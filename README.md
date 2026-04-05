@@ -130,12 +130,27 @@ push 后，GitHub Actions 会自动执行：
 ┌─────────────────────────────────────────────────────────────┐
 │ 2. Release Workflow（自动运行）                              │
 │    - 检测 changeset 文件                                     │
+│    - 确定哪些包有变更                                        │
+│    - 只构建变更的包（pnpm build）                           │
 │    - 运行 pnpm ci:version（更新版本号）                      │
 │    - 生成各项目的 CHANGELOG.md                               │
 │    - 提交版本变更到 main 分支                                │
-│    - 创建 GitHub Release（带版本号和 changelog）             │
+│    - 创建 GitHub Release（带 changelog + dist 打包产物）     │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+### 5. Release 产物说明
+
+发版后，GitHub Release 包含：
+
+| 内容 | 说明 |
+|------|------|
+| **CHANGELOG** | 完整版本历史和变更记录 |
+| **dist.tar.gz** | 构建产物压缩包（可下载使用） |
+
+**示例**：`web-react@0.2.1` Release 包含 `web-react-0.2.1.tar.gz`（可下载的构建产物）
 
 ---
 
