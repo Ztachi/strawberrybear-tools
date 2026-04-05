@@ -20,6 +20,7 @@
   --card-radius: 10px;
   --transition-fast: 80ms ease-out;
   --transition-normal: 120ms ease-out;
+  --font-size-large: 5rem;
 }
 
 /* 数字卡片背景色 - 14色板，高辨识度配色 */
@@ -53,6 +54,9 @@ html,
 body {
   height: 100%;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none; /* 关键：禁用iOS长按菜单 */
 }
 
 body {
@@ -73,8 +77,8 @@ body {
 /* Container */
 .container {
   width: 100%;
-  max-width: 900px;
-  height: 100%;
+  max-width: 600px;
+  /* height: 100%; */
   margin: 0 auto;
   padding: 16px;
   display: flex;
@@ -157,7 +161,7 @@ body {
 
 /* Board Wrapper */
 .board-wrapper {
-  flex: 1;
+  /* flex: 1; */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -171,6 +175,7 @@ body {
   justify-content: space-between;
   align-items: center;
   font-size: 0.9rem;
+  gap: 12px;
 }
 
 .phase-label {
@@ -182,6 +187,51 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Interaction Toggle */
+.interaction-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.toggle-label {
+  user-select: none;
+}
+
+.toggle-switch {
+  width: 40px;
+  height: 20px;
+  background: var(--color-card);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  top: 2px;
+  right: 2px;
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch.click-mode {
+  background: var(--color-primary);
+}
+
+.toggle-switch.click-mode::after {
+  transform: translateX(-20px);
+  background: #fff;
+}
+
 .hint {
   flex-shrink: 0;
   font-size: 0.8rem;
@@ -191,7 +241,7 @@ body {
 
 /* Game Board - CSS Grid */
 .board {
-  flex: 1;
+  /* flex: 1; */
   display: grid;
   gap: var(--card-gap);
   padding: 12px;
@@ -203,11 +253,14 @@ body {
 }
 
 .card {
+  aspect-ratio: 1/1;
   perspective: 1000px;
   cursor: pointer;
   user-select: none;
   overflow: hidden;
-  transition: transform var(--transition-normal), box-shadow var(--transition-normal),
+  transition:
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal),
     background-color var(--transition-normal);
   border-radius: var(--card-radius);
 }
@@ -282,7 +335,7 @@ body {
 
 /* Card Pattern */
 .pattern {
-  font-size: 2rem;
+  font-size: var(--font-size-large);
   font-weight: 700;
   color: #fff;
 }
@@ -291,10 +344,18 @@ body {
 .card.click-selected,
 .card.keyboard-selected,
 .card:not(.empty):hover {
-  box-shadow: 0 0 0 3px var(--color-primary), 0 4px 16px rgba(52, 152, 219, 0.4);
+  box-shadow:
+    0 0 0 3px var(--color-primary),
+    0 4px 16px rgba(52, 152, 219, 0.4);
   transform: scale(1.05);
 }
 
+#gameBoard:has(.click-selected) > .card:not(.click-selected):hover,
+#gameBoard > .card.drag-over {
+  > .card-inner {
+    background: #000;
+  }
+}
 /* Dragging */
 .card.dragging {
   transform: scale(1.1) rotate(2deg);
@@ -305,7 +366,9 @@ body {
 
 .card.drag-over {
   transform: scale(1.08);
-  box-shadow: 0 0 0 3px var(--color-primary), 0 0 20px rgba(52, 152, 219, 0.5);
+  box-shadow:
+    0 0 0 3px var(--color-primary),
+    0 0 20px rgba(52, 152, 219, 0.5);
 }
 
 /* Star Card - 彩虹光芒特效（最特殊的背景） */
@@ -323,8 +386,11 @@ body {
   );
   background-size: 400% 400%;
   animation: starRainbow 4s ease infinite;
-  box-shadow: 0 0 30px rgba(255, 0, 128, 0.9), 0 0 60px rgba(0, 255, 255, 0.6),
-    0 0 90px rgba(255, 215, 0, 0.4), inset 0 0 30px rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 0 30px rgba(255, 0, 128, 0.9),
+    0 0 60px rgba(0, 255, 255, 0.6),
+    0 0 90px rgba(255, 215, 0, 0.4),
+    inset 0 0 30px rgba(255, 255, 255, 0.5);
   border: 4px solid #fff;
 }
 
@@ -342,9 +408,15 @@ body {
 
 .card.star .pattern {
   color: #fff;
-  font-size: 12vw;
-  animation: starSpin 2s linear infinite, starGlow 1s ease-in-out infinite alternate;
-  text-shadow: 0 0 20px #ff0080, 0 0 40px #00ffff, 0 0 60px #ffff00, 2px 2px 4px rgba(0, 0, 0, 0.8);
+  font-size: var(--font-size-large);
+  animation:
+    starSpin 2s linear infinite,
+    starGlow 1s ease-in-out infinite alternate;
+  text-shadow:
+    0 0 20px #ff0080,
+    0 0 40px #00ffff,
+    0 0 60px #ffff00,
+    2px 2px 4px rgba(0, 0, 0, 0.8);
 }
 
 @keyframes starSpin {
@@ -377,8 +449,11 @@ body {
   );
   background-size: 300% 300%;
   animation: jokerFlame 3s ease infinite;
-  box-shadow: 0 0 30px rgba(231, 76, 60, 0.9), 0 0 60px rgba(192, 57, 43, 0.6),
-    0 0 90px rgba(22, 33, 62, 0.8), inset 0 0 30px rgba(255, 200, 100, 0.4);
+  box-shadow:
+    0 0 30px rgba(231, 76, 60, 0.9),
+    0 0 60px rgba(192, 57, 43, 0.6),
+    0 0 90px rgba(22, 33, 62, 0.8),
+    inset 0 0 30px rgba(255, 200, 100, 0.4);
   border: 4px solid #ffd700;
 }
 
@@ -395,7 +470,7 @@ body {
 }
 
 .card.joker .pattern {
-  font-size: 12vw;
+  font-size: var(--font-size-large);
   animation: jokerWobble 0.8s ease-in-out infinite;
   filter: drop-shadow(0 0 20px #ffd700) drop-shadow(0 0 40px #e74c3c);
 }
@@ -428,7 +503,9 @@ body {
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+  transition:
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal);
 }
 
 .btn-reset:hover {

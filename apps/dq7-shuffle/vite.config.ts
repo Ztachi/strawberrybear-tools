@@ -2,7 +2,7 @@
  * @Author: ztachi(legendryztachi@gmail.com)
  * @Date: 2026-04-05 16:30:32
  * @LastEditors: ztachi(legendryztachi@gmail.com)
- * @LastEditTime: 2026-04-05 19:32:19
+ * @LastEditTime: 2026-04-05 21:45:41
  * @FilePath: /strawberrybear-tools/apps/dq7-shuffle/vite.config.ts
  * @Description: DQ7 对对碰洗牌记录工具 Vite 配置
  */
@@ -91,6 +91,7 @@ function inlinePlugin() {
 
 export default defineConfig({
   server: {
+    host: '0.0.0.0',
     port: 3001,
     open: true,
   },

@@ -1,5 +1,7 @@
-import type { DifficultyKey } from './constants'
-import { getDifficulty } from './constants'
+/**
+ * @description: 游戏状态管理
+ */
+import { getDifficulty, type DifficultyKey } from './constants'
 
 /** 卡片类型 */
 export type CardType = 'normal' | 'star' | 'joker'
@@ -20,49 +22,24 @@ export interface GameState {
   phase: Phase
   difficulty: DifficultyKey
   cards: Card[]
-  initialSnapshot: Card[]
   clickedCount: number
-  clickSelectedId: number | null
-  keyboardSelectedId: number | null
-  draggingId: number | null
   hoveredId: number | null
+  draggingId: number | null
 }
 
-/** 状态变更回调 */
-export type StateChangeCallback = (state: GameState) => void
-
-/** 游戏状态管理 */
+/** 游戏类 */
 class Game {
   private state: GameState = {
     phase: 'define',
     difficulty: 'easy',
     cards: [],
-    initialSnapshot: [],
     clickedCount: 0,
-    clickSelectedId: null,
-    keyboardSelectedId: null,
-    draggingId: null,
     hoveredId: null,
+    draggingId: null,
   }
-
-  private listeners: StateChangeCallback[] = []
 
   constructor() {
     this.initCards()
-  }
-
-  /** 通知状态变更 */
-  private notify() {
-    this.listeners.forEach(fn => fn({ ...this.state }))
-  }
-
-  /** 订阅状态变更 */
-  subscribe(fn: StateChangeCallback) {
-    this.listeners.push(fn)
-    fn({ ...this.state })
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== fn)
-    }
   }
 
   /** 获取当前状态 */
@@ -85,6 +62,16 @@ class Game {
     return this.state.phase
   }
 
+  /** 获取悬停ID */
+  getHoveredId(): number | null {
+    return this.state.hoveredId
+  }
+
+  /** 获取拖拽中的卡片索引 */
+  getDraggingId(): number | null {
+    return this.state.draggingId
+  }
+
   /** 初始化卡片 */
   initCards() {
     const { cols, rows } = getDifficulty(this.state.difficulty)
@@ -97,12 +84,8 @@ class Game {
     }))
     this.state.phase = 'define'
     this.state.clickedCount = 0
-    this.state.clickSelectedId = null
-    this.state.keyboardSelectedId = null
-    this.state.draggingId = null
     this.state.hoveredId = null
-    this.state.initialSnapshot = []
-    this.notify()
+    this.state.draggingId = null
   }
 
   /** 设置难度并重置 */
@@ -112,9 +95,9 @@ class Game {
   }
 
   /** 定义阶段点击格子 */
-  fillCell(index: number) {
-    if (this.state.phase !== 'define') return
-    if (this.state.cards[index].filled) return
+  fillCell(index: number): 'filled' | 'star' | 'joker' | 'complete' | null {
+    if (this.state.phase !== 'define') return null
+    if (this.state.cards[index].filled) return null
 
     const total = this.state.cards.length
     const remaining = total - this.state.clickedCount
@@ -124,8 +107,7 @@ class Game {
       this.state.cards[index].type = 'star'
       this.state.cards[index].filled = true
       this.state.clickedCount++
-      this.notify()
-      return
+      return 'star'
     }
 
     if (remaining === 1) {
@@ -133,9 +115,8 @@ class Game {
       this.state.cards[index].type = 'joker'
       this.state.cards[index].filled = true
       this.state.clickedCount++
-      this.notify()
-      this.enterExchangePhase()
-      return
+      this.state.phase = 'exchange'
+      return 'complete'
     }
 
     const pairIndex = Math.floor(this.state.clickedCount / 2)
@@ -143,88 +124,41 @@ class Game {
     this.state.cards[index].type = 'normal'
     this.state.cards[index].filled = true
     this.state.clickedCount++
-    this.notify()
+    return 'filled'
   }
 
-  /** 进入交换阶段 */
-  private enterExchangePhase() {
-    this.state.phase = 'exchange'
-    this.state.initialSnapshot = this.state.cards.map(c => ({ ...c }))
-    this.notify()
-  }
+  /**
+   * @description: 根据索引交换卡片
+   * @param {number} idx1 索引1
+   * @param {number} idx2 索引2
+   * @return {boolean} 是否交换成功
+   */
+  swapCardsByIndex(idx1: number, idx2: number): boolean {
+    if (idx1 === idx2) return false
+    if (idx1 < 0 || idx2 < 0 || idx1 >= this.state.cards.length || idx2 >= this.state.cards.length)
+      return false
 
-  /** 重置游戏 */
-  reset() {
-    this.initCards()
-  }
-
-  /** 根据索引交换卡片 */
-  swapCardsByIndex(idx1: number, idx2: number) {
-    if (idx1 === idx2) return
-    if (idx1 < 0 || idx2 < 0 || idx1 >= this.state.cards.length || idx2 >= this.state.cards.length) return
-
-    const id1 = this.state.cards[idx1].id
-    const id2 = this.state.cards[idx2].id
-
-    const temp = { ...this.state.cards[idx1] }
-    this.state.cards[idx1] = { ...this.state.cards[idx2] }
+    // 交换整个卡片对象（包括 id）
+    const temp = this.state.cards[idx1]
+    this.state.cards[idx1] = this.state.cards[idx2]
     this.state.cards[idx2] = temp
 
-    this.state.cards[idx1].id = id1
-    this.state.cards[idx2].id = id2
-
-    // 交换后清除所有选中
-    this.state.clickSelectedId = null
-    this.state.keyboardSelectedId = null
-    this.notify()
+    return true
   }
 
-  /** 设置点击选中 */
-  setClickSelected(index: number) {
-    this.state.clickSelectedId = index
-    this.notify()
-  }
-
-  /** 清除点击选中 */
-  clearClickSelected() {
-    this.state.clickSelectedId = null
-    this.notify()
-  }
-
-  /** 设置键盘选中 */
-  setKeyboardSelected(index: number) {
-    this.state.keyboardSelectedId = index
-    this.notify()
-  }
-
-  /** 清除键盘选中 */
-  clearKeyboardSelected() {
-    this.state.keyboardSelectedId = null
-    this.notify()
+  /** 设置悬停 */
+  setHovered(index: number | null) {
+    this.state.hoveredId = index
   }
 
   /** 设置拖拽中的卡片 */
   setDragging(index: number | null) {
     this.state.draggingId = index
-    this.notify()
   }
 
-  /** 获取拖拽中的卡片索引 */
-  getDraggingId(): number | null {
-    return this.state.draggingId
-  }
-
-  /** 设置悬停 */
-  setHovered(index: number | null) {
-    if (this.state.hoveredId !== index) {
-      this.state.hoveredId = index
-      this.notify()
-    }
-  }
-
-  /** 获取悬停ID */
-  getHoveredId(): number | null {
-    return this.state.hoveredId
+  /** 重置游戏 */
+  reset() {
+    this.initCards()
   }
 }
 
