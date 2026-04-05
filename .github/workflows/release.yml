@@ -39,6 +39,6 @@ jobs:
           version: pnpm ci:version
           commit: 'chore: version bump'
           title: 'chore: version bump'
-          publish: echo "No npm publish configured"
+          publish: "echo 'done'"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
