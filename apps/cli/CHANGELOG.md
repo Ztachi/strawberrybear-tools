@@ -1,5 +1,11 @@
 # @strawberrybear/cli
 
+## 1.0.2
+
+### Patch Changes
+
+- 1a7c475: Test full release flow: CI build + Release + CHANGELOG + dist upload
+
 ## 1.0.1
 
 ### Patch Changes
