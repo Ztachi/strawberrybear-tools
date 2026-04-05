@@ -2,6 +2,10 @@
 
 个人工具仓库 | Monorepo 管理多类型工具项目（Vue/React/CLI/纯 JS）
 
+> **English**: [README_en.md](README_en.md)
+
+---
+
 ## 快速开始
 
 ```bash

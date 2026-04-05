@@ -1,5 +1,12 @@
 # 规范文档索引
 
+## 根目录文档
+
+| 文档 | 说明 |
+|------|------|
+| [README.md](../README.md) | 中文项目文档 |
+| [README_en.md](../README_en.md) | English project documentation |
+
 ## 项目文档
 - [搭建计划](PLAN.md) - 项目从零搭建的完整计划与执行过程
 
