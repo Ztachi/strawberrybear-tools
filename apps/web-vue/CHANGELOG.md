@@ -1,5 +1,11 @@
 # @strawberrybear/web-vue
 
+## 0.0.3
+
+### Patch Changes
+
+- fcd10be: Test patch release for web-vue
+
 ## 0.0.2
 
 ### Patch Changes
