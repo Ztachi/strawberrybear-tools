@@ -56,16 +56,67 @@ jobs:
           git fetch origin main
           git checkout origin/main
 
+      - name: Get changed packages
+        id: changed_packages
+        if: steps.changeset.outputs.has_changes == 'true'
+        run: |
+          CHANGED_PKGS=$(git diff --name-only HEAD~1 -- 'apps/*/package.json' 2>/dev/null)
+          echo "Changed packages: $CHANGED_PKGS"
+          echo "$CHANGED_PKGS" | tr ' ' '\n' > /tmp/changed_packages.txt
+          echo "packages_file=/tmp/changed_packages.txt" >> $GITHUB_OUTPUT
+
+      - name: Build changed packages
+        if: steps.changeset.outputs.has_changes == 'true'
+        run: |
+          echo "Building changed packages..."
+          # Get package names and build each one
+          for pkg_file in $(cat ${{ steps.changed_packages.outputs.packages_file }}); do
+            pkg_dir=$(dirname "$pkg_file")
+            echo "Building $pkg_dir..."
+            cd "$pkg_dir"
+            pnpm build
+            cd - > /dev/null
+          done
+
+      - name: Upload build artifacts
+        if: steps.changeset.outputs.has_changes == 'true'
+        run: |
+          echo "Uploading build artifacts..."
+          for pkg_file in $(cat ${{ steps.changed_packages.outputs.packages_file }}); do
+            pkg_dir=$(dirname "$pkg_file")
+            pkg_name=$(grep '"name"' "$pkg_file" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
+            pkg_version=$(grep '"version"' "$pkg_file" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+            
+            echo "Processing $pkg_name v$pkg_version..."
+            
+            # Check for dist directory
+            if [ -d "$pkg_dir/dist" ]; then
+              echo "Found dist for $pkg_name, creating archive..."
+              cd "$pkg_dir"
+              
+              # Create zip of dist
+              zip -r "${pkg_name}-${pkg_version}.zip" dist/ 2>/dev/null || tar -czf "${pkg_name}-${pkg_version}.tar.gz" dist/
+              
+              if [ -f "${pkg_name}-${pkg_version}.zip" ]; then
+                ARCHIVE="${pkg_name}-${pkg_version}.zip"
+              else
+                ARCHIVE="${pkg_name}-${pkg_version}.tar.gz"
+              fi
+              
+              echo "Created archive: $ARCHIVE"
+              cd - > /dev/null
+            else
+              echo "No dist found for $pkg_name"
+            fi
+          done
+
       - name: Get package info and create release
         if: steps.changeset.outputs.has_changes == 'true'
         id: release_info
         run: |
-          # Get list of changed packages
-          echo "Finding changed packages..."
-          CHANGED_PKGS=$(git diff --name-only HEAD~1 -- 'apps/*/package.json' 2>/dev/null)
-          echo "Changed packages: $CHANGED_PKGS"
+          CHANGED_PKGS=$(cat ${{ steps.changed_packages.outputs.packages_file }})
+          echo "Creating releases for: $CHANGED_PKGS"
           
-          # Create releases for each changed package
           for PKG_FILE in $CHANGED_PKGS; do
             if [ -f "$PKG_FILE" ]; then
               PKG_NAME=$(grep '"name"' "$PKG_FILE" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
@@ -79,17 +130,42 @@ jobs:
               # Read changelog content
               if [ -f "$CHANGELOG_FILE" ]; then
                 BODY=$(cat "$CHANGELOG_FILE")
-                echo "Changelog length: ${#BODY} chars"
               else
                 BODY="Release $TAG_NAME"
               fi
               
-              # Create release using GitHub CLI
-              gh release create "$TAG_NAME" \
-                --title "$TAG_NAME" \
-                --notes "$BODY" \
-                --draft=false \
-                --prerelease=false
+              # Prepare assets
+              ASSETS=""
+              ARCHIVE=""
+              if [ -d "apps/${PKG_NAME}/dist" ]; then
+                cd "apps/${PKG_NAME}"
+                if [ -f "${PKG_NAME}-${PKG_VERSION}.zip" ]; then
+                  ASSETS="${PKG_NAME}-${PKG_VERSION}.zip"
+                elif [ -f "${PKG_NAME}-${PKG_VERSION}.tar.gz" ]; then
+                  ASSETS="${PKG_NAME}-${PKG_VERSION}.tar.gz"
+                fi
+                cd - > /dev/null
+              fi
+              
+              echo "Assets to upload: $ASSETS"
+              
+              # Create release with gh CLI
+              if [ -n "$ASSETS" ] && [ -f "$ASSETS" ]; then
+                gh release create "$TAG_NAME" \
+                  --title "$TAG_NAME" \
+                  --notes "$BODY" \
+                  --draft=false \
+                  --prerelease=false \
+                  --latest=true \
+                  "$ASSETS"
+              else
+                gh release create "$TAG_NAME" \
+                  --title "$TAG_NAME" \
+                  --notes "$BODY" \
+                  --draft=false \
+                  --prerelease=false \
+                  --latest=true
+              fi
               
               echo "Release $TAG_NAME created successfully"
             fi
