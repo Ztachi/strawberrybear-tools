@@ -1,5 +1,11 @@
 # @strawberrybear/dq7-shuffle
 
+## 0.1.1
+
+### Patch Changes
+
+- ce8df2a: fix: 修复 iframe 环境下语言检测问题
+
 ## 0.1.0
 
 ### Minor Changes
