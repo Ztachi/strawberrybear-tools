@@ -1,5 +1,11 @@
 # @strawberrybear/cli
 
+## 1.0.0
+
+### Major Changes
+
+- 8877173: Test major release for cli
+
 ## 0.0.2
 
 ### Patch Changes
