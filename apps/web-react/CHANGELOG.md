@@ -1,5 +1,11 @@
 # @strawberrybear/web-react
 
+## 0.2.1
+
+### Patch Changes
+
+- ab72ccf: Test dist upload to release assets
+
 ## 0.2.0
 
 ### Minor Changes
