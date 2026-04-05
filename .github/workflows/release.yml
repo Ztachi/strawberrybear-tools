@@ -8,7 +8,7 @@ on:
 
 jobs:
   release:
-    timeout-minutes: 15
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,10 +30,8 @@ jobs:
       - name: Run changeset version
         id: changeset
         run: |
-          echo "Running changeset version..."
           pnpm ci:version
           CHANGESET_SUMMARY=$(git status --porcelain)
-          echo "Changeset summary: $CHANGESET_SUMMARY"
           if [ -n "$CHANGESET_SUMMARY" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
@@ -43,14 +41,13 @@ jobs:
       - name: Commit and push version bump
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
-          echo "Committing version bump..."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "chore: version bump"
           git push
 
-      - name: Fetch latest to get pushed commit
+      - name: Fetch latest commit
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
           git fetch origin main
@@ -60,16 +57,14 @@ jobs:
         id: changed_packages
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
-          CHANGED_PKGS=$(git diff --name-only HEAD~1 -- 'apps/*/package.json' 2>/dev/null)
-          echo "Changed packages: $CHANGED_PKGS"
-          echo "$CHANGED_PKGS" | tr ' ' '\n' > /tmp/changed_packages.txt
+          echo "Finding changed packages..."
+          git diff --name-only HEAD~1 -- 'apps/*/package.json' > /tmp/changed_packages.txt
+          cat /tmp/changed_packages.txt
           echo "packages_file=/tmp/changed_packages.txt" >> $GITHUB_OUTPUT
 
-      - name: Build changed packages
+      - name: Build all changed packages
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
-          echo "Building changed packages..."
-          # Get package names and build each one
           for pkg_file in $(cat ${{ steps.changed_packages.outputs.packages_file }}); do
             pkg_dir=$(dirname "$pkg_file")
             echo "Building $pkg_dir..."
@@ -78,97 +73,55 @@ jobs:
             cd - > /dev/null
           done
 
-      - name: Upload build artifacts
+      - name: Create release for each changed package
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
-          echo "Uploading build artifacts..."
-          for pkg_file in $(cat ${{ steps.changed_packages.outputs.packages_file }}); do
-            pkg_dir=$(dirname "$pkg_file")
-            pkg_name=$(grep '"name"' "$pkg_file" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
-            pkg_version=$(grep '"version"' "$pkg_file" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
-            
-            echo "Processing $pkg_name v$pkg_version..."
-            
-            # Check for dist directory
-            if [ -d "$pkg_dir/dist" ]; then
-              echo "Found dist for $pkg_name, creating archive..."
-              cd "$pkg_dir"
-              
-              # Create zip of dist
-              zip -r "${pkg_name}-${pkg_version}.zip" dist/ 2>/dev/null || tar -czf "${pkg_name}-${pkg_version}.tar.gz" dist/
-              
-              if [ -f "${pkg_name}-${pkg_version}.zip" ]; then
-                ARCHIVE="${pkg_name}-${pkg_version}.zip"
-              else
-                ARCHIVE="${pkg_name}-${pkg_version}.tar.gz"
-              fi
-              
-              echo "Created archive: $ARCHIVE"
-              cd - > /dev/null
-            else
-              echo "No dist found for $pkg_name"
-            fi
-          done
-
-      - name: Get package info and create release
-        if: steps.changeset.outputs.has_changes == 'true'
-        id: release_info
-        run: |
-          CHANGED_PKGS=$(cat ${{ steps.changed_packages.outputs.packages_file }})
-          echo "Creating releases for: $CHANGED_PKGS"
+          echo "Creating releases..."
           
-          for PKG_FILE in $CHANGED_PKGS; do
-            if [ -f "$PKG_FILE" ]; then
-              PKG_NAME=$(grep '"name"' "$PKG_FILE" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
-              PKG_VERSION=$(grep '"version"' "$PKG_FILE" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
-              TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
-              CHANGELOG_FILE="apps/${PKG_NAME}/CHANGELOG.md"
+          # Loop through changed packages
+          while IFS= read -r pkg_file; do
+            if [ -f "$pkg_file" ]; then
+              pkg_dir=$(dirname "$pkg_file")
+              pkg_name=$(grep '"name"' "$pkg_file" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
+              pkg_version=$(grep '"version"' "$pkg_file" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+              TAG_NAME="${pkg_name}@${pkg_version}"
+              CHANGELOG_FILE="apps/${pkg_name}/CHANGELOG.md"
               
-              echo "---"
-              echo "Creating release for: $TAG_NAME"
+              echo "Processing: $TAG_NAME"
               
-              # Read changelog content
+              # Read changelog
               if [ -f "$CHANGELOG_FILE" ]; then
                 BODY=$(cat "$CHANGELOG_FILE")
               else
                 BODY="Release $TAG_NAME"
               fi
               
-              # Prepare assets
-              ASSETS=""
-              ARCHIVE=""
-              if [ -d "apps/${PKG_NAME}/dist" ]; then
-                cd "apps/${PKG_NAME}"
-                if [ -f "${PKG_NAME}-${PKG_VERSION}.zip" ]; then
-                  ASSETS="${PKG_NAME}-${PKG_VERSION}.zip"
-                elif [ -f "${PKG_NAME}-${PKG_VERSION}.tar.gz" ]; then
-                  ASSETS="${PKG_NAME}-${PKG_VERSION}.tar.gz"
-                fi
+              # Check for dist
+              if [ -d "$pkg_dir/dist" ]; then
+                echo "Creating archive for $pkg_name..."
+                cd "$pkg_dir"
+                tar -czf "${pkg_name}-${pkg_version}.tar.gz" dist/
+                ARCHIVE="${pkg_name}-${pkg_version}.tar.gz"
                 cd - > /dev/null
-              fi
-              
-              echo "Assets to upload: $ASSETS"
-              
-              # Create release with gh CLI
-              if [ -n "$ASSETS" ] && [ -f "$ASSETS" ]; then
+                
+                echo "Creating release with archive: $ARCHIVE"
                 gh release create "$TAG_NAME" \
                   --title "$TAG_NAME" \
                   --notes "$BODY" \
                   --draft=false \
                   --prerelease=false \
-                  --latest=true \
-                  "$ASSETS"
+                  "$pkg_dir/$ARCHIVE"
               else
+                echo "No dist found, creating release without artifact"
                 gh release create "$TAG_NAME" \
                   --title "$TAG_NAME" \
                   --notes "$BODY" \
                   --draft=false \
-                  --prerelease=false \
-                  --latest=true
+                  --prerelease=false
               fi
               
-              echo "Release $TAG_NAME created successfully"
+              echo "Created: $TAG_NAME"
             fi
-          done
+          done < "${{ steps.changed_packages.outputs.packages_file }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
