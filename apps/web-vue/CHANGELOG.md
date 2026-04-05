@@ -1,5 +1,11 @@
 # @strawberrybear/web-vue
 
+## 0.0.6
+
+### Patch Changes
+
+- 3c20b2d: Test release with build artifacts
+
 ## 0.0.5
 
 ### Patch Changes
