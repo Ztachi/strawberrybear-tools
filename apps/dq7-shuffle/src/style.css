@@ -77,7 +77,7 @@ body {
 /* Container */
 .container {
   width: 100%;
-  max-width: 600px;
+  max-width: 500px;
   /* height: 100%; */
   margin: 0 auto;
   padding: 16px;
