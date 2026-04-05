@@ -1,5 +1,11 @@
 # @strawberrybear/cli
 
+## 1.0.1
+
+### Patch Changes
+
+- 28e8c13: Test final release with gh CLI
+
 ## 1.0.0
 
 ### Major Changes
