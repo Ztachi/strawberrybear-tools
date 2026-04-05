@@ -11,7 +11,7 @@ pnpm install
 # 构建所有项目
 pnpm build
 
-# 开发单个项目
+# 开发单个项目（示例项目）
 cd apps/web-vue && pnpm dev
 ```
 
@@ -21,40 +21,52 @@ cd apps/web-vue && pnpm dev
 
 | 项目 | 类型 | 说明 |
 |------|------|------|
-| `apps/web-vue` | Vite + Vue3 | Web 在线工具示例 |
-| `apps/web-react` | Vite + React | Web 在线工具示例 |
-| `apps/cli` | 纯 TS CLI | 命令行工具示例 |
+| `apps/web-vue` | Vite + Vue3 | 示例项目（测试用） |
+| `apps/web-react` | Vite + React | 示例项目（测试用） |
+| `apps/cli` | 纯 TS CLI | 示例项目（测试用） |
+
+> **这三个是示例/测试项目**，用于验证 monorepo 架构和 CI/CD 流程正常。新建自己的项目时请参考示例创建新的目录。
 
 ---
 
-## 开发流程
+## 如何新增自己的项目
 
-### 1. 创建或修改项目
-
-在 `apps/` 目录下创建新项目，或修改现有项目。
+### 1. 在 `apps/` 下创建新目录
 
 ```
 apps/
-├── web-vue/      # 新建或修改这里
-├── web-react/    # 或这里
-└── cli/          # 或这里
+└── my-new-tool/           # 新建你的项目目录
+    ├── package.json       # name: "@strawberrybear/my-new-tool"
+    ├── src/
+    └── ...
 ```
 
-### 2. 本地开发
+### 2. 配置 package.json
+
+```json
+{
+  "name": "@strawberrybear/my-new-tool",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "你的开发命令",
+    "build": "你的构建命令"
+  }
+}
+```
+
+### 3. 本地开发
 
 ```bash
-# 进入项目目录
-cd apps/web-vue
-
-# 启动开发服务器
+cd apps/my-new-tool
 pnpm dev
 ```
 
-### 3. 提交代码
+### 4. 提交代码
 
 ```bash
 git add .
-git commit -m "feat(web-vue): 添加新功能"
+git commit -m "feat(my-new-tool): 添加新工具"
 git push
 ```
 
@@ -70,19 +82,14 @@ git push
 
 在 `.changeset/` 目录下创建一个 `.md` 文件：
 
-```bash
-# 手动创建，或使用命令（交互式）
-pnpm changeset
-```
-
-**文件格式示例**（`.changeset/fix-vue-button.md`）：
+**手动创建**，内容格式：
 
 ```markdown
 ---
-"@strawberrybear/web-vue": patch
+"@strawberrybear/你的项目名": patch
 ---
 
-修复按钮点击事件
+修复某个问题
 ```
 
 ### 2. changeset 类型说明
@@ -96,8 +103,8 @@ pnpm changeset
 ### 3. 提交 changeset
 
 ```bash
-git add .changeset/fix-vue-button.md
-git commit -m "chore: 添加 vue 按钮修复 changeset"
+git add .changeset/xxx.md
+git commit -m "chore: 添加发版 changeset"
 git push
 ```
 
@@ -124,9 +131,9 @@ push 后，GitHub Actions 会自动执行：
 │ 2. Release Workflow（自动运行）                              │
 │    - 检测 changeset 文件                                     │
 │    - 运行 pnpm ci:version（更新版本号）                      │
-│    - 生成 CHANGELOG.md                                       │
+│    - 生成各项目的 CHANGELOG.md                               │
 │    - 提交版本变更到 main 分支                                │
-│    - 创建 GitHub Release                                     │
+│    - 创建 GitHub Release（带版本号和 changelog）             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -138,32 +145,22 @@ push 后，GitHub Actions 会自动执行：
 
 ### 示例场景
 
-假设你只修改了 `web-vue`，只想发 `web-vue`：
+假设你只修改了 `my-new-tool`，只想发 `my-new-tool`：
 
-**步骤 1**：创建只针对 `web-vue` 的 changeset：
+**步骤 1**：创建只针对 `my-new-tool` 的 changeset：
 
 ```markdown
 ---
-"@strawberrybear/web-vue": patch
+"@strawberrybear/my-new-tool": patch
 ---
 
-修复登录按钮样式
+修复按钮点击问题
 ```
 
-**步骤 2**：其他包（`web-react`、`cli`）保持不变，**不需要创建任何 changeset 文件**。
-
-**步骤 3**：push 后，系统只会：
-- 更新 `web-vue` 的版本号（`0.0.1` → `0.0.2`）
-- 只为 `web-vue` 生成 CHANGELOG
-- 只创建 `web-vue` 的 GitHub Release
-
-**结果**：
-
-```
-@strawberrybear/web-vue     0.0.1 → 0.0.2  ✅ 发布
-@strawberrybear/web-react   0.0.1         ✅ 不变
-@strawberrybear/cli         0.0.1         ✅ 不变
-```
+**步骤 2**：push 后，系统只会：
+- 更新 `my-new-tool` 的版本号
+- 只为 `my-new-tool` 生成 CHANGELOG
+- 只创建 `my-new-tool` 的 GitHub Release
 
 ### 同时发多个包
 
@@ -171,8 +168,8 @@ push 后，GitHub Actions 会自动执行：
 
 ```markdown
 ---
-"@strawberrybear/web-vue": minor
-"@strawberrybear/web-react": patch
+"@strawberrybear/my-new-tool": minor
+"@strawberrybear/another-tool": patch
 ---
 
 统一主题配色
@@ -208,11 +205,7 @@ pnpm type-check
 # 开发单个项目
 cd apps/web-vue && pnpm dev
 
-# 创建 changeset（交互式）
-pnpm changeset
-
-# 手动版本更新（仅本地，不会发版）
-pnpm ci:version
+# 创建 changeset（手动编辑 .changeset/xxx.md）
 ```
 
 ---

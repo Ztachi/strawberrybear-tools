@@ -40,7 +40,7 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Commit version bump
+      - name: Commit and push version bump
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
           echo "Committing version bump..."
@@ -50,26 +50,67 @@ jobs:
           git commit -m "chore: version bump"
           git push
 
-      - name: Get changed packages and versions
+      - name: Get package info and create release
         if: steps.changeset.outputs.has_changes == 'true'
-        id: versions
+        id: release_info
         run: |
-          echo "Extracting versions..."
-          # Get list of changed package.json files and extract versions
-          for pkg in $(git diff HEAD~1 --name-only -- 'apps/*/package.json' 2>/dev/null | xargs); do
-            if [ -f "$pkg" ]; then
-              name=$(grep '"name"' "$pkg" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
-              version=$(grep '"version"' "$pkg" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
-              echo "Package: @strawberrybear/$name v$version"
-            fi
-          done
+          # Get the first changed package (for multi-package, creates multiple releases)
+          PKG_FILE=$(git diff HEAD~1 --name-only -- 'apps/*/package.json' 2>/dev/null | head -1)
+          if [ -n "$PKG_FILE" ] && [ -f "$PKG_FILE" ]; then
+            PKG_NAME=$(grep '"name"' "$PKG_FILE" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
+            PKG_VERSION=$(grep '"version"' "$PKG_FILE" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+            TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
+            echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+            echo "body_file=apps/${PKG_NAME}/CHANGELOG.md" >> $GITHUB_OUTPUT
+            echo "Created release for $TAG_NAME"
+          else
+            echo "No package changes found"
+            echo "has_release=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create GitHub Release
-        if: steps.changeset.outputs.has_changes == 'true'
+        if: steps.release_info.outputs.has_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: false
-          generate_release_notes: true
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.tag_name }}
+          body_path: ${{ steps.release_info.outputs.body_file }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create additional releases for multi-package
+        if: steps.changeset.outputs.has_changes == 'true'
+        run: |
+          # Check if there are more packages that need releases
+          CHANGED_PKGS=$(git diff HEAD~1 --name-only -- 'apps/*/package.json' 2>/dev/null | tail -n +2)
+          if [ -n "$CHANGED_PKGS" ]; then
+            echo "Creating releases for additional packages..."
+            for PKG_FILE in $CHANGED_PKGS; do
+              if [ -f "$PKG_FILE" ]; then
+                PKG_NAME=$(grep '"name"' "$PKG_FILE" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
+                PKG_VERSION=$(grep '"version"' "$PKG_FILE" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+                TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
+                CHANGELOG_FILE="apps/${PKG_NAME}/CHANGELOG.md"
+                
+                echo "Creating release for $TAG_NAME"
+                
+                # Create release using GitHub CLI
+                if [ -f "$CHANGELOG_FILE" ]; then
+                  BODY=$(cat "$CHANGELOG_FILE")
+                else
+                  BODY="Release $TAG_NAME"
+                fi
+                
+                gh release create "$TAG_NAME" \
+                  --title "$TAG_NAME" \
+                  --notes "$BODY" \
+                  --draft=false \
+                  --prerelease=false \
+                  || echo "Release $TAG_NAME may already exist"
+              fi
+            done
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
