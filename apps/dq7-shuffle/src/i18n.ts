@@ -36,7 +36,7 @@ export function detectLocale(): Locale {
   return window.location.pathname.includes('/en') ? 'en-US' : 'zh-CN'
 }
 
-let currentLocale = detectLocale()
+const currentLocale = detectLocale()
 
 /**
  * @description: 获取当前语言
