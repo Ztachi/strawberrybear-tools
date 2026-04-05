@@ -1,5 +1,11 @@
 # @strawberrybear/web-react
 
+## 0.1.0
+
+### Minor Changes
+
+- 96c88dd: Test minor release for web-react
+
 ## 0.0.2
 
 ### Patch Changes
