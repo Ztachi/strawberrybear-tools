@@ -1,0 +1,413 @@
+/* ===========================
+   DQ7 对对碰洗牌记录工具 - 样式
+   =========================== */
+
+/* CSS Variables */
+:root {
+  --color-bg: #1a1a2e;
+  --color-surface: #16213e;
+  --color-card: #0f3460;
+  --color-card-back: #2d3a4f;
+  --color-primary: #3498db;
+  --color-star: #ffd700;
+  --color-joker: #ff4757;
+  --color-text: #eaeaea;
+  --color-text-muted: #a0a0a0;
+  --color-border: #3a4a6a;
+
+  --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --card-gap: 8px;
+  --card-radius: 10px;
+  --transition-fast: 80ms ease-out;
+  --transition-normal: 120ms ease-out;
+}
+
+/* 数字卡片背景色 - 14色板，高辨识度配色 */
+:root {
+  --bg-1: #e74c3c;   /* 红色 */
+  --bg-2: #3498db;   /* 蓝色 */
+  --bg-3: #2ecc71;   /* 绿色 */
+  --bg-4: #f39c12;   /* 橙色 */
+  --bg-5: #9b59b6;   /* 紫色 */
+  --bg-6: #1abc9c;   /* 青色 */
+  --bg-7: #e67e22;   /* 深橙 */
+  --bg-8: #ff69b4;   /* 粉红 */
+  --bg-9: #00ced1;   /* 青色2 */
+  --bg-10: #ff6347;  /* 番茄红 */
+  --bg-11: #7b68ee;   /* 蓝紫 */
+  --bg-12: #ffd700;  /* 金色 */
+  --bg-13: #ff1493;  /* 深粉 */
+  --bg-14: #20b2aa;  /* 海绿 */
+}
+
+/* Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Container */
+.container {
+  width: 100%;
+  max-width: 900px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Header */
+.header {
+  flex-shrink: 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #3498db, #9b59b6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Difficulty Tabs */
+.difficulty-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 6px 16px;
+  border: 2px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.tab:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+/* Main Layout */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+@media (max-width: 700px) {
+  .main {
+    flex-direction: column;
+  }
+
+  .control-panel {
+    flex-direction: row !important;
+    width: 100%;
+  }
+
+  .btn-reset {
+    flex: 1;
+  }
+}
+
+/* Board Wrapper */
+.board-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.phase-info {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.phase-label {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.progress {
+  color: var(--color-text-muted);
+}
+
+.hint {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* Game Board - CSS Grid */
+.board {
+  flex: 1;
+  display: grid;
+  gap: var(--card-gap);
+  padding: 12px;
+  background: var(--color-surface);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  min-height: 0;
+  overflow: hidden;
+}
+
+
+.card {
+  perspective: 1000px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--card-radius);
+  background: var(--color-card-back);
+  transition: transform var(--transition-normal),
+              box-shadow var(--transition-normal),
+              background-color var(--transition-normal);
+}
+
+.card:not(.empty):hover .card-inner {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
+}
+
+.card.empty {
+  cursor: pointer;
+}
+
+.card.empty .card-inner {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-card-back),
+    var(--color-card-back) 8px,
+    #263347 8px,
+    #263347 16px
+  );
+}
+
+/* 数字卡片背景色 */
+.card.bg-1 .card-inner { background: var(--bg-1); }
+.card.bg-2 .card-inner { background: var(--bg-2); }
+.card.bg-3 .card-inner { background: var(--bg-3); }
+.card.bg-4 .card-inner { background: var(--bg-4); }
+.card.bg-5 .card-inner { background: var(--bg-5); }
+.card.bg-6 .card-inner { background: var(--bg-6); }
+.card.bg-7 .card-inner { background: var(--bg-7); }
+.card.bg-8 .card-inner { background: var(--bg-8); }
+.card.bg-9 .card-inner { background: var(--bg-9); }
+.card.bg-10 .card-inner { background: var(--bg-10); }
+.card.bg-11 .card-inner { background: var(--bg-11); }
+.card.bg-12 .card-inner { background: var(--bg-12); }
+.card.bg-13 .card-inner { background: var(--bg-13); }
+.card.bg-14 .card-inner { background: var(--bg-14); }
+
+/* Card Pattern */
+.pattern {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Click Selected - Blue Border */
+.card.click-selected .card-inner {
+  box-shadow: 0 0 0 3px var(--color-primary),
+              0 4px 16px rgba(52, 152, 219, 0.4);
+  transform: scale(1.05);
+}
+
+/* Keyboard Selected - White Border */
+.card.keyboard-selected .card-inner {
+  box-shadow: 0 0 0 3px #fff,
+              0 4px 16px rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+/* Dragging */
+.card.dragging .card-inner {
+  transform: scale(1.1) rotate(2deg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  opacity: 0.9;
+  z-index: 100;
+}
+
+.card.drag-over .card-inner {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 3px var(--color-primary),
+              0 0 20px rgba(52, 152, 219, 0.5);
+}
+
+/* Star Card - 彩虹光芒特效（最特殊的背景） */
+.card.star .card-inner {
+  background: linear-gradient(135deg,
+    #ff0080, #ff8c00, #ffff00, #00ff00, #00ffff, #0000ff, #8b00ff, #ff0080);
+  background-size: 400% 400%;
+  animation: starRainbow 4s ease infinite;
+  box-shadow: 0 0 30px rgba(255, 0, 128, 0.9),
+              0 0 60px rgba(0, 255, 255, 0.6),
+              0 0 90px rgba(255, 215, 0, 0.4),
+              inset 0 0 30px rgba(255, 255, 255, 0.5);
+  border: 4px solid #fff;
+}
+
+@keyframes starRainbow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.card.star .pattern {
+  color: #fff;
+  font-size: 12vw;
+  animation: starSpin 2s linear infinite, starGlow 1s ease-in-out infinite alternate;
+  text-shadow: 0 0 20px #ff0080,
+               0 0 40px #00ffff,
+               0 0 60px #ffff00,
+               2px 2px 4px rgba(0,0,0,0.8);
+}
+
+@keyframes starSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes starGlow {
+  from { filter: brightness(1) drop-shadow(0 0 10px #fff); }
+  to { filter: brightness(1.3) drop-shadow(0 0 25px #ff0080); }
+}
+
+/* Joker Card - 暗黑火焰特效（最特殊的背景） */
+.card.joker .card-inner {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #e74c3c 50%, #c0392b 75%, #1a1a2e 100%);
+  background-size: 300% 300%;
+  animation: jokerFlame 3s ease infinite;
+  box-shadow: 0 0 30px rgba(231, 76, 60, 0.9),
+              0 0 60px rgba(192, 57, 43, 0.6),
+              0 0 90px rgba(22, 33, 62, 0.8),
+              inset 0 0 30px rgba(255, 200, 100, 0.4);
+  border: 4px solid #ffd700;
+}
+
+@keyframes jokerFlame {
+  0%, 100% { background-position: 0% 50%; filter: brightness(1); }
+  50% { background-position: 100% 50%; filter: brightness(1.2); }
+}
+
+.card.joker .pattern {
+  font-size: 12vw;
+  animation: jokerWobble 0.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px #ffd700) drop-shadow(0 0 40px #e74c3c);
+}
+
+@keyframes jokerWobble {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50% { transform: scale(1.1) rotate(2deg); }
+}
+
+/* Control Panel */
+.control-panel {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.btn-reset {
+  width: 100%;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--transition-normal),
+              box-shadow var(--transition-normal);
+}
+
+.btn-reset:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(231, 76, 60, 0.4);
+}
+
+.btn-reset:active {
+  transform: translateY(0);
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+  .container {
+    padding: 12px;
+  }
+
+  .title {
+    font-size: 1.3rem;
+  }
+
+  .pattern {
+    font-size: 1.5rem;
+  }
+
+  .card.star .pattern,
+  .card.joker .pattern {
+    font-size: 2rem;
+  }
+
+  .tab {
+    padding: 5px 12px;
+    font-size: 0.8rem;
+  }
+}

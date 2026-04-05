@@ -1,0 +1,7 @@
+{
+  "extends": "@strawberrybear/tsconfig/base.json",
+  "compilerOptions": {
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+}
