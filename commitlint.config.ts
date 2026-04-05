@@ -2,7 +2,7 @@
  * @Author: ztachi(legendryztachi@gmail.com)
  * @Date: 2026-04-01 21:05:41
  * @LastEditors: ztachi(legendryztachi@gmail.com)
- * @LastEditTime: 2026-04-05 20:32:10
+ * @LastEditTime: 2026-04-05 20:48:09
  * @FilePath: /strawberrybear-tools/commitlint.config.ts
  * @Description: 
  */

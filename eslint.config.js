@@ -24,6 +24,9 @@ export default [
         MouseEvent: 'readonly',
         DragEvent: 'readonly',
         KeyboardEvent: 'readonly',
+        HTMLInputElement: 'readonly',
+        HTMLTextAreaElement: 'readonly',
+        localStorage: 'readonly',
       },
     },
     plugins: {

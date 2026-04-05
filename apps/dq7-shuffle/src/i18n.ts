@@ -20,6 +20,7 @@ export const I18N = {
       define: '依次点击格子，记录卡牌顺序',
       exchange: '拖拽 / 点击 / 空格键 三种方式交换卡牌',
     },
+    toggle: { click: '点击', drag: '拖拽' },
   },
   'en-US': {
     title: 'DQ7 Memory Match Shuffle Recorder',
@@ -31,6 +32,7 @@ export const I18N = {
       define: 'Tap cells in order to record card sequence',
       exchange: 'Drag / Click / Space key to swap cards',
     },
+    toggle: { click: 'Click', drag: 'Drag' },
   },
 } as const
 

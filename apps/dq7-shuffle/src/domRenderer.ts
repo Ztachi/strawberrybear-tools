@@ -50,9 +50,9 @@ export class DOMRenderer {
               <span class="phase-label">${t(`phase.${phase}`)}</span>
               ${phase === 'define' ? `<span class="progress">${tf('progress', { current: clickedCount, total: cards.length })}</span>` : ''}
               <div class="interaction-toggle" id="interactionToggle">
-                <span class="toggle-label">点击</span>
+                <span class="toggle-label">${t('toggle.click')}</span>
                 <div class="toggle-switch" id="toggleSwitch"></div>
-                <span class="toggle-label">拖拽</span>
+                <span class="toggle-label">${t('toggle.drag')}</span>
               </div>
             </div>
             <p class="hint">${t(`hint.${phase}`)}</p>
