@@ -2,7 +2,7 @@
   "name": "strawberrybear-tools",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@10.0.0",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -20,7 +20,7 @@
     "typescript": "^5.4.0"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
   }
 }
