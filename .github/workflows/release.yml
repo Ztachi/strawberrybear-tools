@@ -30,8 +30,10 @@ jobs:
       - name: Run changeset version
         id: changeset
         run: |
+          echo "Running changeset version..."
           pnpm ci:version
-          CHANGESET_SUMMARY=$(git diff --stat HEAD)
+          CHANGESET_SUMMARY=$(git status --porcelain)
+          echo "Changeset summary: $CHANGESET_SUMMARY"
           if [ -n "$CHANGESET_SUMMARY" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
@@ -41,24 +43,30 @@ jobs:
       - name: Commit version bump
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
+          echo "Committing version bump..."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "chore: version bump"
           git push
 
-      - name: Extract version
+      - name: Get changed packages and versions
         if: steps.changeset.outputs.has_changes == 'true'
-        id: version
+        id: versions
         run: |
-          # Get the version from the first package that changed
-          VERSION=$(git diff HEAD~1 --name-only -- apps/*/package.json | head -1 | xargs -I {} cat {}/package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Package version: $VERSION"
+          echo "Extracting versions..."
+          # Get list of changed package.json files and extract versions
+          for pkg in $(git diff HEAD~1 --name-only -- 'apps/*/package.json' 2>/dev/null | xargs); do
+            if [ -f "$pkg" ]; then
+              name=$(grep '"name"' "$pkg" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
+              version=$(grep '"version"' "$pkg" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+              echo "Package: @strawberrybear/$name v$version"
+            fi
+          done
 
       - name: Create GitHub Release
         if: steps.changeset.outputs.has_changes == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: false
