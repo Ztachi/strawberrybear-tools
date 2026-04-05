@@ -2,6 +2,8 @@
 
 > Dragon Quest VII 珍爱之物卡牌顺序记录工具
 
+**GitHub**: https://github.com/Ztachi/strawberrybear-tools/tree/main/apps/dq7-shuffle
+
 ---
 
 ## 操作指南

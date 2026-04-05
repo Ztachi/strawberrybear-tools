@@ -1,3 +1,11 @@
+/*
+ * @Author: ztachi(legendryztachi@gmail.com)
+ * @Date: 2026-04-05 16:31:00
+ * @LastEditors: ztachi(legendryztachi@gmail.com)
+ * @LastEditTime: 2026-04-06 02:16:28
+ * @FilePath: /strawberrybear-tools/apps/dq7-shuffle/src/i18n.ts
+ * @Description: 国际化语言包
+ */
 /**
  * @description: 国际化语言包
  */
@@ -33,7 +41,8 @@ export type Locale = keyof typeof I18N
  * @return {Locale} 当前语言
  */
 export function detectLocale(): Locale {
-  return window.location.pathname.includes('/en') ? 'en-US' : 'zh-CN'
+  const globalWindow = window.top || window
+  return globalWindow.location.pathname.includes('/en') ? 'en-US' : 'zh-CN'
 }
 
 const currentLocale = detectLocale()
