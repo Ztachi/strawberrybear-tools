@@ -1,5 +1,11 @@
 # @strawberrybear/dq7-shuffle
 
+## 0.1.2
+
+### Patch Changes
+
+- a13e633: style: 调整容器最大宽度为 500px
+
 ## 0.1.1
 
 ### Patch Changes
