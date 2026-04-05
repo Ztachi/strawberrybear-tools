@@ -1,5 +1,11 @@
 # @strawberrybear/web-react
 
+## 0.2.0
+
+### Minor Changes
+
+- 71ed1ca: Test multi-package release: web-vue patch + web-react minor
+
 ## 0.1.0
 
 ### Minor Changes

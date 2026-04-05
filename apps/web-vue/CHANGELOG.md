@@ -1,5 +1,11 @@
 # @strawberrybear/web-vue
 
+## 0.0.4
+
+### Patch Changes
+
+- 71ed1ca: Test multi-package release: web-vue patch + web-react minor
+
 ## 0.0.3
 
 ### Patch Changes
