@@ -303,23 +303,7 @@ body {
   z-index: 100;
 }
 
-/* SortableJS Dragging */
-.sortable-ghost {
-  opacity: 0.4;
-}
-
-.sortable-chosen {
-  cursor: grabbing;
-}
-
-.sortable-drag {
-  opacity: 1 !important;
-  transform: scale(1.05) rotate(2deg) !important;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-}
-
-.card.drag-over .card-inner {
+.card.drag-over {
   transform: scale(1.08);
   box-shadow: 0 0 0 3px var(--color-primary), 0 0 20px rgba(52, 152, 219, 0.5);
 }

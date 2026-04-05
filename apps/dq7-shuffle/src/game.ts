@@ -24,8 +24,8 @@ export interface GameState {
   clickedCount: number
   clickSelectedId: number | null
   keyboardSelectedId: number | null
-  hoveredId: number | null
   draggingId: number | null
+  hoveredId: number | null
 }
 
 /** 状态变更回调 */
@@ -41,8 +41,8 @@ class Game {
     clickedCount: 0,
     clickSelectedId: null,
     keyboardSelectedId: null,
-    hoveredId: null,
     draggingId: null,
+    hoveredId: null,
   }
 
   private listeners: StateChangeCallback[] = []
@@ -99,8 +99,8 @@ class Game {
     this.state.clickedCount = 0
     this.state.clickSelectedId = null
     this.state.keyboardSelectedId = null
-    this.state.hoveredId = null
     this.state.draggingId = null
+    this.state.hoveredId = null
     this.state.initialSnapshot = []
     this.notify()
   }
@@ -120,7 +120,6 @@ class Game {
     const remaining = total - this.state.clickedCount
 
     if (remaining === 2) {
-      // 最后两格自动填充特殊卡
       this.state.cards[index].pattern = '⭐'
       this.state.cards[index].type = 'star'
       this.state.cards[index].filled = true
@@ -135,12 +134,10 @@ class Game {
       this.state.cards[index].filled = true
       this.state.clickedCount++
       this.notify()
-      // 全部填满，进入交换阶段
       this.enterExchangePhase()
       return
     }
 
-    // 普通卡片，成对填充
     const pairIndex = Math.floor(this.state.clickedCount / 2)
     this.state.cards[index].pattern = String(pairIndex + 1)
     this.state.cards[index].type = 'normal'
@@ -161,91 +158,73 @@ class Game {
     this.initCards()
   }
 
-  /** 交换两张卡片 */
-  swapCards(id1: number, id2: number) {
-    if (id1 === id2) return
-    const idx1 = this.state.cards.findIndex(c => c.id === id1)
-    const idx2 = this.state.cards.findIndex(c => c.id === id2)
-    if (idx1 === -1 || idx2 === -1) return
+  /** 根据索引交换卡片 */
+  swapCardsByIndex(idx1: number, idx2: number) {
+    if (idx1 === idx2) return
+    if (idx1 < 0 || idx2 < 0 || idx1 >= this.state.cards.length || idx2 >= this.state.cards.length) return
+
+    const id1 = this.state.cards[idx1].id
+    const id2 = this.state.cards[idx2].id
 
     const temp = { ...this.state.cards[idx1] }
     this.state.cards[idx1] = { ...this.state.cards[idx2] }
     this.state.cards[idx2] = temp
 
-    // 保持 id 不变，只交换数据
     this.state.cards[idx1].id = id1
     this.state.cards[idx2].id = id2
+
+    // 交换后清除所有选中
+    this.state.clickSelectedId = null
+    this.state.keyboardSelectedId = null
     this.notify()
   }
 
-  /** 点击选中/交换 */
-  handleClick(id: number) {
-    if (this.state.phase !== 'exchange') return
-
-    if (this.state.clickSelectedId === null) {
-      // 第一次点击，选中
-      this.state.clickSelectedId = id
-    } else if (this.state.clickSelectedId === id) {
-      // 点击同一张，取消选中
-      this.state.clickSelectedId = null
-    } else {
-      // 第二次点击，交换
-      this.swapCards(this.state.clickSelectedId, id)
-      this.state.clickSelectedId = null
-    }
+  /** 设置点击选中 */
+  setClickSelected(index: number) {
+    this.state.clickSelectedId = index
     this.notify()
   }
 
-  /** 键盘悬停选中/交换 */
-  handleKeyboard(id: number) {
-    if (this.state.phase !== 'exchange') return
-
-    if (this.state.keyboardSelectedId === null) {
-      // 第一次按空格，选中
-      this.state.keyboardSelectedId = id
-    } else if (this.state.keyboardSelectedId === id) {
-      // 同一张卡，取消选中
-      this.state.keyboardSelectedId = null
-    } else {
-      // 与悬停卡交换
-      this.swapCards(this.state.keyboardSelectedId, id)
-      this.state.keyboardSelectedId = null
-    }
+  /** 清除点击选中 */
+  clearClickSelected() {
+    this.state.clickSelectedId = null
     this.notify()
   }
 
-  /** 设置悬停卡片 */
-  setHovered(id: number | null) {
-    if (this.state.hoveredId !== id) {
-      this.state.hoveredId = id
-      this.notify()
-    }
+  /** 设置键盘选中 */
+  setKeyboardSelected(index: number) {
+    this.state.keyboardSelectedId = index
+    this.notify()
+  }
+
+  /** 清除键盘选中 */
+  clearKeyboardSelected() {
+    this.state.keyboardSelectedId = null
+    this.notify()
   }
 
   /** 设置拖拽中的卡片 */
-  setDragging(id: number | null) {
-    this.state.draggingId = id
+  setDragging(index: number | null) {
+    this.state.draggingId = index
     this.notify()
   }
 
-  /** 获取点击选中ID */
-  getClickSelectedId(): number | null {
-    return this.state.clickSelectedId
+  /** 获取拖拽中的卡片索引 */
+  getDraggingId(): number | null {
+    return this.state.draggingId
   }
 
-  /** 获取键盘选中ID */
-  getKeyboardSelectedId(): number | null {
-    return this.state.keyboardSelectedId
+  /** 设置悬停 */
+  setHovered(index: number | null) {
+    if (this.state.hoveredId !== index) {
+      this.state.hoveredId = index
+      this.notify()
+    }
   }
 
   /** 获取悬停ID */
   getHoveredId(): number | null {
     return this.state.hoveredId
-  }
-
-  /** 获取拖拽ID */
-  getDraggingId(): number | null {
-    return this.state.draggingId
   }
 }
 

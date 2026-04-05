@@ -49,23 +49,23 @@ export function render() {
 }
 
 /** 渲染单张卡片 */
-function renderCard(card: ReturnType<typeof game.getCards>[number], index: number, state: ReturnType<typeof game.getState>): string {
+function renderCard(
+  card: ReturnType<typeof game.getCards>[number],
+  index: number,
+  state: ReturnType<typeof game.getState>
+): string {
   const isClickSelected = state.clickSelectedId === index
   const isKeyboardSelected = state.keyboardSelectedId === index
-  const isDragging = state.draggingId === index
   const isEmpty = !card.filled
 
   let classes = 'card'
   if (isEmpty) classes += ' empty'
   if (isClickSelected) classes += ' click-selected'
   if (isKeyboardSelected) classes += ' keyboard-selected'
-  if (isDragging) classes += ' dragging'
   if (card.type === 'star') classes += ' star'
   if (card.type === 'joker') classes += ' joker'
 
-  const content = card.filled
-    ? `<span class="pattern">${card.pattern}</span>`
-    : ''
+  const content = card.filled ? `<span class="pattern">${card.pattern}</span>` : ''
 
   // 不同数字不同背景色
   const bgClass = card.type === 'normal' && card.pattern ? `bg-${card.pattern}` : ''
@@ -74,6 +74,7 @@ function renderCard(card: ReturnType<typeof game.getCards>[number], index: numbe
     <div
       class="${classes} ${bgClass}"
       data-index="${index}"
+      draggable="true"
     >
       <div class="card-inner">
         ${content}
@@ -82,7 +83,7 @@ function renderCard(card: ReturnType<typeof game.getCards>[number], index: numbe
   `
 }
 
-/** 绑定全局事件（使用事件委托，只调用一次） */
+/** 绑定全局事件 */
 let eventsBound = false
 
 export function bindEvents() {
@@ -92,28 +93,49 @@ export function bindEvents() {
   const app = document.getElementById('app')
   if (!app) return
 
-  // 事件委托 - 处理所有点击
+  // 点击事件
   app.addEventListener('click', (e: MouseEvent) => {
     const target = e.target as HTMLElement
 
-    // 处理卡片点击
+    // 卡片点击
     const cardEl = target.closest('.card')
     if (cardEl) {
       const index = Number((cardEl as HTMLElement).dataset.index)
       if (isNaN(index)) return
 
       const state = game.getState()
+
       if (state.phase === 'define') {
         game.fillCell(index)
         render()
-      } else {
-        game.handleClick(index)
+        return
+      }
+
+      // 交换阶段 - 点击交换
+      const prevSelected = state.clickSelectedId
+
+      // 清除之前的选中样式
+      if (prevSelected !== null && prevSelected !== index) {
+        const prevCard = document.querySelector(`.card[data-index="${prevSelected}"]`)
+        prevCard?.classList.remove('click-selected')
+      }
+
+      if (prevSelected === index) {
+        // 点击同一张，取消选中
+        game.clearClickSelected()
+      } else if (prevSelected !== null) {
+        // 不同卡，交换
+        game.swapCardsByIndex(prevSelected, index)
         render()
+      } else {
+        // 选中
+        game.setClickSelected(index)
+        cardEl.classList.add('click-selected')
       }
       return
     }
 
-    // 处理难度切换
+    // 难度切换
     const tab = target.closest('.tab')
     if (tab) {
       const key = (tab as HTMLElement).dataset.difficulty as DifficultyKey
@@ -122,7 +144,7 @@ export function bindEvents() {
       return
     }
 
-    // 处理重置按钮
+    // 重置
     const resetBtn = target.closest('#resetBtn')
     if (resetBtn) {
       game.reset()
@@ -131,79 +153,96 @@ export function bindEvents() {
     }
   })
 
-  // 拖拽事件
+  // 原生拖拽事件
   app.addEventListener('dragstart', (e: DragEvent) => {
-    const target = e.target as HTMLElement
-    const cardEl = target.closest('.card') as HTMLElement
+    const cardEl = (e.target as HTMLElement).closest('.card') as HTMLElement
     if (!cardEl) return
+
     const index = Number(cardEl.dataset.index)
+    if (isNaN(index)) return
+
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', String(index))
     }
+
     cardEl.classList.add('dragging')
     game.setDragging(index)
   })
 
   app.addEventListener('dragend', (e: DragEvent) => {
-    const target = e.target as HTMLElement
-    const cardEl = target.closest('.card')
-    if (cardEl) {
-      cardEl.classList.remove('dragging')
-    }
+    const cardEl = (e.target as HTMLElement).closest('.card')
+    cardEl?.classList.remove('dragging')
     game.setDragging(null)
   })
 
   app.addEventListener('dragover', (e: DragEvent) => {
     e.preventDefault()
-    const target = e.target as HTMLElement
-    const cardEl = target.closest('.card')
-    if (!cardEl) return
-    if (cardEl.classList.contains('dragging')) return
+    const cardEl = (e.target as HTMLElement).closest('.card')
+    if (!cardEl || cardEl.classList.contains('dragging')) return
     cardEl.classList.add('drag-over')
   })
 
   app.addEventListener('dragleave', (e: DragEvent) => {
-    const target = e.target as HTMLElement
-    const cardEl = target.closest('.card')
+    const cardEl = (e.target as HTMLElement).closest('.card')
     cardEl?.classList.remove('drag-over')
   })
 
   app.addEventListener('drop', (e: DragEvent) => {
     e.preventDefault()
-    const target = e.target as HTMLElement
-    const cardEl = target.closest('.card') as HTMLElement
-    if (!cardEl) return
-    cardEl.classList.remove('drag-over')
+    const targetCard = (e.target as HTMLElement).closest('.card') as HTMLElement
+    if (!targetCard) return
+    targetCard.classList.remove('drag-over')
 
     const fromIndex = game.getDraggingId()
-    const toIndex = Number(cardEl.dataset.index)
+    const toIndex = Number(targetCard.dataset.index)
 
     if (fromIndex !== null && !isNaN(toIndex) && fromIndex !== toIndex) {
-      game.swapCards(fromIndex, toIndex)
+      game.swapCardsByIndex(fromIndex, toIndex)
       game.setDragging(null)
       render()
     }
   })
 
-  // 键盘事件（空格/回车）
+  // 键盘事件（空格/回车）- 仅在交换阶段
   document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.code === 'Space' || e.code === 'Enter') {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       e.preventDefault()
+
       const state = game.getState()
-      if (state.phase === 'exchange') {
-        if (state.hoveredId !== null) {
-          game.handleKeyboard(state.hoveredId)
-          render()
-        }
+      if (state.phase !== 'exchange') return
+
+      const hoveredId = state.hoveredId
+      if (hoveredId === null) return
+
+      const prevSelected = state.keyboardSelectedId
+
+      // 清除之前的键盘选中样式
+      if (prevSelected !== null && prevSelected !== hoveredId) {
+        const prevCard = document.querySelector(`.card[data-index="${prevSelected}"]`)
+        prevCard?.classList.remove('keyboard-selected')
+      }
+
+      if (prevSelected === hoveredId) {
+        // 同一张，取消选中
+        game.clearKeyboardSelected()
+      } else if (prevSelected !== null) {
+        // 不同卡，交换
+        game.swapCardsByIndex(prevSelected, hoveredId)
+        render()
+      } else {
+        // 选中
+        game.setKeyboardSelected(hoveredId)
+        const card = document.querySelector(`.card[data-index="${hoveredId}"]`)
+        card?.classList.add('keyboard-selected')
       }
     }
   })
 
-  // 悬停卡片（用于键盘模式）
+  // 悬停事件 - 仅更新状态，不触发 render
   app.addEventListener('mouseover', (e: MouseEvent) => {
-    const target = e.target as HTMLElement
-    const cardEl = target.closest('.card')
+    const cardEl = (e.target as HTMLElement).closest('.card')
     if (!cardEl) return
     const index = Number((cardEl as HTMLElement).dataset.index)
     if (!isNaN(index)) {
@@ -212,8 +251,7 @@ export function bindEvents() {
   })
 
   app.addEventListener('mouseout', (e: MouseEvent) => {
-    const target = e.target as HTMLElement
-    const cardEl = target.closest('.card')
+    const cardEl = (e.target as HTMLElement).closest('.card')
     if (!cardEl) return
     game.setHovered(null)
   })
