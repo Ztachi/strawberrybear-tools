@@ -1,0 +1,10 @@
+{
+  "$schema": "https://pnpm.io/config/v10/package.json",
+  "changelog": {
+    "repository": "https://github.com/strawberrybear/strawberrybear-tools"
+  },
+  "access": "public",
+  "auto": {
+    "autoMergeAfterNpmPublish": true
+  }
+}
