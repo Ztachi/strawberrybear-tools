@@ -4,87 +4,87 @@
 
 项目主色调为 `#F7C0C1`（淡粉色），源自游戏《无限暖暖》的清新可爱风格。
 
-## CSS 变量
-
-在 `src/style.css` 中定义的主题变量：
+## 明亮主题（默认）
 
 ```css
 :root {
-  /* 主色调 */
-  --primary: 350 89% 80%;        /* #F7C0C1 */
+  /* 品牌粉色系 */
+  --color-primary: #f7c0c1;
+  --color-primary-light: #fddde6;
+  --color-secondary: #f5b8c0;
 
-  /* 背景色（暗色主题） */
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
+  /* 明亮背景 */
+  --background: 30 20% 97%;
+  --foreground: 330 10% 15%;
 
-  /* 卡片 */
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
+  /* 主色调 - 柔和粉 */
+  --primary: 350 89% 80%;
+  --primary-foreground: 330 10% 15%;
 
   /* 次要色 */
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-
-  /* 强调色 */
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-
-  /* 状态色 */
-  --destructive: 0 62.8% 30.6%;
-
-  /* 边框 */
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 350 89% 80%;
+  --secondary: 30 15% 94%;
+  --muted: 30 10% 92%;
 
   /* 圆角 */
-  --radius: 0.5rem;
+  --radius: 0.875rem;
 }
 ```
 
-## Tailwind CSS 使用
+### 色彩系统
 
-### 基础类名
+| 变量            | 值        | 用途               |
+| --------------- | --------- | ------------------ |
+| `primary`       | `#f7c0c1` | 主题色、按钮、强调 |
+| `primary-light` | `#fddde6` | 悬停状态、次要强调 |
+| `secondary`     | `#f5b8c0` | 次要按钮、标签     |
+| `foreground`    | `#4a3f3f` | 主文本             |
+| `muted`         | `#a89a9a` | 次要文本           |
 
-```html
-<!-- 背景 -->
-<div class="bg-background text-foreground">
+### 组件色彩
 
-<!-- 卡片 -->
-<div class="bg-card text-card-foreground">
-
-<!-- 主色调 -->
-<button class="bg-primary text-primary-foreground">
-
-<!-- 边框 -->
-<div class="border">
-```
-
-### 自定义色彩
-
-在 `tailwind.config.js` 中配置了 HSL 变量映射：
-
-```js
-colors: {
-  primary: {
-    DEFAULT: 'hsl(var(--primary))',
-    foreground: 'hsl(var(--primary-foreground))',
-  },
-  background: 'hsl(var(--background))',
-  // ...
-}
-```
+| 组件       | 背景                     | 边框                     | 文字      |
+| ---------- | ------------------------ | ------------------------ | --------- |
+| 卡片       | `rgba(255,255,255,0.9)`  | `rgba(247,192,193,0.2)`  | `#4a3f3f` |
+| 标签栏     | `rgba(255,255,255,0.8)`  | `rgba(247,192,193,0.2)`  | `#f7c0c1` |
+| 标签(激活) | 渐变粉色                 | -                        | `#4a3f3f` |
+| 输入框     | `rgba(247,192,193,0.08)` | `rgba(247,192,193,0.15)` | `#6b5a5a` |
 
 ## 暗色主题
 
-项目默认使用暗色主题，所有组件自动适配。背景色为深灰蓝色系，文字为高对比度白色。
+待实现，将跟随系统自动切换。
 
-## 响应式设计
+## 设计原则
 
-使用 Tailwind 的响应式前缀：
+### 1. Modern Minimal
 
-```html
-<div class="flex flex-col sm:flex-row">
-  <!-- 移动端垂直排列，桌面端水平排列 -->
-</div>
+- 大量 whitespace
+- 柔和圆角 `rounded-2xl` (14px)
+- 简洁线条
+
+### 2. 粉色主题
+
+- 主色调 `#F7C0C1` 贯穿全局
+- 渐变背景 `#fdf6f7 → #fef9fa`
+- 悬停状态使用 `hover:bg-pink-50`
+
+### 3. 玻璃态卡片
+
+```css
+.card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(247, 192, 193, 0.2);
+  box-shadow: 0 2px 12px rgba(247, 192, 193, 0.08);
+}
 ```
+
+### 4. 动画
+
+- 悬停 `translateY(-2px)` 轻微上浮
+- 脉冲动画用于播放状态指示
+- `fadeIn` 动画用于 Tab 切换
+
+## 未来计划
+
+- [ ] 暗色主题支持
+- [ ] 跟随系统自动切换
+- [ ] 用户手动选择主题

@@ -48,7 +48,7 @@ async function adjustSpeed(delta: number) {
 </script>
 
 <template>
-  <div class="player-controls glass">
+  <div class="player-controls">
     <!-- 状态栏 -->
     <div class="status-bar">
       <div class="status-indicator" :class="playerStore.playbackState.status">
@@ -122,8 +122,9 @@ async function adjustSpeed(delta: number) {
 <style scoped>
 .player-controls {
   @apply rounded-2xl p-5;
-  background: rgba(20, 20, 25, 0.5) !important;
-  border: 1px solid rgba(247, 192, 193, 0.15) !important;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(247, 192, 193, 0.2);
+  box-shadow: 0 2px 12px rgba(247, 192, 193, 0.08);
 }
 
 .status-bar {
@@ -143,11 +144,11 @@ async function adjustSpeed(delta: number) {
 }
 
 .status-indicator.idle .indicator-dot {
-  @apply bg-white/30;
+  @apply bg-pink-300;
 }
 
 .status-indicator.playing .indicator-dot {
-  @apply bg-green-400;
+  @apply bg-green-500;
 }
 
 .status-indicator.playing .indicator-glow {
@@ -156,7 +157,7 @@ async function adjustSpeed(delta: number) {
 }
 
 .status-indicator.paused .indicator-dot {
-  @apply bg-yellow-400;
+  @apply bg-yellow-500;
 }
 
 .status-indicator.paused .indicator-glow {
@@ -164,13 +165,14 @@ async function adjustSpeed(delta: number) {
 }
 
 .status-text {
-  @apply text-sm font-medium text-white/80;
+  @apply text-sm font-medium;
+  color: #6b5a5a;
 }
 
 .template-badge {
   @apply ml-auto px-3 py-1 rounded-full text-xs font-medium;
   background: rgba(247, 192, 193, 0.15);
-  color: #f7c0c1;
+  color: #d88a8a;
   border: 1px solid rgba(247, 192, 193, 0.2);
 }
 
@@ -181,37 +183,42 @@ async function adjustSpeed(delta: number) {
 .play-btn {
   @apply flex-1 gap-2 h-12 text-base font-semibold;
   background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
-  @apply text-gray-900;
+  @apply text-pink-900;
+  box-shadow: 0 4px 16px rgba(247, 192, 193, 0.3);
 }
 
 .play-btn:hover:not(:disabled) {
-  @apply opacity-90;
+  @apply opacity-95;
   transform: translateY(-1px);
 }
 
 .stop-btn {
   @apply gap-2 h-12 px-6;
-  background: rgba(255, 255, 255, 0.05) !important;
-  @apply text-white/80 border-white/10;
+  @apply text-pink-600 border-pink-200;
 }
 
 .stop-btn:hover:not(:disabled) {
-  @apply bg-white/10;
+  @apply bg-pink-50;
 }
 
 .speed-control {
   @apply flex items-center gap-1 px-3 py-2 rounded-xl;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(247, 192, 193, 0.08);
+  border: 1px solid rgba(247, 192, 193, 0.15);
 }
 
 .speed-btn {
-  @apply w-8 h-8 rounded-lg flex items-center justify-center text-white/60;
-  @apply hover:bg-white/10 hover:text-white transition-all;
+  @apply w-8 h-8 rounded-lg flex items-center justify-center;
+  @apply text-pink-400 transition-all;
+}
+
+.speed-btn:hover {
+  @apply bg-pink-100;
 }
 
 .speed-value {
-  @apply min-w-[3rem] text-center text-sm font-mono font-medium text-white;
+  @apply min-w-[3rem] text-center text-sm font-mono font-medium;
+  color: #6b5a5a;
 }
 
 @keyframes pulse {

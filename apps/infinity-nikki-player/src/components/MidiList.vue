@@ -64,7 +64,7 @@ function formatDuration(ms: number) {
         </svg>
       </div>
     </div>
-    <div v-if="list.length === 0" class="empty-state glass">
+    <div v-if="list.length === 0" class="empty-state">
       <div class="empty-icon">
         <svg
           width="32"
@@ -92,24 +92,25 @@ function formatDuration(ms: number) {
 .midi-item {
   @apply flex items-center gap-4 p-4 rounded-xl cursor-pointer;
   @apply transition-all duration-200;
-  background: rgba(20, 20, 25, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(247, 192, 193, 0.15);
 }
 
 .midi-item:hover {
-  background: rgba(30, 30, 35, 0.5);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(247, 192, 193, 0.3);
   transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(247, 192, 193, 0.1);
 }
 
 .midi-item.active {
   background: rgba(247, 192, 193, 0.1) !important;
-  border-color: rgba(247, 192, 193, 0.3) !important;
+  border-color: rgba(247, 192, 193, 0.4) !important;
 }
 
 .item-icon {
   @apply w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0;
-  background: rgba(247, 192, 193, 0.1);
+  background: rgba(247, 192, 193, 0.15);
   color: #f7c0c1;
 }
 
@@ -118,15 +119,17 @@ function formatDuration(ms: number) {
 }
 
 .filename {
-  @apply block text-sm font-medium text-white truncate;
+  @apply block text-sm font-medium;
+  color: #4a3f3f;
 }
 
 .meta {
-  @apply text-xs text-white/50 mt-0.5;
+  @apply text-xs mt-0.5;
+  color: #a89a9a;
 }
 
 .item-arrow {
-  @apply text-white/30;
+  @apply text-pink-300;
   @apply opacity-0 transition-opacity;
 }
 
@@ -141,17 +144,18 @@ function formatDuration(ms: number) {
 
 .empty-state {
   @apply flex flex-col items-center justify-center gap-4 py-12 rounded-2xl;
-  background: rgba(20, 20, 25, 0.3) !important;
-  border: 1px dashed rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px dashed rgba(247, 192, 193, 0.2);
 }
 
 .empty-icon {
   @apply w-16 h-16 rounded-2xl flex items-center justify-center;
-  background: rgba(247, 192, 193, 0.05);
+  background: rgba(247, 192, 193, 0.1);
   color: rgba(247, 192, 193, 0.5);
 }
 
 .empty-text {
-  @apply text-sm text-white/40;
+  @apply text-sm;
+  color: #a89a9a;
 }
 </style>

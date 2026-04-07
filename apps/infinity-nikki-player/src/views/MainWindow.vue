@@ -66,8 +66,8 @@ function formatDuration(ms: number) {
 
 <template>
   <div class="main-window">
-    <!-- 顶部导航栏 - 玻璃态 -->
-    <header class="header glass">
+    <!-- 顶部导航栏 -->
+    <header class="header">
       <div class="header-content">
         <div class="logo-section">
           <div class="logo-icon">
@@ -119,8 +119,8 @@ function formatDuration(ms: number) {
     <!-- 主内容区 -->
     <main class="content">
       <Tabs v-model="activeTab" class="tabs-container">
-        <!-- 玻璃态标签栏 -->
-        <TabsList class="tabs-list glass">
+        <!-- 标签栏 -->
+        <TabsList class="tabs-list">
           <TabsTrigger value="files" class="tab-trigger">
             <svg
               width="16"
@@ -174,7 +174,7 @@ function formatDuration(ms: number) {
         <TabsContent value="files" class="tab-content">
           <!-- 操作按钮组 -->
           <div class="action-cards">
-            <button class="action-card glass" @click="selectFile">
+            <button class="action-card" @click="selectFile">
               <div class="action-icon">
                 <svg
                   width="24"
@@ -191,7 +191,7 @@ function formatDuration(ms: number) {
               </div>
               <span class="action-text">{{ t('actions.selectFile') }}</span>
             </button>
-            <button class="action-card glass" @click="selectFolder">
+            <button class="action-card" @click="selectFolder">
               <div class="action-icon">
                 <svg
                   width="24"
@@ -218,7 +218,7 @@ function formatDuration(ms: number) {
           />
 
           <!-- 当前文件信息 -->
-          <Card v-if="playerStore.currentMidi" class="current-file-card glass">
+          <Card v-if="playerStore.currentMidi" class="current-file-card">
             <CardContent class="card-content">
               <div class="file-header">
                 <div class="file-icon">
@@ -279,16 +279,11 @@ function formatDuration(ms: number) {
 
 <style scoped>
 .main-window {
-  @apply h-screen flex flex-col bg-background text-foreground overflow-hidden;
-  background:
-    radial-gradient(ellipse at top left, rgba(247, 192, 193, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at bottom right, rgba(245, 184, 192, 0.05) 0%, transparent 50%),
-    hsl(var(--background));
+  @apply h-screen flex flex-col bg-gradient-warm text-foreground overflow-hidden;
 }
 
 .header {
-  @apply border-0 border-b border-white/5;
-  background: rgba(15, 15, 20, 0.7) !important;
+  @apply bg-white/80 backdrop-blur-xl border-b border-pink-100;
 }
 
 .header-content {
@@ -305,7 +300,8 @@ function formatDuration(ms: number) {
 }
 
 .title {
-  @apply text-xl font-semibold text-white;
+  @apply text-xl font-semibold;
+  color: #4a3f3f;
   letter-spacing: -0.02em;
 }
 
@@ -314,17 +310,19 @@ function formatDuration(ms: number) {
 }
 
 .lang-btn {
-  @apply text-white/70 hover:text-white;
+  @apply text-pink-400 hover:text-pink-500;
 }
 
 .overlay-btn {
   @apply gap-2;
   background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
-  @apply text-gray-900 font-medium;
+  @apply text-pink-900 font-medium;
+  box-shadow: 0 4px 16px rgba(247, 192, 193, 0.4);
 }
 
 .overlay-btn:hover {
-  @apply opacity-90;
+  @apply opacity-95;
+  transform: translateY(-1px);
 }
 
 .content {
@@ -336,24 +334,25 @@ function formatDuration(ms: number) {
 }
 
 .tabs-list {
-  @apply inline-flex h-12 items-center justify-start rounded-xl p-1;
-  background: rgba(20, 20, 25, 0.6) !important;
-  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  @apply inline-flex h-12 items-center justify-start rounded-2xl p-1;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(247, 192, 193, 0.2);
 }
 
 .tab-trigger {
-  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium;
-  @apply text-white/60 transition-all duration-200;
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium;
+  @apply text-pink-400 transition-all duration-200;
 }
 
 .tab-trigger[data-state='active'] {
-  @apply text-white;
-  background: rgba(247, 192, 193, 0.15) !important;
-  box-shadow: 0 0 20px rgba(247, 192, 193, 0.1);
+  @apply text-pink-900;
+  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
+  box-shadow: 0 2px 8px rgba(247, 192, 193, 0.3);
 }
 
 .tab-trigger:hover:not([data-state='active']) {
-  @apply text-white/80;
+  @apply text-pink-500;
+  background: rgba(247, 192, 193, 0.1);
 }
 
 .tab-content {
@@ -367,20 +366,21 @@ function formatDuration(ms: number) {
 
 .action-card {
   @apply flex flex-col items-center justify-center gap-3 p-6 rounded-2xl;
-  @apply text-white/80 hover:text-white transition-all duration-200;
-  background: rgba(20, 20, 25, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  @apply text-pink-600 transition-all duration-200;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(247, 192, 193, 0.2);
+  box-shadow: 0 2px 12px rgba(247, 192, 193, 0.1);
 }
 
 .action-card:hover {
-  background: rgba(30, 30, 35, 0.6) !important;
-  border-color: rgba(247, 192, 193, 0.2) !important;
+  border-color: rgba(247, 192, 193, 0.4);
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(247, 192, 193, 0.15);
 }
 
 .action-icon {
   @apply w-12 h-12 rounded-xl flex items-center justify-center;
-  background: rgba(247, 192, 193, 0.1);
+  background: rgba(247, 192, 193, 0.15);
   color: #f7c0c1;
 }
 
@@ -390,8 +390,9 @@ function formatDuration(ms: number) {
 
 .current-file-card {
   @apply mb-6;
-  background: rgba(20, 20, 25, 0.5) !important;
-  border: 1px solid rgba(247, 192, 193, 0.15) !important;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(247, 192, 193, 0.2);
+  box-shadow: 0 2px 12px rgba(247, 192, 193, 0.08);
 }
 
 .card-content {
@@ -409,7 +410,8 @@ function formatDuration(ms: number) {
 }
 
 .file-name {
-  @apply text-base font-semibold text-white flex-1;
+  @apply text-base font-semibold flex-1;
+  color: #4a3f3f;
 }
 
 .file-stats {
@@ -421,11 +423,13 @@ function formatDuration(ms: number) {
 }
 
 .stat-label {
-  @apply text-xs text-white/50;
+  @apply text-xs;
+  color: #a89a9a;
 }
 
 .stat-value {
-  @apply text-lg font-semibold text-white;
+  @apply text-lg font-semibold;
+  color: #4a3f3f;
 }
 
 .stat-value.highlight {

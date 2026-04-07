@@ -22,7 +22,7 @@ function formatTime(timestamp: number) {
 </script>
 
 <template>
-  <div class="key-log-panel glass">
+  <div class="key-log-panel">
     <!-- 头部 -->
     <div class="panel-header">
       <div class="header-title">
@@ -101,17 +101,18 @@ function formatTime(timestamp: number) {
 <style scoped>
 .key-log-panel {
   @apply h-full flex flex-col rounded-2xl;
-  background: rgba(20, 20, 25, 0.5) !important;
-  border: 1px solid rgba(247, 192, 193, 0.1) !important;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(247, 192, 193, 0.15);
 }
 
 .panel-header {
   @apply flex items-center justify-between px-5 py-4 border-b;
-  border-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(247, 192, 193, 0.1) !important;
 }
 
 .header-title {
-  @apply flex items-center gap-2 text-sm font-medium text-white/80;
+  @apply flex items-center gap-2 text-sm font-medium;
+  color: #6b5a5a;
 }
 
 .header-actions {
@@ -119,15 +120,16 @@ function formatTime(timestamp: number) {
 }
 
 .log-count {
-  @apply text-xs text-white/40 font-mono;
+  @apply text-xs font-mono;
+  color: #a89a9a;
 }
 
 .clear-btn {
-  @apply text-white/50 text-xs;
+  @apply text-pink-400 text-xs;
 }
 
 .clear-btn:hover {
-  @apply text-white/80;
+  @apply text-pink-500 bg-pink-50;
 }
 
 .log-list {
@@ -145,25 +147,27 @@ function formatTime(timestamp: number) {
 }
 
 .log-entry.release {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(247, 192, 193, 0.04);
+  border: 1px solid rgba(247, 192, 193, 0.08);
 }
 
 .time {
-  @apply text-xs font-mono text-white/40;
+  @apply text-xs font-mono;
+  color: #a89a9a;
 }
 
 .pitch {
   @apply text-sm font-mono font-medium;
-  color: #f7c0c1;
+  color: #d88a8a;
 }
 
 .arrow {
-  @apply text-white/30;
+  @apply text-pink-300;
 }
 
 .key {
-  @apply text-lg font-bold font-mono text-white;
+  @apply text-lg font-bold font-mono;
+  color: #6b5a5a;
 }
 
 .action-badge {
@@ -171,20 +175,21 @@ function formatTime(timestamp: number) {
 }
 
 .action-badge.press {
-  @apply bg-green-500/20 text-green-400;
+  @apply bg-green-100 text-green-600;
 }
 
 .action-badge.release {
-  @apply bg-white/5 text-white/40;
+  @apply bg-pink-50 text-pink-400;
 }
 
 .empty-state {
-  @apply flex flex-col items-center justify-center gap-3 py-16 text-white/40;
+  @apply flex flex-col items-center justify-center gap-3 py-16;
+  color: #a89a9a;
 }
 
 .empty-icon {
   @apply w-12 h-12 rounded-xl flex items-center justify-center;
-  background: rgba(247, 192, 193, 0.05);
+  background: rgba(247, 192, 193, 0.1);
   color: rgba(247, 192, 193, 0.4);
 }
 
