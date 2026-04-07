@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #f7c0c1;
+    --color-secondary: #f5b8c0;
+  }
+}
+
+@layer utilities {
+  .bg-primary {
+    background-color: var(--color-primary);
+  }
+  .text-primary {
+    color: var(--color-primary);
+  }
+  .border-primary {
+    border-color: var(--color-primary);
+  }
+  .hover\:bg-primary:hover {
+    background-color: var(--color-primary);
+  }
+  .hover\:text-primary:hover {
+    color: var(--color-primary);
+  }
+}

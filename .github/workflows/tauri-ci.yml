@@ -1,0 +1,59 @@
+name: Tauri CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/infinity-nikki-player/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/infinity-nikki-player/**'
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  tauri-build:
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            args: --target x86_64-unknown-linux-gnu
+          - os: macos-latest
+            args: ''
+          - os: windows-latest
+            args: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        run: pnpm --filter @strawberrybear/infinity-nikki-player tauri build ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: infinity-nikki-player-${{ matrix.os }}
+          path: |
+            apps/infinity-nikki-player/src-tauri/target/release/bundle/dmg/*.dmg
+            apps/infinity-nikki-player/src-tauri/target/release/bundle/nsis/*.exe
+            apps/infinity-nikki-player/src-tauri/target/release/bundle/app/*.app
+          if-no-files-found: ignore
