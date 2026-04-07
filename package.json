@@ -13,7 +13,8 @@
     "prepare": "husky",
     "ci:version": "changeset version",
     "ci:publish": "turbo run build && changeset publish",
-    "nikki": "pnpm --filter @strawberrybear/infinity-nikki-player tauri dev"
+    "nikki": "pnpm --filter @strawberrybear/infinity-nikki-player tauri dev",
+    "nikki:clean": "pnpm --filter @strawberrybear/infinity-nikki-player tauri:dev"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.1",

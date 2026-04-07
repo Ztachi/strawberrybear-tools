@@ -42,6 +42,15 @@ export default {
     tracks: 'Tracks',
     melodyNotes: 'Melody Notes',
     selectFileTip: 'Please select a MIDI file first',
+    libraryEmpty: 'Playlist is empty',
+    libraryEmptyTip: 'Click above to import MIDI files',
+    confirmDelete: 'Remove this file from the list?',
+    melodyInfo: 'Melody Info',
+    totalNotes: 'Total Notes',
+    activeNotes: 'Active Notes',
+  },
+  permissions: {
+    required: 'Accessibility Required',
   },
   template: {
     title: 'Template Management',

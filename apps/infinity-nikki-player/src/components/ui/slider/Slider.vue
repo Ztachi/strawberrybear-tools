@@ -1,51 +1,43 @@
 <script setup lang="ts">
-import { type HTMLAttributes, ref, watch } from 'vue'
-import { cn } from '@/lib/utils'
+import type { SliderRootEmits, SliderRootProps } from "reka-ui"
+import type { HTMLAttributes } from "vue"
+import { reactiveOmit } from "@vueuse/core"
+import { SliderRange, SliderRoot, SliderThumb, SliderTrack, useForwardPropsEmits } from "reka-ui"
+import { cn } from "@/lib/utils"
 
-const props = defineProps<{
-  modelValue?: number[]
-  min?: number
-  max?: number
-  step?: number
-  class?: HTMLAttributes['class']
-}>()
+const props = defineProps<SliderRootProps & { class?: HTMLAttributes["class"] }>()
+const emits = defineEmits<SliderRootEmits>()
 
-const emit = defineEmits<{
-  'update:modelValue': [value: number[]]
-}>()
+const delegatedProps = reactiveOmit(props, "class")
 
-const internalValue = ref(props.modelValue ?? [props.min ?? 0, props.max ?? 100])
-
-watch(() => props.modelValue, (val) => {
-  if (val) internalValue.value = val
-})
+const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
 
 <template>
-  <div :class="cn('relative flex w-full touch-none select-none items-center', props.class)">
-    <div class="relative h-1.5 w-full grow overflow-hidden rounded-full bg-primary/20">
-      <div
-        class="absolute h-full bg-primary"
-        :style="{ width: `${((internalValue[1] - (props.min ?? 0)) / ((props.max ?? 100) - (props.min ?? 0))) * 100}%` }"
+  <SliderRoot
+    v-slot="{ modelValue }"
+    data-slot="slider"
+    :class="cn(
+      'relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col',
+      props.class,
+    )"
+    v-bind="forwarded"
+  >
+    <SliderTrack
+      data-slot="slider-track"
+      class="bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
+    >
+      <SliderRange
+        data-slot="slider-range"
+        class="bg-primary absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
       />
-    </div>
-    <input
-      type="range"
-      :min="props.min ?? 0"
-      :max="props.max ?? 100"
-      :step="props.step ?? 1"
-      :value="internalValue[0]"
-      class="absolute w-full h-full opacity-0 cursor-pointer"
-      @input="internalValue[0] = Number(($event.target as HTMLInputElement).value); emit('update:modelValue', internalValue)"
+    </SliderTrack>
+
+    <SliderThumb
+      v-for="(_, key) in modelValue"
+      :key="key"
+      data-slot="slider-thumb"
+      class="bg-white border-primary ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
     />
-    <input
-      type="range"
-      :min="props.min ?? 0"
-      :max="props.max ?? 100"
-      :step="props.step ?? 1"
-      :value="internalValue[1]"
-      class="absolute w-full h-full opacity-0 cursor-pointer"
-      @input="internalValue[1] = Number(($event.target as HTMLInputElement).value); emit('update:modelValue', internalValue)"
-    />
-  </div>
+  </SliderRoot>
 </template>

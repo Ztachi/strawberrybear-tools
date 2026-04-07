@@ -4,47 +4,25 @@
 
 @layer base {
   :root {
-    /* 品牌粉色系 */
-    --color-primary: #f7c0c1;
-    --color-primary-light: #fddde6;
-    --color-secondary: #f5b8c0;
-
-    /* 明亮主题 */
     --background: 30 20% 97%;
     --foreground: 330 10% 15%;
-
-    /* 卡片 - 玻璃态白 */
-    --card: 30 20% 98%;
+    --card: 0 0% 100%;
     --card-foreground: 330 10% 15%;
-
-    --popover: 30 20% 100%;
+    --popover: 0 0% 100%;
     --popover-foreground: 330 10% 15%;
-
-    /* 主色调 - 柔和粉 */
     --primary: 350 89% 80%;
     --primary-foreground: 330 10% 15%;
-
-    /* 次要色 */
     --secondary: 30 15% 94%;
     --secondary-foreground: 330 10% 15%;
-
-    /* 静音/强调 */
     --muted: 30 10% 92%;
     --muted-foreground: 330 10% 45%;
-
     --accent: 30 15% 94%;
     --accent-foreground: 330 10% 15%;
-
-    /* 状态色 */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-
-    /* 边框 */
     --border: 30 10% 88%;
     --input: 30 10% 88%;
     --ring: 350 89% 80%;
-
-    /* 圆角 */
     --radius: 0.875rem;
   }
 }
@@ -62,14 +40,24 @@
   }
 }
 
-/* 玻璃态工具类 */
-@layer utilities {
+@layer components {
   .glass {
     @apply bg-white/80 backdrop-blur-xl border border-black/5;
   }
 
   .glass-subtle {
     @apply bg-white/60 backdrop-blur-lg border border-black/5;
+  }
+
+  /* 渐变背景 - 组件级别以便 @apply 可用 */
+  .bg-gradient-warm {
+    background: linear-gradient(135deg, #fdf6f7 0%, #fef9fa 50%, #fdf6f7 100%);
+  }
+
+  /* 主色强调 */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #f7c0c1 0%, #e8a0a3 100%);
   }
 
   /* 柔和阴影 */
@@ -85,17 +73,6 @@
       0 1px 3px rgba(0, 0, 0, 0.04);
   }
 
-  /* 渐变背景 */
-  .bg-gradient-warm {
-    background: linear-gradient(135deg, #fdf6f7 0%, #fef9fa 50%, #fdf6f7 100%);
-  }
-
-  /* 主色强调 */
-  .text-gradient {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #f7c0c1 0%, #e8a0a3 100%);
-  }
-
   /* 柔和边框 */
   .border-subtle {
     border-color: rgba(247, 192, 193, 0.3);
@@ -104,14 +81,6 @@
   /* 平滑过渡 */
   .transition-smooth {
     @apply transition-all duration-300 ease-out;
-  }
-}
-
-/* 修复 button cursor */
-@layer base {
-  button:not(:disabled),
-  [role='button']:not(:disabled) {
-    cursor: pointer;
   }
 }
 

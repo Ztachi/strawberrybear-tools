@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "identifier": "com.strawberrybear.infinity-nikki-player",
   "build": {
+    "devUrl": "http://localhost:1421",
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"

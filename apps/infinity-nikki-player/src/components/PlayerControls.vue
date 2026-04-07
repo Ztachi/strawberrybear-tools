@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { Button } from '@/components/ui'
+import { Play, Pause, Square, Minus, Plus } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
@@ -30,7 +31,7 @@ async function togglePlay() {
     await playerStore.resumePlayback()
   } else if (playerStore.currentMidi) {
     playerStore.startLogPolling()
-    await playerStore.startPlayback(playerStore.currentMidi.filename)
+    await playerStore.startPlayback()
   }
 }
 
@@ -69,50 +70,24 @@ async function adjustSpeed(delta: number) {
         :disabled="!playerStore.currentMidi"
         @click="togglePlay"
       >
-        <svg v-if="!isPlaying" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <polygon points="5 3 19 12 5 21 5 3" />
-        </svg>
-        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="6" y="4" width="4" height="16" />
-          <rect x="14" y="4" width="4" height="16" />
-        </svg>
+        <Pause v-if="isPlaying" :size="20" />
+        <Play v-else :size="20" />
         {{ isPlaying ? t('player.pause') : t('player.play') }}
       </Button>
 
       <Button variant="outline" class="stop-btn" :disabled="isIdle" @click="stop">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-        </svg>
+        <Square :size="18" />
         {{ t('player.stop') }}
       </Button>
 
       <!-- 速度控制 -->
       <div class="speed-control">
         <button class="speed-btn" @click="adjustSpeed(-0.1)">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+          <Minus :size="14" />
         </button>
         <span class="speed-value">{{ playerStore.speed.toFixed(1) }}x</span>
         <button class="speed-btn" @click="adjustSpeed(0.1)">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+          <Plus :size="14" />
         </button>
       </div>
     </div>

@@ -1,34 +1,34 @@
+<!--
+ * @Author: ztachi(legendryztachi@gmail.com)
+ * @Date: 2026-04-07 19:18:30
+ * @LastEditors: ztachi(legendryztachi@gmail.com)
+ * @LastEditTime: 2026-04-07 19:44:30
+ * @FilePath: /strawberrybear-tools/apps/infinity-nikki-player/src/components/ui/badge/Badge.vue
+ * @Description: 
+-->
 <script setup lang="ts">
-import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
+import type { PrimitiveProps } from "reka-ui"
+import type { HTMLAttributes } from "vue"
+import type { BadgeVariants } from "."
+import { reactiveOmit } from "@vueuse/core"
+import { Primitive } from "reka-ui"
+import { cn } from "@/lib/utils"
+import { badgeVariants } from "."
 
-const badgeVariants = cva(
-  'inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-  {
-    variants: {
-      variant: {
-        default: 'border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80',
-        secondary: 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        destructive: 'border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/90',
-        outline: 'text-foreground',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-    },
-  }
-)
-
-type BadgeVariants = VariantProps<typeof badgeVariants>
-
-const props = defineProps<{
-  variant?: BadgeVariants['variant']
-  class?: string
+const props = defineProps<PrimitiveProps & {
+  variant?: BadgeVariants["variant"]
+  class?: HTMLAttributes["class"]
 }>()
+
+const delegatedProps = reactiveOmit(props, "class")
 </script>
 
 <template>
-  <div :class="cn(badgeVariants({ variant: props.variant }), props.class)">
+  <Primitive
+    data-slot="badge"
+    :class="cn(badgeVariants({ variant }), props.class)"
+    v-bind="delegatedProps"
+  >
     <slot />
-  </div>
+  </Primitive>
 </template>

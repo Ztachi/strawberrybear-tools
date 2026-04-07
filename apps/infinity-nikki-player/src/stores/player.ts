@@ -4,10 +4,17 @@ import { invoke } from '@tauri-apps/api/core'
 import type { KeyLogEntry, MidiInfo, MelodyEvent, PlaybackState, KeyTemplate } from '@/types'
 
 export const usePlayerStore = defineStore('player', () => {
-  // MIDI 文件相关
+  // MIDI 库（已导入的文件列表）
+  const midiLibrary = ref<MidiInfo[]>([])
+
+  // 当前选中的 MIDI
   const currentMidi = ref<MidiInfo | null>(null)
-  const midiList = ref<MidiInfo[]>([])
+
+  // 当前 MIDI 的旋律数据
   const melody = ref<MelodyEvent[]>([])
+
+  // 是否显示详情 Drawer
+  const showDetail = ref(false)
 
   // 播放状态
   const playbackState = ref<PlaybackState>({
@@ -30,30 +37,92 @@ export const usePlayerStore = defineStore('player', () => {
   // 是否加载中
   const isLoading = ref(false)
 
-  /** 解析 MIDI 文件 */
-  async function parseMidi(path: string) {
+  // 辅助功能权限状态
+  const hasAccessibility = ref(false)
+
+  /** 检查辅助功能权限 */
+  async function checkAccessibility() {
+    try {
+      hasAccessibility.value = await invoke<boolean>('check_accessibility')
+    } catch {
+      hasAccessibility.value = false
+    }
+  }
+
+  /** 导入 MIDI 文件到库中 */
+  async function importMidi(path: string) {
     isLoading.value = true
     try {
       const [info, events] = await invoke<[MidiInfo, any[]]>('parse_midi_file', { path })
-      currentMidi.value = info
-      // 提取旋律
-      melody.value = await invoke<MelodyEvent[]>('extract_melody', {
-        events,
-        ticksPerBeat: info.ticks_per_beat,
-        tempo: 500000,
-      })
+      // 检查是否已存在
+      const exists = midiLibrary.value.some((m) => m.filename === info.filename)
+      if (!exists) {
+        midiLibrary.value.push(info)
+      }
+      // 选中并打开详情
+      await selectMidi(info, events)
+      return true
     } catch (e) {
-      console.error('解析 MIDI 失败:', e)
+      console.error('导入 MIDI 失败:', e)
+      return false
     } finally {
       isLoading.value = false
     }
   }
 
-  /** 扫描文件夹 */
+  /** 从库中删除 MIDI */
+  function removeFromLibrary(filename: string) {
+    const index = midiLibrary.value.findIndex((m) => m.filename === filename)
+    if (index !== -1) {
+      midiLibrary.value.splice(index, 1)
+    }
+    // 如果删除的是当前选中的，关闭详情
+    if (currentMidi.value?.filename === filename) {
+      closeDetail()
+    }
+  }
+
+  /** 选中 MIDI 并打开详情 */
+  async function selectMidi(midi: MidiInfo, events?: any[]) {
+    currentMidi.value = midi
+    if (events) {
+      melody.value = events
+    } else {
+      // 需要重新解析
+      try {
+        const [, parsedEvents] = await invoke<[MidiInfo, any[]]>('parse_midi_file', {
+          path: midi.filename,
+        })
+        melody.value = await invoke<MelodyEvent[]>('extract_melody', {
+          events: parsedEvents,
+          ticksPerBeat: midi.ticks_per_beat,
+          tempo: 500000,
+        })
+      } catch (e) {
+        console.error('解析 MIDI 失败:', e)
+      }
+    }
+    showDetail.value = true
+  }
+
+  /** 关闭详情 */
+  function closeDetail() {
+    showDetail.value = false
+    currentMidi.value = null
+    melody.value = []
+  }
+
+  /** 扫描文件夹并导入所有 MIDI */
   async function scanFolder(folderPath: string) {
     isLoading.value = true
     try {
-      midiList.value = await invoke<MidiInfo[]>('scan_folder', { folderPath })
+      const files = await invoke<MidiInfo[]>('scan_folder', { folderPath })
+      for (const file of files) {
+        const exists = midiLibrary.value.some((m) => m.filename === file.filename)
+        if (!exists) {
+          midiLibrary.value.push(file)
+        }
+      }
     } catch (e) {
       console.error('扫描文件夹失败:', e)
     } finally {
@@ -62,14 +131,15 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   /** 开始播放 */
-  async function startPlayback(midiPath: string) {
+  async function startPlayback() {
+    if (!currentMidi.value) return
     if (!currentTemplate.value) {
       alert('请先选择映射模板')
       return
     }
     try {
       await invoke('start_playback', {
-        midiPath,
+        midiPath: currentMidi.value.filename,
         melody: melody.value,
         template: currentTemplate.value.mappings,
         speed: speed.value,
@@ -202,17 +272,22 @@ export const usePlayerStore = defineStore('player', () => {
 
   return {
     // 状态
+    midiLibrary,
     currentMidi,
-    midiList,
     melody,
+    showDetail,
     playbackState,
     keyLogs,
     templates,
     currentTemplate,
     speed,
     isLoading,
+    hasAccessibility,
     // 方法
-    parseMidi,
+    importMidi,
+    removeFromLibrary,
+    selectMidi,
+    closeDetail,
     scanFolder,
     startPlayback,
     pausePlayback,
@@ -225,6 +300,7 @@ export const usePlayerStore = defineStore('player', () => {
     loadTemplates,
     saveTemplate,
     deleteTemplate,
+    checkAccessibility,
     startLogPolling,
     stopLogPolling,
   }

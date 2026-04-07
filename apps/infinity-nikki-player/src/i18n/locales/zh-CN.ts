@@ -42,6 +42,15 @@ export default {
     tracks: '音轨数',
     melodyNotes: '旋律音符数',
     selectFileTip: '请先选择 MIDI 文件',
+    libraryEmpty: '播放列表为空',
+    libraryEmptyTip: '点击上方按钮导入 MIDI 文件',
+    confirmDelete: '确定要从列表中删除此文件吗？',
+    melodyInfo: '旋律信息',
+    totalNotes: '总音符',
+    activeNotes: '有效音符',
+  },
+  permissions: {
+    required: '需要辅助功能权限',
   },
   template: {
     title: '模板管理',

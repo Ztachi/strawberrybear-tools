@@ -18,8 +18,8 @@ pub fn run() {
         .manage(PlayerControl::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_app_version,
-            commands::midi::parse_midi_file_cmd,
-            commands::midi::extract_melody_cmd,
+            commands::midi::parse_midi_file,
+            commands::midi::extract_melody,
             commands::midi::scan_folder,
             commands::player::start_playback,
             commands::player::pause_playback,
@@ -35,6 +35,7 @@ pub fn run() {
             commands::templates::save_template,
             commands::templates::delete_template,
             commands::check_accessibility,
+            commands::open_accessibility_settings,
         ])
         .setup(|app| {
             log::info!("App setup complete");

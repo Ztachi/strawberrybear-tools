@@ -21,7 +21,10 @@
 pnpm install
 
 # 开发模式
-pnpm --filter @strawberrybear/infinity-nikki-player dev
+pnpm nikki
+
+# 清理缓存并开发（Rust/配置/新增组件后使用）
+pnpm nikki:clean
 
 # 类型检查
 pnpm --filter @strawberrybear/infinity-nikki-player type-check

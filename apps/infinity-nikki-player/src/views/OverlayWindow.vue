@@ -2,6 +2,9 @@
 import { ref, computed } from 'vue'
 import { usePlayerStore } from '@/stores/player'
 import { invoke } from '@tauri-apps/api/core'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const playerStore = usePlayerStore()
 const isExpanded = ref(false)
@@ -33,7 +36,7 @@ async function togglePlay() {
   } else if (playerStore.playbackState.status === 'paused') {
     await playerStore.resumePlayback()
   } else if (playerStore.currentMidi) {
-    playerStore.startPlayback(playerStore.currentMidi.filename)
+    playerStore.startPlayback()
   }
 }
 
@@ -58,7 +61,7 @@ const recentLogs = computed(() => playerStore.keyLogs.slice(-5))
     <div class="drag-region" data-tauri-drag-region>
       <div class="drag-content">
         <span class="midi-name" data-tauri-drag-region>
-          {{ playerStore.playbackState.midi_name || '未选择文件' }}
+          {{ playerStore.playbackState.midi_name || t('player.noFile') }}
         </span>
         <button class="btn-lang-small" @click.stop="toggleLocale">
           {{ currentLang === 'zh-CN' ? 'EN' : '中文' }}
@@ -119,7 +122,7 @@ const recentLogs = computed(() => playerStore.keyLogs.slice(-5))
         <span v-for="log in recentLogs" :key="log.id" class="log-item" :class="log.action">
           {{ log.mapped_key }}
         </span>
-        <span v-if="recentLogs.length === 0" class="log-empty"> 暂无按键 </span>
+        <span v-if="recentLogs.length === 0" class="log-empty"> {{ t('log.empty') }} </span>
       </div>
     </div>
   </div>
