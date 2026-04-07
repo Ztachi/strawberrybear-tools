@@ -7,6 +7,7 @@ pub struct MidiInfo {
     pub duration_ms: u64,
     pub track_count: usize,
     pub ticks_per_beat: u16,
+    pub events: Vec<NoteEvent>,
 }
 
 /// MIDI 音符事件

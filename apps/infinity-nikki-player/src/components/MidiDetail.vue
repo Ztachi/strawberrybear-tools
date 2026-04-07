@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import PlayerControls from '@/components/PlayerControls.vue'
+import PreviewPlayer from '@/components/PreviewPlayer.vue'
 import { Music, Clock, Music2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -41,7 +42,12 @@ function formatDuration(ms: number) {
       </div>
     </div>
 
-    <!-- 播放控制 -->
+    <!-- 试听播放器 -->
+    <div class="preview-section">
+      <PreviewPlayer />
+    </div>
+
+    <!-- 演奏控制 -->
     <div class="detail-player">
       <PlayerControls />
     </div>
@@ -105,6 +111,12 @@ function formatDuration(ms: number) {
 
 .stat.highlight {
   @apply text-pink-500 font-medium;
+}
+
+.preview-section {
+  @apply mb-6 p-4 rounded-2xl;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.2);
 }
 
 .detail-player {

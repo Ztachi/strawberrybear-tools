@@ -2,6 +2,17 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import type { KeyLogEntry, MidiInfo, MelodyEvent, PlaybackState, KeyTemplate } from '@/types'
+import {
+  previewAllNotes,
+  stopPreview as stopPreviewPlayer,
+  pausePreview,
+  resumePreview,
+  getCurrentTime,
+  getTotalDuration,
+  setVolume as setPreviewVolume,
+  seekTo,
+  isPlayingState,
+} from '@/lib/midiPlayer'
 
 export const usePlayerStore = defineStore('player', () => {
   // MIDI 库（已导入的文件列表）
@@ -40,6 +51,17 @@ export const usePlayerStore = defineStore('player', () => {
   // 辅助功能权限状态
   const hasAccessibility = ref(false)
 
+  // 试听状态
+  const isPreviewPlaying = ref(false)
+  const isPreviewPaused = ref(false)
+  const previewCurrentTime = ref(0)
+  const previewDuration = ref(0)
+  const previewVolume = ref(1)
+  const isPreviewMuted = ref(false)
+  const isDragging = ref(false) // 标记是否正在拖拽进度条
+  const previewStartTime = 0
+  let previewTimer: ReturnType<typeof setInterval> | null = null
+
   /** 检查辅助功能权限 */
   async function checkAccessibility() {
     try {
@@ -53,14 +75,14 @@ export const usePlayerStore = defineStore('player', () => {
   async function importMidi(path: string) {
     isLoading.value = true
     try {
-      const [info, events] = await invoke<[MidiInfo, any[]]>('parse_midi_file', { path })
-      // 检查是否已存在
+      const [info] = await invoke<[MidiInfo]>('parse_midi_file', { path })
+      // 检查是否已存在（按文件名判断）
       const exists = midiLibrary.value.some((m) => m.filename === info.filename)
       if (!exists) {
         midiLibrary.value.push(info)
       }
       // 选中并打开详情
-      await selectMidi(info, events)
+      await selectMidi(info)
       return true
     } catch (e) {
       console.error('导入 MIDI 失败:', e)
@@ -83,30 +105,24 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   /** 选中 MIDI 并打开详情 */
-  async function selectMidi(midi: MidiInfo, events?: any[]) {
+  async function selectMidi(midi: MidiInfo) {
     currentMidi.value = midi
-    if (events) {
-      melody.value = events
-    } else {
-      // 需要重新解析
-      try {
-        const [, parsedEvents] = await invoke<[MidiInfo, any[]]>('parse_midi_file', {
-          path: midi.filename,
-        })
-        melody.value = await invoke<MelodyEvent[]>('extract_melody', {
-          events: parsedEvents,
-          ticksPerBeat: midi.ticks_per_beat,
-          tempo: 500000,
-        })
-      } catch (e) {
-        console.error('解析 MIDI 失败:', e)
-      }
+    try {
+      // 从缓存的 events 提取旋律（包含 pitch_name）
+      melody.value = await invoke<MelodyEvent[]>('extract_melody', {
+        events: midi.events,
+        ticksPerBeat: midi.ticks_per_beat,
+        tempo: 500000,
+      })
+    } catch (e) {
+      console.error('解析 MIDI 失败:', e)
     }
     showDetail.value = true
   }
 
   /** 关闭详情 */
   function closeDetail() {
+    stopPreviewPlayback() // 停止试听
     showDetail.value = false
     currentMidi.value = null
     melody.value = []
@@ -179,6 +195,159 @@ export const usePlayerStore = defineStore('player', () => {
       await updatePlaybackState()
     } catch (e) {
       console.error('停止失败:', e)
+    }
+  }
+
+  /** 开始试听 */
+  async function startPreview() {
+    if (!currentMidi.value || currentMidi.value.events.length === 0) return
+
+    try {
+      // 播放所有音符（所有音轨叠加）
+      await previewAllNotes(
+        currentMidi.value.events,
+        currentMidi.value.ticks_per_beat,
+        500000,
+        speed.value
+      )
+      isPreviewPlaying.value = true
+      isPreviewPaused.value = false
+      previewDuration.value = getTotalDuration()
+      startPreviewTimer()
+    } catch (e) {
+      console.error('试听失败:', e)
+      isPreviewPlaying.value = false
+    }
+  }
+
+  /** 停止试听 */
+  function stopPreviewPlayback() {
+    stopPreviewPlayer()
+    stopPreviewTimer()
+    isPreviewPlaying.value = false
+    isPreviewPaused.value = false
+    previewCurrentTime.value = 0
+  }
+
+  /** 暂停试听 */
+  function pausePreviewPlayback() {
+    if (!isPreviewPlaying.value) return
+    pausePreview()
+    isPreviewPaused.value = true
+    stopPreviewTimer()
+  }
+
+  /** 继续试听 */
+  function resumePreviewPlayback() {
+    if (!isPreviewPaused.value) return
+    resumePreview()
+    isPreviewPaused.value = false
+    startPreviewTimer()
+  }
+
+  /** 设置音量 */
+  function setPreviewVolumeValue(value: number) {
+    setPreviewVolume(value)
+    previewVolume.value = value
+    if (value > 0) {
+      isPreviewMuted.value = false
+    }
+  }
+
+  /** 切换静音 */
+  function toggleMute() {
+    if (isPreviewMuted.value) {
+      setPreviewVolume(previewVolume.value)
+      isPreviewMuted.value = false
+    } else {
+      setPreviewVolume(0)
+      isPreviewMuted.value = true
+    }
+  }
+
+  /** 跳转播放 */
+  function seekPreview(time: number) {
+    previewCurrentTime.value = time
+    // 只有在拖拽结束时才真正跳转播放位置
+    if (!isDragging.value) {
+      seekTo(time)
+    }
+  }
+
+  /** 开始定时器 */
+  function startPreviewTimer() {
+    stopPreviewTimer()
+    previewTimer = setInterval(() => {
+      // 如果不在拖拽中，才从 Tone.js 获取真实播放时间
+      if (!isDragging.value) {
+        previewCurrentTime.value = getCurrentTime()
+      }
+    }, 100)
+  }
+
+  /** 标记为正在拖拽（阻止定时器覆盖） */
+  function setDragging(dragging: boolean) {
+    isDragging.value = dragging
+  }
+
+  /** 设置预览播放时间（仅更新显示值） */
+  function setPreviewTime(time: number) {
+    previewCurrentTime.value = time
+  }
+
+  /** 停止定时器 */
+  function stopPreviewTimer() {
+    if (previewTimer) {
+      clearInterval(previewTimer)
+      previewTimer = null
+    }
+  }
+
+  /** 播放上一曲 */
+  async function playPrev() {
+    if (midiLibrary.value.length === 0) return
+    stopPreviewPlayback()
+    const currentIndex = midiLibrary.value.findIndex(
+      (m) => m.filename === currentMidi.value?.filename
+    )
+    const prevIndex = currentIndex <= 0 ? midiLibrary.value.length - 1 : currentIndex - 1
+    const prevMidi = midiLibrary.value[prevIndex]
+    currentMidi.value = prevMidi
+    try {
+      melody.value = await invoke<MelodyEvent[]>('extract_melody', {
+        events: prevMidi.events,
+        ticksPerBeat: prevMidi.ticks_per_beat,
+        tempo: 500000,
+      })
+      showDetail.value = true
+      // 选择后立即开始播放
+      startPreview()
+    } catch (e) {
+      console.error('解析 MIDI 失败:', e)
+    }
+  }
+
+  /** 播放下一曲 */
+  async function playNext() {
+    if (midiLibrary.value.length === 0) return
+    stopPreviewPlayback()
+    const currentIndex = midiLibrary.value.findIndex(
+      (m) => m.filename === currentMidi.value?.filename
+    )
+    const nextIndex = currentIndex >= midiLibrary.value.length - 1 ? 0 : currentIndex + 1
+    const nextMidi = midiLibrary.value[nextIndex]
+    currentMidi.value = nextMidi
+    try {
+      melody.value = await invoke<MelodyEvent[]>('extract_melody', {
+        events: nextMidi.events,
+        ticksPerBeat: nextMidi.ticks_per_beat,
+        tempo: 500000,
+      })
+      showDetail.value = true
+      // 选择后立即开始播放
+      startPreview()
+    } catch (e) {
+      console.error('解析 MIDI 失败:', e)
     }
   }
 
@@ -283,6 +452,12 @@ export const usePlayerStore = defineStore('player', () => {
     speed,
     isLoading,
     hasAccessibility,
+    isPreviewPlaying,
+    isPreviewPaused,
+    previewCurrentTime,
+    previewDuration,
+    previewVolume,
+    isPreviewMuted,
     // 方法
     importMidi,
     removeFromLibrary,
@@ -303,5 +478,17 @@ export const usePlayerStore = defineStore('player', () => {
     checkAccessibility,
     startLogPolling,
     stopLogPolling,
+    startPreview,
+    stopPreviewPlayback,
+    pausePreviewPlayback,
+    resumePreviewPlayback,
+    seekPreview,
+    seekTo,
+    setPreviewVolumeValue,
+    setDragging,
+    setPreviewTime,
+    toggleMute,
+    playPrev,
+    playNext,
   }
 })

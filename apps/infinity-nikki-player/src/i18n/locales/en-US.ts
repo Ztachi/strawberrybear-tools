@@ -31,6 +31,8 @@ export default {
     play: 'Play',
     pause: 'Pause',
     stop: 'Stop',
+    preview: 'Preview',
+    stopPreview: 'Stop Preview',
     speed: 'Speed',
     template: 'Template',
     noTemplate: 'Not Selected',

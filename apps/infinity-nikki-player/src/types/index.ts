@@ -1,11 +1,3 @@
-/** MIDI 文件基本信息 */
-export interface MidiInfo {
-  filename: string
-  duration_ms: number
-  track_count: number
-  ticks_per_beat: number
-}
-
 /** MIDI 音符事件 */
 export interface NoteEvent {
   pitch: number
@@ -13,6 +5,15 @@ export interface NoteEvent {
   start_tick: number
   end_tick: number
   channel: number
+}
+
+/** MIDI 文件基本信息 */
+export interface MidiInfo {
+  filename: string
+  duration_ms: number
+  track_count: number
+  ticks_per_beat: number
+  events: NoteEvent[]
 }
 
 /** 提取后的旋律事件 */

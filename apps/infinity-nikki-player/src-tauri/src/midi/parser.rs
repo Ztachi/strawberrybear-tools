@@ -84,6 +84,7 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
         duration_ms: duration_ms as u64,
         track_count,
         ticks_per_beat,
+        events: events.clone(),
     };
 
     Ok((info, events))

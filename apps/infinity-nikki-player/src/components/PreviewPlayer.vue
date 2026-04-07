@@ -1,0 +1,219 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { usePlayerStore } from '@/stores/player'
+import { Button } from '@/components/ui'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Slider } from '@/components/ui/slider'
+import {
+  SkipBack,
+  SkipForward,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+} from 'lucide-vue-next'
+
+const playerStore = usePlayerStore()
+
+/** 内部进度值（包装为响应式数组） */
+const internalPercentArray = ref<[number]>([0])
+/** 是否正在拖拽 */
+const isDragging = ref(false)
+
+/** 格式化时间 */
+function formatTime(seconds: number) {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+/** 当前播放时间对应的百分比 */
+const currentPercent = computed(() => {
+  if (!playerStore.previewDuration) return 0
+  return (playerStore.previewCurrentTime / playerStore.previewDuration) * 100
+})
+
+/** 音量百分比 */
+const volumePercent = computed(() => {
+  return Math.round(playerStore.previewVolume * 100)
+})
+
+/** 播放/暂停 */
+function togglePlay() {
+  if (playerStore.isPreviewPlaying && !playerStore.isPreviewPaused) {
+    playerStore.pausePreviewPlayback()
+  } else if (playerStore.isPreviewPaused) {
+    playerStore.resumePreviewPlayback()
+  } else {
+    playerStore.startPreview()
+  }
+}
+
+/** 进度条拖拽开始 */
+function onSliderPointerDown() {
+  isDragging.value = true
+}
+
+/** 进度条值变化 */
+function onSliderUpdate(value: [number, number]) {
+  internalPercentArray.value = [value[0]]
+  if (isDragging.value) {
+    playerStore.setPreviewTime((value[0] / 100) * playerStore.previewDuration)
+  }
+}
+
+/** 进度条拖拽结束 */
+function onSliderPointerUp() {
+  if (isDragging.value) {
+    playerStore.seekTo((internalPercentArray.value[0] / 100) * playerStore.previewDuration)
+    isDragging.value = false
+  }
+}
+
+/** 播放时同步进度条 */
+watch(currentPercent, (newVal) => {
+  if (!isDragging.value) {
+    internalPercentArray.value = [newVal]
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('pointerup', onSliderPointerUp)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pointerup', onSliderPointerUp)
+})
+</script>
+
+<template>
+  <div class="preview-player">
+    <!-- 进度条 -->
+    <div class="progress-bar">
+      <span class="time current">{{ formatTime(playerStore.previewCurrentTime) }}</span>
+      <div class="slider-wrapper">
+        <Slider
+          v-model="internalPercentArray"
+          :max="100"
+          :step="0.1"
+          class="progress-slider"
+          @pointerdown="onSliderPointerDown"
+          @update:model-value="onSliderUpdate"
+        />
+      </div>
+      <span class="time duration">{{ formatTime(playerStore.previewDuration) }}</span>
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="controls">
+      <!-- 上一曲 -->
+      <Button variant="ghost" size="icon" class="control-btn prev" @click="playerStore.playPrev">
+        <SkipBack :size="18" />
+      </Button>
+
+      <!-- 播放/暂停 -->
+      <Button variant="default" size="icon" class="control-btn play" @click="togglePlay">
+        <Pause v-if="playerStore.isPreviewPlaying && !playerStore.isPreviewPaused" :size="20" />
+        <Play v-else :size="20" />
+      </Button>
+
+      <!-- 下一曲 -->
+      <Button variant="ghost" size="icon" class="control-btn next" @click="playerStore.playNext">
+        <SkipForward :size="18" />
+      </Button>
+
+      <!-- 音量控制 -->
+      <Popover>
+        <PopoverTrigger as-child>
+          <Button variant="ghost" size="icon" class="control-btn volume">
+            <VolumeX v-if="playerStore.isPreviewMuted" :size="18" />
+            <Volume2 v-else :size="18" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent class="w-48 p-3" align="center" side="top">
+          <div class="volume-popover">
+            <Button variant="ghost" size="icon" class="mute-btn" @click="playerStore.toggleMute">
+              <VolumeX v-if="playerStore.isPreviewMuted" :size="16" />
+              <Volume2 v-else :size="16" />
+            </Button>
+            <Slider
+              :model-value="[playerStore.isPreviewMuted ? 0 : playerStore.previewVolume * 100]"
+              :max="100"
+              class="volume-slider"
+              @update:model-value="(v) => playerStore.setPreviewVolumeValue(v[0] / 100)"
+            />
+            <span class="volume-percent">{{ volumePercent }}%</span>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.preview-player {
+  @apply flex flex-col gap-3;
+}
+
+.progress-bar {
+  @apply flex items-center gap-3;
+}
+
+.time {
+  @apply text-xs font-mono w-10 text-center;
+  color: #a89a9a;
+}
+
+.time.current {
+  @apply text-pink-400;
+}
+
+.slider-wrapper {
+  @apply flex-1 cursor-pointer;
+}
+
+.progress-slider {
+  @apply w-full cursor-pointer;
+}
+
+.controls {
+  @apply flex items-center justify-center gap-2;
+}
+
+.control-btn {
+  @apply text-pink-400 hover:bg-pink-50;
+}
+
+.control-btn.play {
+  @apply w-12 h-12 rounded-full;
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%) !important;
+  @apply text-white hover:opacity-90;
+}
+
+.control-btn.prev,
+.control-btn.next {
+  @apply w-10 h-10 rounded-xl;
+}
+
+.control-btn.volume {
+  @apply w-10 h-10 rounded-xl ml-4;
+}
+
+.volume-popover {
+  @apply flex items-center gap-2;
+}
+
+.mute-btn {
+  @apply w-8 h-8 rounded-lg;
+  @apply text-pink-400 hover:bg-pink-50;
+}
+
+.volume-slider {
+  @apply flex-1 cursor-pointer;
+}
+
+.volume-percent {
+  @apply text-xs w-8 text-right font-mono;
+  color: #a89a9a;
+}
+</style>

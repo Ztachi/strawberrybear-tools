@@ -31,6 +31,8 @@ export default {
     play: '播放',
     pause: '暂停',
     stop: '停止',
+    preview: '试听',
+    stopPreview: '停止试听',
     speed: '速度',
     template: '模板',
     noTemplate: '未选择',

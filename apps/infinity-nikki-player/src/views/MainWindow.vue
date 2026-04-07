@@ -7,7 +7,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
-import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder } from 'lucide-vue-next'
+import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder, X } from 'lucide-vue-next'
 import MidiLibrary from '@/components/MidiLibrary.vue'
 import MidiDetail from '@/components/MidiDetail.vue'
 import TemplateEditor from '@/components/TemplateEditor.vue'
@@ -162,13 +162,18 @@ async function enterOverlayMode() {
     </main>
 
     <!-- MIDI 详情 Drawer -->
-    <Drawer v-model:open="playerStore.showDetail">
-      <DrawerContent>
-        <DrawerHeader>
-          <DrawerTitle>{{ playerStore.currentMidi?.filename }}</DrawerTitle>
-          <DrawerDescription>{{ t('midi.melodyInfo') }}</DrawerDescription>
+    <Drawer v-model:open="playerStore.showDetail" direction="right">
+      <DrawerContent class="!inset-y-0 !right-0 !left-auto !w-full !max-w-full">
+        <DrawerHeader class="flex flex-row items-center justify-between">
+          <div>
+            <DrawerTitle>{{ playerStore.currentMidi?.filename }}</DrawerTitle>
+            <DrawerDescription>{{ t('midi.melodyInfo') }}</DrawerDescription>
+          </div>
+          <Button variant="ghost" size="icon" @click="playerStore.closeDetail">
+            <X :size="20" />
+          </Button>
         </DrawerHeader>
-        <MidiDetail v-if="playerStore.currentMidi" />
+        <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
       </DrawerContent>
     </Drawer>
   </div>
