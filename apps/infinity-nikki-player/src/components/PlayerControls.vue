@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
+import { Button } from '@/components/ui'
 
+const { t } = useI18n()
 const playerStore = usePlayerStore()
 
 const statusText = computed(() => {
   switch (playerStore.playbackState.status) {
     case 'playing':
-      return '播放中'
+      return t('player.status.playing')
     case 'paused':
-      return '已暂停'
+      return t('player.status.paused')
     default:
-      return '空闲'
+      return t('player.status.idle')
   }
 })
 
@@ -45,90 +48,180 @@ async function adjustSpeed(delta: number) {
 </script>
 
 <template>
-  <div class="player-controls">
-    <div class="status">
-      <span class="status-indicator" :class="playerStore.playbackState.status" />
-      <span>{{ statusText }}</span>
+  <div class="player-controls glass">
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <div class="status-indicator" :class="playerStore.playbackState.status">
+        <span class="indicator-dot" />
+        <span class="indicator-glow" />
+      </div>
+      <span class="status-text">{{ statusText }}</span>
+      <span v-if="playerStore.currentMidi" class="template-badge">
+        {{ playerStore.currentTemplate?.name || t('player.noTemplate') }}
+      </span>
     </div>
 
-    <div class="controls">
-      <button class="btn-play" :disabled="!playerStore.currentMidi" @click="togglePlay">
-        {{ isPlaying ? '⏸ 暂停' : '▶ 播放' }}
-      </button>
-      <button class="btn-stop" :disabled="isIdle" @click="stop">⏹ 停止</button>
-    </div>
+    <!-- 控制按钮 -->
+    <div class="controls-bar">
+      <Button
+        :variant="isPlaying ? 'secondary' : 'default'"
+        class="play-btn"
+        :disabled="!playerStore.currentMidi"
+        @click="togglePlay"
+      >
+        <svg v-if="!isPlaying" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5 3 19 12 5 21 5 3" />
+        </svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="4" width="4" height="16" />
+          <rect x="14" y="4" width="4" height="16" />
+        </svg>
+        {{ isPlaying ? t('player.pause') : t('player.play') }}
+      </Button>
 
-    <div class="speed-control">
-      <span class="label">速度:</span>
-      <button class="btn-adjust" @click="adjustSpeed(-0.1)">-</button>
-      <span class="speed">{{ playerStore.speed.toFixed(1) }}x</span>
-      <button class="btn-adjust" @click="adjustSpeed(0.1)">+</button>
-    </div>
+      <Button variant="outline" class="stop-btn" :disabled="isIdle" @click="stop">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+        </svg>
+        {{ t('player.stop') }}
+      </Button>
 
-    <div v-if="playerStore.currentMidi" class="progress-info">
-      <span>模板: {{ playerStore.currentTemplate?.name || '未选择' }}</span>
+      <!-- 速度控制 -->
+      <div class="speed-control">
+        <button class="speed-btn" @click="adjustSpeed(-0.1)">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+        <span class="speed-value">{{ playerStore.speed.toFixed(1) }}x</span>
+        <button class="speed-btn" @click="adjustSpeed(0.1)">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .player-controls {
-  @apply p-4 bg-gray-800 rounded-lg space-y-4;
+  @apply rounded-2xl p-5;
+  background: rgba(20, 20, 25, 0.5) !important;
+  border: 1px solid rgba(247, 192, 193, 0.15) !important;
 }
 
-.status {
-  @apply flex items-center gap-2;
+.status-bar {
+  @apply flex items-center gap-3 mb-4;
 }
 
 .status-indicator {
-  @apply w-3 h-3 rounded-full;
+  @apply relative w-8 h-8 flex items-center justify-center;
 }
 
-.status-indicator.idle {
-  @apply bg-gray-500;
+.indicator-dot {
+  @apply w-3 h-3 rounded-full z-10;
 }
 
-.status-indicator.playing {
-  @apply bg-green-500;
+.indicator-glow {
+  @apply absolute inset-0 rounded-full;
 }
 
-.status-indicator.paused {
-  @apply bg-yellow-500;
+.status-indicator.idle .indicator-dot {
+  @apply bg-white/30;
 }
 
-.controls {
-  @apply flex gap-4;
+.status-indicator.playing .indicator-dot {
+  @apply bg-green-400;
 }
 
-.btn-play {
-  @apply flex-1 py-3 bg-pink-400 rounded font-semibold
-         hover:bg-pink-500 disabled:opacity-50 disabled:cursor-not-allowed
-         transition-colors;
+.status-indicator.playing .indicator-glow {
+  background: rgba(74, 222, 128, 0.3);
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
-.btn-stop {
-  @apply px-6 py-3 bg-gray-700 rounded font-semibold
-         hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed
-         transition-colors;
+.status-indicator.paused .indicator-dot {
+  @apply bg-yellow-400;
+}
+
+.status-indicator.paused .indicator-glow {
+  background: rgba(250, 204, 21, 0.2);
+}
+
+.status-text {
+  @apply text-sm font-medium text-white/80;
+}
+
+.template-badge {
+  @apply ml-auto px-3 py-1 rounded-full text-xs font-medium;
+  background: rgba(247, 192, 193, 0.15);
+  color: #f7c0c1;
+  border: 1px solid rgba(247, 192, 193, 0.2);
+}
+
+.controls-bar {
+  @apply flex items-center gap-3;
+}
+
+.play-btn {
+  @apply flex-1 gap-2 h-12 text-base font-semibold;
+  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
+  @apply text-gray-900;
+}
+
+.play-btn:hover:not(:disabled) {
+  @apply opacity-90;
+  transform: translateY(-1px);
+}
+
+.stop-btn {
+  @apply gap-2 h-12 px-6;
+  background: rgba(255, 255, 255, 0.05) !important;
+  @apply text-white/80 border-white/10;
+}
+
+.stop-btn:hover:not(:disabled) {
+  @apply bg-white/10;
 }
 
 .speed-control {
-  @apply flex items-center gap-2;
+  @apply flex items-center gap-1 px-3 py-2 rounded-xl;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.label {
-  @apply text-gray-400;
+.speed-btn {
+  @apply w-8 h-8 rounded-lg flex items-center justify-center text-white/60;
+  @apply hover:bg-white/10 hover:text-white transition-all;
 }
 
-.btn-adjust {
-  @apply w-8 h-8 bg-gray-700 rounded hover:bg-gray-600 transition-colors;
+.speed-value {
+  @apply min-w-[3rem] text-center text-sm font-mono font-medium text-white;
 }
 
-.speed {
-  @apply min-w-[4rem] text-center font-mono;
-}
-
-.progress-info {
-  @apply text-sm text-gray-500;
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
 }
 </style>

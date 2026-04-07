@@ -1,0 +1,85 @@
+/**
+ * @description: English translations
+ */
+export default {
+  app: {
+    title: 'Infinity Nikki Auto Player',
+    overlayMode: 'Enter Overlay Mode',
+  },
+  tabs: {
+    files: 'Files',
+    templates: 'Templates',
+    logs: 'Logs',
+  },
+  actions: {
+    selectFile: 'Select MIDI File',
+    selectFolder: 'Select Folder',
+    clear: 'Clear',
+    save: 'Save',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    edit: 'Edit',
+    add: 'Add',
+    create: 'Create',
+  },
+  player: {
+    status: {
+      idle: 'Idle',
+      playing: 'Playing',
+      paused: 'Paused',
+    },
+    play: 'Play',
+    pause: 'Pause',
+    stop: 'Stop',
+    speed: 'Speed',
+    template: 'Template',
+    noTemplate: 'Not Selected',
+  },
+  midi: {
+    noFiles: 'No MIDI files',
+    currentFile: 'Current File',
+    duration: 'Duration',
+    tracks: 'Tracks',
+    melodyNotes: 'Melody Notes',
+    selectFileTip: 'Please select a MIDI file first',
+  },
+  template: {
+    title: 'Template Management',
+    name: 'Template Name',
+    builtin: 'Built-in',
+    custom: 'Custom',
+    newTemplate: 'New Template',
+    editTemplate: 'Edit Template',
+    createTemplate: 'Create Template',
+    confirmDelete: 'Are you sure you want to delete this template?',
+    pitch: 'Pitch',
+    key: 'Key',
+    addMapping: 'Add Mapping',
+    mappings: 'Mappings',
+  },
+  log: {
+    title: 'Key Log',
+    count: '{count}/50',
+    empty: 'No key logs',
+    action: {
+      press: 'Press',
+      release: 'Release',
+    },
+  },
+  overlay: {
+    expand: 'Expand',
+    collapse: 'Collapse',
+    close: 'Close',
+  },
+  status: {
+    ready: 'Ready',
+    playing: 'Playing',
+    paused: 'Paused',
+    stopped: 'Stopped',
+  },
+  errors: {
+    loadFailed: 'Load failed',
+    parseFailed: 'Parse failed',
+    playFailed: 'Play failed',
+  },
+}

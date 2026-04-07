@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
+import { Button } from '@/components/ui'
 
+const { t } = useI18n()
 const playerStore = usePlayerStore()
 
 /** 音高转音名 */
@@ -19,13 +22,34 @@ function formatTime(timestamp: number) {
 </script>
 
 <template>
-  <div class="key-log-panel">
-    <div class="log-header">
-      <span>按键日志</span>
-      <span class="count">{{ playerStore.keyLogs.length }}/50</span>
-      <button class="btn-clear" @click="playerStore.clearLogs()">清空</button>
+  <div class="key-log-panel glass">
+    <!-- 头部 -->
+    <div class="panel-header">
+      <div class="header-title">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </svg>
+        <span>{{ t('log.title') }}</span>
+      </div>
+      <div class="header-actions">
+        <span class="log-count">{{ t('log.count', { count: playerStore.keyLogs.length }) }}</span>
+        <Button variant="ghost" size="sm" class="clear-btn" @click="playerStore.clearLogs()">
+          {{ t('actions.clear') }}
+        </Button>
+      </div>
     </div>
 
+    <!-- 日志列表 -->
     <div class="log-list">
       <div
         v-for="entry in playerStore.keyLogs"
@@ -34,87 +58,137 @@ function formatTime(timestamp: number) {
       >
         <span class="time">{{ formatTime(entry.timestamp) }}</span>
         <span class="pitch">{{ pitchToName(entry.pitch) }}</span>
-        <span class="arrow">-&gt;</span>
+        <span class="arrow">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
+        </span>
         <span class="key">{{ entry.mapped_key }}</span>
-        <span
-          :class="['action', entry.action]"
-          >{{ entry.action === 'press' ? '按下' : '释放' }}</span
-        >
+        <span :class="['action-badge', entry.action]">
+          {{ entry.action === 'press' ? t('log.action.press') : t('log.action.release') }}
+        </span>
       </div>
 
-      <div v-if="playerStore.keyLogs.length === 0" class="empty">暂无按键日志</div>
+      <div v-if="playerStore.keyLogs.length === 0" class="empty-state">
+        <div class="empty-icon">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M6 8h.01" />
+            <path d="M10 8h.01" />
+          </svg>
+        </div>
+        <span>{{ t('log.empty') }}</span>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .key-log-panel {
-  @apply flex flex-col h-full;
+  @apply h-full flex flex-col rounded-2xl;
+  background: rgba(20, 20, 25, 0.5) !important;
+  border: 1px solid rgba(247, 192, 193, 0.1) !important;
 }
 
-.log-header {
-  @apply flex items-center gap-4 pb-4 border-b border-gray-700;
+.panel-header {
+  @apply flex items-center justify-between px-5 py-4 border-b;
+  border-color: rgba(255, 255, 255, 0.05) !important;
 }
 
-.log-header span:first-child {
-  @apply font-semibold;
+.header-title {
+  @apply flex items-center gap-2 text-sm font-medium text-white/80;
 }
 
-.count {
-  @apply text-sm text-gray-500;
+.header-actions {
+  @apply flex items-center gap-3;
 }
 
-.btn-clear {
-  @apply ml-auto px-3 py-1 text-sm bg-gray-700 rounded
-         hover:bg-gray-600 transition-colors;
+.log-count {
+  @apply text-xs text-white/40 font-mono;
+}
+
+.clear-btn {
+  @apply text-white/50 text-xs;
+}
+
+.clear-btn:hover {
+  @apply text-white/80;
 }
 
 .log-list {
-  @apply flex-1 overflow-auto py-4 space-y-1;
+  @apply flex-1 overflow-auto p-4 space-y-2;
 }
 
 .log-entry {
-  @apply grid grid-cols-[5rem_3rem_2rem_2rem_4rem] gap-2 items-center
-         px-3 py-2 rounded;
+  @apply grid grid-cols-[auto_auto_auto_auto_1fr] gap-3 items-center px-4 py-3 rounded-xl;
+  @apply transition-all duration-150;
 }
 
 .log-entry.press {
-  @apply bg-green-900/30;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.15);
 }
 
 .log-entry.release {
-  @apply bg-gray-800/50;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .time {
-  @apply text-xs text-gray-500 font-mono;
+  @apply text-xs font-mono text-white/40;
 }
 
 .pitch {
-  @apply text-sm font-mono text-pink-400;
+  @apply text-sm font-mono font-medium;
+  color: #f7c0c1;
 }
 
 .arrow {
-  @apply text-gray-600;
+  @apply text-white/30;
 }
 
 .key {
-  @apply text-lg font-bold font-mono;
+  @apply text-lg font-bold font-mono text-white;
 }
 
-.action {
-  @apply text-xs uppercase;
+.action-badge {
+  @apply justify-self-end px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider;
 }
 
-.action.press {
-  @apply text-green-400;
+.action-badge.press {
+  @apply bg-green-500/20 text-green-400;
 }
 
-.action.release {
-  @apply text-gray-500;
+.action-badge.release {
+  @apply bg-white/5 text-white/40;
 }
 
-.empty {
-  @apply text-center text-gray-500 py-12;
+.empty-state {
+  @apply flex flex-col items-center justify-center gap-3 py-16 text-white/40;
+}
+
+.empty-icon {
+  @apply w-12 h-12 rounded-xl flex items-center justify-center;
+  background: rgba(247, 192, 193, 0.05);
+  color: rgba(247, 192, 193, 0.4);
+}
+
+.empty-state span {
+  @apply text-sm;
 }
 </style>

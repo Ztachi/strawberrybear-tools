@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
+import { Button } from '@/components/ui'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
+import { Card, CardContent } from '@/components/ui'
 import MidiList from '@/components/MidiList.vue'
 import PlayerControls from '@/components/PlayerControls.vue'
 import TemplateEditor from '@/components/TemplateEditor.vue'
 import KeyLogPanel from '@/components/KeyLogPanel.vue'
 
+const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
-const activeTab = ref<'files' | 'templates' | 'logs'>('files')
-const currentLang = ref('zh-CN')
+const activeTab = ref('files')
 
 /** 切换语言 */
 function toggleLocale() {
-  currentLang.value = currentLang.value === 'zh-CN' ? 'en-US' : 'zh-CN'
+  locale.value = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
 }
 
 onMounted(async () => {
@@ -62,145 +66,380 @@ function formatDuration(ms: number) {
 
 <template>
   <div class="main-window">
-    <!-- 顶部栏 -->
-    <header class="header" style="background-color: #F7C0C1;">
-      <div class="header-left">
-        <h1 class="title">无限暖暖自动演奏</h1>
-      </div>
-      <div class="header-right">
-        <button class="btn-lang" @click="toggleLocale">
-          {{ currentLang === 'zh-CN' ? 'EN' : '中文' }}
-        </button>
-        <button class="btn-secondary" @click="enterOverlayMode">进入悬浮模式</button>
+    <!-- 顶部导航栏 - 玻璃态 -->
+    <header class="header glass">
+      <div class="header-content">
+        <div class="logo-section">
+          <div class="logo-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" fill="url(#logoGradient)" />
+              <path
+                d="M8 12L11 15L16 9"
+                stroke="white"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <defs>
+                <linearGradient id="logoGradient" x1="0" y1="0" x2="24" y2="24">
+                  <stop stop-color="#F7C0C1" />
+                  <stop offset="1" stop-color="#f9d5d7" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h1 class="title">
+            {{ t('app.title') }}
+          </h1>
+        </div>
+
+        <div class="header-actions">
+          <Button variant="ghost" size="sm" class="lang-btn" @click="toggleLocale">
+            <span class="lang-text">{{ locale === 'zh-CN' ? 'EN' : '中文' }}</span>
+          </Button>
+          <Button variant="default" size="sm" class="overlay-btn" @click="enterOverlayMode">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <path d="M8 21h8" />
+              <path d="M12 17v4" />
+            </svg>
+            {{ t('app.overlayMode') }}
+          </Button>
+        </div>
       </div>
     </header>
 
-    <!-- 标签页 -->
-    <nav class="tabs">
-      <button
-        v-for="tab in ['files', 'templates', 'logs'] as const"
-        :key="tab"
-        :class="['tab', { active: activeTab === tab }]"
-        @click="activeTab = tab"
-      >
-        {{ tab === 'files' ? '文件' : tab === 'templates' ? '模板' : '日志' }}
-      </button>
-    </nav>
-
-    <!-- 内容区 -->
+    <!-- 主内容区 -->
     <main class="content">
-      <!-- 文件 Tab -->
-      <div v-if="activeTab === 'files'" class="tab-content">
-        <!-- 操作按钮 -->
-        <div class="file-actions">
-          <button class="btn-primary" @click="selectFile">选择 MIDI 文件</button>
-          <button class="btn-secondary" @click="selectFolder">选择文件夹</button>
-        </div>
+      <Tabs v-model="activeTab" class="tabs-container">
+        <!-- 玻璃态标签栏 -->
+        <TabsList class="tabs-list glass">
+          <TabsTrigger value="files" class="tab-trigger">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+            {{ t('tabs.files') }}
+          </TabsTrigger>
+          <TabsTrigger value="templates" class="tab-trigger">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18" />
+              <path d="M9 21V9" />
+            </svg>
+            {{ t('tabs.templates') }}
+          </TabsTrigger>
+          <TabsTrigger value="logs" class="tab-trigger">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M16 13H8" />
+              <path d="M16 17H8" />
+              <path d="M10 9H8" />
+            </svg>
+            {{ t('tabs.logs') }}
+          </TabsTrigger>
+        </TabsList>
 
-        <!-- MIDI 列表 -->
-        <MidiList
-          :list="playerStore.midiList"
-          :current="playerStore.currentMidi"
-          @select="(m) => playerStore.parseMidi(m.filename)"
-        />
+        <!-- 文件 Tab -->
+        <TabsContent value="files" class="tab-content">
+          <!-- 操作按钮组 -->
+          <div class="action-cards">
+            <button class="action-card glass" @click="selectFile">
+              <div class="action-icon">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </div>
+              <span class="action-text">{{ t('actions.selectFile') }}</span>
+            </button>
+            <button class="action-card glass" @click="selectFolder">
+              <div class="action-icon">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                  />
+                </svg>
+              </div>
+              <span class="action-text">{{ t('actions.selectFolder') }}</span>
+            </button>
+          </div>
 
-        <!-- 当前文件信息 -->
-        <div v-if="playerStore.currentMidi" class="current-file">
-          <h3>当前文件: {{ playerStore.currentMidi.filename }}</h3>
-          <p>时长: {{ formatDuration(playerStore.currentMidi.duration_ms) }}</p>
-          <p>音轨数: {{ playerStore.currentMidi.track_count }}</p>
-          <p>旋律音符数: {{ playerStore.melody.length }}</p>
-        </div>
+          <!-- MIDI 列表 -->
+          <MidiList
+            :list="playerStore.midiList"
+            :current="playerStore.currentMidi"
+            @select="(m) => playerStore.parseMidi(m.filename)"
+          />
 
-        <!-- 播放控制 -->
-        <PlayerControls v-if="playerStore.currentMidi" />
-      </div>
+          <!-- 当前文件信息 -->
+          <Card v-if="playerStore.currentMidi" class="current-file-card glass">
+            <CardContent class="card-content">
+              <div class="file-header">
+                <div class="file-icon">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18V5l12-2v13" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="18" cy="16" r="3" />
+                  </svg>
+                </div>
+                <h3 class="file-name truncate">
+                  {{ playerStore.currentMidi.filename }}
+                </h3>
+              </div>
+              <div class="file-stats">
+                <div class="stat">
+                  <span class="stat-label">{{ t('midi.duration') }}</span>
+                  <span
+                    class="stat-value"
+                    >{{ formatDuration(playerStore.currentMidi.duration_ms) }}</span
+                  >
+                </div>
+                <div class="stat">
+                  <span class="stat-label">{{ t('midi.tracks') }}</span>
+                  <span class="stat-value">{{ playerStore.currentMidi.track_count }}</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
+                  <span class="stat-value highlight">{{ playerStore.melody.length }}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      <!-- 模板 Tab -->
-      <div v-else-if="activeTab === 'templates'" class="tab-content">
-        <TemplateEditor />
-      </div>
+          <!-- 播放控制 -->
+          <PlayerControls v-if="playerStore.currentMidi" />
+        </TabsContent>
 
-      <!-- 日志 Tab -->
-      <div v-else-if="activeTab === 'logs'" class="tab-content">
-        <KeyLogPanel />
-      </div>
+        <!-- 模板 Tab -->
+        <TabsContent value="templates" class="tab-content">
+          <TemplateEditor />
+        </TabsContent>
+
+        <!-- 日志 Tab -->
+        <TabsContent value="logs" class="tab-content">
+          <KeyLogPanel />
+        </TabsContent>
+      </Tabs>
     </main>
   </div>
 </template>
 
 <style scoped>
 .main-window {
-  @apply h-screen flex flex-col bg-gray-900 text-white;
+  @apply h-screen flex flex-col bg-background text-foreground overflow-hidden;
+  background:
+    radial-gradient(ellipse at top left, rgba(247, 192, 193, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(245, 184, 192, 0.05) 0%, transparent 50%),
+    hsl(var(--background));
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem;
-  background-color: #F7C0C1;
-  border-bottom: 1px solid #f9a8d4;
+  @apply border-0 border-b border-white/5;
+  background: rgba(15, 15, 20, 0.7) !important;
 }
 
-.header-left {
+.header-content {
+  @apply flex items-center justify-between px-6 py-4;
+}
+
+.logo-section {
   @apply flex items-center gap-3;
 }
 
-.title {
-  @apply text-xl font-bold;
+.logo-icon {
+  @apply w-10 h-10 rounded-xl flex items-center justify-center;
+  background: linear-gradient(135deg, #f7c0c1 0%, #f9d5d7 100%);
 }
 
-.header-right {
+.title {
+  @apply text-xl font-semibold text-white;
+  letter-spacing: -0.02em;
+}
+
+.header-actions {
   @apply flex items-center gap-2;
 }
 
-.btn-lang {
-  @apply px-3 py-1.5 text-sm rounded border border-pink-400/50
-         text-pink-400 hover:bg-pink-400/20 transition-colors;
+.lang-btn {
+  @apply text-white/70 hover:text-white;
 }
 
-.tabs {
-  @apply flex border-b border-gray-700;
+.overlay-btn {
+  @apply gap-2;
+  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
+  @apply text-gray-900 font-medium;
 }
 
-.tab {
-  @apply px-6 py-3 text-gray-400 hover:text-white transition-colors;
-}
-
-.tab.active {
-  @apply text-white border-b-2 border-pink-400;
+.overlay-btn:hover {
+  @apply opacity-90;
 }
 
 .content {
-  @apply flex-1 overflow-auto p-4;
+  @apply flex-1 overflow-auto px-6 py-6;
+}
+
+.tabs-container {
+  @apply h-full flex flex-col;
+}
+
+.tabs-list {
+  @apply inline-flex h-12 items-center justify-start rounded-xl p-1;
+  background: rgba(20, 20, 25, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.tab-trigger {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium;
+  @apply text-white/60 transition-all duration-200;
+}
+
+.tab-trigger[data-state='active'] {
+  @apply text-white;
+  background: rgba(247, 192, 193, 0.15) !important;
+  box-shadow: 0 0 20px rgba(247, 192, 193, 0.1);
+}
+
+.tab-trigger:hover:not([data-state='active']) {
+  @apply text-white/80;
 }
 
 .tab-content {
-  @apply space-y-4;
+  @apply mt-6 flex-1;
+  animation: fadeIn 0.2s ease-out;
 }
 
-.file-actions {
-  @apply flex gap-4;
+.action-cards {
+  @apply grid grid-cols-2 gap-4 mb-6;
 }
 
-.btn-primary {
-  @apply px-4 py-2 bg-pink-400 rounded hover:bg-pink-500 transition-colors;
+.action-card {
+  @apply flex flex-col items-center justify-center gap-3 p-6 rounded-2xl;
+  @apply text-white/80 hover:text-white transition-all duration-200;
+  background: rgba(20, 20, 25, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
-.btn-secondary {
-  @apply px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors;
+.action-card:hover {
+  background: rgba(30, 30, 35, 0.6) !important;
+  border-color: rgba(247, 192, 193, 0.2) !important;
+  transform: translateY(-2px);
 }
 
-.current-file {
-  @apply p-4 bg-gray-800 rounded-lg;
+.action-icon {
+  @apply w-12 h-12 rounded-xl flex items-center justify-center;
+  background: rgba(247, 192, 193, 0.1);
+  color: #f7c0c1;
 }
 
-.current-file h3 {
-  @apply text-lg font-semibold mb-2 truncate;
+.action-text {
+  @apply text-sm font-medium;
 }
 
-.current-file p {
-  @apply text-sm text-gray-400;
+.current-file-card {
+  @apply mb-6;
+  background: rgba(20, 20, 25, 0.5) !important;
+  border: 1px solid rgba(247, 192, 193, 0.15) !important;
+}
+
+.card-content {
+  @apply p-5;
+}
+
+.file-header {
+  @apply flex items-center gap-3 mb-4;
+}
+
+.file-icon {
+  @apply w-10 h-10 rounded-xl flex items-center justify-center;
+  background: rgba(247, 192, 193, 0.15);
+  color: #f7c0c1;
+}
+
+.file-name {
+  @apply text-base font-semibold text-white flex-1;
+}
+
+.file-stats {
+  @apply grid grid-cols-3 gap-4;
+}
+
+.stat {
+  @apply flex flex-col gap-1;
+}
+
+.stat-label {
+  @apply text-xs text-white/50;
+}
+
+.stat-value {
+  @apply text-lg font-semibold text-white;
+}
+
+.stat-value.highlight {
+  color: #f7c0c1;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

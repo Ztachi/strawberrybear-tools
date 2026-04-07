@@ -10,6 +10,7 @@
 - **后端**: Tauri v2 + Rust
 - **状态管理**: Pinia
 - **国际化**: vue-i18n
+- **UI 组件**: shadcn-vue
 - **MIDI 解析**: midly
 - **键盘模拟**: enigo
 
@@ -25,6 +26,9 @@ pnpm --filter @strawberrybear/infinity-nikki-player dev
 # 类型检查
 pnpm --filter @strawberrybear/infinity-nikki-player type-check
 
+# Lint 检查
+pnpm --filter @strawberrybear/infinity-nikki-player lint
+
 # 构建
 pnpm --filter @strawberrybear/infinity-nikki-player build
 pnpm --filter @strawberrybear/infinity-nikki-player tauri build
@@ -37,6 +41,7 @@ pnpm --filter @strawberrybear/infinity-nikki-player tauri build
 - 多窗口支持（主窗口 + 悬浮 overlay）
 - 全局键盘模拟（支持 Mac/Windows）
 - 按键日志记录（实时调试映射）
+- 中英文国际化支持
 
 ## 主题色
 
@@ -51,3 +56,24 @@ pnpm --filter @strawberrybear/infinity-nikki-player tauri build
 - 英文（en-US）：可选
 
 所有用户可见文本均使用 `vue-i18n` 管理，翻译文件位于 `src/i18n/` 目录。
+
+## 文档索引
+
+| 文档                                   | 说明                |
+| -------------------------------------- | ------------------- |
+| [设计文档](docs/design/README.md)      | UI 组件、主题规范   |
+| [UI 组件指南](docs/design/ui-guide.md) | shadcn-vue 组件使用 |
+| [错误文档](docs/error/README.md)       | 问题追踪            |
+
+### 目录结构
+
+```
+docs/
+├── design/                    # 设计文档
+│   ├── README.md              # 设计索引
+│   ├── ui-guide.md            # UI 组件使用指南
+│   └── theme.md               # 主题和样式规范
+└── error/                     # 错误文档
+    ├── README.md
+    └── ISSUE-001-*.md
+```

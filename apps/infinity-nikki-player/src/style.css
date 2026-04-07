@@ -4,25 +4,136 @@
 
 @layer base {
   :root {
+    /* 品牌粉色系 */
     --color-primary: #f7c0c1;
+    --color-primary-light: #fddde6;
     --color-secondary: #f5b8c0;
+
+    /* Glassmorphism 暗色主题 */
+    --background: 250 25% 8%;
+    --foreground: 0 0% 98%;
+
+    /* 卡片 - 玻璃态 */
+    --card: 250 15% 12%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 250 15% 12%;
+    --popover-foreground: 0 0% 98%;
+
+    /* 主色调 - 柔和粉 */
+    --primary: 350 89% 80%;
+    --primary-foreground: 0 0% 9%;
+
+    /* 次要色 */
+    --secondary: 250 10% 18%;
+    --secondary-foreground: 0 0% 98%;
+
+    /* 静音/强调 */
+    --muted: 250 10% 18%;
+    --muted-foreground: 0 0% 63.9%;
+
+    --accent: 250 10% 18%;
+    --accent-foreground: 0 0% 98%;
+
+    /* 状态色 */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* 边框 */
+    --border: 250 15% 20%;
+    --input: 250 15% 18%;
+    --ring: 350 89% 80%;
+
+    /* 圆角 */
+    --radius: 0.875rem;
   }
 }
 
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+}
+
+/* Glassmorphism 工具类 */
 @layer utilities {
-  .bg-primary {
-    background-color: var(--color-primary);
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
   }
-  .text-primary {
-    color: var(--color-primary);
+
+  .glass-dark {
+    @apply bg-black/20 backdrop-blur-xl border border-white/5;
   }
-  .border-primary {
-    border-color: var(--color-primary);
+
+  .glass-primary {
+    @apply bg-primary/10 backdrop-blur-xl border border-primary/20;
   }
-  .hover\:bg-primary:hover {
-    background-color: var(--color-primary);
+
+  /* 柔和阴影 */
+  .shadow-soft {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      0 2px 8px rgba(0, 0, 0, 0.08);
   }
-  .hover\:text-primary:hover {
-    color: var(--color-primary);
+
+  .shadow-glow {
+    box-shadow:
+      0 0 20px rgba(247, 192, 193, 0.3),
+      0 8px 32px rgba(0, 0, 0, 0.15);
   }
+
+  /* 渐变文字 */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, var(--color-primary) 0%, #f9d5d7 100%);
+  }
+
+  /* 平滑过渡 */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-out;
+  }
+}
+
+/* 修复 button cursor */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* 自定义滚动条 - 暗色玻璃态 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-white/20;
+}
+
+/* 拖拽区域样式 */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  cursor: move;
+}
+
+[data-tauri-drag-region] button,
+[data-tauri-drag-region] input {
+  -webkit-app-region: no-drag;
 }

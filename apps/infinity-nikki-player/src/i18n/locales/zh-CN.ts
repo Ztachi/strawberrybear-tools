@@ -1,0 +1,85 @@
+/**
+ * @description: 中文翻译
+ */
+export default {
+  app: {
+    title: '无限暖暖自动演奏',
+    overlayMode: '进入悬浮模式',
+  },
+  tabs: {
+    files: '文件',
+    templates: '模板',
+    logs: '日志',
+  },
+  actions: {
+    selectFile: '选择 MIDI 文件',
+    selectFolder: '选择文件夹',
+    clear: '清空',
+    save: '保存',
+    cancel: '取消',
+    delete: '删除',
+    edit: '编辑',
+    add: '添加',
+    create: '新建',
+  },
+  player: {
+    status: {
+      idle: '空闲',
+      playing: '播放中',
+      paused: '已暂停',
+    },
+    play: '播放',
+    pause: '暂停',
+    stop: '停止',
+    speed: '速度',
+    template: '模板',
+    noTemplate: '未选择',
+  },
+  midi: {
+    noFiles: '暂无 MIDI 文件',
+    currentFile: '当前文件',
+    duration: '时长',
+    tracks: '音轨数',
+    melodyNotes: '旋律音符数',
+    selectFileTip: '请先选择 MIDI 文件',
+  },
+  template: {
+    title: '模板管理',
+    name: '模板名称',
+    builtin: '内置',
+    custom: '自定义',
+    newTemplate: '新模板',
+    editTemplate: '编辑模板',
+    createTemplate: '新建模板',
+    confirmDelete: '确定要删除这个模板吗？',
+    pitch: '音高',
+    key: '按键',
+    addMapping: '添加映射',
+    mappings: '映射关系',
+  },
+  log: {
+    title: '按键日志',
+    count: '{count}/50',
+    empty: '暂无按键日志',
+    action: {
+      press: '按下',
+      release: '释放',
+    },
+  },
+  overlay: {
+    expand: '展开',
+    collapse: '收起',
+    close: '关闭',
+  },
+  status: {
+    ready: '就绪',
+    playing: '演奏中',
+    paused: '已暂停',
+    stopped: '已停止',
+  },
+  errors: {
+    loadFailed: '加载失败',
+    parseFailed: '解析失败',
+    playFailed: '播放失败',
+  },
+}

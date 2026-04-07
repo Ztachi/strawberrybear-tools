@@ -1,0 +1,6 @@
+export { default as Button } from './button/Button.vue'
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs'
+export { Card, CardHeader, CardTitle, CardContent } from './card'
+export { default as Input } from './input/Input.vue'
+export { Slider } from './slider'
+export { Badge } from './badge'
