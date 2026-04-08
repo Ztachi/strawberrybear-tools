@@ -7,6 +7,35 @@
 - **构建工具**: Vite
 - **图标库**: lucide-vue-next (基于 Lucide Icons)
 
+## 手势操作禁止规范
+
+**规则**: 桌面应用中，禁止使用任何触摸手势相关的操作，包括但不限于：
+
+- 禁止使用 `touchstart`、`touchmove`、`touchend` 事件
+- 禁止使用 `pinch-zoom`、`pan` 等手势操作
+- 禁止使用 `pointerdown`/`pointermove` 的手势相关属性（如 `pointerType`）
+- 仅允许鼠标点击、拖拽等桌面原生交互方式
+
+**原因**: 桌面应用不需要手势操作，手势会与正常的拖拽、滚动等操作产生冲突。
+
+**示例**:
+
+```vue
+<!-- 错误：使用了 pointerdown 手势 -->
+<Slider @pointerdown="onDragStart" />
+
+<!-- 正确：使用原生浏览器行为 -->
+<Slider @update:model-value="onValueChange" />
+```
+
+```vue
+<!-- 错误：禁止手势操作 -->
+<div @touchstart="handleTouch" @touchmove="handleMove" />
+
+<!-- 正确：只处理鼠标事件 -->
+<div @mousedown="handleMouseDown" />
+```
+
 ## 安装组件
 
 ### shadcn-vue 组件
@@ -26,6 +55,8 @@ pnpm dlx shadcn-vue@latest add input
 pnpm dlx shadcn-vue@latest add slider
 pnpm dlx shadcn-vue@latest add popover
 pnpm dlx shadcn-vue@latest add drawer
+pnpm dlx shadcn-vue@latest add tooltip
+pnpm dlx shadcn-vue@latest add sonner
 ```
 
 ### lucide-vue-next 图标
@@ -53,6 +84,8 @@ src/
 │   │   ├── slider/
 │   │   ├── popover/
 │   │   ├── drawer/
+│   │   ├── tooltip/
+│   │   ├── sonner/
 │   │   └── index.ts
 │   ├── MidiLibrary.vue   # MIDI 文件列表
 │   ├── MidiDetail.vue    # MIDI 详情面板
@@ -144,6 +177,10 @@ import {
   PopoverContent,
   Drawer,
   DrawerContent,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@/components/ui'
 </script>
 ```
@@ -431,3 +468,171 @@ import { Music, Play, Pause, Trash2 } from 'lucide-vue-next'
 ### 搜索图标
 
 访问 https://lucide.dev/icons 搜索可用图标。
+
+## Tooltip 文本提示
+
+用于展示超长文本的完整内容。
+
+### 安装
+
+```bash
+pnpm dlx shadcn-vue@latest add tooltip
+```
+
+### 使用方式
+
+```vue
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger as-child>
+      <span class="line-clamp-2">超长的文件名可能会被截断</span>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>超长的文件名可能会被截断</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+## 文本超长处理规范
+
+**规则**: 当文本可能超出容器宽度或显示行数时，必须同时满足以下条件：
+
+1. 使用 Tailwind CSS 的 `truncate`（单行截断）或 `line-clamp-*`（多行截断）限制显示
+2. 外层包裹 `Tooltip` 组件，鼠标悬停时显示完整文本
+
+**示例场景**:
+
+- 文件名列表项（单行截断 + Tooltip）
+- 详情页标题（多行截断 + Tooltip）
+- 任何用户输入的文本内容
+
+**正确示例**:
+
+```vue
+<!-- 单行截断 + Tooltip -->
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger as-child>
+      <span class="truncate">{{ filename }}</span>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>{{ filename }}</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+
+<!-- 多行截断 + Tooltip -->
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger as-child>
+      <div class="line-clamp-2">{{ title }}</div>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>{{ title }}</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+**错误示例**:
+
+```vue
+<!-- 只有截断，没有 Tooltip -->
+<span class="truncate">{{ filename }}</span>
+
+<!-- 只有 Tooltip，没有截断 -->
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger as-child>
+      <span>{{ filename }}</span>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>{{ filename }}</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+## Sonner 错误提示
+
+用于向用户展示操作结果和错误信息。
+
+### 安装
+
+```bash
+pnpm dlx shadcn-vue@latest add sonner
+```
+
+### 全局配置
+
+在 `App.vue` 中添加 Toaster 组件：
+
+```vue
+<script setup lang="ts">
+import { Toaster } from '@/components/ui'
+</script>
+
+<template>
+  <YourApp />
+  <Toaster rich-colors />
+</template>
+```
+
+> 注意：`rich-colors` 属性会让 toast 根据类型（success/error/warning/info）显示不同的颜色主题。
+
+### 使用方式
+
+```typescript
+import { toast } from 'vue-sonner'
+
+// 成功提示
+toast.success('保存成功', { richColors: true })
+
+// 错误提示
+toast.error('操作失败', { description: '文件不存在', richColors: true })
+
+// 其他类型
+toast.warning('警告', { richColors: true })
+toast.info('提示', { richColors: true })
+```
+
+> 注意：每次调用 `toast` 时都需要传入 `richColors: true` 才能显示颜色。
+
+## 错误处理规范
+
+### 规则
+
+所有 `try-catch` 中的错误处理必须同时满足：
+
+1. **控制台输出**：`console.error()` 打印完整错误信息便于调试
+2. **用户提示**：使用 `toast.error()` 向用户展示错误信息，并添加 `richColors: true`
+
+### 正确示例
+
+```typescript
+try {
+  await someOperation()
+} catch (e) {
+  toast.error('操作失败', { description: String(e) })
+  console.error('操作失败:', e)
+}
+```
+
+### 错误示例
+
+```typescript
+// 只打印控制台，用户不知道发生了什么
+try {
+  await someOperation()
+} catch (e) {
+  console.error('操作失败:', e)
+}
+
+// 只弹 toast，控制台没有记录
+try {
+  await someOperation()
+} catch (e) {
+  toast.error('操作失败', { description: String(e) })
+}
+```

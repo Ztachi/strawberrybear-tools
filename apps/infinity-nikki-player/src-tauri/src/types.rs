@@ -4,9 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MidiInfo {
     pub filename: String,
+    pub file_path: String, // 文件完整路径
     pub duration_ms: u64,
     pub track_count: usize,
     pub ticks_per_beat: u16,
+    pub tempo: u32, // 微秒每拍
     pub events: Vec<NoteEvent>,
 }
 

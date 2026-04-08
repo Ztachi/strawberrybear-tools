@@ -21,6 +21,7 @@ pub fn run() {
             commands::midi::parse_midi_file,
             commands::midi::extract_melody,
             commands::midi::scan_folder,
+            commands::midi::read_midi_data,
             commands::player::start_playback,
             commands::player::pause_playback,
             commands::player::resume_playback,

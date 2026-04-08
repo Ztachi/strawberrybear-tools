@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Music, MoreVertical, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -24,7 +25,7 @@ function confirmDelete(filename: string) {
 </script>
 
 <template>
-  <div class="midi-library">
+  <div class="midi-library px-[10px] -translate-x-[10px] w-[calc(100%+20px)]">
     <!-- 列表 -->
     <div v-if="playerStore.midiLibrary.length > 0" class="library-list">
       <div
@@ -41,7 +42,16 @@ function confirmDelete(filename: string) {
           <Music :size="18" />
         </div>
         <div class="item-info">
-          <span class="filename">{{ midi.filename }}</span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="filename">{{ midi.filename }}</span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ midi.filename }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <span class="meta"
             >{{ formatDuration(midi.duration_ms) }} · {{ midi.track_count }}
             {{ t('midi.tracks') }}</span

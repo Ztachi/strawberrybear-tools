@@ -10,9 +10,11 @@ export interface NoteEvent {
 /** MIDI 文件基本信息 */
 export interface MidiInfo {
   filename: string
+  file_path: string
   duration_ms: number
   track_count: number
   ticks_per_beat: number
+  tempo: number // 微秒每拍
   events: NoteEvent[]
 }
 

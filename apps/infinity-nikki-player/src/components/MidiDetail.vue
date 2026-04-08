@@ -28,7 +28,7 @@ function formatDuration(ms: number) {
         <div class="file-stats">
           <span class="stat">
             <Clock :size="14" />
-            {{ formatDuration(playerStore.currentMidi?.duration_ms || 0) }}
+            {{ formatDuration(playerStore.previewDuration) }}
           </span>
           <span class="stat">
             <Music :size="14" />
@@ -83,7 +83,7 @@ function formatDuration(ms: number) {
 
 <style scoped>
 .midi-detail {
-  @apply p-6;
+  @apply p-6 overflow-y-auto;
 }
 
 .detail-header {

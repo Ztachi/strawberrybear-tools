@@ -1,17 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { toast } from 'vue-sonner'
 import type { KeyLogEntry, MidiInfo, MelodyEvent, PlaybackState, KeyTemplate } from '@/types'
 import {
-  previewAllNotes,
-  stopPreview as stopPreviewPlayer,
+  playMidi,
+  stopPreview,
   pausePreview,
   resumePreview,
   getCurrentTime,
   getTotalDuration,
   setVolume as setPreviewVolume,
   seekTo,
-  isPlayingState,
+  loadMidiForDuration,
 } from '@/lib/midiPlayer'
 
 export const usePlayerStore = defineStore('player', () => {
@@ -59,7 +60,6 @@ export const usePlayerStore = defineStore('player', () => {
   const previewVolume = ref(1)
   const isPreviewMuted = ref(false)
   const isDragging = ref(false) // 标记是否正在拖拽进度条
-  const previewStartTime = 0
   let previewTimer: ReturnType<typeof setInterval> | null = null
 
   /** 检查辅助功能权限 */
@@ -76,6 +76,11 @@ export const usePlayerStore = defineStore('player', () => {
     isLoading.value = true
     try {
       const [info] = await invoke<[MidiInfo]>('parse_midi_file', { path })
+      // 通过后端读取 MIDI 文件计算正确时长
+      const midiData = await invoke<number[]>('read_midi_data', { path })
+      const uint8Array = new Uint8Array(midiData)
+      const { duration } = await loadMidiForDuration(uint8Array.buffer)
+      info.duration_ms = duration
       // 检查是否已存在（按文件名判断）
       const exists = midiLibrary.value.some((m) => m.filename === info.filename)
       if (!exists) {
@@ -85,6 +90,7 @@ export const usePlayerStore = defineStore('player', () => {
       await selectMidi(info)
       return true
     } catch (e) {
+      toast.error('导入 MIDI 失败', { description: String(e), richColors: true })
       console.error('导入 MIDI 失败:', e)
       return false
     } finally {
@@ -114,7 +120,16 @@ export const usePlayerStore = defineStore('player', () => {
         ticksPerBeat: midi.ticks_per_beat,
         tempo: 500000,
       })
+
+      // 读取 MIDI 文件获取实际时长
+      const midiData = await invoke<number[]>('read_midi_data', {
+        path: midi.file_path,
+      })
+      const uint8Array = new Uint8Array(midiData)
+      const { duration } = await loadMidiForDuration(uint8Array.buffer)
+      previewDuration.value = duration
     } catch (e) {
+      toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
     }
     showDetail.value = true
@@ -136,10 +151,20 @@ export const usePlayerStore = defineStore('player', () => {
       for (const file of files) {
         const exists = midiLibrary.value.some((m) => m.filename === file.filename)
         if (!exists) {
+          // 计算正确的时长
+          try {
+            const midiData = await invoke<number[]>('read_midi_data', { path: file.file_path })
+            const uint8Array = new Uint8Array(midiData)
+            const { duration } = await loadMidiForDuration(uint8Array.buffer)
+            file.duration_ms = duration
+          } catch (e) {
+            console.warn('计算时长失败:', file.filename, e)
+          }
           midiLibrary.value.push(file)
         }
       }
     } catch (e) {
+      toast.error('扫描文件夹失败', { description: String(e), richColors: true })
       console.error('扫描文件夹失败:', e)
     } finally {
       isLoading.value = false
@@ -163,6 +188,7 @@ export const usePlayerStore = defineStore('player', () => {
       await updatePlaybackState()
       await refreshLogs()
     } catch (e) {
+      toast.error('播放失败', { description: String(e), richColors: true })
       console.error('播放失败:', e)
       alert(`播放失败: ${e}`)
     }
@@ -174,6 +200,7 @@ export const usePlayerStore = defineStore('player', () => {
       await invoke('pause_playback')
       await updatePlaybackState()
     } catch (e) {
+      toast.error('暂停失败', { description: String(e), richColors: true })
       console.error('暂停失败:', e)
     }
   }
@@ -184,6 +211,7 @@ export const usePlayerStore = defineStore('player', () => {
       await invoke('resume_playback')
       await updatePlaybackState()
     } catch (e) {
+      toast.error('继续播放失败', { description: String(e), richColors: true })
       console.error('继续播放失败:', e)
     }
   }
@@ -194,27 +222,30 @@ export const usePlayerStore = defineStore('player', () => {
       await invoke('stop_playback')
       await updatePlaybackState()
     } catch (e) {
+      toast.error('停止失败', { description: String(e), richColors: true })
       console.error('停止失败:', e)
     }
   }
 
   /** 开始试听 */
   async function startPreview() {
-    if (!currentMidi.value || currentMidi.value.events.length === 0) return
+    if (!currentMidi.value) return
 
     try {
-      // 播放所有音符（所有音轨叠加）
-      await previewAllNotes(
-        currentMidi.value.events,
-        currentMidi.value.ticks_per_beat,
-        500000,
-        speed.value
-      )
+      // 通过后端读取 MIDI 文件二进制数据
+      const midiData = await invoke<number[]>('read_midi_data', {
+        path: currentMidi.value.file_path,
+      })
+      // 转换为 Uint8Array
+      const uint8Array = new Uint8Array(midiData)
+      // 播放
+      await playMidi(uint8Array.buffer, speed.value)
       isPreviewPlaying.value = true
       isPreviewPaused.value = false
       previewDuration.value = getTotalDuration()
       startPreviewTimer()
     } catch (e) {
+      toast.error('试听失败', { description: String(e), richColors: true })
       console.error('试听失败:', e)
       isPreviewPlaying.value = false
     }
@@ -222,7 +253,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 停止试听 */
   function stopPreviewPlayback() {
-    stopPreviewPlayer()
+    stopPreview()
     stopPreviewTimer()
     isPreviewPlaying.value = false
     isPreviewPaused.value = false
@@ -278,9 +309,9 @@ export const usePlayerStore = defineStore('player', () => {
   function startPreviewTimer() {
     stopPreviewTimer()
     previewTimer = setInterval(() => {
-      // 如果不在拖拽中，才从 Tone.js 获取真实播放时间
+      // 如果不在拖拽中，才从播放器获取真实播放时间
       if (!isDragging.value) {
-        previewCurrentTime.value = getCurrentTime()
+        previewCurrentTime.value = Math.max(0, getCurrentTime())
       }
     }, 100)
   }
@@ -319,10 +350,18 @@ export const usePlayerStore = defineStore('player', () => {
         ticksPerBeat: prevMidi.ticks_per_beat,
         tempo: 500000,
       })
+      // 读取 MIDI 文件获取实际时长
+      const midiData = await invoke<number[]>('read_midi_data', {
+        path: prevMidi.file_path,
+      })
+      const uint8Array = new Uint8Array(midiData)
+      const { duration } = await loadMidiForDuration(uint8Array.buffer)
+      previewDuration.value = duration
       showDetail.value = true
       // 选择后立即开始播放
       startPreview()
     } catch (e) {
+      toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
     }
   }
@@ -343,10 +382,18 @@ export const usePlayerStore = defineStore('player', () => {
         ticksPerBeat: nextMidi.ticks_per_beat,
         tempo: 500000,
       })
+      // 读取 MIDI 文件获取实际时长
+      const midiData = await invoke<number[]>('read_midi_data', {
+        path: nextMidi.file_path,
+      })
+      const uint8Array = new Uint8Array(midiData)
+      const { duration } = await loadMidiForDuration(uint8Array.buffer)
+      previewDuration.value = duration
       showDetail.value = true
       // 选择后立即开始播放
       startPreview()
     } catch (e) {
+      toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
     }
   }
@@ -356,6 +403,7 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       playbackState.value = await invoke<PlaybackState>('get_playback_state')
     } catch (e) {
+      toast.error('获取播放状态失败', { description: String(e), richColors: true })
       console.error('获取播放状态失败:', e)
     }
   }
@@ -366,6 +414,7 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       await invoke('set_speed', { speed: newSpeed })
     } catch (e) {
+      toast.error('设置速度失败', { description: String(e), richColors: true })
       console.error('设置速度失败:', e)
     }
   }
@@ -375,6 +424,7 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       keyLogs.value = await invoke<KeyLogEntry[]>('get_key_logs')
     } catch (e) {
+      toast.error('获取日志失败', { description: String(e), richColors: true })
       console.error('获取日志失败:', e)
     }
   }
@@ -385,6 +435,7 @@ export const usePlayerStore = defineStore('player', () => {
       await invoke('clear_key_logs')
       keyLogs.value = []
     } catch (e) {
+      toast.error('清空日志失败', { description: String(e), richColors: true })
       console.error('清空日志失败:', e)
     }
   }
@@ -397,6 +448,7 @@ export const usePlayerStore = defineStore('player', () => {
         currentTemplate.value = templates.value[0]
       }
     } catch (e) {
+      toast.error('加载模板失败', { description: String(e), richColors: true })
       console.error('加载模板失败:', e)
     }
   }
@@ -407,6 +459,7 @@ export const usePlayerStore = defineStore('player', () => {
       await invoke('save_template', { template })
       await loadTemplates()
     } catch (e) {
+      toast.error('保存模板失败', { description: String(e), richColors: true })
       console.error('保存模板失败:', e)
     }
   }
@@ -420,6 +473,7 @@ export const usePlayerStore = defineStore('player', () => {
         currentTemplate.value = templates.value[0] || null
       }
     } catch (e) {
+      toast.error('删除模板失败', { description: String(e), richColors: true })
       console.error('删除模板失败:', e)
     }
   }

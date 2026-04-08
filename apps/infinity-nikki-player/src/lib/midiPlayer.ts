@@ -1,263 +1,246 @@
 /**
  * @description: MIDI 播放器工具模块
  * @module midiPlayer
- * 使用 Tone.js 实现跨平台 MIDI 播放
+ * 使用 midi-player-js 解析 + soundfont-player 发声
  */
-import * as Tone from 'tone'
-import type { MelodyEvent, NoteEvent } from '@/types'
+import MidiPlayer from 'midi-player-js'
+import soundfont from 'soundfont-player'
 
-/** 单例播放器状态 */
-let isInitialized = false
-let synth: Tone.PolySynth | null = null
+const { Player } = MidiPlayer
+
+/** 播放器实例 */
+let player: InstanceType<typeof Player> | null = null
+
+/** 音频上下文 */
+let audioContext: AudioContext | null = null
+
+/** 合成器 */
+let instrument: soundfont.Player | null = null
+
+/** 播放状态 */
 let isPlaying = false
 let isPaused = false
-let scheduledEvents: number[] = []
-let totalDurationSec: number = 0
+let currentVolume = 1 // 音量系数 0-1
+
+/** 回调函数 */
+let onTimeUpdate: ((time: number) => void) | null = null
+let onEndCallback: (() => void) | null = null
 
 /**
- * @description: 初始化音频上下文
+ * @description: 初始化音频上下文和合成器
  */
-export async function initAudioContext() {
-  if (isInitialized) return
-
-  await Tone.start()
-  synth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: 'sine' },
-    envelope: {
-      attack: 0.01,
-      decay: 0.05,
-      sustain: 0.5,
-      release: 0.1,
-    },
-    maxPolyphony: 512,
-  }).toDestination()
-  synth.volume.value = -6
-
-  isInitialized = true
-}
-
-/**
- * @description: 将 MIDI 音符号转换为音名
- */
-function midiToNoteName(midiNote: number): string {
-  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-  const octave = Math.floor(midiNote / 12) - 1
-  const noteIndex = midiNote % 12
-  return `${noteNames[noteIndex]}${octave}`
-}
-
-/**
- * @description: 清理资源
- */
-function cleanup() {
-  const transport = Tone.getTransport()
-  for (const id of scheduledEvents) {
-    transport.clear(id)
+async function initInstrument() {
+  if (!audioContext) {
+    audioContext = new AudioContext()
   }
-  scheduledEvents = []
 
-  transport.stop()
-  transport.cancel()
-
-  isPlaying = false
-  isPaused = false
+  if (!instrument) {
+    // 从本地加载音色（public 目录下的文件可被直接访问）
+    instrument = await soundfont.instrument(audioContext, '/soundfonts/acoustic_grand_piano-mp3.js')
+  }
 }
 
 /**
- * @description: tick 转换为秒
+ * @description: 播放 MIDI 事件
  */
-function tickToSec(tick: number, ticksPerBeat: number, tempo: number): number {
-  return (tick / ticksPerBeat) * (tempo / 1000000)
+function handleMidiEvent(event: { name: string; noteName?: string; velocity: number }) {
+  if (!instrument || !audioContext) return
+
+  if (event.name === 'Note on' && event.velocity > 0 && event.noteName) {
+    instrument.play(event.noteName, audioContext.currentTime, {
+      gain: (event.velocity / 100) * currentVolume,
+    })
+  }
 }
 
 /**
- * @description: 试听播放（播放所有音符）
+ * @description: 播放 MIDI 文件
  */
-export async function previewAllNotes(
-  events: NoteEvent[],
-  ticksPerBeat: number,
-  tempo: number = 500000,
+export async function playMidi(
+  midiData: ArrayBuffer,
   speed: number = 1.0
 ): Promise<{ stop: () => void }> {
-  if (!synth) {
-    await initAudioContext()
-  }
+  stop()
 
-  cleanup()
+  await initInstrument()
 
-  if (events.length === 0) {
-    return { stop: cleanup }
-  }
+  player = new Player((event: { name: string; noteName?: string; velocity: number }) => {
+    if (isPlaying && !isPaused) {
+      handleMidiEvent(event)
+    }
+  })
 
-  // 计算总时长
-  let maxTick = 0
-  for (const event of events) {
-    if (event.end_tick > maxTick) maxTick = event.end_tick
-  }
-  const maxTimeSec = tickToSec(maxTick, ticksPerBeat, tempo)
-  totalDurationSec = maxTimeSec / speed
+  player.on('playing', () => {
+    if (!isPaused && player) {
+      const remainingTime = player.getSongTimeRemaining()
+      const totalTime = player.getSongTime()
+      const currentTime = (totalTime - remainingTime) * 1000
+      onTimeUpdate?.(currentTime)
+    }
+  })
 
-  const transport = Tone.getTransport()
-  transport.bpm.value = ((60 * 1000000) / tempo) * speed
-
-  // 调度每个音符
-  for (const event of events) {
-    const note = midiToNoteName(event.pitch)
-    const startSec = tickToSec(event.start_tick, ticksPerBeat, tempo) / speed
-    // 音符时长，缩短释放时间避免重叠
-    const durationSec = Math.max(
-      tickToSec(event.end_tick - event.start_tick, ticksPerBeat, tempo) / speed,
-      0.05
-    )
-
-    const id = transport.schedule((time) => {
-      if (synth && isPlaying) {
-        // 使用短释放避免音符重叠
-        synth.triggerAttackRelease(note, Math.min(durationSec, 0.5), time)
-      }
-    }, startSec)
-    scheduledEvents.push(id)
-  }
-
-  // 调度结束
-  const endId = transport.schedule(() => {
+  player.on('endOfFile', () => {
     isPlaying = false
     isPaused = false
-  }, totalDurationSec)
-  scheduledEvents.push(endId)
+    onEndCallback?.()
+  })
+
+  player.loadArrayBuffer(midiData)
+  ;(player as any).setTempo?.((player as any).tempo * speed)
 
   isPlaying = true
   isPaused = false
+  player.play()
 
-  transport.start()
-
-  return { stop: cleanup }
+  return { stop }
 }
 
 /**
- * @description: 试听播放（仅最高音）
+ * @description: 预加载 MIDI 文件（不播放），返回时长
  */
-export async function previewMelody(
-  melody: MelodyEvent[],
-  tempo: number = 500000,
-  speed: number = 1.0
-): Promise<{ stop: () => void }> {
-  if (!synth) {
-    await initAudioContext()
-  }
+export async function loadMidiForDuration(
+  midiData: ArrayBuffer
+): Promise<{ duration: number; player: InstanceType<typeof Player> }> {
+  const tempPlayer = new Player()
 
-  cleanup()
+  tempPlayer.loadArrayBuffer(midiData)
+  ;(tempPlayer as any).setTempo?.(tempPlayer.tempo)
 
-  if (melody.length === 0) {
-    return { stop: cleanup }
-  }
+  const duration = tempPlayer.getSongTime() * 1000
 
-  let maxTime = 0
-  for (const event of melody) {
-    const endTime = event.start_ms + event.duration_ms
-    if (endTime > maxTime) maxTime = endTime
-  }
-  totalDurationSec = maxTime / 1000 / speed
-
-  const transport = Tone.getTransport()
-  transport.bpm.value = ((60 * 1000000) / tempo) * speed
-
-  for (const event of melody) {
-    const note = midiToNoteName(event.pitch)
-    const startSec = event.start_ms / 1000 / speed
-    const durationSec = Math.max(event.duration_ms / 1000 / speed, 0.05)
-
-    const id = transport.schedule((time) => {
-      if (synth && isPlaying) {
-        synth.triggerAttackRelease(note, Math.min(durationSec, 0.5), time)
-      }
-    }, startSec)
-    scheduledEvents.push(id)
-  }
-
-  const endId = transport.schedule(() => {
-    isPlaying = false
-    isPaused = false
-  }, totalDurationSec)
-  scheduledEvents.push(endId)
-
-  isPlaying = true
-  isPaused = false
-
-  transport.start()
-
-  return { stop: cleanup }
+  return { duration, player: tempPlayer }
 }
 
 /**
  * @description: 停止播放
  */
-export function stopPreview() {
-  cleanup()
+export function stop() {
+  if (player) {
+    player.stop()
+    player = null
+  }
+  isPlaying = false
+  isPaused = false
 }
 
 /**
  * @description: 暂停播放
  */
-export function pausePreview() {
+export function pause() {
   if (isPlaying && !isPaused) {
-    Tone.getTransport().pause()
     isPaused = true
+    player?.pause()
   }
 }
 
 /**
- * @description: 继续播放
+ * @description: 继续播放（midi-player-js 用 play() 代替 resume）
  */
-export function resumePreview() {
+export function resume() {
   if (isPlaying && isPaused) {
-    Tone.getTransport().start()
     isPaused = false
+    player?.play()
   }
 }
 
 /**
- * @description: 获取当前播放位置（秒）
+ * @description: 获取当前播放位置（毫秒）
  */
 export function getCurrentTime(): number {
-  if (!isPlaying) return 0
-  return Tone.getTransport().seconds
+  if (!player) return 0
+  const totalTime = player.getSongTime()
+  const remainingTime = player.getSongTimeRemaining()
+  return Math.max(0, (totalTime - remainingTime) * 1000)
 }
 
 /**
- * @description: 获取总时长（秒）
+ * @description: 获取总时长（毫秒）
  */
 export function getTotalDuration(): number {
-  if (!isPlaying && !isPaused) return 0
-  return totalDurationSec
+  if (!player) return 0
+  return player.getSongTime() * 1000
 }
 
 /**
- * @description: 跳转到指定播放位置
+ * @description: 跳转到指定位置（毫秒）
  */
-export function seekTo(time: number) {
-  if (!isPlaying && !isPaused) return
-  Tone.getTransport().seconds = time
+export function seekTo(timeMs: number) {
+  if (!player) {
+    console.warn('seekTo: player not initialized')
+    return
+  }
+  const seconds = timeMs / 1000
+  try {
+    player.skipToSeconds(seconds)
+    setTimeout(() => {
+      player?.play()
+    }, 100)
+  } catch (e) {
+    console.error('seekTo failed:', e)
+  }
 }
 
 /**
- * @description: 设置音量
+ * @description: 设置音量（0-1）
  */
 export function setVolume(value: number) {
-  if (synth) {
-    const db = value <= 0 ? -60 : 20 * Math.log10(value)
-    synth.volume.value = db
-  }
+  currentVolume = Math.max(0, Math.min(1, value))
 }
 
 /**
  * @description: 获取当前音量
  */
 export function getVolume(): number {
-  if (synth) {
-    const db = synth.volume.value
-    if (db <= -60) return 0
-    return Math.pow(10, db / 20)
-  }
-  return 1
+  return currentVolume
+}
+
+/**
+ * @description: 设置回调函数
+ */
+export function setCallbacks(
+  timeUpdate: ((time: number) => void) | null,
+  endCallback: (() => void) | null
+) {
+  onTimeUpdate = timeUpdate
+  onEndCallback = endCallback
+}
+
+/**
+ * @description: 停止预览
+ */
+export function stopPreview() {
+  stop()
+}
+
+/**
+ * @description: 暂停预览
+ */
+export function pausePreview() {
+  pause()
+}
+
+/**
+ * @description: 继续预览
+ */
+export function resumePreview() {
+  resume()
+}
+
+/**
+ * @description: 播放所有音符
+ */
+export async function previewAllNotes(
+  _events: {
+    pitch: number
+    velocity: number
+    start_tick: number
+    end_tick: number
+    channel: number
+  }[],
+  _ticksPerBeat: number,
+  _tempo: number = 500000,
+  _speed: number = 1.0
+): Promise<{ stop: () => void }> {
+  console.error('previewAllNotes is not implemented, use playMidi')
+  return { stop }
 }

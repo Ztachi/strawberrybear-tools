@@ -29,7 +29,7 @@ const browserGlobals = {
 
 export default [
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.git/**', '**/src-tauri/**', '**/gen/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/.git/**', '**/src-tauri/**', '**/gen/**', '**/public/soundfonts/**'],
   },
   eslint.configs.recommended,
   {

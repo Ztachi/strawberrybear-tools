@@ -22,8 +22,9 @@ const isDragging = ref(false)
 
 /** 格式化时间 */
 function formatTime(seconds: number) {
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
+  const safeSeconds = Math.max(0, seconds)
+  const mins = Math.floor(safeSeconds / 60)
+  const secs = Math.floor(safeSeconds % 60)
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
@@ -52,13 +53,16 @@ function togglePlay() {
 /** 进度条拖拽开始 */
 function onSliderPointerDown() {
   isDragging.value = true
+  playerStore.setDragging(true)
 }
 
 /** 进度条值变化 */
-function onSliderUpdate(value: [number, number]) {
-  internalPercentArray.value = [value[0]]
-  if (isDragging.value) {
-    playerStore.setPreviewTime((value[0] / 100) * playerStore.previewDuration)
+function onSliderUpdate(value: number[] | undefined) {
+  if (value) {
+    internalPercentArray.value = [value[0]]
+    if (isDragging.value) {
+      playerStore.setPreviewTime((value[0] / 100) * playerStore.previewDuration)
+    }
   }
 }
 
@@ -67,6 +71,7 @@ function onSliderPointerUp() {
   if (isDragging.value) {
     playerStore.seekTo((internalPercentArray.value[0] / 100) * playerStore.previewDuration)
     isDragging.value = false
+    playerStore.setDragging(false)
   }
 }
 
@@ -90,7 +95,7 @@ onUnmounted(() => {
   <div class="preview-player">
     <!-- 进度条 -->
     <div class="progress-bar">
-      <span class="time current">{{ formatTime(playerStore.previewCurrentTime) }}</span>
+      <span class="time current">{{ formatTime(playerStore.previewCurrentTime / 1000) }}</span>
       <div class="slider-wrapper">
         <Slider
           v-model="internalPercentArray"
@@ -101,7 +106,7 @@ onUnmounted(() => {
           @update:model-value="onSliderUpdate"
         />
       </div>
-      <span class="time duration">{{ formatTime(playerStore.previewDuration) }}</span>
+      <span class="time duration">{{ formatTime(playerStore.previewDuration / 1000) }}</span>
     </div>
 
     <!-- 控制按钮 -->
@@ -140,7 +145,7 @@ onUnmounted(() => {
               :model-value="[playerStore.isPreviewMuted ? 0 : playerStore.previewVolume * 100]"
               :max="100"
               class="volume-slider"
-              @update:model-value="(v) => playerStore.setPreviewVolumeValue(v[0] / 100)"
+              @update:model-value="(v) => v && playerStore.setPreviewVolumeValue(v[0] / 100)"
             />
             <span class="volume-percent">{{ volumePercent }}%</span>
           </div>

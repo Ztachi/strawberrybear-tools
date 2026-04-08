@@ -7,6 +7,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder, X } from 'lucide-vue-next'
 import MidiLibrary from '@/components/MidiLibrary.vue'
 import MidiDetail from '@/components/MidiDetail.vue'
@@ -162,13 +163,25 @@ async function enterOverlayMode() {
     </main>
 
     <!-- MIDI 详情 Drawer -->
-    <Drawer v-model:open="playerStore.showDetail" direction="right">
+    <Drawer v-model:open="playerStore.showDetail" direction="left" handle-only>
       <DrawerContent class="!inset-y-0 !right-0 !left-auto !w-full !max-w-full">
         <DrawerHeader class="flex flex-row items-center justify-between">
-          <div>
-            <DrawerTitle>{{ playerStore.currentMidi?.filename }}</DrawerTitle>
-            <DrawerDescription>{{ t('midi.melodyInfo') }}</DrawerDescription>
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <div class="flex-1 min-w-0">
+                  <DrawerTitle class="line-clamp-2">
+                    {{ playerStore.currentMidi?.filename }}
+                  </DrawerTitle>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ playerStore.currentMidi?.filename }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <!-- 隐藏描述文字但保留 aria-describedby -->
+          <DrawerDescription class="sr-only"> MIDI 详情 </DrawerDescription>
           <Button variant="ghost" size="icon" @click="playerStore.closeDetail">
             <X :size="20" />
           </Button>

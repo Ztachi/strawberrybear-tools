@@ -81,9 +81,11 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
 
     let info = MidiInfo {
         filename,
+        file_path: path.display().to_string(),
         duration_ms: duration_ms as u64,
         track_count,
         ticks_per_beat,
+        tempo,
         events: events.clone(),
     };
 

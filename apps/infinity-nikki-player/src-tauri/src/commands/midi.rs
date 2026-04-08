@@ -9,6 +9,12 @@ pub fn parse_midi_file(path: String) -> Result<(MidiInfo, Vec<NoteEvent>), Strin
     parse_midi_internal(&path)
 }
 
+/// 读取 MIDI 文件的二进制数据
+#[tauri::command]
+pub fn read_midi_data(path: String) -> Result<Vec<u8>, String> {
+    fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))
+}
+
 /// 提取旋律
 #[tauri::command]
 pub fn extract_melody(
