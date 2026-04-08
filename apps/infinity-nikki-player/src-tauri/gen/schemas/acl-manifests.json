@@ -1859,6 +1859,27 @@
     "permission_sets": {},
     "global_scope_schema": null
   },
+  "locale": {
+    "default_permission": {
+      "identifier": "default",
+      "description": "Default permissions for the plugin",
+      "permissions": ["allow-get-locale"]
+    },
+    "permissions": {
+      "allow-get-locale": {
+        "identifier": "allow-get-locale",
+        "description": "Enables the get_locale command without any pre-configured scope.",
+        "commands": { "allow": ["get_locale"], "deny": [] }
+      },
+      "deny-get-locale": {
+        "identifier": "deny-get-locale",
+        "description": "Denies the get_locale command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["get_locale"] }
+      }
+    },
+    "permission_sets": {},
+    "global_scope_schema": null
+  },
   "mcp-bridge": {
     "default_permission": {
       "identifier": "default",

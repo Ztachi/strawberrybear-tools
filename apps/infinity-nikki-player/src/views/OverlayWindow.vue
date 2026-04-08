@@ -8,12 +8,6 @@ const { t } = useI18n()
 
 const playerStore = usePlayerStore()
 const isExpanded = ref(false)
-const currentLang = ref('zh-CN')
-
-/** 切换语言 */
-function toggleLocale() {
-  currentLang.value = currentLang.value === 'zh-CN' ? 'en-US' : 'zh-CN'
-}
 
 /** 切换展开/收起 */
 function toggleExpand() {
@@ -63,9 +57,6 @@ const recentLogs = computed(() => playerStore.keyLogs.slice(-5))
         <span class="midi-name" data-tauri-drag-region>
           {{ playerStore.playbackState.midi_name || t('player.noFile') }}
         </span>
-        <button class="btn-lang-small" @click.stop="toggleLocale">
-          {{ currentLang === 'zh-CN' ? 'EN' : '中文' }}
-        </button>
       </div>
     </div>
 
@@ -152,11 +143,6 @@ const recentLogs = computed(() => playerStore.keyLogs.slice(-5))
 
 .midi-name {
   @apply text-xs text-gray-700 truncate;
-}
-
-.btn-lang-small {
-  @apply px-2 py-0.5 text-xs rounded border border-pink-500/50
-         text-pink-600 hover:bg-pink-500/20 transition-colors;
 }
 
 .controls-mini {

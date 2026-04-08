@@ -12,6 +12,36 @@ pub fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// 获取系统语言/区域设置 - 取 AppleLanguages 列表中的第一个（最高优先级）
+#[tauri::command]
+pub fn get_system_locale() -> String {
+    if let Ok(output) = Command::new("defaults")
+        .args(["read", "-g", "AppleLanguages"])
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // AppleLanguages 返回格式: (\n    "en-CN",\n    "zh-Hans-CN"\n)
+        // 提取第一个语言代码
+        if let Some(start) = stdout.find('"') {
+            if let Some(end) = stdout[start + 1..].find('"') {
+                let lang = &stdout[start + 1..start + 1 + end];
+                let lang = lang.trim();
+                log::info!("First AppleLanguage: {}", lang);
+                if lang.starts_with("zh-Hans") || lang.starts_with("zh-CN") {
+                    return "zh-CN".to_string();
+                }
+                if lang.starts_with("zh-Hant") || lang.starts_with("zh-TW") {
+                    return "zh-TW".to_string();
+                }
+                if lang.starts_with("en") {
+                    return "en-US".to_string();
+                }
+            }
+        }
+    }
+    "en-US".to_string()
+}
+
 /// 检查辅助功能权限
 #[tauri::command]
 pub fn check_accessibility() -> bool {

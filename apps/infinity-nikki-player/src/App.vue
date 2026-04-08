@@ -15,7 +15,7 @@ function showError(title: string, message: string) {
 /** 设置 Vue 全局错误处理器 */
 const app = getCurrentInstance()?.appContext.app
 if (app) {
-  app.config.errorHandler = (err, instance, info) => {
+  app.config.errorHandler = (err, _instance, info) => {
     console.error('Vue Error:', err, info)
     const message = err instanceof Error ? err.message : String(err)
     showError('应用错误', message)

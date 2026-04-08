@@ -17,7 +17,6 @@ const props = defineProps<ToasterProps>()
       '--normal-border': 'var(--border)',
       '--border-radius': 'var(--radius)',
     }"
-    rich-colors
     v-bind="props"
   >
     <template #success-icon>

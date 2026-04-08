@@ -44,7 +44,10 @@ async function initInstrument() {
 
   if (!instrument) {
     // 从本地加载音色（public 目录下的文件可被直接访问）
-    instrument = await soundfont.instrument(audioContext, '/soundfonts/acoustic_grand_piano-mp3.js')
+    instrument = await soundfont.instrument(
+      audioContext,
+      '/soundfonts/acoustic_grand_piano-mp3.js' as never
+    )
   }
 }
 

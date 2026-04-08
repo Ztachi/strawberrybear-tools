@@ -11,14 +11,9 @@ import FilesTab from './FilesTab/index.vue'
 import TemplatesTab from './TemplatesTab/index.vue'
 import LogsTab from './LogsTab/index.vue'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const playerStore = usePlayerStore()
 const activeTab = ref('files')
-
-/** 切换语言 */
-function toggleLocale() {
-  locale.value = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
-}
 
 /** 跳转到辅助功能权限设置 */
 async function openAccessibilitySettings() {
@@ -93,9 +88,6 @@ async function enterOverlayMode() {
             {{ t('permissions.required') }}
           </Button>
 
-          <Button variant="ghost" size="sm" class="lang-btn" @click="toggleLocale">
-            {{ locale === 'zh-CN' ? 'EN' : '中文' }}
-          </Button>
           <Button variant="default" size="sm" class="overlay-btn" @click="enterOverlayMode">
             <Monitor :size="16" />
             {{ t('app.overlayMode') }}
@@ -199,14 +191,6 @@ async function enterOverlayMode() {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
-}
-
-.lang-btn {
-  color: var(--color-primary);
-}
-
-.lang-btn:hover {
-  color: var(--color-secondary);
 }
 
 .overlay-btn {
