@@ -82,6 +82,12 @@
   .transition-smooth {
     @apply transition-all duration-300 ease-out;
   }
+
+  /* iOS 毛玻璃效果 */
+  .glass-ios {
+    -webkit-backdrop-filter: blur(4px) saturate(287%);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 100%);
+  }
 }
 
 /* 自定义滚动条 */
@@ -112,3 +118,7 @@
 [data-tauri-drag-region] input {
   -webkit-app-region: no-drag;
 }
+/* 
+[data-vaul-drawer] {
+  @apply glass-ios;
+} */

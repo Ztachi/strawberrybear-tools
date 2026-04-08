@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { confirm } from '@tauri-apps/plugin-dialog'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Music, MoreVertical, Trash2 } from 'lucide-vue-next'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Music, MoreVertical, Trash2, X } from 'lucide-vue-next'
+import MidiDetail from './components/MidiDetail/index.vue'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
@@ -17,15 +20,16 @@ function formatDuration(ms: number) {
 }
 
 /** 删除确认 */
-function confirmDelete(filename: string) {
-  if (confirm(t('midi.confirmDelete'))) {
+async function confirmDelete(filename: string) {
+  const confirmed = await confirm(t('midi.confirmDelete'), { title: t('actions.delete'), kind: 'warning' })
+  if (confirmed) {
     playerStore.removeFromLibrary(filename)
   }
 }
 </script>
 
 <template>
-  <div class="midi-library px-[10px] -translate-x-[10px] w-[calc(100%+20px)]">
+  <div class="midi-library h-full px-[10px] -translate-x-[10px] w-[calc(100%+20px)]">
     <!-- 列表 -->
     <div v-if="playerStore.midiLibrary.length > 0" class="library-list">
       <div
@@ -76,19 +80,47 @@ function confirmDelete(filename: string) {
     </div>
 
     <!-- 空状态 -->
-    <div v-else class="empty-state">
+    <div v-else class="empty-state flex-1">
       <div class="empty-icon">
         <Music :size="40" />
       </div>
       <span class="empty-title">{{ t('midi.libraryEmpty') }}</span>
       <span class="empty-desc">{{ t('midi.libraryEmptyTip') }}</span>
     </div>
+
+    <!-- MIDI 详情 Drawer -->
+    <Drawer v-model:open="playerStore.showDetail" direction="left" handle-only>
+      <DrawerContent class="!inset-y-0 !right-0 !left-auto !w-full !max-w-full">
+        <DrawerHeader class="flex flex-row items-center justify-between">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <div class="flex-1 min-w-0">
+                  <DrawerTitle class="line-clamp-2">
+                    {{ playerStore.currentMidi?.filename }}
+                  </DrawerTitle>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{{ playerStore.currentMidi?.filename }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <!-- 隐藏描述文字但保留 aria-describedby -->
+          <DrawerDescription class="sr-only"> MIDI 详情 </DrawerDescription>
+          <button variant="ghost" size="icon" class="close-btn" @click="playerStore.closeDetail">
+            <X :size="20" />
+          </button>
+        </DrawerHeader>
+        <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
+      </DrawerContent>
+    </Drawer>
   </div>
 </template>
 
 <style scoped>
 .midi-library {
-  @apply max-h-[calc(100vh-320px)] overflow-y-auto;
+  @apply flex flex-col flex-1;
 }
 
 .library-list {
@@ -162,5 +194,10 @@ function confirmDelete(filename: string) {
 .empty-desc {
   @apply text-sm;
   color: #a89a9a;
+}
+
+.close-btn {
+  @apply w-10 h-10 rounded-lg flex items-center justify-center;
+  @apply text-pink-400 hover:bg-pink-50 transition-colors;
 }
 </style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, onMounted, getCurrentInstance } from 'vue'
-import MainWindow from './views/MainWindow.vue'
+import MainWindow from './views/MainWindow/index.vue'
 import OverlayWindow from './views/OverlayWindow.vue'
 import { Toaster } from '@/components/ui'
 import { toast } from 'vue-sonner'

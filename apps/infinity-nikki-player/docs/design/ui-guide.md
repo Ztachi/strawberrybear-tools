@@ -74,36 +74,181 @@ src/
 ├── assets/
 │   └── images/
 │       └── logo.png      # 应用 Logo
-├── components/
-│   ├── ui/               # shadcn-vue 组件
-│   │   ├── button/
-│   │   ├── card/
-│   │   ├── tabs/
-│   │   ├── badge/
-│   │   ├── input/
-│   │   ├── slider/
-│   │   ├── popover/
-│   │   ├── drawer/
-│   │   ├── tooltip/
-│   │   ├── sonner/
-│   │   └── index.ts
-│   ├── MidiLibrary.vue   # MIDI 文件列表
-│   ├── MidiDetail.vue    # MIDI 详情面板
-│   ├── PlayerControls.vue # 播放控制组件
-│   ├── KeyLogPanel.vue   # 按键日志面板
-│   └── TemplateEditor.vue # 模板编辑器
+├── components/                      # 全局组件
+│   ├── PreviewPlayer/               # 试听播放器
+│   │   └── index.vue
+│   ├── PlayerControls.vue           # 演奏控制组件
+│   └── ui/                          # shadcn-vue 全局公共组件
+│       ├── button/
+│       ├── card/
+│       ├── tabs/
+│       ├── badge/
+│       ├── input/
+│       ├── slider/
+│       ├── popover/
+│       ├── drawer/
+│       ├── tooltip/
+│       ├── sonner/
+│       └── index.ts
 ├── views/
-│   ├── MainWindow.vue    # 主窗口
-│   └── OverlayWindow.vue # 悬浮模式窗口
+│   ├── MainWindow/                       # 主窗口（页面级组件）
+│   │   ├── index.vue                     # 主窗口入口
+│   │   ├── FilesTab/                     # 文件页面
+│   │   │   ├── index.vue
+│   │   │   └── components/
+│   │   │       └── MidiLibrary/          # MIDI 列表
+│   │   │           ├── index.vue
+│   │   │           └── components/
+│   │   │               └── MidiDetail/  # MIDI 详情
+│   │   │                   └── index.vue
+│   │   ├── TemplatesTab/                 # 模板页面
+│   │   │   ├── index.vue
+│   │   │   └── components/
+│   │   │       └── TemplateEditor.vue
+│   │   └── LogsTab/                      # 日志页面
+│   │       ├── index.vue
+│   │       └── components/
+│   │           └── KeyLogPanel.vue
+│   └── OverlayWindow.vue                 # 悬浮模式窗口
 ├── stores/
-│   └── player.ts         # 播放器状态管理
+│   └── player.ts                         # 播放器状态管理
 ├── i18n/
 │   └── locales/
 │       ├── en-US.ts
 │       └── zh-CN.ts
 └── lib/
-    └── utils.ts          # 工具函数
+    └── utils.ts                           # 工具函数
 ```
+
+## 组件存放规范
+
+### 核心原则
+
+**组件分为两类：全局公共组件 和 页面级组件**
+
+| 类型         | 存放位置         | 说明                                                         |
+| ------------ | ---------------- | ------------------------------------------------------------ |
+| 全局公共组件 | `components/ui/` | 可在项目任何位置使用的组件，如 shadcn-vue 组件、业务公共组件 |
+| 页面级组件   | `views/xxx/`     | 仅属于特定页面的组件，不可跨页面复用                         |
+
+### 目录组织规则
+
+**规则 1：有子组件的页面必须使用文件夹结构**
+
+```
+# 错误：页面与子组件同名且同级
+views/
+├── MainWindow.vue      # 页面
+└── MainWindow.vue      # 子组件（同名，错误！）
+
+# 正确：页面使用文件夹，子组件放入 components
+views/
+└── MainWindow/
+    ├── index.vue           # 页面入口
+    └── components/        # 子组件目录
+        └── xxx.vue        # 子组件
+```
+
+**规则 2：组件命名遵循小驼峰**
+
+```
+views/
+└── MainWindow/
+    ├── index.vue
+    └── components/
+        ├── filesTab.vue       # 错误： kebab-case
+        ├── FilesTab.vue        # 错误： PascalCase（除非是全局组件）
+        └── files-tab.vue       # 错误： kebab-case
+        └── FilesTab.vue        # 正确： PascalCase（页面级组件）
+```
+
+**规则 3：嵌套层级**
+
+页面组件可以继续拆分更小的子组件，遵循相同规则：
+
+```
+src/
+├── components/                      # 全局组件（可在任何页面复用）
+│   ├── PreviewPlayer/
+│   │   └── index.vue               # 试听播放器（可能在悬浮窗调用）
+│   └── PlayerControls.vue          # 演奏控制（可能在悬浮窗调用）
+│
+└── views/
+    └── MainWindow/                  # 主窗口（页面级）
+        ├── index.vue                 # 主窗口布局
+        │
+        ├── FilesTab/                 # 文件页面
+        │   ├── index.vue
+        │   └── components/          # 子组件
+        │       └── MidiLibrary/      # 继续拆分的子模块
+        │           ├── index.vue
+        │           └── components/   # 子子组件
+        │               └── MidiDetail/
+        │                   └── index.vue
+        │
+        ├── TemplatesTab/
+        │   ├── index.vue
+        │   └── components/
+        │       └── TemplateEditor.vue
+        │
+        └── LogsTab/
+            ├── index.vue
+            └── components/
+                └── KeyLogPanel.vue
+```
+
+**嵌套判定**：当组件是特定页面的子模块，且该子模块还有更小的子组件时，继续使用相同规则（文件夹 + components 子目录）。
+
+### 示例：创建新页面组件
+
+假设需要创建一个新的「设置」页面：
+
+```bash
+# 1. 创建目录结构
+views/
+└── Settings/
+    ├── index.vue          # 设置页面入口
+    └── components/        # 设置页面的子组件
+        ├── GeneralTab.vue
+        └── AdvancedTab.vue
+```
+
+```vue
+<!-- views/Settings/index.vue -->
+<script setup lang="ts">
+import GeneralTab from './components/GeneralTab.vue'
+import AdvancedTab from './components/AdvancedTab.vue'
+</script>
+
+<template>
+  <div class="settings">
+    <GeneralTab />
+    <AdvancedTab />
+  </div>
+</template>
+```
+
+### 判定标准：何时应该创建文件夹
+
+满足以下任一条件时，应该创建文件夹：
+
+1. 页面有 2 个或以上的子组件
+2. 组件内部需要进一步拆分
+3. 组件与其他组件有明显的上下级关系
+
+### 全局公共组件判定
+
+满足以下条件时，应该放在 `components/` 目录：
+
+1. 可在项目任意位置复用
+2. 不与特定页面绑定
+3. 独立功能，可抽离
+
+**示例**：
+
+- `components/ui/` 下的所有 shadcn-vue 组件（Button、Card 等）
+- 工具类组件（Tooltip、Popover 等）
+- 业务公共组件（如 `PreviewPlayer`、`PlayerControls` 等可能在悬浮窗等场景调用）
 
 ## shadcn-vue 组件结构
 

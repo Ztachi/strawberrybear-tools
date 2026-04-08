@@ -6,13 +6,10 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
-import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder, X } from 'lucide-vue-next'
-import MidiLibrary from '@/components/MidiLibrary.vue'
-import MidiDetail from '@/components/MidiDetail.vue'
-import TemplateEditor from '@/components/TemplateEditor.vue'
-import KeyLogPanel from '@/components/KeyLogPanel.vue'
+import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder } from 'lucide-vue-next'
+import FilesTab from './FilesTab/index.vue'
+import TemplatesTab from './TemplatesTab/index.vue'
+import LogsTab from './LogsTab/index.vue'
 
 const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
@@ -26,10 +23,8 @@ function toggleLocale() {
 /** 跳转到辅助功能权限设置 */
 async function openAccessibilitySettings() {
   try {
-    // macOS 打开系统偏好设置
     await invoke('open_accessibility_settings')
   } catch {
-    // fallback: 打开通用辅助功能 URL
     window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility')
   }
 }
@@ -111,84 +106,53 @@ async function enterOverlayMode() {
 
     <!-- 主内容区 -->
     <main class="content">
-      <Tabs v-model="activeTab" class="tabs-container">
-        <!-- 标签栏 -->
-        <TabsList class="tabs-list">
-          <TabsTrigger value="files" class="tab-trigger">
-            <Music :size="16" />
-            {{ t('tabs.files') }}
-          </TabsTrigger>
-          <TabsTrigger value="templates" class="tab-trigger">
-            <LayoutGrid :size="16" />
-            {{ t('tabs.templates') }}
-          </TabsTrigger>
-          <TabsTrigger value="logs" class="tab-trigger">
-            <FileText :size="16" />
-            {{ t('tabs.logs') }}
-          </TabsTrigger>
-        </TabsList>
+      <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
+        <!-- 标签栏 + 操作按钮 -->
+        <div class="tabs-header sticky top-0 z-10">
+          <TabsList class="tabs-list">
+            <TabsTrigger value="files" class="tab-trigger">
+              <Music :size="16" />
+              {{ t('tabs.files') }}
+            </TabsTrigger>
+            <TabsTrigger value="templates" class="tab-trigger">
+              <LayoutGrid :size="16" />
+              {{ t('tabs.templates') }}
+            </TabsTrigger>
+            <TabsTrigger value="logs" class="tab-trigger">
+              <FileText :size="16" />
+              {{ t('tabs.logs') }}
+            </TabsTrigger>
+          </TabsList>
+
+          <!-- 文件操作按钮 -->
+          <div class="file-actions">
+            <Button variant="outline" size="sm" @click="selectFile">
+              <Upload :size="16" />
+              {{ t('actions.selectFile') }}
+            </Button>
+            <Button variant="outline" size="sm" @click="selectFolder">
+              <Folder :size="16" />
+              {{ t('actions.selectFolder') }}
+            </Button>
+          </div>
+        </div>
 
         <!-- 文件 Tab -->
-        <TabsContent value="files" class="tab-content">
-          <!-- 操作按钮组 -->
-          <div class="action-cards">
-            <button class="action-card" @click="selectFile">
-              <div class="action-icon">
-                <Upload :size="24" />
-              </div>
-              <span class="action-text">{{ t('actions.selectFile') }}</span>
-            </button>
-            <button class="action-card" @click="selectFolder">
-              <div class="action-icon">
-                <Folder :size="24" />
-              </div>
-              <span class="action-text">{{ t('actions.selectFolder') }}</span>
-            </button>
-          </div>
-
-          <!-- MIDI 库列表 -->
-          <MidiLibrary />
+        <TabsContent value="files" class="tab-content flex-1">
+          <FilesTab />
         </TabsContent>
 
         <!-- 模板 Tab -->
-        <TabsContent value="templates" class="tab-content">
-          <TemplateEditor />
+        <TabsContent value="templates" class="tab-content flex-1">
+          <TemplatesTab />
         </TabsContent>
 
         <!-- 日志 Tab -->
-        <TabsContent value="logs" class="tab-content">
-          <KeyLogPanel />
+        <TabsContent value="logs" class="tab-content flex-1">
+          <LogsTab />
         </TabsContent>
       </Tabs>
     </main>
-
-    <!-- MIDI 详情 Drawer -->
-    <Drawer v-model:open="playerStore.showDetail" direction="left" handle-only>
-      <DrawerContent class="!inset-y-0 !right-0 !left-auto !w-full !max-w-full">
-        <DrawerHeader class="flex flex-row items-center justify-between">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <div class="flex-1 min-w-0">
-                  <DrawerTitle class="line-clamp-2">
-                    {{ playerStore.currentMidi?.filename }}
-                  </DrawerTitle>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{{ playerStore.currentMidi?.filename }}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <!-- 隐藏描述文字但保留 aria-describedby -->
-          <DrawerDescription class="sr-only"> MIDI 详情 </DrawerDescription>
-          <Button variant="ghost" size="icon" @click="playerStore.closeDetail">
-            <X :size="20" />
-          </Button>
-        </DrawerHeader>
-        <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
-      </DrawerContent>
-    </Drawer>
   </div>
 </template>
 
@@ -246,17 +210,25 @@ async function enterOverlayMode() {
 }
 
 .content {
-  @apply flex-1 p-6;
+  @apply flex-1 p-6 overflow-auto;
 }
 
 .tabs-container {
-  @apply h-full flex flex-col;
+  @apply flex flex-col;
 }
 
 .tabs-list {
-  @apply inline-flex h-12 items-center justify-start rounded-2xl p-1;
+  @apply inline-flex h-10 items-center justify-start rounded-2xl p-1;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid rgba(247, 192, 193, 0.2);
+}
+
+.tabs-header {
+  @apply flex items-center justify-between gap-4;
+}
+
+.file-actions {
+  @apply flex items-center gap-2;
 }
 
 .tab-trigger {
@@ -276,36 +248,8 @@ async function enterOverlayMode() {
 }
 
 .tab-content {
-  @apply mt-6 flex-1;
+  @apply flex-1 h-full;
   animation: fadeIn 0.2s ease-out;
-}
-
-.action-cards {
-  @apply grid grid-cols-2 gap-4 mb-6;
-}
-
-.action-card {
-  @apply flex flex-col items-center justify-center gap-3 p-6 rounded-2xl;
-  @apply text-pink-600 transition-all duration-200;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(247, 192, 193, 0.2);
-  box-shadow: 0 2px 12px rgba(247, 192, 193, 0.1);
-}
-
-.action-card:hover {
-  border-color: rgba(247, 192, 193, 0.4);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(247, 192, 193, 0.15);
-}
-
-.action-icon {
-  @apply w-12 h-12 rounded-xl flex items-center justify-center;
-  background: rgba(247, 192, 193, 0.15);
-  color: #f7c0c1;
-}
-
-.action-text {
-  @apply text-sm font-medium;
 }
 
 @keyframes fadeIn {

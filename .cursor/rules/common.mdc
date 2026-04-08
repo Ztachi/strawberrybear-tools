@@ -5,3 +5,65 @@ alwaysApply: true
 - 每次写完代码要自己lint一下。
 - 不要只是为了实现目标而去实现目标，要寻找最合理最优雅的方案。
 - 尽可能使用网上已有的开源库，避免自己重复造轮子。
+- **禁止修改 `public/` 文件夹下的任何内容**，除非明确获得用户授权。该目录存放静态资源（如音色文件、字体等），修改会导致不可预期的错误。
+
+## 组件目录结构规范
+
+### 核心原则
+
+| 目录 | 存放内容 | 示例 |
+|------|----------|------|
+| `src/components/` | **全局组件** - 可在任何页面复用 | `PreviewPlayer`, `PlayerControls`, `ui/` |
+| `src/views/` | **页面组件** - 页面级模块 | `MainWindow`, `FilesTab` |
+
+### 嵌套规则
+
+**只要组件有子组件，就必须创建文件夹，子组件放入 `components/` 子文件夹。**
+
+### 正确示例
+
+```
+src/
+├── components/                              # 全局组件
+│   ├── PreviewPlayer/                        # 播放器（可能在悬浮窗调用）
+│   │   └── index.vue
+│   ├── PlayerControls.vue                    # 演奏控制（可能在悬浮窗调用）
+│   └── ui/                                   # UI组件库
+│
+└── views/
+    └── MainWindow/                          # 主窗口（页面级）
+        ├── index.vue                         # 主窗口布局
+        │
+        ├── FilesTab/                         # 文件页面
+        │   ├── index.vue
+        │   └── components/                   # 子组件
+        │       └── MidiLibrary/
+        │           ├── index.vue
+        │           └── components/           # 更深层子组件
+        │               └── MidiDetail/
+        │                   └── index.vue
+        │
+        ├── TemplatesTab/
+        │   ├── index.vue
+        │   └── components/                   # 子组件
+        │       └── TemplateEditor.vue
+        │
+        └── LogsTab/
+            ├── index.vue
+            └── components/                   # 子组件
+                └── KeyLogPanel.vue
+```
+
+### 常见错误
+
+❌ 错误：`components/MidiLibrary.vue` - MidiLibrary 是页面级组件，不应放在全局 components 目录
+✅ 正确：`views/MainWindow/FilesTab/components/MidiLibrary/index.vue`
+
+❌ 错误：`views/MainWindow/components/FilesTab.vue` - FilesTab 是页面，应该建文件夹
+✅ 正确：`views/MainWindow/FilesTab/index.vue`
+
+### 命名规范
+
+- 页面级组件：使用 PascalCase 建文件夹，入口文件为 `index.vue`
+- 子组件：放在父组件的 `components/` 子目录下
+- 全局组件：放在 `src/components/` 目录下，使用文件夹组织

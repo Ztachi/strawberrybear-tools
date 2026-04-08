@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
+import { confirm } from '@tauri-apps/plugin-dialog'
 import type { KeyTemplate } from '@/types'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui'
@@ -71,7 +72,8 @@ function cancelEdit() {
 
 /** 删除模板 */
 async function deleteTemplate(templateId: string) {
-  if (confirm(t('template.confirmDelete'))) {
+  const confirmed = await confirm(t('template.confirmDelete'), { title: t('actions.delete'), kind: 'warning' })
+  if (confirmed) {
     await playerStore.deleteTemplate(templateId)
   }
 }

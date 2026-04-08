@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
-import PlayerControls from '@/components/PlayerControls.vue'
-import PreviewPlayer from '@/components/PreviewPlayer.vue'
+import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
+import PlayerControls from '@/components/PlayerControls/index.vue'
 import { Music, Clock, Music2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -115,8 +115,8 @@ function formatDuration(ms: number) {
 
 .preview-section {
   @apply mb-6 p-4 rounded-2xl;
-  background: rgba(167, 139, 250, 0.1);
-  border: 1px solid rgba(167, 139, 250, 0.2);
+  background: rgba(247, 192, 193, 0.1);
+  border: 1px solid rgba(247, 192, 193, 0.2);
 }
 
 .detail-player {

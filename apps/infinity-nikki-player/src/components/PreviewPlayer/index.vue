@@ -191,8 +191,8 @@ onUnmounted(() => {
 
 .control-btn.play {
   @apply w-12 h-12 rounded-full;
-  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%) !important;
-  @apply text-white hover:opacity-90;
+  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
+  @apply text-pink-900 hover:opacity-90;
 }
 
 .control-btn.prev,

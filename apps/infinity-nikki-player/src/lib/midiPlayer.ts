@@ -1,3 +1,11 @@
+/*
+ * @Author: ztachi(legendryztachi@gmail.com)
+ * @Date: 2026-04-08 13:42:27
+ * @LastEditors: ztachi(legendryztachi@gmail.com)
+ * @LastEditTime: 2026-04-08 17:13:50
+ * @FilePath: /strawberrybear-tools/apps/infinity-nikki-player/src/lib/midiPlayer.ts
+ * @Description:
+ */
 /**
  * @description: MIDI 播放器工具模块
  * @module midiPlayer
