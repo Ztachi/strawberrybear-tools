@@ -162,7 +162,9 @@ async function enterOverlayMode() {
 }
 
 .header {
-  @apply bg-white/80 backdrop-blur-xl border-b border-pink-100;
+  background: var(--bg-white-80);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-primary-10);
 }
 
 .header-content {
@@ -175,13 +177,13 @@ async function enterOverlayMode() {
 
 .logo-icon {
   @apply w-10 h-10 rounded-xl flex items-center justify-center;
-  background: linear-gradient(135deg, #f7c0c1 0%, #f9d5d7 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
   color: white;
 }
 
 .title {
   @apply text-xl font-semibold;
-  color: #4a3f3f;
+  color: var(--color-foreground);
   letter-spacing: -0.02em;
 }
 
@@ -200,13 +202,17 @@ async function enterOverlayMode() {
 }
 
 .lang-btn {
-  @apply text-pink-400 hover:text-pink-500;
+  color: var(--color-primary);
+}
+
+.lang-btn:hover {
+  color: var(--color-secondary);
 }
 
 .overlay-btn {
-  @apply gap-2;
-  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
-  @apply text-pink-900 font-medium;
+  @apply gap-2 font-medium;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
+  color: var(--color-foreground) !important;
 }
 
 .content {
@@ -219,8 +225,8 @@ async function enterOverlayMode() {
 
 .tabs-list {
   @apply inline-flex h-10 items-center justify-start rounded-2xl p-1;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(247, 192, 193, 0.2);
+  background: var(--bg-white-80);
+  border: 1px solid var(--border-primary-20);
 }
 
 .tabs-header {
@@ -233,18 +239,19 @@ async function enterOverlayMode() {
 
 .tab-trigger {
   @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium;
-  @apply text-pink-400 transition-all duration-200;
+  color: var(--color-primary);
+  transition: all 0.2s;
 }
 
 .tab-trigger[data-state='active'] {
-  @apply text-pink-900;
-  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
-  box-shadow: 0 2px 8px rgba(247, 192, 193, 0.3);
+  color: var(--color-foreground);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
+  box-shadow: 0 2px 8px var(--bg-primary-15);
 }
 
 .tab-trigger:hover:not([data-state='active']) {
-  @apply text-pink-500;
-  background: rgba(247, 192, 193, 0.1);
+  color: var(--color-secondary);
+  background: var(--bg-primary-10);
 }
 
 .tab-content {

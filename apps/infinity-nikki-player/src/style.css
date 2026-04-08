@@ -4,6 +4,55 @@
 
 @layer base {
   :root {
+    /* 品牌粉色系 */
+    --color-primary: #f7c0c1;
+    --color-primary-light: #fddde6;
+    --color-secondary: #f5b8c0;
+
+    /* 文本颜色 */
+    --color-foreground: #4a3f3f;
+    --color-muted: #a89a9a;
+    --color-muted-dark: #6b5a5a;
+    --color-white: #ffffff;
+
+    /* 白色透明背景 */
+    --bg-white-95: rgba(255, 255, 255, 0.95);
+    --bg-white-90: rgba(255, 255, 255, 0.9);
+    --bg-white-80: rgba(255, 255, 255, 0.8);
+    --bg-white-50: rgba(255, 255, 255, 0.5);
+
+    /* 粉色透明背景 */
+    --bg-primary-15: rgba(247, 192, 193, 0.15);
+    --bg-primary-10: rgba(247, 192, 193, 0.1);
+    --bg-primary-08: rgba(247, 192, 193, 0.08);
+    --bg-primary-04: rgba(247, 192, 193, 0.04);
+
+    /* 粉色边框 */
+    --border-primary-30: rgba(247, 192, 193, 0.3);
+    --border-primary-20: rgba(247, 192, 193, 0.2);
+    --border-primary-15: rgba(247, 192, 193, 0.15);
+    --border-primary-10: rgba(247, 192, 193, 0.1);
+
+    /* 状态颜色 */
+    --color-success: #4ade80;
+    --color-warning: #facc15;
+
+    /* 状态透明背景 */
+    --bg-success-08: rgba(74, 222, 128, 0.08);
+    --bg-success-15: rgba(74, 222, 128, 0.15);
+    --bg-success-30: rgba(74, 222, 128, 0.3);
+    --bg-warning-20: rgba(250, 204, 21, 0.2);
+
+    /* 粉色阴影 */
+    --shadow-pink: 0 8px 32px rgba(247, 192, 193, 0.15);
+    --shadow-pink-sm: 0 2px 8px rgba(247, 192, 193, 0.08);
+    --shadow-pink-card: 0 2px 12px rgba(247, 192, 193, 0.08);
+
+    /* 通用阴影 */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+
+    /* Tailwind CSS 变量 */
     --background: 30 20% 97%;
     --foreground: 330 10% 15%;
     --card: 0 0% 100%;
@@ -51,31 +100,32 @@
 
   /* 渐变背景 - 组件级别以便 @apply 可用 */
   .bg-gradient-warm {
-    background: linear-gradient(135deg, #fdf6f7 0%, #fef9fa 50%, #fdf6f7 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-primary-light) 0%,
+      var(--bg-white-95) 50%,
+      var(--color-primary-light) 100%
+    );
   }
 
   /* 主色强调 */
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #f7c0c1 0%, #e8a0a3 100%);
+    background-image: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   }
 
   /* 柔和阴影 */
   .shadow-soft {
-    box-shadow:
-      0 8px 32px rgba(247, 192, 193, 0.15),
-      0 2px 8px rgba(247, 192, 193, 0.08);
+    box-shadow: var(--shadow-pink), var(--shadow-pink-sm);
   }
 
   .shadow-card {
-    box-shadow:
-      0 2px 12px rgba(0, 0, 0, 0.06),
-      0 1px 3px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--shadow-card), var(--shadow-sm);
   }
 
   /* 柔和边框 */
   .border-subtle {
-    border-color: rgba(247, 192, 193, 0.3);
+    border-color: var(--border-primary-30);
   }
 
   /* 平滑过渡 */

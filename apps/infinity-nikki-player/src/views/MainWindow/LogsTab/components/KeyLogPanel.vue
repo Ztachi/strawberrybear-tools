@@ -67,18 +67,18 @@ function formatTime(timestamp: number) {
 <style scoped>
 .key-log-panel {
   @apply h-full flex flex-col rounded-2xl;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(247, 192, 193, 0.15);
+  background: var(--bg-white-90);
+  border: 1px solid var(--border-primary-15);
 }
 
 .panel-header {
-  @apply flex items-center justify-between px-5 py-4 border-b;
-  border-color: rgba(247, 192, 193, 0.1) !important;
+  @apply flex items-center justify-between px-5 py-4;
+  border-bottom: 1px solid var(--border-primary-10);
 }
 
 .header-title {
   @apply flex items-center gap-2 text-sm font-medium;
-  color: #6b5a5a;
+  color: var(--color-muted-dark);
 }
 
 .header-actions {
@@ -87,15 +87,17 @@ function formatTime(timestamp: number) {
 
 .log-count {
   @apply text-xs font-mono;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 
 .clear-btn {
-  @apply text-pink-400 text-xs;
+  color: var(--color-primary);
+  @apply text-xs;
 }
 
 .clear-btn:hover {
-  @apply text-pink-500 bg-pink-50;
+  color: var(--color-primary);
+  background: var(--bg-primary-10);
 }
 
 .log-list {
@@ -104,36 +106,36 @@ function formatTime(timestamp: number) {
 
 .log-entry {
   @apply grid grid-cols-[auto_auto_auto_auto_1fr] gap-3 items-center px-4 py-3 rounded-xl;
-  @apply transition-all duration-150;
+  transition: all 0.15s;
 }
 
 .log-entry.press {
-  background: rgba(74, 222, 128, 0.08);
-  border: 1px solid rgba(74, 222, 128, 0.15);
+  background: var(--bg-success-08);
+  border: 1px solid var(--bg-success-15);
 }
 
 .log-entry.release {
-  background: rgba(247, 192, 193, 0.04);
-  border: 1px solid rgba(247, 192, 193, 0.08);
+  background: var(--bg-primary-04);
+  border: 1px solid var(--border-primary-10);
 }
 
 .time {
   @apply text-xs font-mono;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 
 .pitch {
   @apply text-sm font-mono font-medium;
-  color: #d88a8a;
+  color: var(--color-primary);
 }
 
 .arrow {
-  @apply text-pink-300;
+  color: var(--color-primary);
 }
 
 .key {
   @apply text-lg font-bold font-mono;
-  color: #6b5a5a;
+  color: var(--color-muted-dark);
 }
 
 .action-badge {
@@ -141,22 +143,24 @@ function formatTime(timestamp: number) {
 }
 
 .action-badge.press {
-  @apply bg-green-100 text-green-600;
+  background: var(--bg-success-08);
+  color: var(--color-success);
 }
 
 .action-badge.release {
-  @apply bg-pink-50 text-pink-400;
+  background: var(--bg-primary-10);
+  color: var(--color-primary);
 }
 
 .empty-state {
   @apply flex flex-col items-center justify-center gap-3 py-16;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 
 .empty-icon {
   @apply w-12 h-12 rounded-xl flex items-center justify-center;
-  background: rgba(247, 192, 193, 0.1);
-  color: rgba(247, 192, 193, 0.4);
+  background: var(--bg-primary-10);
+  color: var(--color-primary);
 }
 
 .empty-state span {

@@ -92,7 +92,7 @@ function formatDuration(ms: number) {
 
 .file-icon {
   @apply w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0;
-  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   color: white;
 }
 
@@ -106,17 +106,18 @@ function formatDuration(ms: number) {
 
 .stat {
   @apply flex items-center gap-1.5 text-sm;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 
 .stat.highlight {
-  @apply text-pink-500 font-medium;
+  color: var(--color-primary);
+  font-weight: 500;
 }
 
 .preview-section {
   @apply mb-6 p-4 rounded-2xl;
-  background: rgba(247, 192, 193, 0.1);
-  border: 1px solid rgba(247, 192, 193, 0.2);
+  background: var(--bg-primary-10);
+  border: 1px solid var(--border-primary-20);
 }
 
 .detail-player {
@@ -124,12 +125,13 @@ function formatDuration(ms: number) {
 }
 
 .melody-info {
-  @apply pt-4 border-t border-pink-100;
+  @apply pt-4;
+  border-top: 1px solid var(--border-primary-10);
 }
 
 .section-title {
   @apply text-sm font-medium mb-4;
-  color: #6b5a5a;
+  color: var(--color-muted-dark);
 }
 
 .melody-stats {
@@ -138,17 +140,17 @@ function formatDuration(ms: number) {
 
 .stat-card {
   @apply flex flex-col items-center gap-1 p-4 rounded-xl;
-  background: rgba(247, 192, 193, 0.08);
-  border: 1px solid rgba(247, 192, 193, 0.15);
+  background: var(--bg-primary-08);
+  border: 1px solid var(--border-primary-15);
 }
 
 .stat-card .stat-value {
   @apply text-2xl font-bold;
-  color: #f7c0c1;
+  color: var(--color-primary);
 }
 
 .stat-card .stat-label {
   @apply text-xs;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 </style>

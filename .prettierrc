@@ -9,5 +9,6 @@
   "arrowParens": "always",
   "endOfLine": "lf",
   "vueIndentScriptAndStyle": false,
-  "embeddedLanguageFormatting": "off"
+  "embeddedLanguageFormatting": "off",
+  "ignore": ["**/soundfonts/**"]
 }

@@ -166,11 +166,11 @@ onUnmounted(() => {
 
 .time {
   @apply text-xs font-mono w-10 text-center;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 
 .time.current {
-  @apply text-pink-400;
+  color: var(--color-primary);
 }
 
 .slider-wrapper {
@@ -186,13 +186,25 @@ onUnmounted(() => {
 }
 
 .control-btn {
-  @apply text-pink-400 hover:bg-pink-50;
+  color: var(--color-primary);
+}
+
+.control-btn:hover {
+  background: var(--bg-primary-10);
 }
 
 .control-btn.play {
   @apply w-12 h-12 rounded-full;
-  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
-  @apply text-pink-900 hover:opacity-90;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
+  color: var(--color-white) !important;
+}
+
+.control-btn.play :deep(svg) {
+  color: var(--color-white);
+}
+
+.control-btn.play:hover {
+  opacity: 0.9;
 }
 
 .control-btn.prev,
@@ -210,7 +222,11 @@ onUnmounted(() => {
 
 .mute-btn {
   @apply w-8 h-8 rounded-lg;
-  @apply text-pink-400 hover:bg-pink-50;
+  color: var(--color-primary);
+}
+
+.mute-btn:hover {
+  background: var(--bg-primary-10);
 }
 
 .volume-slider {
@@ -219,6 +235,6 @@ onUnmounted(() => {
 
 .volume-percent {
   @apply text-xs w-8 text-right font-mono;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 </style>

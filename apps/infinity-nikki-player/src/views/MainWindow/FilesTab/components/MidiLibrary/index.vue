@@ -129,21 +129,21 @@ async function confirmDelete(filename: string) {
 
 .library-item {
   @apply flex items-center gap-3 p-3 rounded-xl cursor-pointer;
-  @apply transition-all duration-200;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(247, 192, 193, 0.15);
+  transition: all 0.2s;
+  background: var(--bg-white-80);
+  border: 1px solid var(--border-primary-15);
 }
 
 .library-item:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(247, 192, 193, 0.3);
+  background: var(--bg-white-95);
+  border-color: var(--border-primary-30);
   transform: translateX(4px);
 }
 
 .item-icon {
   @apply w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0;
-  background: rgba(247, 192, 193, 0.15);
-  color: #f7c0c1;
+  background: var(--bg-primary-15);
+  color: var(--color-primary);
 }
 
 .item-info {
@@ -152,52 +152,65 @@ async function confirmDelete(filename: string) {
 
 .filename {
   @apply block text-sm font-medium truncate;
-  color: #4a3f3f;
+  color: var(--color-foreground);
 }
 
 .meta {
   @apply text-xs mt-0.5;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 
 .menu-trigger {
   @apply w-8 h-8 rounded-lg flex items-center justify-center;
-  @apply text-pink-300 hover:bg-pink-50 transition-colors;
+  color: var(--color-primary);
+  transition: all 0.2s;
+}
+
+.menu-trigger:hover {
+  background: var(--bg-primary-10);
 }
 
 .menu-action {
   @apply w-full flex items-center gap-2 px-3 py-2 text-sm text-left;
-  @apply text-pink-600 transition-colors rounded-lg cursor-pointer;
+  color: var(--color-primary);
+  transition: all 0.2s;
+  border-radius: 0.5rem;
+  cursor: pointer;
 }
 
 .menu-action:hover {
-  @apply bg-pink-50;
+  background: var(--bg-primary-10);
 }
 
 .empty-state {
   @apply flex flex-col items-center justify-center gap-3 py-16 rounded-2xl;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px dashed rgba(247, 192, 193, 0.2);
+  background: var(--bg-white-50);
+  border: 1px dashed var(--border-primary-20);
 }
 
 .empty-icon {
   @apply w-20 h-20 rounded-2xl flex items-center justify-center;
-  background: rgba(247, 192, 193, 0.1);
-  color: rgba(247, 192, 193, 0.5);
+  background: var(--bg-primary-10);
+  color: var(--color-primary);
 }
 
 .empty-title {
   @apply text-base font-medium;
-  color: #6b5a5a;
+  color: var(--color-muted-dark);
 }
 
 .empty-desc {
   @apply text-sm;
-  color: #a89a9a;
+  color: var(--color-muted);
 }
 
 .close-btn {
   @apply w-10 h-10 rounded-lg flex items-center justify-center;
-  @apply text-pink-400 hover:bg-pink-50 transition-colors;
+  color: var(--color-primary);
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: var(--bg-primary-10);
 }
 </style>

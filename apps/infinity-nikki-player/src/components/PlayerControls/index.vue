@@ -97,9 +97,9 @@ async function adjustSpeed(delta: number) {
 <style scoped>
 .player-controls {
   @apply rounded-2xl p-5;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(247, 192, 193, 0.2);
-  box-shadow: 0 2px 12px rgba(247, 192, 193, 0.08);
+  background: var(--bg-white-90);
+  border: 1px solid var(--border-primary-20);
+  box-shadow: var(--shadow-pink-card);
 }
 
 .status-bar {
@@ -119,36 +119,36 @@ async function adjustSpeed(delta: number) {
 }
 
 .status-indicator.idle .indicator-dot {
-  @apply bg-pink-300;
+  background: var(--color-primary);
 }
 
 .status-indicator.playing .indicator-dot {
-  @apply bg-green-500;
+  background: var(--color-success);
 }
 
 .status-indicator.playing .indicator-glow {
-  background: rgba(74, 222, 128, 0.3);
+  background: var(--bg-success-30);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .status-indicator.paused .indicator-dot {
-  @apply bg-yellow-500;
+  background: var(--color-warning);
 }
 
 .status-indicator.paused .indicator-glow {
-  background: rgba(250, 204, 21, 0.2);
+  background: var(--bg-warning-20);
 }
 
 .status-text {
   @apply text-sm font-medium;
-  color: #6b5a5a;
+  color: var(--color-muted-dark);
 }
 
 .template-badge {
   @apply ml-auto px-3 py-1 rounded-full text-xs font-medium;
-  background: rgba(247, 192, 193, 0.15);
-  color: #d88a8a;
-  border: 1px solid rgba(247, 192, 193, 0.2);
+  background: var(--bg-primary-15);
+  color: var(--color-primary);
+  border: 1px solid var(--border-primary-20);
 }
 
 .controls-bar {
@@ -157,43 +157,49 @@ async function adjustSpeed(delta: number) {
 
 .play-btn {
   @apply flex-1 gap-2 h-12 text-base font-semibold;
-  background: linear-gradient(135deg, #f7c0c1 0%, #f5b8c0 100%) !important;
-  @apply text-pink-900;
-  box-shadow: 0 4px 16px rgba(247, 192, 193, 0.3);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
+  color: var(--color-white) !important;
+  box-shadow: 0 4px 16px var(--bg-primary-15);
+}
+
+.play-btn :deep(svg) {
+  color: var(--color-white);
 }
 
 .play-btn:hover:not(:disabled) {
-  @apply opacity-95;
+  opacity: 0.95;
   transform: translateY(-1px);
 }
 
 .stop-btn {
   @apply gap-2 h-12 px-6;
-  @apply text-pink-600 border-pink-200;
+  color: var(--color-primary);
+  border-color: var(--border-primary-20);
 }
 
 .stop-btn:hover:not(:disabled) {
-  @apply bg-pink-50;
+  background: var(--bg-primary-10);
 }
 
 .speed-control {
   @apply flex items-center gap-1 px-3 py-2 rounded-xl;
-  background: rgba(247, 192, 193, 0.08);
-  border: 1px solid rgba(247, 192, 193, 0.15);
+  background: var(--bg-primary-08);
+  border: 1px solid var(--border-primary-15);
 }
 
 .speed-btn {
   @apply w-8 h-8 rounded-lg flex items-center justify-center;
-  @apply text-pink-400 transition-all;
+  color: var(--color-primary);
+  transition: all 0.2s;
 }
 
 .speed-btn:hover {
-  @apply bg-pink-100;
+  background: var(--bg-primary-10);
 }
 
 .speed-value {
   @apply min-w-[3rem] text-center text-sm font-mono font-medium;
-  color: #6b5a5a;
+  color: var(--color-muted-dark);
 }
 
 @keyframes pulse {
