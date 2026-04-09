@@ -5,6 +5,17 @@ export interface NoteEvent {
   start_tick: number
   end_tick: number
   channel: number
+  track: number // 音轨索引
+}
+
+/** 音轨信息 */
+export interface TrackInfo {
+  index: number // 音轨索引
+  channel: number // MIDI 通道 (0-15)
+  name: string // 音轨名称（如果有）
+  noteCount: number // 音符数量
+  isPercussion: boolean // 是否是打击乐通道
+  enabled: boolean // 是否启用（可屏蔽）
 }
 
 /** MIDI 文件基本信息 */

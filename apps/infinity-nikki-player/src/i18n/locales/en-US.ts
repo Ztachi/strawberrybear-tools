@@ -50,6 +50,11 @@ export default {
     melodyInfo: 'Melody Info',
     totalNotes: 'Total Notes',
     activeNotes: 'Active Notes',
+    trackList: 'Track List',
+    trackEnabled: 'Enabled',
+    trackDisabled: 'Disabled',
+    clickToEnable: 'Click to enable',
+    clickToDisable: 'Click to disable',
   },
   permissions: {
     required: 'Accessibility Required',

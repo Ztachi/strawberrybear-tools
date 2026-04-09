@@ -89,6 +89,9 @@ importers:
 
   apps/infinity-nikki-player:
     dependencies:
+      '@strawberrybear/piano-roll':
+        specifier: workspace:*
+        version: link:../../packages/piano-roll
       '@tauri-apps/api':
         specifier: ^2.2.0
         version: 2.10.1
@@ -122,9 +125,6 @@ importers:
       tailwind-merge:
         specifier: ^2.6.1
         version: 2.6.1
-      tauri-plugin-locale-api:
-        specifier: ^2.0.1
-        version: 2.0.1
       vaul-vue:
         specifier: ^0.4.1
         version: 0.4.1(reka-ui@2.9.5(vue@3.5.32(typescript@5.7.3)))(vue@3.5.32(typescript@5.7.3))
@@ -242,6 +242,12 @@ importers:
       vue-tsc:
         specifier: ^3.2.5
         version: 3.2.6(typescript@5.9.3)
+
+  packages/piano-roll:
+    dependencies:
+      vue:
+        specifier: ^3.0.0
+        version: 3.5.32(typescript@5.9.3)
 
   packages/tsconfig: {}
 
@@ -4643,12 +4649,6 @@ packages:
     engines: { node: '>=14.0.0' }
     hasBin: true
 
-  tauri-plugin-locale-api@2.0.1:
-    resolution:
-      {
-        integrity: sha512-kiNcbP6ZKUpPbFseePrR9eb8kTRw8tSJ0ZBpQk4mDyGcbK3xGu0/dy7Cx8lBfC/p2MlmnyO4uRVIwta7FoV6eQ==,
-      }
-
   term-size@2.2.1:
     resolution:
       {
@@ -7721,10 +7721,6 @@ snapshots:
     transitivePeerDependencies:
       - tsx
       - yaml
-
-  tauri-plugin-locale-api@2.0.1:
-    dependencies:
-      '@tauri-apps/api': 2.10.1
 
   term-size@2.2.1: {}
 

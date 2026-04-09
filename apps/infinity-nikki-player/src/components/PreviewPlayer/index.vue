@@ -67,11 +67,12 @@ function onSliderUpdate(value: number[] | undefined) {
 }
 
 /** 进度条拖拽结束 */
-function onSliderPointerUp() {
+async function onSliderPointerUp() {
   if (isDragging.value) {
-    playerStore.seekTo((internalPercentArray.value[0] / 100) * playerStore.previewDuration)
+    const time = (internalPercentArray.value[0] / 100) * playerStore.previewDuration
     isDragging.value = false
     playerStore.setDragging(false)
+    await playerStore.seekPreview(time)
   }
 }
 

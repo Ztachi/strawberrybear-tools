@@ -26,7 +26,7 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
     let mut current_tick: u32 = 0;
     let mut tempo = 500000u32;
 
-    for track in &smf.tracks {
+    for (track_idx, track) in smf.tracks.iter().enumerate() {
         let mut track_tick: u32 = 0;
         for event in track {
             track_tick += event.delta.as_int() as u32;
@@ -41,10 +41,12 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
                                     start_tick: track_tick,
                                     end_tick: 0,
                                     channel: channel.as_int() as u8,
+                                    track: track_idx as u8,
                                 });
                             } else if let Some(idx) = events.iter().rposition(|e| {
                                 e.pitch == note.as_int() as u8
                                     && e.channel == channel.as_int() as u8
+                                    && e.track == track_idx as u8
                                     && e.end_tick == 0
                             }) {
                                 events[idx].end_tick = track_tick;
@@ -54,6 +56,7 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
                             if let Some(idx) = events.iter().rposition(|e| {
                                 e.pitch == note.as_int() as u8
                                     && e.channel == channel.as_int() as u8
+                                    && e.track == track_idx as u8
                                     && e.end_tick == 0
                             }) {
                                 events[idx].end_tick = track_tick;

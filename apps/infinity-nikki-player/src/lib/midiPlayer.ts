@@ -30,6 +30,9 @@ let isPlaying = false
 let isPaused = false
 let currentVolume = 1 // 音量系数 0-1
 
+/** 禁用的音轨索引集合 */
+let disabledTracks: Set<number> = new Set()
+
 /** 回调函数 */
 let onTimeUpdate: ((time: number) => void) | null = null
 let onEndCallback: (() => void) | null = null
@@ -54,14 +57,36 @@ async function initInstrument() {
 /**
  * @description: 播放 MIDI 事件
  */
-function handleMidiEvent(event: { name: string; noteName?: string; velocity: number }) {
+function handleMidiEvent(
+  event: { name: string; noteName?: string; velocity: number; track?: number },
+  disabledTracks: Set<number>
+) {
   if (!instrument || !audioContext) return
+
+  // 如果音轨被禁用，跳过播放
+  if (event.track !== undefined && disabledTracks.has(event.track)) {
+    return
+  }
 
   if (event.name === 'Note on' && event.velocity > 0 && event.noteName) {
     instrument.play(event.noteName, audioContext.currentTime, {
       gain: (event.velocity / 100) * currentVolume,
     })
   }
+}
+
+/**
+ * @description: 设置禁用的音轨
+ */
+export function setDisabledTracks(tracks: Set<number>) {
+  disabledTracks = tracks
+}
+
+/**
+ * @description: 获取禁用的音轨
+ */
+export function getDisabledTracks(): Set<number> {
+  return disabledTracks
 }
 
 /**
@@ -75,11 +100,13 @@ export async function playMidi(
 
   await initInstrument()
 
-  player = new Player((event: { name: string; noteName?: string; velocity: number }) => {
-    if (isPlaying && !isPaused) {
-      handleMidiEvent(event)
+  player = new Player(
+    (event: { name: string; noteName?: string; velocity: number; track?: number }) => {
+      if (isPlaying && !isPaused) {
+        handleMidiEvent(event, disabledTracks)
+      }
     }
-  })
+  )
 
   player.on('playing', () => {
     if (!isPaused && player) {

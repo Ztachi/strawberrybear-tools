@@ -1,0 +1,21 @@
+{
+  "name": "@strawberrybear/piano-roll",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/PianoRoll.vue",
+  "types": "./src/PianoRoll.vue",
+  "exports": {
+    ".": {
+      "import": "./src/PianoRoll.vue",
+      "types": "./src/PianoRoll.vue"
+    },
+    "./index": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "peerDependencies": {
+    "vue": "^3.0.0"
+  },
+  "dependencies": {}
+}

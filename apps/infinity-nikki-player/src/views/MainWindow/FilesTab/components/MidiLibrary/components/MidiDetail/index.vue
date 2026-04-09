@@ -1,8 +1,11 @@
 <script setup lang="ts">
+/**
+ * @description: MIDI 详情面板
+ */
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
-import PlayerControls from '@/components/PlayerControls/index.vue'
+import PianoRoll from '@strawberrybear/piano-roll'
 import { Music, Clock, Music2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -14,6 +17,11 @@ function formatDuration(ms: number) {
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${minutes}:${secs.toString().padStart(2, '0')}`
+}
+
+/** 切换音轨 */
+function handleToggleTrack(trackIndex: number) {
+  playerStore.toggleTrack(trackIndex)
 }
 </script>
 
@@ -47,47 +55,33 @@ function formatDuration(ms: number) {
       <PreviewPlayer />
     </div>
 
-    <!-- 演奏控制 -->
-    <div class="detail-player">
-      <PlayerControls />
-    </div>
-
-    <!-- 旋律信息 -->
-    <div class="melody-info">
+    <!-- 音轨列表 -->
+    <div class="tracks-section">
       <h3 class="section-title">
-        {{ t('midi.melodyInfo') }}
+        {{ t('midi.trackList') }}
       </h3>
-      <div class="melody-stats">
-        <div class="stat-card">
-          <span class="stat-value">{{ playerStore.melody.length }}</span>
-          <span class="stat-label">{{ t('midi.totalNotes') }}</span>
-        </div>
-        <div class="stat-card">
-          <span
-            class="stat-value"
-            >{{ formatDuration(playerStore.currentMidi?.duration_ms || 0) }}</span
-          >
-          <span class="stat-label">{{ t('midi.duration') }}</span>
-        </div>
-        <div class="stat-card">
-          <span
-            class="stat-value"
-            >{{ playerStore.melody.filter(n => n.velocity > 0).length }}</span
-          >
-          <span class="stat-label">{{ t('midi.activeNotes') }}</span>
-        </div>
-      </div>
+      <PianoRoll
+        :notes="playerStore.currentMidi?.events || []"
+        :duration="playerStore.previewDuration"
+        :ticks-per-beat="playerStore.currentMidi?.ticks_per_beat || 480"
+        :tempo="playerStore.currentMidi?.tempo || 500000"
+        :tracks="playerStore.tracks"
+        :disabled-tracks="playerStore.disabledTracks"
+        :current-time="playerStore.previewCurrentTime"
+        @toggle="handleToggleTrack"
+      />
     </div>
   </div>
 </template>
 
 <style scoped>
 .midi-detail {
-  @apply p-6 overflow-y-auto;
+  @apply p-6 flex flex-col gap-6;
+  overflow-y: auto;
 }
 
 .detail-header {
-  @apply flex items-start gap-4 mb-6;
+  @apply flex items-start gap-4;
 }
 
 .file-icon {
@@ -115,42 +109,18 @@ function formatDuration(ms: number) {
 }
 
 .preview-section {
-  @apply mb-6 p-4 rounded-2xl;
+  @apply p-4 rounded-2xl;
   background: var(--bg-primary-10);
   border: 1px solid var(--border-primary-20);
 }
 
-.detail-player {
-  @apply mb-6;
-}
-
-.melody-info {
-  @apply pt-4;
-  border-top: 1px solid var(--border-primary-10);
+/* 音轨区域 */
+.tracks-section {
+  @apply flex flex-col gap-3;
 }
 
 .section-title {
-  @apply text-sm font-medium mb-4;
+  @apply text-sm font-medium;
   color: var(--color-muted-dark);
-}
-
-.melody-stats {
-  @apply grid grid-cols-3 gap-3;
-}
-
-.stat-card {
-  @apply flex flex-col items-center gap-1 p-4 rounded-xl;
-  background: var(--bg-primary-08);
-  border: 1px solid var(--border-primary-15);
-}
-
-.stat-card .stat-value {
-  @apply text-2xl font-bold;
-  color: var(--color-primary);
-}
-
-.stat-card .stat-label {
-  @apply text-xs;
-  color: var(--color-muted);
 }
 </style>

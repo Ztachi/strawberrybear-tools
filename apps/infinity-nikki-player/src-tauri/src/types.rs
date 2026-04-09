@@ -20,6 +20,7 @@ pub struct NoteEvent {
     pub start_tick: u32,
     pub end_tick: u32,
     pub channel: u8,
+    pub track: u8, // 音轨索引
 }
 
 /// 提取后的旋律事件

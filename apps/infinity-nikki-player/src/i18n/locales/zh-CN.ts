@@ -50,6 +50,11 @@ export default {
     melodyInfo: '旋律信息',
     totalNotes: '总音符',
     activeNotes: '有效音符',
+    trackList: '音轨列表',
+    trackEnabled: '启用',
+    trackDisabled: '已屏蔽',
+    clickToEnable: '点击启用',
+    clickToDisable: '点击屏蔽',
   },
   permissions: {
     required: '需要辅助功能权限',

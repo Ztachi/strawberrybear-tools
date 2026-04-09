@@ -1,19 +1,53 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'vue-sonner'
-import type { KeyLogEntry, MidiInfo, MelodyEvent, PlaybackState, KeyTemplate } from '@/types'
+import type {
+  KeyLogEntry,
+  MidiInfo,
+  MelodyEvent,
+  PlaybackState,
+  KeyTemplate,
+  TrackInfo,
+  NoteEvent,
+} from '@/types'
 import {
   playMidi,
   stopPreview,
   pausePreview,
   resumePreview,
-  getCurrentTime,
   getTotalDuration,
   setVolume as setPreviewVolume,
   seekTo,
   loadMidiForDuration,
+  setDisabledTracks,
 } from '@/lib/midiPlayer'
+
+/** 音轨屏蔽设置缓存 */
+const TRACK_SETTINGS_KEY = 'midi_track_settings'
+
+interface TrackSettings {
+  [filename: string]: number[] // 禁用的音轨索引数组
+}
+
+/** 获取缓存的音轨设置 */
+function getTrackSettingsCache(): TrackSettings {
+  try {
+    const cached = localStorage.getItem(TRACK_SETTINGS_KEY)
+    return cached ? JSON.parse(cached) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** 保存音轨设置到缓存 */
+function saveTrackSettingsCache(settings: TrackSettings) {
+  try {
+    localStorage.setItem(TRACK_SETTINGS_KEY, JSON.stringify(settings))
+  } catch {
+    console.warn('保存音轨设置失败')
+  }
+}
 
 export const usePlayerStore = defineStore('player', () => {
   // MIDI 库（已导入的文件列表）
@@ -24,6 +58,12 @@ export const usePlayerStore = defineStore('player', () => {
 
   // 当前 MIDI 的旋律数据
   const melody = ref<MelodyEvent[]>([])
+
+  // 当前 MIDI 的音轨列表
+  const tracks = ref<TrackInfo[]>([])
+
+  // 禁用的音轨索引集合
+  const disabledTracks = ref<Set<number>>(new Set())
 
   // 是否显示详情 Drawer
   const showDetail = ref(false)
@@ -61,6 +101,8 @@ export const usePlayerStore = defineStore('player', () => {
   const isPreviewMuted = ref(false)
   const isDragging = ref(false) // 标记是否正在拖拽进度条
   let previewTimer: ReturnType<typeof setInterval> | null = null
+  let playbackStartTime = 0 // 开始播放时的时间戳（毫秒）
+  let pausedAtTime = 0 // 暂停时的已播放时间（毫秒）
 
   /** 检查辅助功能权限 */
   async function checkAccessibility() {
@@ -110,6 +152,83 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  /** 从 NoteEvent 构建音轨列表 */
+  function buildTracksFromEvents(events: NoteEvent[]): TrackInfo[] {
+    const trackMap = new Map<number, TrackInfo>()
+    const channelMap = new Map<number, Set<number>>()
+
+    for (const event of events) {
+      if (!trackMap.has(event.track)) {
+        trackMap.set(event.track, {
+          index: event.track,
+          channel: event.channel,
+          name: `音轨 ${event.track + 1}`,
+          noteCount: 0,
+          isPercussion: event.channel === 9,
+          enabled: true,
+        })
+      }
+      if (!channelMap.has(event.track)) {
+        channelMap.set(event.track, new Set())
+      }
+      channelMap.get(event.track)!.add(event.channel)
+
+      const track = trackMap.get(event.track)!
+      track.noteCount++
+    }
+
+    // 标记打击乐音轨
+    for (const [trackIdx, channels] of channelMap) {
+      const track = trackMap.get(trackIdx)!
+      if (channels.has(9)) {
+        track.isPercussion = true
+        track.name = `打击乐`
+      }
+    }
+
+    return Array.from(trackMap.values()).sort((a, b) => a.index - b.index)
+  }
+
+  /** 加载音轨屏蔽设置 */
+  function loadDisabledTracks(midi: MidiInfo) {
+    const settings = getTrackSettingsCache()
+    const disabled = settings[midi.filename] || []
+    disabledTracks.value = new Set(disabled)
+  }
+
+  /** 保存音轨屏蔽设置 */
+  function persistDisabledTracks() {
+    if (!currentMidi.value) return
+    const settings = getTrackSettingsCache()
+    if (disabledTracks.value.size > 0) {
+      settings[currentMidi.value.filename] = Array.from(disabledTracks.value)
+    } else {
+      delete settings[currentMidi.value.filename]
+    }
+    saveTrackSettingsCache(settings)
+  }
+
+  /** 切换音轨启用状态 */
+  function toggleTrack(trackIndex: number) {
+    if (disabledTracks.value.has(trackIndex)) {
+      disabledTracks.value.delete(trackIndex)
+    } else {
+      disabledTracks.value.add(trackIndex)
+    }
+    persistDisabledTracks()
+  }
+
+  /** 获取当前启用的音轨索引集合 */
+  const enabledTrackIndices = computed(() => {
+    const indices = new Set<number>()
+    for (let i = 0; i < tracks.value.length; i++) {
+      if (!disabledTracks.value.has(i)) {
+        indices.add(i)
+      }
+    }
+    return indices
+  })
+
   /** 选中 MIDI 并打开详情 */
   async function selectMidi(midi: MidiInfo) {
     currentMidi.value = midi
@@ -120,6 +239,12 @@ export const usePlayerStore = defineStore('player', () => {
         ticksPerBeat: midi.ticks_per_beat,
         tempo: 500000,
       })
+
+      // 构建音轨列表
+      tracks.value = buildTracksFromEvents(midi.events as any)
+
+      // 加载缓存的音轨屏蔽设置
+      loadDisabledTracks(midi)
 
       // 读取 MIDI 文件获取实际时长
       const midiData = await invoke<number[]>('read_midi_data', {
@@ -141,6 +266,8 @@ export const usePlayerStore = defineStore('player', () => {
     showDetail.value = false
     currentMidi.value = null
     melody.value = []
+    tracks.value = []
+    disabledTracks.value.clear()
   }
 
   /** 扫描文件夹并导入所有 MIDI */
@@ -232,6 +359,9 @@ export const usePlayerStore = defineStore('player', () => {
     if (!currentMidi.value) return
 
     try {
+      // 同步音轨屏蔽设置到播放器
+      setDisabledTracks(disabledTracks.value)
+
       // 通过后端读取 MIDI 文件二进制数据
       const midiData = await invoke<number[]>('read_midi_data', {
         path: currentMidi.value.file_path,
@@ -243,6 +373,7 @@ export const usePlayerStore = defineStore('player', () => {
       isPreviewPlaying.value = true
       isPreviewPaused.value = false
       previewDuration.value = getTotalDuration()
+      pausedAtTime = 0 // 重置暂停时间
       startPreviewTimer()
     } catch (e) {
       toast.error('试听失败', { description: String(e), richColors: true })
@@ -258,11 +389,13 @@ export const usePlayerStore = defineStore('player', () => {
     isPreviewPlaying.value = false
     isPreviewPaused.value = false
     previewCurrentTime.value = 0
+    pausedAtTime = 0
   }
 
   /** 暂停试听 */
   function pausePreviewPlayback() {
     if (!isPreviewPlaying.value) return
+    pausedAtTime = previewCurrentTime.value // 保存当前播放位置
     pausePreview()
     isPreviewPaused.value = true
     stopPreviewTimer()
@@ -297,28 +430,52 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   /** 跳转播放 */
-  function seekPreview(time: number) {
+  async function seekPreview(time: number) {
     previewCurrentTime.value = time
-    // 只有在拖拽结束时才真正跳转播放位置
+    pausedAtTime = time
     if (!isDragging.value) {
+      // 如果 player 不存在，先加载 MIDI
+      if (!currentMidi.value) return
+      const midiData = await invoke<number[]>('read_midi_data', {
+        path: currentMidi.value.file_path,
+      })
+      const uint8Array = new Uint8Array(midiData)
+      await playMidi(uint8Array.buffer, speed.value)
       seekTo(time)
+      isPreviewPlaying.value = true
+      isPreviewPaused.value = false
+      playbackStartTime = performance.now() - time
+      startPreviewTimer()
     }
   }
 
-  /** 开始定时器 */
+  /** 开始定时器 - 60fps 平滑更新 */
   function startPreviewTimer() {
     stopPreviewTimer()
+    playbackStartTime = performance.now() - pausedAtTime
     previewTimer = setInterval(() => {
-      // 如果不在拖拽中，才从播放器获取真实播放时间
+      // 如果不在拖拽中，用 performance.now() 计算时间
       if (!isDragging.value) {
-        previewCurrentTime.value = Math.max(0, getCurrentTime())
+        pausedAtTime = performance.now() - playbackStartTime
+        // 播放结束，停止计时
+        if (pausedAtTime >= previewDuration.value) {
+          previewCurrentTime.value = previewDuration.value
+          stopPreviewTimer()
+          isPreviewPlaying.value = false
+          return
+        }
+        previewCurrentTime.value = Math.max(0, pausedAtTime)
       }
-    }, 100)
+    }, 16) // 16ms ≈ 60fps
   }
 
   /** 标记为正在拖拽（阻止定时器覆盖） */
   function setDragging(dragging: boolean) {
     isDragging.value = dragging
+    if (!dragging) {
+      // 拖拽结束，重置播放起始时间
+      playbackStartTime = performance.now() - previewCurrentTime.value
+    }
   }
 
   /** 设置预览播放时间（仅更新显示值） */
@@ -498,6 +655,9 @@ export const usePlayerStore = defineStore('player', () => {
     midiLibrary,
     currentMidi,
     melody,
+    tracks,
+    disabledTracks,
+    enabledTrackIndices,
     showDetail,
     playbackState,
     keyLogs,
@@ -544,5 +704,6 @@ export const usePlayerStore = defineStore('player', () => {
     toggleMute,
     playPrev,
     playNext,
+    toggleTrack,
   }
 })

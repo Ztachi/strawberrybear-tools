@@ -15,6 +15,7 @@
 
 - [Agent 规范](AGENT.md) - Agent 开发规范
 - [UI 交互规范](UI.md) - UI 组件使用与交互规范
+- [公共库规范](packages/README.md) - `@packages` 公共库开发标准
 
 ## 国际化规范
 
