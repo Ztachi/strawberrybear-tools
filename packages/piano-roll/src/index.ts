@@ -13,6 +13,7 @@ export interface NoteEvent {
 
 export interface TrackInfo {
   index: number
+  eventTrackValue: number
   channel: number
   name: string
   noteCount: number
@@ -88,7 +89,9 @@ function drawNotes(
     const displayIndex = trackIndexToDisplayIndex.get(note.track)
     if (displayIndex === undefined) continue
 
-    const isEnabled = !disabledTracks.has(note.track)
+    // disabledTracks 存储的是 midiPlayerTrackValue (= eventTrackValue + 1)
+    const midiPlayerTrackValue = note.track + 1
+    const isEnabled = !disabledTracks.has(midiPlayerTrackValue)
     const trackY = displayIndex * trackHeight
 
     const noteX = tickToSeconds(note.start_tick, tempo, ticksPerBeat) * pixelsPerSecond
@@ -147,10 +150,10 @@ export function drawPianoRoll(
   const tempo = options.tempo || 500000
   const ticksPerBeat = options.ticksPerBeat || 480
 
-  // 建立 MIDI track index -> display index 的映射
+  // 建立 MIDI event.track 值 -> display index 的映射
   const trackIndexToDisplayIndex = new Map<number, number>()
   for (let i = 0; i < options.tracks.length; i++) {
-    trackIndexToDisplayIndex.set(options.tracks[i].index, i)
+    trackIndexToDisplayIndex.set(options.tracks[i].eventTrackValue, i)
   }
 
   function draw() {

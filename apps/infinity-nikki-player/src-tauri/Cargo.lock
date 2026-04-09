@@ -1771,6 +1771,7 @@ dependencies = [
  "tauri-plugin-mcp-bridge",
  "tauri-plugin-shell",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

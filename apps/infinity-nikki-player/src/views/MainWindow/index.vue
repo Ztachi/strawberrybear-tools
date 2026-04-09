@@ -27,6 +27,7 @@ async function openAccessibilitySettings() {
 onMounted(async () => {
   await playerStore.checkAccessibility()
   await playerStore.loadTemplates()
+  await playerStore.loadMidiLibrary()
 })
 
 /** 选择文件导入 */

@@ -27,7 +27,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  toggle: [trackIndex: number]
+  toggle: [eventTrackValue: number]
 }>()
 
 const rollContainerRef = ref<HTMLDivElement | null>(null)
@@ -35,6 +35,13 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 let destroyFn: (() => void) | null = null
 
 const TRACK_HEIGHT = 176 // 88键 x 2px
+
+/** 根据 eventTrackValue 检查音轨是否被禁用 */
+function isTrackDisabledByMidiPlayerValue(eventTrackValue: number): boolean {
+  // midi-player-js 的 track 值比 Rust 解析的大 1
+  const midiPlayerTrackValue = eventTrackValue + 1
+  return props.disabledTracks.has(midiPlayerTrackValue)
+}
 
 function render() {
   if (!canvasRef.value || !rollContainerRef.value) return
@@ -88,11 +95,11 @@ function handleToggle(trackIndex: number) {
         class="track-label"
         :style="{ height: `${TRACK_HEIGHT}px` }"
       >
-        <div
-          class="switch"
-          :class="{ active: !disabledTracks.has(track.index) }"
-          @click="handleToggle(track.index)"
-        >
+<div
+        class="switch"
+        :class="{ active: !isTrackDisabledByMidiPlayerValue(track.eventTrackValue) }"
+        @click="handleToggle(track.index)"
+      >
           <span class="switch-knob" />
         </div>
         <span class="track-name">{{ track.name || `Track ${track.index + 1}` }}</span>

@@ -23,7 +23,7 @@ function formatDuration(ms: number) {
 async function confirmDelete(filename: string) {
   const confirmed = await confirm(t('midi.confirmDelete'), { title: t('actions.delete'), kind: 'warning' })
   if (confirmed) {
-    playerStore.removeFromLibrary(filename)
+    await playerStore.deleteMidi(filename)
   }
 }
 </script>

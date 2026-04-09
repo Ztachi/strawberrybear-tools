@@ -10,7 +10,8 @@ export interface NoteEvent {
 
 /** 音轨信息 */
 export interface TrackInfo {
-  index: number // 音轨索引
+  index: number // 显示用的递增索引 (0, 1, 2...)
+  eventTrackValue: number // MIDI 事件中的原始 track 值，用于禁用匹配
   channel: number // MIDI 通道 (0-15)
   name: string // 音轨名称（如果有）
   noteCount: number // 音符数量

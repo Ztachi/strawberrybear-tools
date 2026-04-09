@@ -24,29 +24,8 @@ import {
 } from '@/lib/midiPlayer'
 
 /** 音轨屏蔽设置缓存 */
-const TRACK_SETTINGS_KEY = 'midi_track_settings'
-
 interface TrackSettings {
   [filename: string]: number[] // 禁用的音轨索引数组
-}
-
-/** 获取缓存的音轨设置 */
-function getTrackSettingsCache(): TrackSettings {
-  try {
-    const cached = localStorage.getItem(TRACK_SETTINGS_KEY)
-    return cached ? JSON.parse(cached) : {}
-  } catch {
-    return {}
-  }
-}
-
-/** 保存音轨设置到缓存 */
-function saveTrackSettingsCache(settings: TrackSettings) {
-  try {
-    localStorage.setItem(TRACK_SETTINGS_KEY, JSON.stringify(settings))
-  } catch {
-    console.warn('保存音轨设置失败')
-  }
 }
 
 export const usePlayerStore = defineStore('player', () => {
@@ -116,21 +95,35 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  /** 导入 MIDI 文件到库中 */
-  async function importMidi(path: string) {
+  /** 加载 MIDI 库列表（从应用数据目录） */
+  async function loadMidiLibrary() {
     isLoading.value = true
     try {
-      const [info] = await invoke<[MidiInfo]>('parse_midi_file', { path })
+      const files = await invoke<MidiInfo[]>('get_midi_library')
+      midiLibrary.value = files
+      return true
+    } catch (e) {
+      toast.error('加载 MIDI 库失败', { description: String(e), richColors: true })
+      console.error('加载 MIDI 库失败:', e)
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** 导入 MIDI 文件到库中（复制到应用数据目录） */
+  async function importMidi(sourcePath: string) {
+    isLoading.value = true
+    try {
+      // 调用后端复制文件到库目录并获取信息
+      const info = await invoke<MidiInfo>('import_midi', { sourcePath })
       // 通过后端读取 MIDI 文件计算正确时长
-      const midiData = await invoke<number[]>('read_midi_data', { path })
+      const midiData = await invoke<number[]>('read_midi_data', { filename: info.file_path })
       const uint8Array = new Uint8Array(midiData)
       const { duration } = await loadMidiForDuration(uint8Array.buffer)
       info.duration_ms = duration
-      // 检查是否已存在（按文件名判断）
-      const exists = midiLibrary.value.some((m) => m.filename === info.filename)
-      if (!exists) {
-        midiLibrary.value.push(info)
-      }
+      // 添加到本地库列表
+      midiLibrary.value.push(info)
       // 选中并打开详情
       await selectMidi(info)
       return true
@@ -140,6 +133,19 @@ export const usePlayerStore = defineStore('player', () => {
       return false
     } finally {
       isLoading.value = false
+    }
+  }
+
+  /** 从库中删除 MIDI 文件 */
+  async function deleteMidi(filename: string) {
+    try {
+      await invoke('delete_midi_from_library', { filename })
+      removeFromLibrary(filename)
+      return true
+    } catch (e) {
+      toast.error('删除 MIDI 失败', { description: String(e), richColors: true })
+      console.error('删除 MIDI 失败:', e)
+      return false
     }
   }
 
@@ -158,32 +164,25 @@ export const usePlayerStore = defineStore('player', () => {
   /** 从 NoteEvent 构建音轨列表 */
   function buildTracksFromEvents(events: NoteEvent[]): TrackInfo[] {
     const trackMap = new Map<number, TrackInfo>()
-    const channelMap = new Map<number, Set<number>>()
 
     for (const event of events) {
       if (!trackMap.has(event.track)) {
         trackMap.set(event.track, {
-          index: event.track,
+          index: trackMap.size,
+          eventTrackValue: event.track, // MIDI 原始 track 值
           channel: event.channel,
-          name: `音轨 ${event.track + 1}`,
+          name: `音轨 ${trackMap.size + 1}`,
           noteCount: 0,
           isPercussion: event.channel === 9,
           enabled: true,
         })
       }
-      if (!channelMap.has(event.track)) {
-        channelMap.set(event.track, new Set())
-      }
-      channelMap.get(event.track)!.add(event.channel)
-
-      const track = trackMap.get(event.track)!
-      track.noteCount++
+      trackMap.get(event.track)!.noteCount++
     }
 
     // 标记打击乐音轨
-    for (const [trackIdx, channels] of channelMap) {
-      const track = trackMap.get(trackIdx)!
-      if (channels.has(9)) {
+    for (const [trackIdx, track] of trackMap) {
+      if (track.channel === 9) {
         track.isPercussion = true
         track.name = `打击乐`
       }
@@ -192,42 +191,65 @@ export const usePlayerStore = defineStore('player', () => {
     return Array.from(trackMap.values()).sort((a, b) => a.index - b.index)
   }
 
-  /** 加载音轨屏蔽设置 */
-  function loadDisabledTracks(midi: MidiInfo) {
-    const settings = getTrackSettingsCache()
-    const disabled = settings[midi.filename] || []
-    disabledTracks.value = new Set(disabled)
-    disabledTracksVersionRef.value = ++disabledTracksVersion
-  }
-
-  /** 保存音轨屏蔽设置 */
-  function persistDisabledTracks() {
-    if (!currentMidi.value) return
-    const settings = getTrackSettingsCache()
-    if (disabledTracks.value.size > 0) {
-      settings[currentMidi.value.filename] = Array.from(disabledTracks.value)
-    } else {
-      delete settings[currentMidi.value.filename]
+  /** 加载音轨屏蔽设置（从应用数据目录的配置文件） */
+  async function loadDisabledTracks(midi: MidiInfo) {
+    try {
+      const disabled = await invoke<number[]>('load_track_config', { filename: midi.file_path })
+      disabledTracks.value = new Set(disabled)
+      disabledTracksVersionRef.value = ++disabledTracksVersion
+    } catch (e) {
+      console.error('加载音轨配置失败:', e)
+      disabledTracks.value = new Set()
+      disabledTracksVersionRef.value = ++disabledTracksVersion
     }
-    saveTrackSettingsCache(settings)
   }
 
-  /** 切换音轨启用状态 */
-  function toggleTrack(trackIndex: number) {
-    if (disabledTracks.value.has(trackIndex)) {
-      disabledTracks.value.delete(trackIndex)
+  /** 保存音轨屏蔽设置（写入应用数据目录的配置文件） */
+  async function persistDisabledTracks() {
+    if (!currentMidi.value) return
+    try {
+      const disabledArray = Array.from(disabledTracks.value).map((n) => n)
+      await invoke('save_track_config', {
+        filename: currentMidi.value.file_path,
+        disabledTracks: disabledArray,
+      })
+    } catch (e) {
+      console.error('保存音轨配置失败:', e)
+    }
+  }
+
+  /** 切换音轨启用状态（使用显示索引） */
+  function toggleTrack(displayIndex: number) {
+    // 获取该显示索引对应的 midi-player-js track 值
+    const track = tracks.value.find((t) => t.index === displayIndex)
+    if (!track) return
+
+    // midi-player-js 的 track 值比 Rust 解析的大 1
+    const midiPlayerTrackValue = track.eventTrackValue + 1
+
+    if (disabledTracks.value.has(midiPlayerTrackValue)) {
+      disabledTracks.value.delete(midiPlayerTrackValue)
     } else {
-      disabledTracks.value.add(trackIndex)
+      disabledTracks.value.add(midiPlayerTrackValue)
     }
     disabledTracksVersionRef.value = ++disabledTracksVersion
     persistDisabledTracks()
+  }
+
+  /** 根据显示索引检查音轨是否被禁用 */
+  function isTrackDisabled(displayIndex: number): boolean {
+    const track = tracks.value.find((t) => t.index === displayIndex)
+    if (!track) return false
+    // midi-player-js 的 track 值比 Rust 解析的大 1
+    const midiPlayerTrackValue = track.eventTrackValue + 1
+    return disabledTracks.value.has(midiPlayerTrackValue)
   }
 
   /** 获取当前启用的音轨索引集合 */
   const enabledTrackIndices = computed(() => {
     const indices = new Set<number>()
     for (let i = 0; i < tracks.value.length; i++) {
-      if (!disabledTracks.value.has(i)) {
+      if (!isTrackDisabled(i)) {
         indices.add(i)
       }
     }
@@ -253,7 +275,7 @@ export const usePlayerStore = defineStore('player', () => {
 
       // 读取 MIDI 文件获取实际时长
       const midiData = await invoke<number[]>('read_midi_data', {
-        path: midi.file_path,
+        filename: midi.file_path,
       })
       const uint8Array = new Uint8Array(midiData)
       const { duration } = await loadMidiForDuration(uint8Array.buffer)
@@ -285,7 +307,7 @@ export const usePlayerStore = defineStore('player', () => {
         if (!exists) {
           // 计算正确的时长
           try {
-            const midiData = await invoke<number[]>('read_midi_data', { path: file.file_path })
+            const midiData = await invoke<number[]>('read_midi_data', { filename: file.file_path })
             const uint8Array = new Uint8Array(midiData)
             const { duration } = await loadMidiForDuration(uint8Array.buffer)
             file.duration_ms = duration
@@ -369,7 +391,7 @@ export const usePlayerStore = defineStore('player', () => {
 
       // 通过后端读取 MIDI 文件二进制数据
       const midiData = await invoke<number[]>('read_midi_data', {
-        path: currentMidi.value.file_path,
+        filename: currentMidi.value.file_path,
       })
       // 转换为 Uint8Array
       const uint8Array = new Uint8Array(midiData)
@@ -442,7 +464,7 @@ export const usePlayerStore = defineStore('player', () => {
       // 如果 player 不存在，先加载 MIDI
       if (!currentMidi.value) return
       const midiData = await invoke<number[]>('read_midi_data', {
-        path: currentMidi.value.file_path,
+        filename: currentMidi.value.file_path,
       })
       const uint8Array = new Uint8Array(midiData)
       await playMidi(uint8Array.buffer, speed.value)
@@ -517,7 +539,7 @@ export const usePlayerStore = defineStore('player', () => {
       loadDisabledTracks(prevMidi)
       // 读取 MIDI 文件获取实际时长
       const midiData = await invoke<number[]>('read_midi_data', {
-        path: prevMidi.file_path,
+        filename: prevMidi.file_path,
       })
       const uint8Array = new Uint8Array(midiData)
       const { duration } = await loadMidiForDuration(uint8Array.buffer)
@@ -552,7 +574,7 @@ export const usePlayerStore = defineStore('player', () => {
       loadDisabledTracks(nextMidi)
       // 读取 MIDI 文件获取实际时长
       const midiData = await invoke<number[]>('read_midi_data', {
-        path: nextMidi.file_path,
+        filename: nextMidi.file_path,
       })
       const uint8Array = new Uint8Array(midiData)
       const { duration } = await loadMidiForDuration(uint8Array.buffer)
@@ -685,7 +707,9 @@ export const usePlayerStore = defineStore('player', () => {
     previewVolume,
     isPreviewMuted,
     // 方法
+    loadMidiLibrary,
     importMidi,
+    deleteMidi,
     removeFromLibrary,
     selectMidi,
     closeDetail,
