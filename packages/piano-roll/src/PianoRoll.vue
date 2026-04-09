@@ -3,7 +3,7 @@
  * @description: 钢琴卷帘组件
  * 左侧 DOM 音轨标签，右侧 Canvas 音符卷轴
  */
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { drawPianoRoll, type NoteEvent, type TrackInfo } from './index'
 
 const props = defineProps<{
@@ -25,6 +25,9 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 let destroyFn: (() => void) | null = null
 
 const TRACK_HEIGHT = 176 // 88键 x 2px
+
+// 动态计算总高度
+const totalHeight = computed(() => props.tracks.length * TRACK_HEIGHT)
 
 function render() {
   if (!canvasRef.value || !rollContainerRef.value) return
@@ -82,8 +85,8 @@ function handleToggle(trackIndex: number) {
     </div>
 
     <!-- 右侧：Canvas 卷轴（可横向滚动） -->
-    <div ref="rollContainerRef" class="roll-scroll">
-      <canvas ref="canvasRef" class="roll-canvas" />
+    <div ref="rollContainerRef" class="roll-scroll" :style="{ height: `${totalHeight}px` }">
+      <canvas ref="canvasRef" class="roll-canvas" :style="{ height: `${totalHeight}px` }" />
     </div>
   </div>
 </template>
@@ -93,7 +96,7 @@ function handleToggle(trackIndex: number) {
   @apply flex rounded-xl overflow-hidden;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
-  height: 352px; /* 2轨 x 176px */
+  /* 高度由内容决定 */
 }
 
 .track-labels {
@@ -105,11 +108,7 @@ function handleToggle(trackIndex: number) {
 
 .track-label {
   @apply flex items-center gap-2 px-3;
-  border-bottom: 1px solid rgba(247, 192, 193, 0.1);
-}
-
-.track-label:last-child {
-  border-bottom: none;
+  border-bottom: 2px solid rgba(247, 192, 193, 0.3);
 }
 
 .switch {
@@ -136,7 +135,7 @@ function handleToggle(trackIndex: number) {
 }
 
 .roll-scroll {
-  @apply flex-1 overflow-x-auto overflow-y-hidden;
+  @apply flex-1 overflow-x-auto;
 }
 
 .roll-canvas {
