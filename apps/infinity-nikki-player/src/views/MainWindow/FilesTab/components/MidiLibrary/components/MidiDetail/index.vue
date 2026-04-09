@@ -61,12 +61,14 @@ function handleToggleTrack(trackIndex: number) {
         {{ t('midi.trackList') }}
       </h3>
       <PianoRoll
+        :key="playerStore.currentMidi?.filename || 'empty'"
         :notes="playerStore.currentMidi?.events || []"
         :duration="playerStore.previewDuration"
         :ticks-per-beat="playerStore.currentMidi?.ticks_per_beat || 480"
         :tempo="playerStore.currentMidi?.tempo || 500000"
         :tracks="playerStore.tracks"
         :disabled-tracks="playerStore.disabledTracks"
+        :disabled-tracks-version="playerStore.disabledTracksVersion"
         :current-time="playerStore.previewCurrentTime"
         @toggle="handleToggleTrack"
       />

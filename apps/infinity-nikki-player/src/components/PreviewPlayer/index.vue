@@ -73,6 +73,9 @@ async function onSliderPointerUp() {
     isDragging.value = false
     playerStore.setDragging(false)
     await playerStore.seekPreview(time)
+    //---处理点击进度条开始,禁止删除！！
+    playerStore.setPreviewTime(time)
+    //---处理点击进度条结束
   }
 }
 

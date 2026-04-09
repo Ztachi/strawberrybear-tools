@@ -64,6 +64,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   // 禁用的音轨索引集合
   const disabledTracks = ref<Set<number>>(new Set())
+  // 用于强制触发响应式更新的版本号
+  let disabledTracksVersion = 0
+  const disabledTracksVersionRef = ref(0)
 
   // 是否显示详情 Drawer
   const showDetail = ref(false)
@@ -194,6 +197,7 @@ export const usePlayerStore = defineStore('player', () => {
     const settings = getTrackSettingsCache()
     const disabled = settings[midi.filename] || []
     disabledTracks.value = new Set(disabled)
+    disabledTracksVersionRef.value = ++disabledTracksVersion
   }
 
   /** 保存音轨屏蔽设置 */
@@ -215,6 +219,7 @@ export const usePlayerStore = defineStore('player', () => {
     } else {
       disabledTracks.value.add(trackIndex)
     }
+    disabledTracksVersionRef.value = ++disabledTracksVersion
     persistDisabledTracks()
   }
 
@@ -507,6 +512,9 @@ export const usePlayerStore = defineStore('player', () => {
         ticksPerBeat: prevMidi.ticks_per_beat,
         tempo: 500000,
       })
+      // 构建音轨列表
+      tracks.value = buildTracksFromEvents(prevMidi.events as any)
+      loadDisabledTracks(prevMidi)
       // 读取 MIDI 文件获取实际时长
       const midiData = await invoke<number[]>('read_midi_data', {
         path: prevMidi.file_path,
@@ -539,6 +547,9 @@ export const usePlayerStore = defineStore('player', () => {
         ticksPerBeat: nextMidi.ticks_per_beat,
         tempo: 500000,
       })
+      // 构建音轨列表
+      tracks.value = buildTracksFromEvents(nextMidi.events as any)
+      loadDisabledTracks(nextMidi)
       // 读取 MIDI 文件获取实际时长
       const midiData = await invoke<number[]>('read_midi_data', {
         path: nextMidi.file_path,
@@ -657,6 +668,7 @@ export const usePlayerStore = defineStore('player', () => {
     melody,
     tracks,
     disabledTracks,
+    disabledTracksVersion: disabledTracksVersionRef,
     enabledTrackIndices,
     showDetail,
     playbackState,

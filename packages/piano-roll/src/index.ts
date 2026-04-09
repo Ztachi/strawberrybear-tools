@@ -38,7 +38,6 @@ const DEFAULT_COLORS = [
   '#E67E22', '#1ABC9C', '#E74C3C', '#F39C12',
 ]
 
-const PIXELS_PER_SECOND = 10
 const NOTE_HEIGHT = 2
 const MIN_NOTE_WIDTH = 2
 const NOTE_GAP = 1
@@ -56,7 +55,6 @@ function getMaxTick(notes: NoteEvent[]): number {
   return Math.max(...notes.map((n) => n.end_tick))
 }
 
-/** tick -> 秒 */
 function tickToSeconds(tick: number, tempo: number, ticksPerBeat: number): number {
   return (tick / ticksPerBeat) * (tempo / 1000000)
 }
@@ -64,19 +62,19 @@ function tickToSeconds(tick: number, tempo: number, ticksPerBeat: number): numbe
 function drawNotes(
   c: CanvasRenderingContext2D,
   width: number,
+  pixelsPerSecond: number,
   tempo: number,
   ticksPerBeat: number,
   notes: NoteEvent[],
   colors: string[],
   disabledTracks: Set<number>,
   trackIndexToDisplayIndex: Map<number, number>,
-  tracks: TrackInfo[],
   trackHeight: number
 ) {
   // 分隔线
-  for (let i = 0; i < tracks.length; i++) {
+  const trackCount = Math.max(...Array.from(trackIndexToDisplayIndex.values()), 0) + 1
+  for (let i = 0; i < trackCount; i++) {
     const trackY = i * trackHeight
-
     c.strokeStyle = 'rgba(247, 192, 193, 0.4)'
     c.lineWidth = 1
     c.beginPath()
@@ -90,13 +88,12 @@ function drawNotes(
     const displayIndex = trackIndexToDisplayIndex.get(note.track)
     if (displayIndex === undefined) continue
 
-    // disabledTracks 存的是 MIDI track index
     const isEnabled = !disabledTracks.has(note.track)
     const trackY = displayIndex * trackHeight
 
-    const noteX = tickToSeconds(note.start_tick, tempo, ticksPerBeat) * PIXELS_PER_SECOND
+    const noteX = tickToSeconds(note.start_tick, tempo, ticksPerBeat) * pixelsPerSecond
     const noteDurationSec = tickToSeconds(note.end_tick - note.start_tick, tempo, ticksPerBeat)
-    const noteW = Math.max(MIN_NOTE_WIDTH, noteDurationSec * PIXELS_PER_SECOND - NOTE_GAP)
+    const noteW = Math.max(MIN_NOTE_WIDTH, noteDurationSec * pixelsPerSecond - NOTE_GAP)
     const noteY = trackY + getNoteY(note.pitch)
 
     if (noteX + noteW < 0 || noteX > width) continue
@@ -115,7 +112,7 @@ function drawPlayhead(
   trackHeight: number
 ) {
   const ratio = duration > 0 ? currentTime / duration : 0
-  const x = ratio * width
+  const x = ratio * (width - 20) // 留出 20px 给播放指针
   const totalHeight = trackCount * trackHeight
 
   c.strokeStyle = '#EF4444'
@@ -147,7 +144,8 @@ export function drawPianoRoll(
 
   const colors = options.colors || DEFAULT_COLORS
   const trackHeight = options.trackHeight || 176
-  const maxTick = getMaxTick(options.notes)
+  const tempo = options.tempo || 500000
+  const ticksPerBeat = options.ticksPerBeat || 480
 
   // 建立 MIDI track index -> display index 的映射
   const trackIndexToDisplayIndex = new Map<number, number>()
@@ -155,27 +153,28 @@ export function drawPianoRoll(
     trackIndexToDisplayIndex.set(options.tracks[i].index, i)
   }
 
-  function setupCanvas() {
-    const dpr = window.devicePixelRatio || 1
-    const width = Math.max(800, tickToSeconds(maxTick, options.tempo, options.ticksPerBeat) * PIXELS_PER_SECOND + 100)
+  function draw() {
+    const maxTick = getMaxTick(options.notes)
+    const maxSeconds = tickToSeconds(maxTick, tempo, ticksPerBeat)
+
+    // 获取容器宽度，如果没有则用默认值
+    const containerWidth = options.container.clientWidth || 600
+    // 计算像素密度，使音符刚好填满宽度
+    const pixelsPerSecond = maxSeconds > 0 ? (containerWidth - 20) / maxSeconds : 10
+    const width = Math.max(containerWidth, maxSeconds * pixelsPerSecond + 20)
     const height = options.tracks.length * trackHeight
 
+    const dpr = window.devicePixelRatio || 1
     canvas.width = width * dpr
     canvas.height = height * dpr
     canvas.style.width = `${width}px`
     canvas.style.height = `${height}px`
     c.scale(dpr, dpr)
 
-    return { width, height }
-  }
-
-  function draw() {
-    const { width, height } = setupCanvas()
-
     c.fillStyle = 'rgba(247, 192, 193, 0.02)'
     c.fillRect(0, 0, width, height)
 
-    drawNotes(c, width, options.tempo, options.ticksPerBeat, options.notes, colors, options.disabledTracks, trackIndexToDisplayIndex, options.tracks, trackHeight)
+    drawNotes(c, width, pixelsPerSecond, tempo, ticksPerBeat, options.notes, colors, options.disabledTracks, trackIndexToDisplayIndex, trackHeight)
     drawPlayhead(c, options.currentTime, options.duration, width, options.tracks.length, trackHeight)
   }
 

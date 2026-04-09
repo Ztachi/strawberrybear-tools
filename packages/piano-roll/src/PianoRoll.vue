@@ -3,8 +3,17 @@
  * @description: 钢琴卷帘组件
  * 左侧 DOM 音轨标签，右侧 Canvas 音符卷轴
  */
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { drawPianoRoll, type NoteEvent, type TrackInfo } from './index'
+
+/** 防抖函数 */
+function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return ((...args: Parameters<T>) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => fn(...args), ms)
+  }) as T
+}
 
 const props = defineProps<{
   notes: NoteEvent[]
@@ -13,6 +22,7 @@ const props = defineProps<{
   tempo?: number
   tracks: TrackInfo[]
   disabledTracks: Set<number>
+  disabledTracksVersion?: number
   currentTime: number
 }>()
 
@@ -25,9 +35,6 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 let destroyFn: (() => void) | null = null
 
 const TRACK_HEIGHT = 176 // 88键 x 2px
-
-// 动态计算总高度
-const totalHeight = computed(() => props.tracks.length * TRACK_HEIGHT)
 
 function render() {
   if (!canvasRef.value || !rollContainerRef.value) return
@@ -45,17 +52,25 @@ function render() {
   })
 }
 
+// 窗口缩放时重绘（防抖）
+const handleResize = debounce(() => {
+  render()
+}, 200)
+
 onMounted(() => {
   render()
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   destroyFn?.()
+  window.removeEventListener('resize', handleResize)
 })
 
 watch(
-  () => [props.notes, props.tracks, props.disabledTracks, props.currentTime],
-  () => render()
+  () => [props.notes, props.tracks, props.currentTime, props.disabledTracksVersion],
+  () => render(),
+  { deep: true }
 )
 
 function handleToggle(trackIndex: number) {
@@ -85,8 +100,8 @@ function handleToggle(trackIndex: number) {
     </div>
 
     <!-- 右侧：Canvas 卷轴（可横向滚动） -->
-    <div ref="rollContainerRef" class="roll-scroll" :style="{ height: `${totalHeight}px` }">
-      <canvas ref="canvasRef" class="roll-canvas" :style="{ height: `${totalHeight}px` }" />
+    <div ref="rollContainerRef" class="roll-scroll">
+      <canvas ref="canvasRef" class="roll-canvas" />
     </div>
   </div>
 </template>
@@ -96,7 +111,6 @@ function handleToggle(trackIndex: number) {
   @apply flex rounded-xl overflow-hidden;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
-  /* 高度由内容决定 */
 }
 
 .track-labels {
