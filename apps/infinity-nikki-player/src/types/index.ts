@@ -25,6 +25,7 @@ export interface MidiInfo {
   file_path: string
   duration_ms: number
   track_count: number
+  melody_note_count: number
   ticks_per_beat: number
   tempo: number // 微秒每拍
   events: NoteEvent[]

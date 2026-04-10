@@ -100,6 +100,64 @@ export const usePlayerStore = defineStore('player', () => {
     isLoading.value = true
     try {
       const files = await invoke<MidiInfo[]>('get_midi_library')
+      // 为每个文件加载配置（时长、音轨数等）
+      for (const file of files) {
+        try {
+          const config = await invoke<{
+            filename: string
+            duration_ms: number
+            track_count: number
+            melody_note_count: number
+            ticks_per_beat: number
+            tempo: number
+            disabled_tracks: number[]
+          }>('load_midi_config', { filename: file.filename })
+          // 使用配置中的值（配置存在时优先使用）
+          if (config.duration_ms > 0) {
+            file.duration_ms = config.duration_ms
+          }
+          if (config.track_count > 0) {
+            file.track_count = config.track_count
+          }
+          if (config.melody_note_count > 0) {
+            file.melody_note_count = config.melody_note_count
+          }
+          if (config.ticks_per_beat > 0) {
+            file.ticks_per_beat = config.ticks_per_beat
+          }
+          if (config.tempo > 0) {
+            file.tempo = config.tempo
+          }
+        } catch {
+          // 配置不存在（可能旧文件），使用 Rust 解析的原始值
+          // 同时计算准确时长
+          try {
+            const midiData = await invoke<number[]>('read_midi_data', { filename: file.filename })
+            const uint8Array = new Uint8Array(midiData)
+            const { duration } = await loadMidiForDuration(uint8Array.buffer)
+            file.duration_ms = Math.floor(duration)
+            // 提取旋律获取音符数
+            const melody = await invoke<MelodyEvent[]>('extract_melody', {
+              events: file.events,
+              ticksPerBeat: file.ticks_per_beat,
+              tempo: 500000,
+            })
+            file.melody_note_count = melody.length
+            // 保存配置以便下次快速加载
+            await invoke('save_midi_config', {
+              filename: file.filename,
+              durationMs: Math.floor(duration),
+              trackCount: file.track_count,
+              melodyNoteCount: melody.length,
+              ticksPerBeat: file.ticks_per_beat,
+              tempo: file.tempo,
+              disabledTracks: [],
+            })
+          } catch {
+            // 忽略时长计算失败
+          }
+        }
+      }
       midiLibrary.value = files
       return true
     } catch (e) {
@@ -118,10 +176,28 @@ export const usePlayerStore = defineStore('player', () => {
       // 调用后端复制文件到库目录并获取信息
       const info = await invoke<MidiInfo>('import_midi', { sourcePath })
       // 通过后端读取 MIDI 文件计算正确时长
-      const midiData = await invoke<number[]>('read_midi_data', { filename: info.file_path })
+      const midiData = await invoke<number[]>('read_midi_data', { filename: info.filename })
       const uint8Array = new Uint8Array(midiData)
       const { duration } = await loadMidiForDuration(uint8Array.buffer)
-      info.duration_ms = duration
+      // duration 可能是浮点数，转为 u64
+      info.duration_ms = Math.floor(duration)
+      // 提取旋律并获取音符数
+      const melody = await invoke<MelodyEvent[]>('extract_melody', {
+        events: info.events,
+        ticksPerBeat: info.ticks_per_beat,
+        tempo: 500000,
+      })
+      info.melody_note_count = melody.length
+      // 保存配置到文件（文件名、时长、音轨数、旋律音符数、音轨禁用状态）
+      await invoke('save_midi_config', {
+        filename: info.filename,
+        durationMs: Math.floor(duration),
+        trackCount: info.track_count,
+        melodyNoteCount: melody.length,
+        ticksPerBeat: info.ticks_per_beat,
+        tempo: info.tempo,
+        disabledTracks: [],
+      })
       // 添加到本地库列表
       midiLibrary.value.push(info)
       // 选中并打开详情
@@ -194,8 +270,15 @@ export const usePlayerStore = defineStore('player', () => {
   /** 加载音轨屏蔽设置（从应用数据目录的配置文件） */
   async function loadDisabledTracks(midi: MidiInfo) {
     try {
-      const disabled = await invoke<number[]>('load_track_config', { filename: midi.file_path })
-      disabledTracks.value = new Set(disabled)
+      const config = await invoke<{
+        filename: string
+        duration_ms: number
+        track_count: number
+        ticks_per_beat: number
+        tempo: number
+        disabled_tracks: number[]
+      }>('load_midi_config', { filename: midi.filename })
+      disabledTracks.value = new Set(config.disabled_tracks)
       disabledTracksVersionRef.value = ++disabledTracksVersion
     } catch (e) {
       console.error('加载音轨配置失败:', e)
@@ -209,8 +292,13 @@ export const usePlayerStore = defineStore('player', () => {
     if (!currentMidi.value) return
     try {
       const disabledArray = Array.from(disabledTracks.value).map((n) => n)
-      await invoke('save_track_config', {
-        filename: currentMidi.value.file_path,
+      await invoke('save_midi_config', {
+        filename: currentMidi.value.filename,
+        durationMs: currentMidi.value.duration_ms,
+        trackCount: currentMidi.value.track_count,
+        melodyNoteCount: currentMidi.value.melody_note_count || 0,
+        ticksPerBeat: currentMidi.value.ticks_per_beat,
+        tempo: currentMidi.value.tempo,
         disabledTracks: disabledArray,
       })
     } catch (e) {

@@ -58,7 +58,8 @@ async function confirmDelete(filename: string) {
           </TooltipProvider>
           <span class="meta"
             >{{ formatDuration(midi.duration_ms) }} · {{ midi.track_count }}
-            {{ t('midi.tracks') }}</span
+            {{ t('midi.tracks') }} · {{ midi.melody_note_count || 0 }}
+            {{ t('midi.melodyNotes') }}</span
           >
         </div>
 

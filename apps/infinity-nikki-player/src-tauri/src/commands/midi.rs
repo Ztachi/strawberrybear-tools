@@ -5,10 +5,30 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
-/// 音轨配置
+/// MIDI 文件配置（包含基本信息、时长和音轨禁用状态）
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrackConfig {
+pub struct MidiConfig {
+    pub filename: String,
+    pub duration_ms: u64, // 计算出的准确时长
+    pub track_count: usize,
+    pub melody_note_count: usize, // 旋律音符数
+    pub ticks_per_beat: u16,
+    pub tempo: u32,
     pub disabled_tracks: Vec<u8>, // 禁用的音轨索引列表
+}
+
+impl Default for MidiConfig {
+    fn default() -> Self {
+        Self {
+            filename: String::new(),
+            duration_ms: 0,
+            track_count: 0,
+            melody_note_count: 0,
+            ticks_per_beat: 480,
+            tempo: 500000,
+            disabled_tracks: Vec::new(),
+        }
+    }
 }
 
 /// 获取 MIDI 库目录路径
@@ -107,10 +127,7 @@ pub fn import_midi(app: tauri::AppHandle, source_path: String) -> Result<MidiInf
         .map_err(|e| format!("复制文件失败: {}", e))?;
 
     // 解析文件获取信息
-    let (mut info, _events) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
-
-    // 更新路径为原始文件名
-    info.file_path = source_filename;
+    let (info, _events) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
 
     Ok(info)
 }
@@ -157,8 +174,8 @@ pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Resu
             .map_err(|e| format!("删除文件失败: {}", e))?;
     }
 
-    // 删除对应的音轨配置文件
-    let config_path = library_dir.join(format!("{}.track-config", filename));
+    // 删除对应的配置文件
+    let config_path = library_dir.join(format!("{}.midi-config", filename));
     if config_path.exists() {
         fs::remove_file(&config_path)
             .map_err(|e| format!("删除配置文件失败: {}", e))?;
@@ -167,40 +184,49 @@ pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Resu
     Ok(())
 }
 
-/// 读取音轨配置
+/// 读取完整的 MIDI 配置（包含时长和禁用状态）
 #[tauri::command]
-pub fn load_track_config(app: tauri::AppHandle, filename: String) -> Result<Vec<u8>, String> {
+pub fn load_midi_config(app: tauri::AppHandle, filename: String) -> Result<MidiConfig, String> {
     let library_dir = get_midi_library_dir(&app)?;
-    let config_path = library_dir.join(format!("{}.track-config", filename));
+    let config_path = library_dir.join(format!("{}.midi-config", filename));
 
     if config_path.exists() {
         let content = fs::read_to_string(&config_path)
             .map_err(|e| format!("读取配置失败: {}", e))?;
-        let config: TrackConfig = serde_json::from_str(&content)
+        let config: MidiConfig = serde_json::from_str(&content)
             .map_err(|e| format!("解析配置失败: {}", e))?;
-        Ok(config.disabled_tracks)
+        Ok(config)
     } else {
-        Ok(Vec::new())
+        // 如果没有配置文件，返回默认值
+        Ok(MidiConfig::default())
     }
 }
 
-/// 保存音轨配置
+/// 保存完整的 MIDI 配置（包含时长和禁用状态）
 #[tauri::command]
-pub fn save_track_config(app: tauri::AppHandle, filename: String, disabled_tracks: Vec<u8>) -> Result<(), String> {
+pub fn save_midi_config(
+    app: tauri::AppHandle,
+    filename: String,
+    duration_ms: u64,
+    track_count: usize,
+    melody_note_count: usize,
+    ticks_per_beat: u16,
+    tempo: u32,
+    disabled_tracks: Vec<u8>,
+) -> Result<(), String> {
     let library_dir = get_midi_library_dir(&app)?;
-    let config_path = library_dir.join(format!("{}.track-config", filename));
+    let config_path = library_dir.join(format!("{}.midi-config", filename));
 
-    // 只有存在禁用的音轨时才保存配置文件
-    if disabled_tracks.is_empty() {
-        // 如果没有禁用的音轨，删除配置文件（如果存在）
-        if config_path.exists() {
-            fs::remove_file(&config_path)
-                .map_err(|e| format!("删除配置文件失败: {}", e))?;
-        }
-        return Ok(());
-    }
+    let config = MidiConfig {
+        filename: filename.clone(),
+        duration_ms,
+        track_count,
+        melody_note_count,
+        ticks_per_beat,
+        tempo,
+        disabled_tracks,
+    };
 
-    let config = TrackConfig { disabled_tracks };
     let content = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("序列化配置失败: {}", e))?;
     fs::write(&config_path, content)
