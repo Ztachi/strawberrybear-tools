@@ -30,7 +30,6 @@ export interface PianoRollOptions {
   tracks: TrackInfo[]
   disabledTracks: Set<number>
   currentTime: number
-  trackHeight?: number
   colors?: string[]
 }
 
@@ -43,12 +42,24 @@ const NOTE_HEIGHT = 2
 const MIN_NOTE_WIDTH = 2
 const NOTE_GAP = 1
 
+// 钢琴 88 键 (A0=21 到 C8=108)，每个键占用 NOTE_HEIGHT + GAP 像素
+const PIANO_NOTE_COUNT = 88
+const PIANO_NOTE_SPAN = NOTE_HEIGHT + NOTE_GAP // 3px
+const PIANO_MIN_PITCH = 21 // A0
+
 function getChannelColor(channel: number, colors: string[] = DEFAULT_COLORS): string {
   return colors[channel % colors.length]
 }
 
+/**
+ * @description: 计算音符在音轨内的 Y 坐标
+ * 钢琴键盘从 A0(21) 到 C8(108)
+ * C8 (pitch 108) -> Y = 0 (顶部)
+ * A0 (pitch 21) -> Y = 261 (底部)
+ */
 function getNoteY(pitch: number): number {
-  return (127 - pitch) * NOTE_HEIGHT
+  const pianoPitch = pitch - PIANO_MIN_PITCH // 转为 0-87 范围
+  return (PIANO_NOTE_COUNT - 1 - pianoPitch) * PIANO_NOTE_SPAN
 }
 
 function getMaxTick(notes: NoteEvent[]): number {
@@ -97,12 +108,13 @@ function drawNotes(
     const noteX = tickToSeconds(note.start_tick, tempo, ticksPerBeat) * pixelsPerSecond
     const noteDurationSec = tickToSeconds(note.end_tick - note.start_tick, tempo, ticksPerBeat)
     const noteW = Math.max(MIN_NOTE_WIDTH, noteDurationSec * pixelsPerSecond - NOTE_GAP)
-    const noteY = trackY + getNoteY(note.pitch)
+    const noteY = getNoteY(note.pitch)
+    const finalY = trackY + noteY
 
     if (noteX + noteW < 0 || noteX > width) continue
 
     c.fillStyle = isEnabled ? getChannelColor(note.channel, colors) : 'rgba(0, 0, 0, 0.15)'
-    c.fillRect(noteX, noteY, noteW, NOTE_HEIGHT)
+    c.fillRect(noteX, finalY, noteW, NOTE_HEIGHT)
   }
 }
 
@@ -146,9 +158,11 @@ export function drawPianoRoll(
   const c = ctx
 
   const colors = options.colors || DEFAULT_COLORS
-  const trackHeight = options.trackHeight || 176
   const tempo = options.tempo || 500000
   const ticksPerBeat = options.ticksPerBeat || 480
+
+  // 每个音轨的高度 = 88 键 * (NOTE_HEIGHT + GAP)
+  const trackHeight = PIANO_NOTE_COUNT * PIANO_NOTE_SPAN
 
   // 建立 MIDI event.track 值 -> display index 的映射
   const trackIndexToDisplayIndex = new Map<number, number>()

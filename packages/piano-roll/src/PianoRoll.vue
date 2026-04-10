@@ -34,7 +34,8 @@ const rollContainerRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let destroyFn: (() => void) | null = null
 
-const TRACK_HEIGHT = 176 // 88键 x 2px
+// 88键 x (NOTE_HEIGHT 2px + GAP 1px) = 264px
+const TRACK_HEIGHT = 88 * 3
 
 /** 根据 eventTrackValue 检查音轨是否被禁用 */
 function isTrackDisabledByMidiPlayerValue(eventTrackValue: number): boolean {
@@ -55,7 +56,6 @@ function render() {
     tracks: props.tracks,
     disabledTracks: props.disabledTracks,
     currentTime: props.currentTime,
-    trackHeight: TRACK_HEIGHT,
   })
 }
 
