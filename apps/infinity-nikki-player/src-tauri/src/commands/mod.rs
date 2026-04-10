@@ -1,6 +1,7 @@
 pub mod keyboard;
 pub mod midi;
 pub mod player;
+pub mod settings;
 pub mod templates;
 pub mod window;
 

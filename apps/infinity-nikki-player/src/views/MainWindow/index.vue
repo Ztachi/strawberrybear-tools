@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
+import { useSettingsStore } from '@/stores/settings'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui'
@@ -14,11 +15,12 @@ import LogsTab from './LogsTab/index.vue'
 
 const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
+const settingsStore = useSettingsStore()
 const activeTab = ref('files')
 
 /** 切换语言 */
 function switchLocale(targetLocale: 'zh-CN' | 'en-US') {
-  locale.value = targetLocale
+  settingsStore.setLocale(targetLocale)
 }
 
 /** 跳转到辅助功能权限设置 */
@@ -32,7 +34,7 @@ async function openAccessibilitySettings() {
 
 onMounted(async () => {
   await playerStore.checkAccessibility()
-  await playerStore.loadTemplates()
+  await settingsStore.loadSettings()
   await playerStore.loadMidiLibrary()
 })
 
@@ -170,12 +172,22 @@ async function enterOverlayMode() {
 
 <style scoped>
 .main-window {
-  @apply h-screen flex flex-col text-foreground overflow-hidden;
+  @apply h-screen flex flex-col text-foreground overflow-hidden relative;
+}
+
+.main-window::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('@/assets/images/bg.jpeg');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.1;
 }
 
 .header {
-  background: var(--bg-white-80);
-  backdrop-filter: blur(20px);
+  background: var(--bg-white-40);
+  backdrop-filter: blur(30px);
   border-bottom: 1px solid var(--border-primary-10);
 }
 
@@ -235,8 +247,8 @@ async function enterOverlayMode() {
 
 .overlay-btn {
   @apply gap-2 font-medium;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
-  color: var(--color-foreground) !important;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: var(--color-white);
 }
 
 .content {
@@ -261,6 +273,21 @@ async function enterOverlayMode() {
   @apply flex items-center gap-2;
 }
 
+.file-actions :deep(button) {
+  background: var(--bg-white-80) !important;
+  border: 1px solid var(--border-primary) !important;
+  color: var(--color-primary) !important;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.file-actions :deep(button:hover) {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-pink-sm);
+}
+
 .tab-trigger {
   @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium;
   color: var(--color-primary);
@@ -268,7 +295,7 @@ async function enterOverlayMode() {
 }
 
 .tab-trigger[data-state='active'] {
-  color: var(--color-foreground);
+  color: var(--color-white);
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
   box-shadow: 0 2px 8px var(--bg-primary-15);
 }

@@ -211,6 +211,8 @@ pub fn run() {
             commands::templates::get_templates,
             commands::templates::save_template,
             commands::templates::delete_template,
+            commands::settings::load_settings,
+            commands::settings::save_settings,
             commands::check_accessibility,
             commands::open_accessibility_settings,
         ])

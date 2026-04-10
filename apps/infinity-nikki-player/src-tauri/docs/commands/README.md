@@ -53,6 +53,37 @@
 | `create_overlay_window` | -    | `()`   | 创建悬浮窗口 |
 | `close_overlay_window`  | -    | `()`   | 关闭悬浮窗口 |
 
+### 设置命令
+
+| 命令            | 参数                    | 返回值        | 功能         |
+| --------------- | ----------------------- | ------------- | ------------ |
+| `load_settings` | -                       | `AppSettings` | 加载应用设置 |
+| `save_settings` | `settings: AppSettings` | `()`          | 保存应用设置 |
+
+**AppSettings 结构：**
+
+```rust
+pub struct AppSettings {
+    pub locale: String,                    // 当前语言，如 "zh-CN" 或 "en-US"
+    pub current_template_id: Option<String>, // 当前选中的模板 ID
+    pub templates: Vec<TemplateData>,        // 模板列表
+}
+
+pub struct TemplateData {
+    pub id: String,
+    pub name: String,
+    pub is_builtin: bool,
+    pub mappings: Vec<KeyMapping>,
+}
+
+pub struct KeyMapping {
+    pub pitch: u8,
+    pub key: String,
+}
+```
+
+**数据存储位置：** `~/Library/Application Support/com.strawberrybear.infinity-nikki-player/settings.json`
+
 ### 辅助功能命令
 
 | 命令                          | 参数 | 返回值 | 功能                 |

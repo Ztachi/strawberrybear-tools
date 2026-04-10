@@ -5,21 +5,43 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
+import { useSettingsStore } from '@/stores/settings'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
+import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
 import PianoRoll from '@strawberrybear/piano-roll'
-import { Music, Clock, Music2 } from 'lucide-vue-next'
+import { Music, Music2 } from 'lucide-vue-next'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import type { TrackInfo } from '@/types'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
+const settingsStore = useSettingsStore()
 
-/** 格式化时长 */
-function formatDuration(ms: number) {
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${minutes}:${secs.toString().padStart(2, '0')}`
-}
+/** 当前激活的按键集合（根据播放时间和旋律音符自动计算） */
+const activeKeys = computed<Set<string>>(() => {
+  const currentTime = playerStore.previewCurrentTime
+  const active = new Set<string>()
+
+  for (const event of playerStore.melody) {
+    const startTime = event.start_ms
+    const endTime = event.start_ms + event.duration_ms
+    if (currentTime >= startTime && currentTime < endTime) {
+      const mapping = settingsStore.getCurrentTemplate()?.mappings.find((m) => m.pitch === event.pitch)
+      if (mapping) {
+        active.add(mapping.key)
+      }
+    }
+  }
+
+  return active
+})
 
 /** 切换音轨 */
 function handleToggleTrack(trackIndex: number) {
@@ -35,43 +57,68 @@ const translatedTracks = computed<TrackInfo[]>(() => {
     return { ...track, name: `${t('midi.trackIndex', { n: Number(track.name) })}` }
   })
 })
+
+/** 选择模板 */
+function handleTemplateChange(value: unknown) {
+  if (typeof value === 'string') {
+    settingsStore.selectTemplate(value)
+  }
+}
 </script>
 
 <template>
   <div class="midi-detail">
-    <!-- 文件信息头部 -->
+    <!-- 顶部区域：左侧播放器 + 右侧键盘预览 -->
     <div class="detail-header">
-      <div class="file-icon">
-        <Music :size="28" />
-      </div>
-      <div class="file-info">
-        <div class="file-stats">
-          <span class="stat">
-            <Clock :size="14" />
-            {{ formatDuration(playerStore.previewDuration) }}
-          </span>
-          <span class="stat">
-            <Music :size="14" />
-            {{ playerStore.currentMidi?.track_count }} {{ t('midi.tracks') }}
-          </span>
-          <span class="stat highlight">
-            <Music2 :size="14" />
-            {{ playerStore.melody.length }} {{ t('midi.melodyNotes') }}
-          </span>
+      <!-- 左侧：播放器 + 模板选择 -->
+      <div class="left-section">
+        <div class="preview-section">
+          <PreviewPlayer />
+        </div>
+        <div class="template-section">
+          <Select
+            :model-value="settingsStore.currentTemplateId"
+            @update:model-value="handleTemplateChange"
+          >
+            <SelectTrigger class="w-full">
+              <SelectValue :placeholder="t('player.noTemplate')" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectLabel>{{ t('player.template') }}</SelectLabel>
+              <SelectItem v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
+                {{ tmpl.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
-    </div>
-
-    <!-- 试听播放器 -->
-    <div class="preview-section">
-      <PreviewPlayer />
+      <!-- 右侧：键盘预览 -->
+      <div class="keyboard-section">
+        <KeyboardPreview :active-keys="activeKeys" />
+      </div>
     </div>
 
     <!-- 音轨列表 -->
     <div class="tracks-section">
-      <h3 class="section-title">
-        {{ t('midi.trackList') }}
-      </h3>
+      <div class="section-header">
+        <div class="section-title-group">
+          <h3 class="section-title">
+            {{ t('midi.trackList') }}
+          </h3>
+          <div class="section-stats">
+            <span class="stat">
+              <Music :size="14" class="text-success" />
+              <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
+              <span class="stat-label">{{ t('midi.tracks') }}</span>
+            </span>
+            <span class="stat">
+              <Music2 :size="14" class="text-success" />
+              <span class="stat-value">{{ playerStore.melody.length }}</span>
+              <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
       <PianoRoll
         :key="playerStore.currentMidi?.filename || 'empty'"
         :notes="playerStore.currentMidi?.events || []"
@@ -90,36 +137,16 @@ const translatedTracks = computed<TrackInfo[]>(() => {
 
 <style scoped>
 .midi-detail {
-  @apply p-6 flex flex-col gap-6;
+  @apply px-6 pb-6 flex flex-col gap-6;
   overflow-y: auto;
 }
 
 .detail-header {
-  @apply flex items-start gap-4;
+  @apply flex gap-4;
 }
 
-.file-icon {
-  @apply w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: white;
-}
-
-.file-info {
-  @apply flex-1 min-w-0;
-}
-
-.file-stats {
-  @apply flex flex-wrap gap-4;
-}
-
-.stat {
-  @apply flex items-center gap-1.5 text-sm;
-  color: var(--color-muted);
-}
-
-.stat.highlight {
-  color: var(--color-primary);
-  font-weight: 500;
+.left-section {
+  @apply flex flex-col gap-4 flex-1;
 }
 
 .preview-section {
@@ -128,13 +155,47 @@ const translatedTracks = computed<TrackInfo[]>(() => {
   border: 1px solid var(--border-primary-20);
 }
 
+.template-section {
+  @apply px-1;
+}
+
+.keyboard-section {
+  @apply flex items-center justify-center flex-1;
+}
+
 /* 音轨区域 */
 .tracks-section {
   @apply flex flex-col gap-3;
 }
 
+.section-header {
+  @apply flex items-center;
+}
+
+.section-title-group {
+  @apply flex items-center gap-4;
+}
+
 .section-title {
   @apply text-sm font-medium;
   color: var(--color-muted-dark);
+}
+
+.section-stats {
+  @apply flex items-center gap-3;
+}
+
+.stat {
+  @apply flex items-center gap-1;
+}
+
+.stat-value {
+  @apply text-sm font-medium;
+  color: var(--color-primary);
+}
+
+.stat-label {
+  @apply text-xs;
+  color: var(--color-muted);
 }
 </style>

@@ -1,3 +1,11 @@
+/*
+ * @Author: ztachi(legendryztachi@gmail.com)
+ * @Date: 2026-04-07 20:27:26
+ * @LastEditors: ztachi(legendryztachi@gmail.com)
+ * @LastEditTime: 2026-04-10 18:07:02
+ * @FilePath: /strawberrybear-tools/apps/infinity-nikki-player/src/components/ui/button/index.ts
+ * @Description:
+ */
 import type { VariantProps } from 'class-variance-authority'
 import { cva } from 'class-variance-authority'
 
@@ -8,13 +16,13 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        default: 'bg-primary text-white hover:bg-primary/90',
         destructive:
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
-          'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
+          'border bg-background shadow-xs hover:bg-primary hover:text-white dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        ghost: 'hover:bg-primary hover:text-primary',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

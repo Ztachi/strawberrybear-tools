@@ -20,6 +20,9 @@
     --bg-white-90: rgba(255, 255, 255, 0.9);
     --bg-white-80: rgba(255, 255, 255, 0.8);
     --bg-white-50: rgba(255, 255, 255, 0.5);
+    --bg-white-40: rgba(255, 255, 255, 0.4);
+    --bg-white-30: rgba(255, 255, 255, 0.3);
+    --bg-white-20: rgba(255, 255, 255, 0.2);
 
     /* 粉色透明背景 */
     --bg-primary-15: rgba(247, 192, 193, 0.15);
@@ -28,6 +31,7 @@
     --bg-primary-04: rgba(247, 192, 193, 0.04);
 
     /* 粉色边框 */
+    --border-primary: rgba(247, 192, 193, 1);
     --border-primary-30: rgba(247, 192, 193, 0.3);
     --border-primary-20: rgba(247, 192, 193, 0.2);
     --border-primary-15: rgba(247, 192, 193, 0.15);
@@ -70,7 +74,7 @@
     --accent-foreground: 330 10% 15%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 30 10% 88%;
+    --border: 30 success10% 88%;
     --input: 30 10% 88%;
     --ring: 350 89% 80%;
     --radius: 0.875rem;
@@ -132,6 +136,10 @@
   /* 平滑过渡 */
   .transition-smooth {
     @apply transition-all duration-300 ease-out;
+  }
+
+  .text-success {
+    color: var(--color-success);
   }
 
   /* iOS 毛玻璃效果 */

@@ -7,7 +7,6 @@ import type {
   MidiInfo,
   MelodyEvent,
   PlaybackState,
-  KeyTemplate,
   TrackInfo,
   NoteEvent,
 } from '@/types'
@@ -22,6 +21,7 @@ import {
   loadMidiForDuration,
   setDisabledTracks,
 } from '@/lib/midiPlayer'
+import { useSettingsStore } from './settings'
 
 /** 音轨屏蔽设置缓存 */
 interface TrackSettings {
@@ -61,12 +61,11 @@ export const usePlayerStore = defineStore('player', () => {
   // 按键日志（最多 50 条）
   const keyLogs = ref<KeyLogEntry[]>([])
 
-  // 模板相关
-  const templates = ref<KeyTemplate[]>([])
-  const currentTemplate = ref<KeyTemplate | null>(null)
-
   // 速度
   const speed = ref(1.0)
+
+  // 获取 settings store 实例
+  const settingsStore = useSettingsStore()
 
   // 是否加载中
   const isLoading = ref(false)
@@ -468,7 +467,7 @@ export const usePlayerStore = defineStore('player', () => {
   /** 开始播放 */
   async function startPlayback() {
     if (!currentMidi.value) return
-    if (!currentTemplate.value) {
+    if (!settingsStore.getCurrentTemplate()) {
       alert('请先选择映射模板')
       return
     }
@@ -476,7 +475,7 @@ export const usePlayerStore = defineStore('player', () => {
       await invoke('start_playback', {
         midiPath: currentMidi.value.filename,
         melody: melody.value,
-        template: currentTemplate.value.mappings,
+        template: settingsStore.getCurrentTemplate()?.mappings,
         speed: speed.value,
       })
       await updatePlaybackState()
@@ -770,43 +769,27 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  /** 加载模板 */
-  async function loadTemplates() {
-    try {
-      templates.value = await invoke<KeyTemplate[]>('get_templates')
-      if (templates.value.length > 0 && !currentTemplate.value) {
-        currentTemplate.value = templates.value[0]
-      }
-    } catch (e) {
-      toast.error('加载模板失败', { description: String(e), richColors: true })
-      console.error('加载模板失败:', e)
-    }
-  }
+  /** 当前激活的按键集合（根据播放时间和旋律音符自动计算） */
+  const activeKeys = computed<Set<string>>(() => {
+    const currentTime = previewCurrentTime.value
+    const active = new Set<string>()
 
-  /** 保存模板 */
-  async function saveTemplate(template: KeyTemplate) {
-    try {
-      await invoke('save_template', { template })
-      await loadTemplates()
-    } catch (e) {
-      toast.error('保存模板失败', { description: String(e), richColors: true })
-      console.error('保存模板失败:', e)
-    }
-  }
-
-  /** 删除模板 */
-  async function deleteTemplate(templateId: string) {
-    try {
-      await invoke('delete_template', { templateId })
-      await loadTemplates()
-      if (currentTemplate.value?.id === templateId) {
-        currentTemplate.value = templates.value[0] || null
+    for (const event of melody.value) {
+      const startTime = event.start_ms
+      const endTime = event.start_ms + event.duration_ms
+      if (currentTime >= startTime && currentTime < endTime) {
+        // 找到当前时间对应的键盘映射
+        const mapping = settingsStore
+          .getCurrentTemplate()
+          ?.mappings.find((m) => m.pitch === event.pitch)
+        if (mapping) {
+          active.add(mapping.key)
+        }
       }
-    } catch (e) {
-      toast.error('删除模板失败', { description: String(e), richColors: true })
-      console.error('删除模板失败:', e)
     }
-  }
+
+    return active
+  })
 
   // 轮询日志（用于实时显示）
   let logPollInterval: number | null = null
@@ -835,8 +818,7 @@ export const usePlayerStore = defineStore('player', () => {
     showDetail,
     playbackState,
     keyLogs,
-    templates,
-    currentTemplate,
+    activeKeys,
     speed,
     isLoading,
     hasAccessibility,
@@ -862,9 +844,6 @@ export const usePlayerStore = defineStore('player', () => {
     setSpeed,
     refreshLogs,
     clearLogs,
-    loadTemplates,
-    saveTemplate,
-    deleteTemplate,
     checkAccessibility,
     startLogPolling,
     stopLogPolling,

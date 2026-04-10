@@ -186,7 +186,7 @@ onUnmounted(() => {
 }
 
 .controls {
-  @apply flex items-center justify-center gap-2;
+  @apply relative flex items-center justify-center gap-2;
 }
 
 .control-btn {
@@ -199,8 +199,8 @@ onUnmounted(() => {
 
 .control-btn.play {
   @apply w-12 h-12 rounded-full;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
-  color: var(--color-white) !important;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: var(--color-white);
 }
 
 .control-btn.play :deep(svg) {
@@ -217,7 +217,8 @@ onUnmounted(() => {
 }
 
 .control-btn.volume {
-  @apply w-10 h-10 rounded-xl ml-4;
+  @apply absolute w-10 h-10 rounded-xl;
+  right: 0;
 }
 
 .volume-popover {

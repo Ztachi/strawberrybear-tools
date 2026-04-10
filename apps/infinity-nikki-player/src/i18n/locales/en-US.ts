@@ -34,7 +34,7 @@ export default {
     preview: 'Preview',
     stopPreview: 'Stop Preview',
     speed: 'Speed',
-    template: 'Template',
+    template: 'Key Mapping',
     noTemplate: 'Not Selected',
   },
   midi: {
