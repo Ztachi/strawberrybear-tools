@@ -2,11 +2,13 @@
 /**
  * @description: MIDI 详情面板
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import PianoRoll from '@strawberrybear/piano-roll'
 import { Music, Clock, Music2 } from 'lucide-vue-next'
+import type { TrackInfo } from '@/types'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
@@ -23,6 +25,16 @@ function formatDuration(ms: number) {
 function handleToggleTrack(trackIndex: number) {
   playerStore.toggleTrack(trackIndex)
 }
+
+/** 带翻译名称的音轨列表 */
+const translatedTracks = computed<TrackInfo[]>(() => {
+  return playerStore.tracks.map((track) => {
+    if (track.name.includes('|percussion')) {
+      return { ...track, name: t('midi.percussionTrack') }
+    }
+    return { ...track, name: `${t('midi.trackIndex', { n: Number(track.name) })}` }
+  })
+})
 </script>
 
 <template>
@@ -66,7 +78,7 @@ function handleToggleTrack(trackIndex: number) {
         :duration="playerStore.previewDuration"
         :ticks-per-beat="playerStore.currentMidi?.ticks_per_beat || 480"
         :tempo="playerStore.currentMidi?.tempo || 500000"
-        :tracks="playerStore.tracks"
+        :tracks="translatedTracks"
         :disabled-tracks="playerStore.disabledTracks"
         :disabled-tracks-version="playerStore.disabledTracksVersion"
         :current-time="playerStore.previewCurrentTime"

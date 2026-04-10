@@ -102,7 +102,7 @@ function handleToggle(trackIndex: number) {
       >
           <span class="switch-knob" />
         </div>
-        <span class="track-name">{{ track.name || `Track ${track.index + 1}` }}</span>
+        <span class="track-name">{{ track.name }}</span>
       </div>
     </div>
 
@@ -128,7 +128,7 @@ function handleToggle(trackIndex: number) {
 }
 
 .track-label {
-  @apply flex items-center gap-2 px-3;
+  @apply flex flex-col items-center justify-center gap-1 px-3 py-2;
   border-bottom: 2px solid rgba(247, 192, 193, 0.3);
 }
 
@@ -151,7 +151,7 @@ function handleToggle(trackIndex: number) {
 }
 
 .track-name {
-  @apply text-xs truncate;
+  @apply text-xs break-words leading-tight;
   color: var(--color-text-secondary);
 }
 

@@ -55,6 +55,8 @@ export default {
     trackDisabled: 'Disabled',
     clickToEnable: 'Click to enable',
     clickToDisable: 'Click to disable',
+    trackIndex: 'Track {n}',
+    percussionTrack: 'Percussion',
   },
   permissions: {
     required: 'Accessibility Required',

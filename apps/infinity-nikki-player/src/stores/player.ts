@@ -247,7 +247,7 @@ export const usePlayerStore = defineStore('player', () => {
           index: trackMap.size,
           eventTrackValue: event.track, // MIDI 原始 track 值
           channel: event.channel,
-          name: `音轨 ${trackMap.size + 1}`,
+          name: `${trackMap.size + 1}`, // 纯数字，显示时由组件处理 i18n
           noteCount: 0,
           isPercussion: event.channel === 9,
           enabled: true,
@@ -260,7 +260,7 @@ export const usePlayerStore = defineStore('player', () => {
     for (const [trackIdx, track] of trackMap) {
       if (track.channel === 9) {
         track.isPercussion = true
-        track.name = `打击乐`
+        track.name = `${track.index}|percussion` // 特殊标记，组件层处理翻译
       }
     }
 

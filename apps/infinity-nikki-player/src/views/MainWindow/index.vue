@@ -7,13 +7,19 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
 import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder } from 'lucide-vue-next'
+import { SUPPORTED_LOCALES } from '@/i18n'
 import FilesTab from './FilesTab/index.vue'
 import TemplatesTab from './TemplatesTab/index.vue'
 import LogsTab from './LogsTab/index.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
 const activeTab = ref('files')
+
+/** 切换语言 */
+function switchLocale(targetLocale: 'zh-CN' | 'en-US') {
+  locale.value = targetLocale
+}
 
 /** 跳转到辅助功能权限设置 */
 async function openAccessibilitySettings() {
@@ -93,6 +99,19 @@ async function enterOverlayMode() {
             <Monitor :size="16" />
             {{ t('app.overlayMode') }}
           </Button>
+
+          <!-- 语言切换 -->
+          <div class="locale-switch">
+            <button
+              v-for="loc in SUPPORTED_LOCALES"
+              :key="loc.value"
+              class="locale-btn"
+              :class="{ active: locale === loc.value }"
+              @click="switchLocale(loc.value)"
+            >
+              {{ loc.label }}
+            </button>
+          </div>
         </div>
       </div>
     </header>
@@ -182,6 +201,26 @@ async function enterOverlayMode() {
 
 .header-actions {
   @apply flex items-center gap-2;
+}
+
+.locale-switch {
+  @apply flex items-center gap-1 p-1 rounded-lg;
+  background: var(--bg-primary-10);
+  border: 1px solid var(--border-primary-20);
+}
+
+.locale-btn {
+  @apply px-2 py-1 text-xs font-medium rounded-md transition-all;
+  color: var(--color-muted);
+}
+
+.locale-btn:hover {
+  color: var(--color-foreground);
+}
+
+.locale-btn.active {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: white;
 }
 
 .access-btn {

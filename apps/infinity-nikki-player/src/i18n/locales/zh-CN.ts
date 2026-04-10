@@ -55,6 +55,8 @@ export default {
     trackDisabled: '已屏蔽',
     clickToEnable: '点击启用',
     clickToDisable: '点击屏蔽',
+    trackIndex: '音轨 {n}',
+    percussionTrack: '打击乐器',
   },
   permissions: {
     required: '需要辅助功能权限',
