@@ -36,6 +36,7 @@
     /* 状态颜色 */
     --color-success: #4ade80;
     --color-warning: #facc15;
+    --color-danger: #ef4444;
 
     /* 状态透明背景 */
     --bg-success-08: rgba(74, 222, 128, 0.08);

@@ -391,18 +391,70 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       const files = await invoke<MidiInfo[]>('scan_folder', { folderPath })
       for (const file of files) {
-        const exists = midiLibrary.value.some((m) => m.filename === file.filename)
-        if (!exists) {
-          // 计算正确的时长
+        // 检查是否已存在于内存中
+        const existsInMemory = midiLibrary.value.some((m) => m.filename === file.filename)
+        if (existsInMemory) continue
+
+        // 检查配置文件是否存在（如果存在，说明文件已复制过）
+        let config = null
+        try {
+          config = await invoke<{
+            filename: string
+            duration_ms: number
+            track_count: number
+            melody_note_count: number
+            ticks_per_beat: number
+            tempo: number
+            disabled_tracks: number[]
+          }>('load_midi_config', { filename: file.filename })
+        } catch {
+          // 配置文件不存在
+        }
+
+        if (config && config.duration_ms > 0) {
+          // 配置文件存在，直接使用
+          file.duration_ms = config.duration_ms
+          file.melody_note_count = config.melody_note_count
+          file.ticks_per_beat = config.ticks_per_beat
+          file.tempo = config.tempo
+          midiLibrary.value.push(file)
+        } else {
+          // 配置文件不存在，调用 importMidi 复制文件并计算
+          // 构建源文件完整路径
+          const sourcePath = `${folderPath}/${file.filename}`
           try {
-            const midiData = await invoke<number[]>('read_midi_data', { filename: file.file_path })
+            const imported = await invoke<MidiInfo>('import_midi', { sourcePath })
+            // 读取库中的文件计算时长（imported.file_path 是相对于库目录的文件名）
+            const midiData = await invoke<number[]>('read_midi_data', {
+              filename: imported.filename,
+            })
             const uint8Array = new Uint8Array(midiData)
             const { duration } = await loadMidiForDuration(uint8Array.buffer)
-            file.duration_ms = duration
+            imported.duration_ms = Math.floor(duration)
+
+            // 提取旋律
+            const melody = await invoke<MelodyEvent[]>('extract_melody', {
+              events: imported.events,
+              ticksPerBeat: imported.ticks_per_beat,
+              tempo: 500000,
+            })
+            imported.melody_note_count = melody.length
+
+            // 保存配置
+            await invoke('save_midi_config', {
+              filename: imported.filename,
+              durationMs: Math.floor(duration),
+              trackCount: imported.track_count,
+              melodyNoteCount: melody.length,
+              ticksPerBeat: imported.ticks_per_beat,
+              tempo: imported.tempo,
+              disabledTracks: [],
+            })
+
+            midiLibrary.value.push(imported)
           } catch (e) {
-            console.warn('计算时长失败:', file.filename, e)
+            console.warn('导入文件失败:', sourcePath, e)
           }
-          midiLibrary.value.push(file)
         }
       }
     } catch (e) {

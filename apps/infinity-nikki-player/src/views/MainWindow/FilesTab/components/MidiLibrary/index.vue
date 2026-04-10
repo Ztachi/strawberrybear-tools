@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
-import { confirm } from '@tauri-apps/plugin-dialog'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -17,14 +16,6 @@ function formatDuration(ms: number) {
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${minutes}:${secs.toString().padStart(2, '0')}`
-}
-
-/** 删除确认 */
-async function confirmDelete(filename: string) {
-  const confirmed = await confirm(t('midi.confirmDelete'), { title: t('actions.delete'), kind: 'warning' })
-  if (confirmed) {
-    await playerStore.deleteMidi(filename)
-  }
 }
 </script>
 
@@ -71,7 +62,7 @@ async function confirmDelete(filename: string) {
             </button>
           </PopoverTrigger>
           <PopoverContent class="w-40 p-1" align="end">
-            <button class="menu-action" @click="confirmDelete(midi.filename)">
+            <button class="menu-action" @click="playerStore.deleteMidi(midi.filename)">
               <Trash2 :size="14" />
               {{ t('actions.delete') }}
             </button>
@@ -173,7 +164,7 @@ async function confirmDelete(filename: string) {
 
 .menu-action {
   @apply w-full flex items-center gap-2 px-3 py-2 text-sm text-left;
-  color: var(--color-primary);
+  color: var(--color-danger);
   transition: all 0.2s;
   border-radius: 0.5rem;
   cursor: pointer;
