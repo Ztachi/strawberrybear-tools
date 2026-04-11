@@ -213,7 +213,7 @@ function handleTemplateChange(value: unknown) {
 }
 
 .template-section {
-  @apply px-1;
+  @apply flex items-center gap-2 px-1;
 }
 
 .keyboard-section {

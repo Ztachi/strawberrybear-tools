@@ -38,6 +38,10 @@ export default {
     noTemplate: 'Not Selected',
     keyLog: 'Key Log',
     noKeyLog: 'No key log yet',
+    pianoOn: 'Enable Piano',
+    pianoOff: 'Disable Piano',
+    pianoMode: 'Piano Mode',
+    autoMode: 'Auto Play',
   },
   midi: {
     noFiles: 'No MIDI files',

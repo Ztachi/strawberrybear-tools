@@ -7,8 +7,10 @@ import MainWindow from './views/MainWindow/index.vue'
 import OverlayWindow from './views/OverlayWindow.vue'
 import { Toaster } from '@/components/ui'
 import { toast } from 'vue-sonner'
+import { usePlayerStore } from './stores/player'
 
 const windowLabel = inject<string>('windowLabel', 'main')
+const playerStore = usePlayerStore()
 
 /** 是否显示加载中 */
 const isLoading = ref(true)
@@ -29,7 +31,10 @@ if (app) {
 }
 
 /** 加载完成 */
-onMounted(() => {
+onMounted(async () => {
+  // 初始化钢琴引擎
+  await playerStore.initPianoEngine()
+
   isLoading.value = false
 
   window.addEventListener('unhandledrejection', (event) => {

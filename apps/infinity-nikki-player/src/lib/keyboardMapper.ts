@@ -24,6 +24,10 @@ export interface KeyboardMapperOptions {
   middleCPitch?: number
   /** 原曲主音（用于移调计算），默认 60（C 大调） */
   originalTonic?: number
+  /** 音符按下回调（可选，用于发音） */
+  onNoteOn?: (pitch: number, originalPitch: number) => void
+  /** 音符释放回调（可选，用于发音） */
+  onNoteOff?: (pitch: number, originalPitch: number) => void
 }
 
 export interface MappingResult {
@@ -86,11 +90,17 @@ export class KeyboardMapper {
   private previousCodeToPitch = new Map<string, number>()
   /** 日志更新回调 */
   private keyLogCallback: KeyLogCallback | null = null
+  /** 音符按下回调（用于发音） */
+  private onNoteOn: ((pitch: number, originalPitch: number) => void) | undefined
+  /** 音符释放回调（用于发音） */
+  private onNoteOff: ((pitch: number, originalPitch: number) => void) | undefined
 
   constructor(options: KeyboardMapperOptions = {}) {
     this.rows = options.rows ?? KEYBOARD_ROWS
     this.middleCPitch = options.middleCPitch ?? MIDDLE_C_PITCH
     this.originalTonic = options.originalTonic ?? MIDDLE_C_PITCH
+    this.onNoteOn = options.onNoteOn
+    this.onNoteOff = options.onNoteOff
 
     // 计算移调量：目标是 C 大调（60）
     this.transposeSemitones = this.middleCPitch - this.originalTonic
@@ -116,6 +126,19 @@ export class KeyboardMapper {
    */
   setKeyLogCallback(callback: KeyLogCallback | null): void {
     this.keyLogCallback = callback
+  }
+
+  /**
+   * @description: 设置音符回调（用于发音）
+   * @param {((pitch: number, originalPitch: number) => void) | undefined} onNoteOn 音符按下回调
+   * @param {((pitch: number, originalPitch: number) => void) | undefined} onNoteOff 音符释放回调
+   */
+  setNoteCallbacks(
+    onNoteOn: ((pitch: number, originalPitch: number) => void) | undefined,
+    onNoteOff: ((pitch: number, originalPitch: number) => void) | undefined
+  ): void {
+    this.onNoteOn = onNoteOn
+    this.onNoteOff = onNoteOff
   }
 
   /**
@@ -182,6 +205,8 @@ export class KeyboardMapper {
             }
             this.keyLog.push(entry)
             this.keyLogCallback?.(entry)
+            // 触发音符按下回调（发音）
+            this.onNoteOn?.(result.pitch, pitch)
           }
         }
       }
@@ -204,6 +229,8 @@ export class KeyboardMapper {
             }
             this.keyLog.push(entry)
             this.keyLogCallback?.(entry)
+            // 触发音符释放回调（止音）
+            this.onNoteOff?.(result.pitch, pitch)
           }
         }
       }

@@ -117,7 +117,82 @@ src/
 │       ├── en-US.ts
 │       └── zh-CN.ts
 └── lib/
-    └── utils.ts                           # 工具函数
+    ├── utils.ts                           # 工具函数
+    ├── keyboardMapper.ts                  # 键盘映射器（C 大调移调、白键量化）
+    └── pianoEngine.ts                     # 钢琴音频引擎（基于 Web Audio API）
+```
+
+## lib 模块说明
+
+### keyboardMapper.ts - 键盘映射器
+
+**功能**：将 MIDI 音符移调并量化到 C 大调白键，然后映射到物理键盘按键。
+
+**核心算法**：
+
+1. **移调（Transpose）**：计算原曲主音到中央 C（60）的半音偏移量，统一移调
+2. **白键量化（Quantize）**：将移调后的音符映射到最近的 C 大调自然音（C/D/E/F/G/A/B）
+3. **键盘映射**：根据模板定义，将音符号映射到具体键盘按键
+
+**使用示例**：
+
+```typescript
+import { KeyboardMapper } from '@/lib/keyboardMapper'
+
+const mapper = new KeyboardMapper({
+  rows: 5,              // 键盘行数（5 八度）
+  middleCPitch: 60,     // 中央 C
+  originalTonic: 60,    // 原曲主音（C 大调）
+  onNoteOn: (pitch, originalPitch) => {
+    // 音符按下回调，可用于发音
+    pianoEngine.keyDown(pitch)
+  },
+  onNoteOff: (pitch, originalPitch) => {
+    // 音符释放回调
+    pianoEngine.keyUp(pitch)
+  },
+})
+
+// 设置模板
+mapper.setTemplate(template)
+
+// 获取当前激活的按键
+const activeKeys = mapper.getActiveKeys(currentTimeMs, melodyEvents)
+```
+
+### pianoEngine.ts - 钢琴音频引擎
+
+**功能**：基于原生 Web Audio API 的钢琴音色发音引擎，直接加载 Salamander Grand Piano 样本。
+
+**特性**：
+
+- 单例模式，全局共享
+- 使用原生 Web Audio API，无第三方依赖
+- 支持音符按下/释放
+- 支持 MIDI 同步演奏
+- 可开关控制
+
+**使用示例**：
+
+```typescript
+import { getPianoEngine } from '@/lib/pianoEngine'
+
+// 获取单例
+const piano = getPianoEngine()
+
+// 初始化（异步加载样本）
+await piano.init()
+
+// 播放单个音符
+piano.keyDown(60, 0.8)  // C4，力度 0.8
+piano.keyUp(60)          // 释放
+
+// 启用/禁用
+piano.enabled = false    // 禁用发音
+piano.enabled = true     // 启用发音
+
+// 停止所有音符
+piano.stopAll()
 ```
 
 ## 组件存放规范

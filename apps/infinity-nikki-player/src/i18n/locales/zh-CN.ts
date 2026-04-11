@@ -38,6 +38,10 @@ export default {
     noTemplate: '未选择',
     keyLog: '按键日志',
     noKeyLog: '暂无按键日志',
+    pianoOn: '开启发音',
+    pianoOff: '关闭发音',
+    pianoMode: '模板发音',
+    autoMode: '自动演奏',
   },
   midi: {
     noFiles: '暂无 MIDI 文件',

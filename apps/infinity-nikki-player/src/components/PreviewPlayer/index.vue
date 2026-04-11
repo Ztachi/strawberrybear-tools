@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { Button } from '@/components/ui'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
 import {
   SkipBack,
   SkipForward,
@@ -14,6 +16,7 @@ import {
   VolumeX,
 } from 'lucide-vue-next'
 
+const { t } = useI18n()
 const playerStore = usePlayerStore()
 
 /** 内部进度值（包装为响应式数组） */
@@ -40,7 +43,7 @@ const volumePercent = computed(() => {
   return Math.round(playerStore.previewVolume * 100)
 })
 
-/** 播放/暂停 */
+/** 切换播放/暂停 */
 function togglePlay() {
   if (playerStore.isPreviewPlaying && !playerStore.isPreviewPaused) {
     playerStore.pausePreviewPlayback()
@@ -138,7 +141,7 @@ onUnmounted(() => {
         <SkipForward :size="18" />
       </Button>
 
-      <!-- 音量控制和停止按钮容器 -->
+      <!-- 右侧控制区 -->
       <div class="right-controls">
         <!-- 停止按钮 -->
         <Button variant="ghost" size="icon" class="control-btn stop" @click="stopPlayback">
@@ -169,6 +172,16 @@ onUnmounted(() => {
             </div>
           </PopoverContent>
         </Popover>
+      </div>
+    </div>
+    <!-- 演奏模式切换（单独一行） -->
+    <div class="play-mode-row">
+      <div class="play-mode-toggle">
+        <Switch
+          :model-value="playerStore.playMode === 'piano'"
+          @update:model-value="(v) => playerStore.setPlayMode(v ? 'piano' : 'auto')"
+        />
+        <span class="mode-label">{{ t('player.pianoMode') }}</span>
       </div>
     </div>
   </div>
@@ -242,6 +255,19 @@ onUnmounted(() => {
 .right-controls {
   @apply absolute flex items-center gap-1;
   right: 0;
+}
+
+.play-mode-row {
+  @apply flex;
+}
+
+.play-mode-toggle {
+  @apply flex items-center gap-2;
+}
+
+.mode-label {
+  @apply text-sm whitespace-nowrap;
+  color: var(--color-muted);
 }
 
 .volume-popover {
