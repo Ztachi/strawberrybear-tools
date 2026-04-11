@@ -41,6 +41,7 @@ export interface KeyLogEntry {
   code: string // 键盘 code
   pitch: number // 映射后的音符号
   originalPitch: number // 原始音符号
+  action: 'press' | 'release' // 按键动作
   velocity?: number // 力度
 }
 
@@ -81,6 +82,8 @@ export class KeyboardMapper {
   private keyLog: KeyLogEntry[] = []
   /** 上一帧的活跃按键（用于检测按键变化） */
   private previousActiveKeys = new Set<string>()
+  /** 上一帧的 code -> pitch 映射（用于 release 事件） */
+  private previousCodeToPitch = new Map<string, number>()
   /** 日志更新回调 */
   private keyLogCallback: KeyLogCallback | null = null
 
@@ -156,25 +159,58 @@ export class KeyboardMapper {
     activeKeys: Set<string>,
     activeNotes: Array<{ pitch: number; code: string }>
   ): void {
-    // 检测按键变化（新增的按键）
+    // 构建当前活跃按键到原始 pitch 的映射
+    const codeToPitch = new Map<string, number>()
     for (const noteInfo of activeNotes) {
-      if (!this.previousActiveKeys.has(noteInfo.code)) {
-        const result = this.pitchCache.get(noteInfo.pitch)
-        if (result) {
-          const entry: KeyLogEntry = {
-            time: currentTimeMs,
-            key: this.pitchToNoteName(result.pitch),
-            code: result.code,
-            pitch: result.pitch,
-            originalPitch: noteInfo.pitch,
+      codeToPitch.set(noteInfo.code, noteInfo.pitch)
+    }
+
+    // 检测 press（当前 active 但上一帧不 active）
+    for (const code of activeKeys) {
+      if (!this.previousActiveKeys.has(code)) {
+        const pitch = codeToPitch.get(code)
+        if (pitch !== undefined) {
+          const result = this.pitchCache.get(pitch)
+          if (result) {
+            const entry: KeyLogEntry = {
+              time: currentTimeMs,
+              key: this.pitchToNoteName(result.pitch),
+              code: result.code,
+              pitch: result.pitch,
+              originalPitch: pitch,
+              action: 'press',
+            }
+            this.keyLog.push(entry)
+            this.keyLogCallback?.(entry)
           }
-          this.keyLog.push(entry)
-          // 触发回调
-          this.keyLogCallback?.(entry)
         }
       }
     }
 
+    // 检测 release（上一帧 active 但当前不 active）
+    for (const code of this.previousActiveKeys) {
+      if (!activeKeys.has(code)) {
+        const pitch = this.previousCodeToPitch.get(code)
+        if (pitch !== undefined) {
+          const result = this.pitchCache.get(pitch)
+          if (result) {
+            const entry: KeyLogEntry = {
+              time: currentTimeMs,
+              key: this.pitchToNoteName(result.pitch),
+              code: result.code,
+              pitch: result.pitch,
+              originalPitch: pitch,
+              action: 'release',
+            }
+            this.keyLog.push(entry)
+            this.keyLogCallback?.(entry)
+          }
+        }
+      }
+    }
+
+    // 保存当前帧的 code -> pitch 映射，供下一帧使用
+    this.previousCodeToPitch = codeToPitch
     this.previousActiveKeys = new Set(activeKeys)
   }
 
@@ -261,6 +297,7 @@ export class KeyboardMapper {
   clearKeyLog(): void {
     this.keyLog = []
     this.previousActiveKeys.clear()
+    this.previousCodeToPitch.clear()
   }
 
   /**
@@ -328,6 +365,7 @@ export class KeyboardMapper {
     this.pitchCache.clear()
     this.keyLog = []
     this.previousActiveKeys.clear()
+    this.previousCodeToPitch.clear()
     this.template = null
   }
 

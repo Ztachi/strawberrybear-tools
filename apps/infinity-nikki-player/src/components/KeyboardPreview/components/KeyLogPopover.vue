@@ -2,7 +2,7 @@
 /**
  * @description: 按键日志弹窗组件
  */
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { FileText } from 'lucide-vue-next'
@@ -20,18 +20,36 @@ const props = defineProps<{
 /** 章节化后的日志（响应式） */
 const chaptersLog = computed(() => props.getKeyLogByChapters())
 
-/** 格式化时间 */
+/** Popover 打开状态 */
+const isOpen = ref(false)
+
+/** 日志容器引用 */
+const logContainer = ref<HTMLElement | null>(null)
+
+/** 格式化时间（毫秒保留3位但显示1位） */
 function formatTime(ms: number): string {
-  const seconds = Math.floor(ms / 1000)
+  const seconds = ms / 1000
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
-  const millis = ms % 1000
-  return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${millis.toString().padStart(3, '0')}`
+  return `${minutes.toString().padStart(2, '0')}:${secs.toFixed(3).padStart(6, '0')}`
 }
+
+/** 当日志变化且 Popover 打开时，滚动到底部 */
+watch(
+  () => props.keyLog.length,
+  async () => {
+    if (isOpen.value) {
+      await nextTick()
+      if (logContainer.value) {
+        logContainer.value.scrollTop = logContainer.value.scrollHeight
+      }
+    }
+  }
+)
 </script>
 
 <template>
-  <Popover>
+  <Popover v-model:open="isOpen">
     <PopoverTrigger as-child>
       <button class="log-btn">
         <FileText :size="14" />
@@ -55,7 +73,7 @@ function formatTime(ms: number): string {
         </div>
 
         <!-- 日志内容 -->
-        <div class="overflow-y-auto flex-1">
+        <div ref="logContainer" class="overflow-y-auto flex-1">
           <div v-if="chaptersLog.length === 0" class="text-center text-sm py-8 text-muted">
             {{ t('player.noKeyLog') }}
           </div>
@@ -76,8 +94,17 @@ function formatTime(ms: number): string {
                   class="flex items-center gap-2 text-xs px-2 py-0.5 hover:bg-primary/5 rounded"
                 >
                   <span class="font-mono text-muted w-16">{{ formatTime(entry.time) }}</span>
+                  <span
+                    class="font-medium w-8"
+                    :class="entry.action === 'press' ? 'text-green-500' : 'text-red-500'"
+                  >
+                    {{ entry.action === 'press' ? '↓' : '↑' }}
+                  </span>
                   <span class="font-medium text-primary w-8">{{ entry.key }}</span>
-                  <span class="font-mono w-14">{{ entry.code.replace('Key', '') }}</span>
+                  <span
+                    class="font-mono w-14"
+                    >{{ entry.code.replace('Key', '').replace('Digit', '') }}</span
+                  >
                   <span class="text-muted">{{ entry.originalPitch }}→{{ entry.pitch }}</span>
                 </div>
               </div>

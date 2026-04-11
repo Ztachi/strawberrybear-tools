@@ -146,3 +146,29 @@ pub fn import_template(app: tauri::AppHandle, source_path: String) -> Result<Key
     log::info!("Imported template: {} from {:?}", template.id, source_path);
     Ok(template)
 }
+
+/// 重命名模板
+#[tauri::command]
+pub fn rename_template(
+    app: tauri::AppHandle,
+    template_id: String,
+    new_name: String,
+) -> Result<KeyTemplate, String> {
+    let templates_dir = get_templates_dir(&app)?;
+    let file_path = templates_dir.join(format!("{}.json", template_id));
+
+    // 读取现有模板
+    let content = fs::read_to_string(&file_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
+    let mut template: KeyTemplate = serde_json::from_str(&content)
+        .map_err(|e| format!("解析模板失败: {}", e))?;
+
+    // 更新名称
+    template.name = new_name;
+
+    // 保存
+    let new_content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
+    fs::write(&file_path, new_content).map_err(|e| e.to_string())?;
+
+    log::info!("Renamed template {} to {}", template_id, template.name);
+    Ok(template)
+}

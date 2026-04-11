@@ -9,6 +9,7 @@ import {
   SkipForward,
   Play,
   Pause,
+  Square,
   Volume2,
   VolumeX,
 } from 'lucide-vue-next'
@@ -48,6 +49,12 @@ function togglePlay() {
   } else {
     playerStore.startPreview()
   }
+}
+
+/** 停止播放并回到起点 */
+function stopPlayback() {
+  playerStore.stopPreviewPlayback()
+  playerStore.setPreviewTime(0)
 }
 
 /** 进度条拖拽开始 */
@@ -131,30 +138,38 @@ onUnmounted(() => {
         <SkipForward :size="18" />
       </Button>
 
-      <!-- 音量控制 -->
-      <Popover>
-        <PopoverTrigger as-child>
-          <Button variant="ghost" size="icon" class="control-btn volume">
-            <VolumeX v-if="playerStore.isPreviewMuted" :size="18" />
-            <Volume2 v-else :size="18" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent class="w-48 p-3" align="center" side="top">
-          <div class="volume-popover">
-            <Button variant="ghost" size="icon" class="mute-btn" @click="playerStore.toggleMute">
-              <VolumeX v-if="playerStore.isPreviewMuted" :size="16" />
-              <Volume2 v-else :size="16" />
+      <!-- 音量控制和停止按钮容器 -->
+      <div class="right-controls">
+        <!-- 停止按钮 -->
+        <Button variant="ghost" size="icon" class="control-btn stop" @click="stopPlayback">
+          <Square :size="16" fill="currentColor" />
+        </Button>
+
+        <!-- 音量控制 -->
+        <Popover>
+          <PopoverTrigger as-child>
+            <Button variant="ghost" size="icon" class="control-btn volume">
+              <VolumeX v-if="playerStore.isPreviewMuted" :size="18" />
+              <Volume2 v-else :size="18" />
             </Button>
-            <Slider
-              :model-value="[playerStore.isPreviewMuted ? 0 : playerStore.previewVolume * 100]"
-              :max="100"
-              class="volume-slider"
-              @update:model-value="(v) => v && playerStore.setPreviewVolumeValue(v[0] / 100)"
-            />
-            <span class="volume-percent">{{ volumePercent }}%</span>
-          </div>
-        </PopoverContent>
-      </Popover>
+          </PopoverTrigger>
+          <PopoverContent class="w-48 p-3" align="center" side="top">
+            <div class="volume-popover">
+              <Button variant="ghost" size="icon" class="mute-btn" @click="playerStore.toggleMute">
+                <VolumeX v-if="playerStore.isPreviewMuted" :size="16" />
+                <Volume2 v-else :size="16" />
+              </Button>
+              <Slider
+                :model-value="[playerStore.isPreviewMuted ? 0 : playerStore.previewVolume * 100]"
+                :max="100"
+                class="volume-slider"
+                @update:model-value="(v) => v && playerStore.setPreviewVolumeValue(v[0] / 100)"
+              />
+              <span class="volume-percent">{{ volumePercent }}%</span>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
     </div>
   </div>
 </template>
@@ -217,7 +232,15 @@ onUnmounted(() => {
 }
 
 .control-btn.volume {
-  @apply absolute w-10 h-10 rounded-xl;
+  @apply w-10 h-10 rounded-xl;
+}
+
+.control-btn.stop {
+  @apply w-10 h-10 rounded-xl;
+}
+
+.right-controls {
+  @apply absolute flex items-center gap-1;
   right: 0;
 }
 

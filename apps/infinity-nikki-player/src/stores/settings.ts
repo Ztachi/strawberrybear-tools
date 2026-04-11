@@ -118,6 +118,12 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  /** 重命名模板 */
+  async function renameTemplate(templateId: string, newName: string) {
+    await invoke('rename_template', { templateId, newName })
+    await refreshTemplates()
+  }
+
   return {
     // 状态
     locale,
@@ -131,5 +137,6 @@ export const useSettingsStore = defineStore('settings', () => {
     refreshTemplates,
     saveTemplate,
     deleteTemplate,
+    renameTemplate,
   }
 })
