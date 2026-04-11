@@ -303,9 +303,12 @@ export class KeyboardMapper {
     if (this.template) {
       const mapping = this.findBestMapping(finalPitch)
       if (mapping) {
+        const upperKey = mapping.key.toUpperCase()
+        // 数字键使用 Digit 前缀，字母键使用 Key 前缀
+        const code = /^[0-9]$/.test(mapping.key) ? `Digit${upperKey}` : `Key${upperKey}`
         const result: MappingResult = {
-          key: mapping.key.toUpperCase(),
-          code: `Key${mapping.key.toUpperCase()}`,
+          key: upperKey,
+          code,
           pitch: mapping.pitch,
           originalPitch,
           wasTransposed: this.transposeSemitones !== 0 || mapping.pitch !== whiteKeyPitch,

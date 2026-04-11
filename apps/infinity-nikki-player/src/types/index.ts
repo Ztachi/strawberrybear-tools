@@ -38,6 +38,7 @@ export interface MelodyEvent {
   velocity: number
   start_ms: number
   duration_ms: number
+  track: number // 音轨索引
 }
 
 /** 按键日志条目 */

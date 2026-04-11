@@ -30,6 +30,7 @@ pub fn extract_melody(events: &[NoteEvent], ticks_per_beat: u16, tempo: u64) -> 
                 velocity: e.velocity,
                 start_ms,
                 duration_ms,
+                track: 0, // 单旋律不保留音轨信息
             });
         }
     }
@@ -58,6 +59,7 @@ pub fn extract_all_notes(events: &[NoteEvent], ticks_per_beat: u16, tempo: u64) 
             velocity: event.velocity,
             start_ms,
             duration_ms,
+            track: event.track,
         });
     }
 

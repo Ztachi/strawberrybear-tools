@@ -39,7 +39,7 @@ fn get_builtin_templates() -> Vec<KeyTemplate> {
         },
         KeyTemplate {
             id: "game-4rows".to_string(),
-            name: "4行键位".to_string(),
+            name: "FreePiano".to_string(),
             is_builtin: true,
             mappings: vec![
                 // 数字行：C5-B5（高音）

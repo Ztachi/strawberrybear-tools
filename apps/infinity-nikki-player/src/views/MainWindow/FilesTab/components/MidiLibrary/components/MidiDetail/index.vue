@@ -69,17 +69,28 @@ watch(
 /** 按键日志（响应式） */
 const keyLog = ref<KeyLogEntry[]>([])
 
-/** 当前激活的按键集合（使用 KeyboardMapper 计算，使用 allNotes 保证所有声部） */
+/** 当前激活的按键集合（根据禁用音轨过滤后计算） */
 const activeKeys = computed<Set<string>>(() => {
   if (!keyboardMapper.value) {
     return new Set()
   }
-  return keyboardMapper.value.getActiveKeys(playerStore.previewCurrentTime, playerStore.allNotes)
+  // 根据禁用的音轨过滤音符（disabledTracks 存储的是 midiPlayerTrackValue = eventTrackValue + 1）
+  // 而 allNotes.track 是原始的 event.track = eventTrackValue，所以需要 +1 来匹配
+  const filteredNotes = playerStore.allNotes.filter(
+    (note) => !playerStore.disabledTracks.has(note.track + 1)
+  )
+  return keyboardMapper.value.getActiveKeys(playerStore.previewCurrentTime, filteredNotes)
 })
 
 /** 获取章节化的按键日志 */
 function getKeyLogByChapters() {
   return keyboardMapper.value?.getKeyLogByChapters() ?? []
+}
+
+/** 清空按键日志 */
+function handleClearKeyLog() {
+  keyboardMapper.value?.clearKeyLog()
+  keyLog.value = []
 }
 
 /** 切换音轨 */
@@ -137,6 +148,7 @@ function handleTemplateChange(value: unknown) {
           :active-keys="activeKeys"
           :key-log="keyLog"
           :get-key-log-by-chapters="getKeyLogByChapters"
+          :clear-key-log="handleClearKeyLog"
         />
       </div>
     </div>

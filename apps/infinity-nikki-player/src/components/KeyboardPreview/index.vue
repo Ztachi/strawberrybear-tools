@@ -10,6 +10,7 @@ const props = defineProps<{
   activeKeys: Set<string> // 当前激活的按键 code 集合
   keyLog: KeyLogEntry[] // 按键日志
   getKeyLogByChapters: () => KeyLogChapter[]
+  clearKeyLog: () => void // 清空按键日志
 }>()
 </script>
 
@@ -21,6 +22,7 @@ const props = defineProps<{
         :active-keys="props.activeKeys"
         :key-log="props.keyLog"
         :get-key-log-by-chapters="props.getKeyLogByChapters"
+        :clear-key-log="props.clearKeyLog"
       />
     </div>
 

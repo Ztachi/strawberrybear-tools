@@ -31,6 +31,7 @@ pub struct MelodyEvent {
     pub velocity: u8,
     pub start_ms: u64,
     pub duration_ms: u64,
+    pub track: u8, // 音轨索引
 }
 
 /// 按键日志条目

@@ -14,6 +14,7 @@ const props = defineProps<{
   activeKeys: Set<string> // 当前激活的按键 code 集合
   keyLog: KeyLogEntry[] // 按键日志
   getKeyLogByChapters: () => KeyLogChapter[]
+  clearKeyLog: () => void // 清空按键日志
 }>()
 
 /** 章节化后的日志（响应式） */
@@ -40,10 +41,17 @@ function formatTime(ms: number): string {
     <PopoverContent class="keylog-content" align="end">
       <div class="flex flex-col max-h-[400px]">
         <!-- 标题 -->
-        <div class="px-3 py-2 border-b content-header">
+        <div class="px-3 py-2 border-b content-header flex items-center justify-between">
           <h4 class="text-sm font-medium text-primary">
             {{ t('player.keyLog') }}
           </h4>
+          <button
+            v-if="keyLog.length > 0"
+            class="text-xs text-muted hover:text-primary px-1.5 py-0.5 rounded transition-colors"
+            @click="clearKeyLog"
+          >
+            {{ t('actions.clear') }}
+          </button>
         </div>
 
         <!-- 日志内容 -->
