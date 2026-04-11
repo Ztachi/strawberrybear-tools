@@ -124,7 +124,13 @@ src/
 
 ### 核心原则
 
-**组件分为两类：全局公共组件 和 页面级组件**
+**组件分为三类：全局公共组件、页面级组件 和 滚动容器组件**
+
+| 类型         | 存放位置                  | 说明                                                         |
+| ------------ | ------------------------- | ------------------------------------------------------------ |
+| 全局公共组件 | `components/ui/`          | 可在项目任何位置使用的组件，如 shadcn-vue 组件、业务公共组件 |
+| 页面级组件   | `views/xxx/`              | 仅属于特定页面的组件，不可跨页面复用                         |
+| 滚动容器组件 | `ScrollableContainer.vue` | 统一管理页面滚动、返回顶部、刷新按钮的容器组件               |
 
 | 类型         | 存放位置         | 说明                                                         |
 | ------------ | ---------------- | ------------------------------------------------------------ |
@@ -781,3 +787,73 @@ try {
   toast.error('操作失败', { description: String(e) })
 }
 ```
+
+## ScrollableContainer 滚动容器组件
+
+### 组件说明
+
+`ScrollableContainer` 是一个统一管理页面滚动、返回顶部按钮和刷新按钮的容器组件。
+
+### 功能特性
+
+1. **接管内部滚动** - 组件内部的 `<slot />` 内容使用独立的滚动区域
+2. **返回顶部按钮** - 滚动超过 200px 时自动显示，点击平滑滚动到顶部
+3. **刷新按钮** - 固定在右下角，点击刷新整个页面
+
+### 使用规范
+
+**规则**: 所有需要滚动的页面，必须使用 `ScrollableContainer` 包裹内容，禁止在页面根部使用 `overflow: auto`。
+
+### 基本用法
+
+```vue
+<script setup lang="ts">
+import ScrollableContainer from '@/components/ScrollableContainer.vue'
+</script>
+
+<template>
+  <ScrollableContainer>
+    <div class="page-content">
+      <!-- 页面内容 -->
+    </div>
+  </ScrollableContainer>
+</template>
+```
+
+### 样式适配
+
+如果父元素是弹性布局，确保父元素不会限制 `ScrollableContainer` 的高度：
+
+```vue
+<!-- 错误：flex 父元素可能限制高度 -->
+<div class="flex-1 overflow-hidden">
+  <ScrollableContainer>
+    <!-- 内容无法滚动 -->
+  </ScrollableContainer>
+</div>
+
+<!-- 正确：父元素需要限制滚动区域 -->
+<div class="flex-1 overflow-hidden">
+  <ScrollableContainer class="h-full">
+    <!-- ScrollableContainer 会填满父元素 -->
+  </ScrollableContainer>
+</div>
+```
+
+### 组件结构
+
+```
+ScrollableContainer/
+└── index.vue          # 滚动容器组件
+
+浮动按钮组（fixed 定位）:
+├── 返回顶部按钮      # 滚动 > 200px 显示
+└── 刷新页面按钮     # 始终显示
+```
+
+### 技术细节
+
+- 滚动检测使用 `passive` 事件监听优化性能
+- 返回顶部使用 `scrollTo({ top: 0, behavior: 'smooth' })` 实现平滑滚动
+- 刷新使用 `window.location.reload()`
+- 浮动按钮使用 CSS `fixed` 定位，`bottom` 和 `right` 可通过 CSS 变量自定义

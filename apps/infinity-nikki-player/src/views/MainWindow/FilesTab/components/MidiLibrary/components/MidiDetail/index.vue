@@ -8,6 +8,7 @@ import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
 import type { KeyLogEntry } from '@/lib/keyboardMapper'
+import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
 import PianoRoll from '@strawberrybear/piano-roll'
@@ -117,83 +118,84 @@ function handleTemplateChange(value: unknown) {
 </script>
 
 <template>
-  <div class="midi-detail">
-    <!-- 顶部区域：左侧播放器 + 右侧键盘预览 -->
-    <div class="detail-header">
-      <!-- 左侧：播放器 + 模板选择 -->
-      <div class="left-section">
-        <div class="preview-section">
-          <PreviewPlayer />
+  <ScrollableContainer>
+    <div class="midi-detail">
+      <!-- 顶部区域：左侧播放器 + 右侧键盘预览 -->
+      <div class="detail-header">
+        <!-- 左侧：播放器 + 模板选择 -->
+        <div class="left-section">
+          <div class="preview-section">
+            <PreviewPlayer />
+          </div>
+          <div class="template-section">
+            <Select
+              :model-value="settingsStore.currentTemplateId"
+              @update:model-value="handleTemplateChange"
+            >
+              <SelectTrigger class="w-full">
+                <SelectValue :placeholder="t('player.noTemplate')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectLabel>{{ t('player.template') }}</SelectLabel>
+                <SelectItem v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
+                  {{ tmpl.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div class="template-section">
-          <Select
-            :model-value="settingsStore.currentTemplateId"
-            @update:model-value="handleTemplateChange"
-          >
-            <SelectTrigger class="w-full">
-              <SelectValue :placeholder="t('player.noTemplate')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectLabel>{{ t('player.template') }}</SelectLabel>
-              <SelectItem v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
-                {{ tmpl.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        <!-- 右侧：键盘预览 -->
+        <div class="keyboard-section">
+          <KeyboardPreview
+            :active-keys="activeKeys"
+            :key-log="keyLog"
+            :get-key-log-by-chapters="getKeyLogByChapters"
+            :clear-key-log="handleClearKeyLog"
+          />
         </div>
       </div>
-      <!-- 右侧：键盘预览 -->
-      <div class="keyboard-section">
-        <KeyboardPreview
-          :active-keys="activeKeys"
-          :key-log="keyLog"
-          :get-key-log-by-chapters="getKeyLogByChapters"
-          :clear-key-log="handleClearKeyLog"
+
+      <!-- 音轨列表 -->
+      <div class="tracks-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <h3 class="section-title">
+              {{ t('midi.trackList') }}
+            </h3>
+            <div class="section-stats">
+              <span class="stat">
+                <Music :size="14" class="text-success" />
+                <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
+                <span class="stat-label">{{ t('midi.tracks') }}</span>
+              </span>
+              <span class="stat">
+                <Music2 :size="14" class="text-success" />
+                <span class="stat-value">{{ playerStore.melody.length }}</span>
+                <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <PianoRoll
+          :key="playerStore.currentMidi?.filename || 'empty'"
+          :notes="playerStore.currentMidi?.events || []"
+          :duration="playerStore.previewDuration"
+          :ticks-per-beat="playerStore.currentMidi?.ticks_per_beat || 480"
+          :tempo="playerStore.currentMidi?.tempo || 500000"
+          :tracks="translatedTracks"
+          :disabled-tracks="playerStore.disabledTracks"
+          :disabled-tracks-version="playerStore.disabledTracksVersion"
+          :current-time="playerStore.previewCurrentTime"
+          @toggle="handleToggleTrack"
         />
       </div>
     </div>
-
-    <!-- 音轨列表 -->
-    <div class="tracks-section">
-      <div class="section-header">
-        <div class="section-title-group">
-          <h3 class="section-title">
-            {{ t('midi.trackList') }}
-          </h3>
-          <div class="section-stats">
-            <span class="stat">
-              <Music :size="14" class="text-success" />
-              <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
-              <span class="stat-label">{{ t('midi.tracks') }}</span>
-            </span>
-            <span class="stat">
-              <Music2 :size="14" class="text-success" />
-              <span class="stat-value">{{ playerStore.melody.length }}</span>
-              <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-      <PianoRoll
-        :key="playerStore.currentMidi?.filename || 'empty'"
-        :notes="playerStore.currentMidi?.events || []"
-        :duration="playerStore.previewDuration"
-        :ticks-per-beat="playerStore.currentMidi?.ticks_per_beat || 480"
-        :tempo="playerStore.currentMidi?.tempo || 500000"
-        :tracks="translatedTracks"
-        :disabled-tracks="playerStore.disabledTracks"
-        :disabled-tracks-version="playerStore.disabledTracksVersion"
-        :current-time="playerStore.previewCurrentTime"
-        @toggle="handleToggleTrack"
-      />
-    </div>
-  </div>
+  </ScrollableContainer>
 </template>
 
 <style scoped>
 .midi-detail {
-  @apply px-6 pb-6 flex flex-col gap-6;
-  overflow-y: auto;
+  @apply flex flex-col gap-6;
 }
 
 .detail-header {

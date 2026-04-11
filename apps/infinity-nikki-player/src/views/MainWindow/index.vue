@@ -9,6 +9,7 @@ import { Button } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
 import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES } from '@/i18n'
+import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import FilesTab from './FilesTab/index.vue'
 import TemplatesTab from './TemplatesTab/index.vue'
 import LogsTab from './LogsTab/index.vue'
@@ -120,52 +121,54 @@ async function enterOverlayMode() {
 
     <!-- 主内容区 -->
     <main class="content">
-      <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
-        <!-- 标签栏 + 操作按钮 -->
-        <div class="tabs-header sticky top-0 z-10">
-          <TabsList class="tabs-list">
-            <TabsTrigger value="files" class="tab-trigger">
-              <Music :size="16" />
-              {{ t('tabs.files') }}
-            </TabsTrigger>
-            <TabsTrigger value="templates" class="tab-trigger">
-              <LayoutGrid :size="16" />
-              {{ t('tabs.templates') }}
-            </TabsTrigger>
-            <TabsTrigger value="logs" class="tab-trigger">
-              <FileText :size="16" />
-              {{ t('tabs.logs') }}
-            </TabsTrigger>
-          </TabsList>
+      <ScrollableContainer>
+        <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
+          <!-- 标签栏 + 操作按钮 -->
+          <div class="tabs-header sticky top-0 z-10">
+            <TabsList class="tabs-list">
+              <TabsTrigger value="files" class="tab-trigger">
+                <Music :size="16" />
+                {{ t('tabs.files') }}
+              </TabsTrigger>
+              <TabsTrigger value="templates" class="tab-trigger">
+                <LayoutGrid :size="16" />
+                {{ t('tabs.templates') }}
+              </TabsTrigger>
+              <TabsTrigger value="logs" class="tab-trigger">
+                <FileText :size="16" />
+                {{ t('tabs.logs') }}
+              </TabsTrigger>
+            </TabsList>
 
-          <!-- 文件操作按钮 -->
-          <div class="file-actions">
-            <Button variant="outline" size="sm" @click="selectFile">
-              <Upload :size="16" />
-              {{ t('actions.selectFile') }}
-            </Button>
-            <Button variant="outline" size="sm" @click="selectFolder">
-              <Folder :size="16" />
-              {{ t('actions.selectFolder') }}
-            </Button>
+            <!-- 文件操作按钮 -->
+            <div class="file-actions">
+              <Button variant="outline" size="sm" @click="selectFile">
+                <Upload :size="16" />
+                {{ t('actions.selectFile') }}
+              </Button>
+              <Button variant="outline" size="sm" @click="selectFolder">
+                <Folder :size="16" />
+                {{ t('actions.selectFolder') }}
+              </Button>
+            </div>
           </div>
-        </div>
 
-        <!-- 文件 Tab -->
-        <TabsContent value="files" class="tab-content flex-1">
-          <FilesTab />
-        </TabsContent>
+          <!-- 文件 Tab -->
+          <TabsContent value="files" class="tab-content flex-1">
+            <FilesTab />
+          </TabsContent>
 
-        <!-- 模板 Tab -->
-        <TabsContent value="templates" class="tab-content flex-1">
-          <TemplatesTab />
-        </TabsContent>
+          <!-- 模板 Tab -->
+          <TabsContent value="templates" class="tab-content flex-1">
+            <TemplatesTab />
+          </TabsContent>
 
-        <!-- 日志 Tab -->
-        <TabsContent value="logs" class="tab-content flex-1">
-          <LogsTab />
-        </TabsContent>
-      </Tabs>
+          <!-- 日志 Tab -->
+          <TabsContent value="logs" class="tab-content flex-1">
+            <LogsTab />
+          </TabsContent>
+        </Tabs>
+      </ScrollableContainer>
     </main>
   </div>
 </template>
@@ -252,7 +255,7 @@ async function enterOverlayMode() {
 }
 
 .content {
-  @apply flex-1 p-6 overflow-auto;
+  @apply flex-1 p-0 overflow-hidden;
 }
 
 .tabs-container {
