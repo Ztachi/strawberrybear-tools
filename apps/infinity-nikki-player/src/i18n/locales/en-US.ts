@@ -36,6 +36,8 @@ export default {
     speed: 'Speed',
     template: 'Key Mapping',
     noTemplate: 'Not Selected',
+    keyLog: 'Key Log',
+    noKeyLog: 'No key log yet',
   },
   midi: {
     noFiles: 'No MIDI files',

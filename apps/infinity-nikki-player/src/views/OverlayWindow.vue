@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { usePlayerStore } from '@/stores/player'
+import { useSettingsStore } from '@/stores/settings'
 import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
 const playerStore = usePlayerStore()
+const settingsStore = useSettingsStore()
 const isExpanded = ref(false)
 
 /** 切换展开/收起 */
@@ -104,8 +106,8 @@ const recentLogs = computed(() => playerStore.keyLogs.slice(-5))
       </div>
 
       <!-- 当前模板 -->
-      <div v-if="playerStore.currentTemplate" class="template-name">
-        {{ playerStore.currentTemplate.name }}
+      <div v-if="settingsStore.getCurrentTemplate()" class="template-name">
+        {{ settingsStore.getCurrentTemplate()?.name }}
       </div>
 
       <!-- 最近按键日志 -->

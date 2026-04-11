@@ -23,11 +23,6 @@ import {
 } from '@/lib/midiPlayer'
 import { useSettingsStore } from './settings'
 
-/** 音轨屏蔽设置缓存 */
-interface TrackSettings {
-  [filename: string]: number[] // 禁用的音轨索引数组
-}
-
 export const usePlayerStore = defineStore('player', () => {
   // MIDI 库（已导入的文件列表）
   const midiLibrary = ref<MidiInfo[]>([])
@@ -37,6 +32,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   // 当前 MIDI 的旋律数据
   const melody = ref<MelodyEvent[]>([])
+
+  // 当前 MIDI 的所有音符（用于键盘映射，保留所有声部）
+  const allNotes = ref<MelodyEvent[]>([])
 
   // 当前 MIDI 的音轨列表
   const tracks = ref<TrackInfo[]>([])
@@ -256,7 +254,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
 
     // 标记打击乐音轨
-    for (const [trackIdx, track] of trackMap) {
+    for (const [_trackIdx, track] of trackMap) {
       if (track.channel === 9) {
         track.isPercussion = true
         track.name = `${track.index}|percussion` // 特殊标记，组件层处理翻译
@@ -349,6 +347,12 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       // 从缓存的 events 提取旋律（包含 pitch_name）
       melody.value = await invoke<MelodyEvent[]>('extract_melody', {
+        events: midi.events,
+        ticksPerBeat: midi.ticks_per_beat,
+        tempo: 500000,
+      })
+      // 提取所有音符用于键盘映射
+      allNotes.value = await invoke<MelodyEvent[]>('extract_all_notes', {
         events: midi.events,
         ticksPerBeat: midi.ticks_per_beat,
         tempo: 500000,
@@ -673,6 +677,12 @@ export const usePlayerStore = defineStore('player', () => {
         ticksPerBeat: prevMidi.ticks_per_beat,
         tempo: 500000,
       })
+      // 提取所有音符用于键盘映射
+      allNotes.value = await invoke<MelodyEvent[]>('extract_all_notes', {
+        events: prevMidi.events,
+        ticksPerBeat: prevMidi.ticks_per_beat,
+        tempo: 500000,
+      })
       // 构建音轨列表
       tracks.value = buildTracksFromEvents(prevMidi.events as any)
       loadDisabledTracks(prevMidi)
@@ -704,6 +714,12 @@ export const usePlayerStore = defineStore('player', () => {
     currentMidi.value = nextMidi
     try {
       melody.value = await invoke<MelodyEvent[]>('extract_melody', {
+        events: nextMidi.events,
+        ticksPerBeat: nextMidi.ticks_per_beat,
+        tempo: 500000,
+      })
+      // 提取所有音符用于键盘映射
+      allNotes.value = await invoke<MelodyEvent[]>('extract_all_notes', {
         events: nextMidi.events,
         ticksPerBeat: nextMidi.ticks_per_beat,
         tempo: 500000,
@@ -811,6 +827,7 @@ export const usePlayerStore = defineStore('player', () => {
     midiLibrary,
     currentMidi,
     melody,
+    allNotes,
     tracks,
     disabledTracks,
     disabledTracksVersion: disabledTracksVersionRef,

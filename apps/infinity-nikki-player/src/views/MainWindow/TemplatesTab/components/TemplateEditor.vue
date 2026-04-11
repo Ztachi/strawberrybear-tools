@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePlayerStore } from '@/stores/player'
+import { useSettingsStore } from '@/stores/settings'
 import { confirm } from '@tauri-apps/plugin-dialog'
 import type { KeyTemplate } from '@/types'
 import { Button } from '@/components/ui'
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui'
 import { Badge } from '@/components/ui'
 
 const { t } = useI18n()
-const playerStore = usePlayerStore()
+const settingsStore = useSettingsStore()
 
 const editingTemplate = ref<KeyTemplate | null>(null)
 const isCreating = ref(false)
@@ -34,8 +34,7 @@ function editTemplate(template: KeyTemplate) {
 
 /** 选择当前模板 */
 async function selectTemplate(template: KeyTemplate) {
-  playerStore.currentTemplate = template
-  await playerStore.saveTemplate(template)
+  await settingsStore.selectTemplate(template.id)
 }
 
 /** 添加映射 */
@@ -59,7 +58,7 @@ function updateMapping(index: number, field: 'pitch' | 'key', value: string | nu
 /** 保存模板 */
 async function saveTemplate() {
   if (!editingTemplate.value) return
-  await playerStore.saveTemplate(editingTemplate.value)
+  await settingsStore.saveTemplate(editingTemplate.value)
   editingTemplate.value = null
   isCreating.value = false
 }
@@ -74,7 +73,7 @@ function cancelEdit() {
 async function deleteTemplate(templateId: string) {
   const confirmed = await confirm(t('template.confirmDelete'), { title: t('actions.delete'), kind: 'warning' })
   if (confirmed) {
-    await playerStore.deleteTemplate(templateId)
+    await settingsStore.deleteTemplate(templateId)
   }
 }
 
@@ -92,11 +91,11 @@ function pitchName(pitch: number) {
     <!-- 模板列表 -->
     <div class="template-list">
       <div
-        v-for="template in playerStore.templates"
+        v-for="template in settingsStore.templates"
         :key="template.id"
         :class="[
           'template-item',
-          { active: playerStore.currentTemplate?.id === template.id },
+          { active: settingsStore.currentTemplateId === template.id },
           { builtin: template.is_builtin }
         ]"
       >

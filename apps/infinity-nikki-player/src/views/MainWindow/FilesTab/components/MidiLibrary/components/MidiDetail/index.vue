@@ -2,10 +2,12 @@
 /**
  * @description: MIDI 详情面板
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
+import { KeyboardMapper } from '@/lib/keyboardMapper'
+import type { KeyLogEntry } from '@/lib/keyboardMapper'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
 import PianoRoll from '@strawberrybear/piano-roll'
@@ -24,24 +26,61 @@ const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
-/** 当前激活的按键集合（根据播放时间和旋律音符自动计算） */
-const activeKeys = computed<Set<string>>(() => {
-  const currentTime = playerStore.previewCurrentTime
-  const active = new Set<string>()
+/** 键盘映射器实例 */
+const keyboardMapper = ref<KeyboardMapper | null>(null)
 
-  for (const event of playerStore.melody) {
-    const startTime = event.start_ms
-    const endTime = event.start_ms + event.duration_ms
-    if (currentTime >= startTime && currentTime < endTime) {
-      const mapping = settingsStore.getCurrentTemplate()?.mappings.find((m) => m.pitch === event.pitch)
-      if (mapping) {
-        active.add(mapping.key)
-      }
+/** 初始化键盘映射器 */
+function initKeyboardMapper() {
+  const template = settingsStore.getCurrentTemplate()
+  if (template) {
+    if (!keyboardMapper.value) {
+      keyboardMapper.value = new KeyboardMapper()
+      // 设置日志回调，实时更新日志
+      keyboardMapper.value.setKeyLogCallback((entry) => {
+        keyLog.value = [...keyLog.value, entry]
+      })
     }
+    keyboardMapper.value.setTemplate(template)
   }
+}
 
-  return active
+/** 监听模板变化 */
+watch(
+  () => settingsStore.currentTemplateId,
+  () => {
+    initKeyboardMapper()
+  },
+  { immediate: true }
+)
+
+/** 监听当前 MIDI 变化（切换歌曲时重置映射器） */
+watch(
+  () => playerStore.currentMidi?.filename,
+  () => {
+    if (keyboardMapper.value) {
+      keyboardMapper.value.reset()
+    }
+    keyLog.value = [] // 清空日志
+    initKeyboardMapper()
+  }
+)
+
+
+/** 按键日志（响应式） */
+const keyLog = ref<KeyLogEntry[]>([])
+
+/** 当前激活的按键集合（使用 KeyboardMapper 计算，使用 allNotes 保证所有声部） */
+const activeKeys = computed<Set<string>>(() => {
+  if (!keyboardMapper.value) {
+    return new Set()
+  }
+  return keyboardMapper.value.getActiveKeys(playerStore.previewCurrentTime, playerStore.allNotes)
 })
+
+/** 获取章节化的按键日志 */
+function getKeyLogByChapters() {
+  return keyboardMapper.value?.getKeyLogByChapters() ?? []
+}
 
 /** 切换音轨 */
 function handleToggleTrack(trackIndex: number) {
@@ -94,7 +133,11 @@ function handleTemplateChange(value: unknown) {
       </div>
       <!-- 右侧：键盘预览 -->
       <div class="keyboard-section">
-        <KeyboardPreview :active-keys="activeKeys" />
+        <KeyboardPreview
+          :active-keys="activeKeys"
+          :key-log="keyLog"
+          :get-key-log-by-chapters="getKeyLogByChapters"
+        />
       </div>
     </div>
 

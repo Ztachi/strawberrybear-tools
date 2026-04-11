@@ -2,11 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
+import { useSettingsStore } from '@/stores/settings'
 import { Button } from '@/components/ui'
 import { Play, Pause, Square, Minus, Plus } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
+const settingsStore = useSettingsStore()
 
 const statusText = computed(() => {
   switch (playerStore.playbackState.status) {
@@ -58,7 +60,7 @@ async function adjustSpeed(delta: number) {
       </div>
       <span class="status-text">{{ statusText }}</span>
       <span v-if="playerStore.currentMidi" class="template-badge">
-        {{ playerStore.currentTemplate?.name || t('player.noTemplate') }}
+        {{ settingsStore.getCurrentTemplate()?.name || t('player.noTemplate') }}
       </span>
     </div>
 

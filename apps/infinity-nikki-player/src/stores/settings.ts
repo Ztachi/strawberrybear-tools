@@ -1,14 +1,10 @@
 /**
- * @description: 应用设置 Store - 管理语言、模板等全局设置
+ * @description: 应用设置 Store - 管理语言、当前模板 ID 等全局设置
+ * 注意：模板列表独立从后端加载，不再保存在 settings.json 中
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import {
-  saveSettings,
-  loadSettings as loadSettingsApi,
-  type AppSettings,
-  type TemplateData,
-} from '@/lib/settings'
+import { saveSettings, loadSettings as loadSettingsApi } from '@/lib/settings'
 import { invoke } from '@tauri-apps/api/core'
 import type { KeyTemplate } from '@/types'
 import i18n from '@/i18n'
@@ -16,16 +12,16 @@ import type { LocaleType } from '@/i18n'
 
 export const useSettingsStore = defineStore('settings', () => {
   // 当前语言
-  const locale = ref<string>('en-US')
+  const locale = ref<LocaleType>('en-US')
 
   // 当前模板 ID
   const currentTemplateId = ref<string | null>(null)
 
-  // 模板列表
+  // 模板列表（从后端加载）
   const templates = ref<KeyTemplate[]>([])
 
-  /** 从后端加载内置模板 */
-  async function loadBuiltinTemplates(): Promise<KeyTemplate[]> {
+  /** 从后端加载所有模板 */
+  async function loadTemplatesFromBackend(): Promise<KeyTemplate[]> {
     return await invoke<KeyTemplate[]>('get_templates')
   }
 
@@ -35,7 +31,7 @@ export const useSettingsStore = defineStore('settings', () => {
       const settings = await loadSettingsApi()
 
       // 设置语言 - 如果没有保存过，使用系统语言
-      if (settings.locale) {
+      if (settings.locale && (settings.locale === 'zh-CN' || settings.locale === 'en-US')) {
         locale.value = settings.locale
         i18n.global.locale.value = settings.locale
       } else {
@@ -46,18 +42,8 @@ export const useSettingsStore = defineStore('settings', () => {
         i18n.global.locale.value = loc
       }
 
-      // 如果设置中有模板数据，直接使用
-      if (settings.templates && settings.templates.length > 0) {
-        templates.value = settings.templates.map((t) => ({
-          id: t.id,
-          name: t.name,
-          is_builtin: t.is_builtin,
-          mappings: t.mappings.map((m) => ({ pitch: m.pitch, key: m.key })),
-        }))
-      } else {
-        // 否则从后端加载内置模板
-        templates.value = await loadBuiltinTemplates()
-      }
+      // 从后端加载模板
+      templates.value = await loadTemplatesFromBackend()
 
       // 设置当前模板
       if (settings.current_template_id) {
@@ -67,35 +53,30 @@ export const useSettingsStore = defineStore('settings', () => {
       }
     } catch (e) {
       console.error('加载设置失败:', e)
-      // 失败时加载内置模板，并使用系统语言
+      // 失败时使用系统语言
       const systemLocale = await invoke<string>('get_system_locale')
       const loc: LocaleType = systemLocale.startsWith('zh') ? 'zh-CN' : 'en-US'
       locale.value = loc
       i18n.global.locale.value = loc
 
-      templates.value = await loadBuiltinTemplates()
+      // 仍然尝试加载模板
+      templates.value = await loadTemplatesFromBackend()
       if (templates.value.length > 0) {
         currentTemplateId.value = templates.value[0].id
       }
     }
   }
 
-  /** 保存设置 */
+  /** 保存设置（只保存语言和当前模板 ID） */
   async function persistSettings() {
     await saveSettings({
       locale: locale.value,
       current_template_id: currentTemplateId.value,
-      templates: templates.value.map((t) => ({
-        id: t.id,
-        name: t.name,
-        is_builtin: t.is_builtin,
-        mappings: t.mappings.map((m) => ({ pitch: m.pitch, key: m.key })),
-      })),
     })
   }
 
   /** 切换语言 */
-  async function setLocale(newLocale: string) {
+  async function setLocale(newLocale: LocaleType) {
     locale.value = newLocale
     i18n.global.locale.value = newLocale
     await persistSettings()
@@ -103,11 +84,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** 选择模板 */
   async function selectTemplate(templateId: string) {
-    const template = templates.value.find((t) => t.id === templateId)
-    if (template) {
-      currentTemplateId.value = templateId
-      await persistSettings()
-    }
+    currentTemplateId.value = templateId
+    await persistSettings()
   }
 
   /** 获取当前模板 */
@@ -115,24 +93,29 @@ export const useSettingsStore = defineStore('settings', () => {
     return templates.value.find((t) => t.id === currentTemplateId.value) || null
   }
 
-  /** 添加/更新模板 */
-  async function saveTemplate(template: KeyTemplate) {
-    const index = templates.value.findIndex((t) => t.id === template.id)
-    if (index >= 0) {
-      templates.value[index] = template
-    } else {
-      templates.value.push(template)
+  /** 刷新模板列表（从后端重新加载） */
+  async function refreshTemplates() {
+    templates.value = await loadTemplatesFromBackend()
+    // 确保当前模板 ID 仍然有效
+    if (currentTemplateId.value && !templates.value.find((t) => t.id === currentTemplateId.value)) {
+      currentTemplateId.value = templates.value[0]?.id || null
     }
-    await persistSettings()
+  }
+
+  /** 保存模板到后端 */
+  async function saveTemplate(template: KeyTemplate) {
+    await invoke('save_template', { template })
+    await refreshTemplates()
   }
 
   /** 删除模板 */
   async function deleteTemplate(templateId: string) {
-    templates.value = templates.value.filter((t) => t.id !== templateId)
+    await invoke('delete_template', { templateId })
+    await refreshTemplates()
     if (currentTemplateId.value === templateId) {
       currentTemplateId.value = templates.value[0]?.id || null
+      await persistSettings()
     }
-    await persistSettings()
   }
 
   return {
@@ -145,6 +128,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setLocale,
     selectTemplate,
     getCurrentTemplate,
+    refreshTemplates,
     saveTemplate,
     deleteTemplate,
   }

@@ -3,15 +3,13 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
 
-/// 全局设置数据结构
+/// 全局设置数据结构（模板已移除，模板列表从 templates/ 目录独立加载）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     /// 当前语言
     pub locale: String,
     /// 当前模板ID
     pub current_template_id: Option<String>,
-    /// 模板列表
-    pub templates: Vec<TemplateData>,
 }
 
 impl Default for AppSettings {
@@ -19,25 +17,8 @@ impl Default for AppSettings {
         Self {
             locale: "en-US".to_string(),
             current_template_id: None,
-            templates: Vec::new(),
         }
     }
-}
-
-/// 模板数据
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TemplateData {
-    pub id: String,
-    pub name: String,
-    pub is_builtin: bool,
-    pub mappings: Vec<KeyMapping>,
-}
-
-/// 键位映射
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KeyMapping {
-    pub pitch: u8,
-    pub key: String,
 }
 
 /// 获取设置文件路径

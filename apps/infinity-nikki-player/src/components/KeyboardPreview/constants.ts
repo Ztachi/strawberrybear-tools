@@ -10,8 +10,9 @@ export interface KeyDefinition {
   type: 'normal' | 'function' // 普通键或功能键
 }
 
-/** 标准键（字母、数字、符号） */
+/** 标准键（字母）按行排列 */
 const NORMAL_KEYS: string[] = [
+  // Q-P 行（中间八度）
   'Q',
   'W',
   'E',
@@ -22,6 +23,7 @@ const NORMAL_KEYS: string[] = [
   'I',
   'O',
   'P',
+  // A-L 行（高音八度）
   'A',
   'S',
   'D',
@@ -31,6 +33,7 @@ const NORMAL_KEYS: string[] = [
   'J',
   'K',
   'L',
+  // Z-M 行（高音+八度）
   'Z',
   'X',
   'C',
@@ -62,6 +65,7 @@ const NUMBER_KEYS: string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 /**
  * 构建键盘布局
  * @description 返回按行组织的键盘按键数组
+ * 行顺序：F1-F12（功能键）, 0-9（数字键）, Q-P（中间八度）, A-L（高音八度）, Z-M（高音+八度）
  */
 export function buildKeyboardLayout(): KeyDefinition[][] {
   return [

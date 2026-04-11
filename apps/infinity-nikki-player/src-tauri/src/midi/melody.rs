@@ -38,6 +38,33 @@ pub fn extract_melody(events: &[NoteEvent], ticks_per_beat: u16, tempo: u64) -> 
     melody
 }
 
+/// 从 NoteEvent 列表中提取所有音符（用于键盘映射）
+/// 保留所有音轨的音符，仅跳过鼓轨
+pub fn extract_all_notes(events: &[NoteEvent], ticks_per_beat: u16, tempo: u64) -> Vec<MelodyEvent> {
+    let mut notes = Vec::new();
+
+    for event in events {
+        // 跳过鼓轨 (channel 9)
+        if event.channel == 9 {
+            continue;
+        }
+
+        let start_ms = tick_to_ms(event.start_tick, ticks_per_beat, tempo);
+        let duration_ms = tick_to_ms(event.end_tick - event.start_tick, ticks_per_beat, tempo);
+
+        notes.push(MelodyEvent {
+            pitch: event.pitch,
+            pitch_name: pitch_to_name(event.pitch),
+            velocity: event.velocity,
+            start_ms,
+            duration_ms,
+        });
+    }
+
+    notes.sort_by_key(|e| e.start_ms);
+    notes
+}
+
 /// tick 转换为毫秒
 fn tick_to_ms(tick: u32, ticks_per_beat: u16, tempo: u64) -> u64 {
     let ticks_per_ms = (ticks_per_beat as f64 * 1000.0) / (tempo as f64);

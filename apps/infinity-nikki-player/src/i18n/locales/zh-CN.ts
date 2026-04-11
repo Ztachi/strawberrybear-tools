@@ -36,6 +36,8 @@ export default {
     speed: '速度',
     template: '映射模板',
     noTemplate: '未选择',
+    keyLog: '按键日志',
+    noKeyLog: '暂无按键日志',
   },
   midi: {
     noFiles: '暂无 MIDI 文件',

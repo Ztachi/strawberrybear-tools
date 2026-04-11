@@ -83,7 +83,6 @@ pub struct KeyMapping {
 pub struct AppState {
     pub playback: parking_lot::Mutex<PlaybackState>,
     pub key_logs: std::sync::Arc<parking_lot::Mutex<Vec<KeyLogEntry>>>,
-    pub templates: parking_lot::Mutex<Vec<KeyTemplate>>,
 }
 
 impl Default for AppState {
@@ -96,32 +95,6 @@ impl Default for AppState {
                 speed: 1.0,
             }),
             key_logs: std::sync::Arc::new(parking_lot::Mutex::new(Vec::new())),
-            templates: parking_lot::Mutex::new(get_builtin_templates()),
         }
     }
-}
-
-/// 获取内置模板
-fn get_builtin_templates() -> Vec<KeyTemplate> {
-    vec![
-        KeyTemplate {
-            id: "piano".to_string(),
-            name: "钢琴映射".to_string(),
-            is_builtin: true,
-            mappings: vec![
-                (60, "a"), (61, "w"), (62, "s"), (63, "e"), (64, "d"),
-                (65, "f"), (66, "t"), (67, "g"), (68, "y"), (69, "h"),
-                (70, "u"), (71, "j"), (72, "k"),
-            ].iter().map(|(p, k)| KeyMapping { pitch: *p, key: k.to_string() }).collect(),
-        },
-        KeyTemplate {
-            id: "game".to_string(),
-            name: "游戏键位".to_string(),
-            is_builtin: true,
-            mappings: vec![
-                (60, "z"), (62, "x"), (64, "c"), (65, "v"),
-                (67, "b"), (69, "n"), (71, "m"),
-            ].iter().map(|(p, k)| KeyMapping { pitch: *p, key: k.to_string() }).collect(),
-        },
-    ]
 }

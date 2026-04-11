@@ -3,35 +3,46 @@
  * @description: 键盘映射预览组件
  */
 import { KEYBOARD_LAYOUT } from './constants'
+import KeyLogPopover from './components/KeyLogPopover.vue'
+import type { KeyLogEntry, KeyLogChapter } from '@/lib/keyboardMapper'
 
 const props = defineProps<{
   activeKeys: Set<string> // 当前激活的按键 code 集合
+  keyLog: KeyLogEntry[] // 按键日志
+  getKeyLogByChapters: () => KeyLogChapter[]
 }>()
-
-/** 检查按键是否被激活 */
-function isActive(keyCode: string): boolean {
-  return props.activeKeys.has(keyCode)
-}
 </script>
 
 <template>
   <div class="keyboard-preview">
-    <div
-      v-for="(row, rowIndex) in KEYBOARD_LAYOUT"
-      :key="rowIndex"
-      class="keyboard-row"
-      :class="{ 'function-row': rowIndex === 0 }"
-    >
+    <!-- 顶部操作区 -->
+    <div class="toolbar">
+      <KeyLogPopover
+        :active-keys="props.activeKeys"
+        :key-log="props.keyLog"
+        :get-key-log-by-chapters="props.getKeyLogByChapters"
+      />
+    </div>
+
+    <!-- 键盘区域 -->
+    <div class="keyboard-area">
       <div
-        v-for="key in row"
-        :key="key.code"
-        class="key"
-        :class="{
-          active: isActive(key.code),
-          function: key.type === 'function',
-        }"
+        v-for="(row, rowIndex) in KEYBOARD_LAYOUT"
+        :key="rowIndex"
+        class="keyboard-row"
+        :class="{ 'function-row': rowIndex === 0 }"
       >
-        <span class="key-label">{{ key.key }}</span>
+        <div
+          v-for="key in row"
+          :key="key.code"
+          class="key"
+          :class="{
+            active: props.activeKeys.has(key.code),
+            function: key.type === 'function',
+          }"
+        >
+          <span class="key-label">{{ key.key }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -39,9 +50,17 @@ function isActive(keyCode: string): boolean {
 
 <style scoped>
 .keyboard-preview {
-  @apply flex flex-col gap-1 p-3 rounded-xl;
+  @apply flex flex-col gap-2 p-3 rounded-xl;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
+}
+
+.toolbar {
+  @apply flex items-center justify-end;
+}
+
+.keyboard-area {
+  @apply flex flex-col gap-1;
 }
 
 .keyboard-row {

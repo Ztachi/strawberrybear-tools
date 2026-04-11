@@ -1,4 +1,4 @@
-use crate::midi::{extract_melody as extract_melody_internal, parse_midi_file as parse_midi_internal};
+use crate::midi::{extract_melody as extract_melody_internal, extract_all_notes as extract_all_notes_internal, parse_midi_file as parse_midi_internal};
 use crate::types::{MelodyEvent, MidiInfo, NoteEvent};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -73,6 +73,16 @@ pub fn extract_melody(
     tempo: u64,
 ) -> Result<Vec<MelodyEvent>, String> {
     Ok(extract_melody_internal(&events, ticks_per_beat, tempo))
+}
+
+/// 提取所有音符（用于键盘映射，保留所有声部）
+#[tauri::command]
+pub fn extract_all_notes(
+    events: Vec<NoteEvent>,
+    ticks_per_beat: u16,
+    tempo: u64,
+) -> Result<Vec<MelodyEvent>, String> {
+    Ok(extract_all_notes_internal(&events, ticks_per_beat, tempo))
 }
 
 /// 扫描文件夹中的 MIDI 文件（仅用于导入，不返回文件内容）
