@@ -10,6 +10,13 @@ pub struct AppSettings {
     pub locale: String,
     /// 当前模板ID
     pub current_template_id: Option<String>,
+    /// 演奏模式："auto" | "piano"
+    #[serde(default = "default_play_mode")]
+    pub play_mode: String,
+}
+
+fn default_play_mode() -> String {
+    "auto".to_string()
 }
 
 impl Default for AppSettings {
@@ -17,6 +24,7 @@ impl Default for AppSettings {
         Self {
             locale: "en-US".to_string(),
             current_template_id: None,
+            play_mode: "auto".to_string(),
         }
     }
 }

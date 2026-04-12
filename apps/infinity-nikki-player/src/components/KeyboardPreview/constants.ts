@@ -82,3 +82,32 @@ export const KEYBOARD_LAYOUT = buildKeyboardLayout()
 
 /** 所有按键的 code 集合（用于快速查找） */
 export const ALL_KEY_CODES = new Set(KEYBOARD_LAYOUT.flat().map((k) => k.code))
+
+/**
+ * @description: 将模板的按键名称转换为键盘 code
+ * @param key 模板中的按键名称，如 "Q", "1", "F1"
+ * @return 键盘 code，如 "KeyQ", "Digit1", "KeyF1"
+ */
+export function keyToCode(key: string): string {
+  // 数字键用 Digit 前缀
+  if (/^[0-9]$/.test(key)) {
+    return `Digit${key}`
+  }
+  // 其他都用 Key 前缀（包括 F1-F12）
+  return `Key${key}`
+}
+
+/**
+ * @description: 将键盘 code 转换为模板的按键名称
+ * @param code 键盘 code，如 "KeyQ", "Digit1"
+ * @return 模板中的按键名称，如 "Q", "1"
+ */
+export function codeToKey(code: string): string {
+  if (code.startsWith('Digit')) {
+    return code.slice(5) // 去掉 "Digit" 前缀
+  }
+  if (code.startsWith('Key')) {
+    return code.slice(3) // 去掉 "Key" 前缀
+  }
+  return code
+}

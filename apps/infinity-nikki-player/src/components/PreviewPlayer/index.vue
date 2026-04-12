@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
+import { useSettingsStore } from '@/stores/settings'
 import { Button } from '@/components/ui'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
@@ -18,6 +19,7 @@ import {
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
+const settingsStore = useSettingsStore()
 
 /** 内部进度值（包装为响应式数组） */
 const internalPercentArray = ref<[number]>([0])
@@ -51,6 +53,15 @@ function togglePlay() {
     playerStore.resumePreviewPlayback()
   } else {
     playerStore.startPreview()
+  }
+}
+
+/** 切换演奏模式 */
+function handleModeSwitch(isPiano: boolean) {
+  settingsStore.setPlayMode(isPiano ? 'piano' : 'auto')
+  // 实时更新过滤器，无需重启播放
+  if (playerStore.isPreviewPlaying) {
+    playerStore.applyPlayModeFilter()
   }
 }
 
@@ -178,8 +189,8 @@ onUnmounted(() => {
     <div class="play-mode-row">
       <div class="play-mode-toggle">
         <Switch
-          :model-value="playerStore.playMode === 'piano'"
-          @update:model-value="(v) => playerStore.setPlayMode(v ? 'piano' : 'auto')"
+          :model-value="settingsStore.playMode === 'piano'"
+          @update:model-value="handleModeSwitch"
         />
         <span class="mode-label">{{ t('player.pianoMode') }}</span>
       </div>

@@ -20,8 +20,10 @@ import {
   seekTo,
   loadMidiForDuration,
   setDisabledTracks,
+  setNoteFilter,
+  setPitchMapper,
+  ensureInstrument,
 } from '@/lib/midiPlayer'
-import { type PianoEngine, getPianoEngine } from '@/lib/pianoEngine'
 import { useSettingsStore } from './settings'
 
 export const usePlayerStore = defineStore('player', () => {
@@ -83,15 +85,6 @@ export const usePlayerStore = defineStore('player', () => {
   let previewTimer: ReturnType<typeof setInterval> | null = null
   let playbackStartTime = 0 // 开始播放时的时间戳（毫秒）
   let pausedAtTime = 0 // 暂停时的已播放时间（毫秒）
-
-  // 钢琴引擎
-  const pianoEngine = getPianoEngine({ enabled: true })
-  /** 演奏模式：'auto' 自动演奏（MIDI播放器）| 'piano' 模板发音（仅钢琴） */
-  const playMode = ref<'auto' | 'piano'>('auto')
-  /** piano 模式下已触发的音符索引集合 */
-  let triggeredNoteIndices = new Set<number>()
-  /** piano 模式下上一帧的活跃音符 */
-  let pianoPrevActivePitches = new Set<number>()
 
   /** 检查辅助功能权限 */
   async function checkAccessibility() {
@@ -542,22 +535,56 @@ export const usePlayerStore = defineStore('player', () => {
       // 同步音轨屏蔽设置到播放器
       setDisabledTracks(disabledTracks.value)
 
-      // 'auto' 模式：MIDI 播放器播放
-      // 'piano' 模式：仅钢琴发音，不调用 MIDI 播放器
-      if (playMode.value === 'auto') {
-        // 通过后端读取 MIDI 文件二进制数据
-        const midiData = await invoke<number[]>('read_midi_data', {
-          filename: currentMidi.value.file_path,
-        })
-        // 转换为 Uint8Array
-        const uint8Array = new Uint8Array(midiData)
-        // 播放
-        await playMidi(uint8Array.buffer, speed.value)
-        previewDuration.value = getTotalDuration()
+      // auto 模式：移除过滤器，让 midiPlayer 直接播放所有音符
+      // piano 模式：设置过滤器只允许模板音高，并设置音高映射器
+      if (settingsStore.playMode === 'piano') {
+        const template = settingsStore.getCurrentTemplate()
+        if (template) {
+          // 提取模板中的所有音高
+          const templatePitches = template.mappings.map((m) => m.pitch)
+
+          // piano 模式：过滤只允许模板音高
+          setNoteFilter(({ pitch }) => templatePitches.includes(pitch))
+
+          // 设置音高映射器（将非模板音高映射到最接近的模板音高）
+          setPitchMapper((originalPitch: number): number | null => {
+            // 在模板中查找完全匹配的音高
+            if (templatePitches.includes(originalPitch)) {
+              return originalPitch
+            }
+
+            // 找到模板中音高最接近的音
+            let closestPitch = templatePitches[0] ?? 60
+            let minDiff = Math.abs(originalPitch - closestPitch)
+            for (const tp of templatePitches) {
+              const diff = Math.abs(originalPitch - tp)
+              if (diff < minDiff) {
+                minDiff = diff
+                closestPitch = tp
+              }
+            }
+            return closestPitch
+          })
+        } else {
+          // 没有模板，移除过滤器和映射器
+          setNoteFilter(null)
+          setPitchMapper(null)
+        }
       } else {
-        // piano 模式：从 currentMidi 获取时长
-        previewDuration.value = currentMidi.value?.duration_ms ?? 0
+        // auto 模式：移除过滤器和音高映射器
+        setNoteFilter(null)
+        setPitchMapper(null)
       }
+
+      // 通过后端读取 MIDI 文件二进制数据
+      const midiData = await invoke<number[]>('read_midi_data', {
+        filename: currentMidi.value.file_path,
+      })
+      // 转换为 Uint8Array
+      const uint8Array = new Uint8Array(midiData)
+      // 播放（无论是 auto 还是 piano 模式都走这个）
+      await playMidi(uint8Array.buffer, speed.value)
+      previewDuration.value = getTotalDuration()
 
       isPreviewPlaying.value = true
       isPreviewPaused.value = false
@@ -578,32 +605,109 @@ export const usePlayerStore = defineStore('player', () => {
     isPreviewPaused.value = false
     previewCurrentTime.value = 0
     pausedAtTime = 0
-    // 停止钢琴发音
-    pianoEngine.stopAll()
+  }
+
+  /** 重启试听（保持当前播放位置） */
+  async function restartPreview() {
+    if (!currentMidi.value) return
+    const currentTime = previewCurrentTime.value
+    stopPreview()
+    stopPreviewTimer()
+    previewCurrentTime.value = 0
+    pausedAtTime = 0
+
+    try {
+      setDisabledTracks(disabledTracks.value)
+
+      // auto 模式：移除过滤器，让 midiPlayer 直接播放所有音符
+      // piano 模式：设置过滤器只允许模板音高，并设置音高映射器
+      if (settingsStore.playMode === 'piano') {
+        const template = settingsStore.getCurrentTemplate()
+        if (template) {
+          const templatePitches = template.mappings.map((m) => m.pitch)
+          setNoteFilter(({ pitch }) => templatePitches.includes(pitch))
+          setPitchMapper((originalPitch: number): number | null => {
+            if (templatePitches.includes(originalPitch)) {
+              return originalPitch
+            }
+            let closestPitch = templatePitches[0] ?? 60
+            let minDiff = Math.abs(originalPitch - closestPitch)
+            for (const tp of templatePitches) {
+              const diff = Math.abs(originalPitch - tp)
+              if (diff < minDiff) {
+                minDiff = diff
+                closestPitch = tp
+              }
+            }
+            return closestPitch
+          })
+        } else {
+          setNoteFilter(null)
+          setPitchMapper(null)
+        }
+      } else {
+        setNoteFilter(null)
+        setPitchMapper(null)
+      }
+
+      const midiData = await invoke<number[]>('read_midi_data', {
+        filename: currentMidi.value.file_path,
+      })
+      const uint8Array = new Uint8Array(midiData)
+      await playMidi(uint8Array.buffer, speed.value)
+      previewDuration.value = getTotalDuration()
+
+      isPreviewPlaying.value = true
+      isPreviewPaused.value = false
+      pausedAtTime = 0
+      startPreviewTimer()
+
+      // 跳转到之前的播放位置
+      if (currentTime > 0) {
+        seekPreview(currentTime)
+      }
+    } catch (e) {
+      toast.error('试听失败', { description: String(e), richColors: true })
+      console.error('试听失败:', e)
+      isPreviewPlaying.value = false
+    }
   }
 
   /** 初始化钢琴引擎 */
   async function initPianoEngine(): Promise<void> {
-    if (!pianoEngine.enabled) return
-    try {
-      await pianoEngine.init()
-      console.log('[PlayerStore] Piano engine initialized')
-    } catch (e) {
-      console.error('[PlayerStore] Failed to init piano engine:', e)
-    }
+    // 预热音频上下文和 instrument
+    await ensureInstrument()
   }
 
-  /** 获取钢琴引擎实例 */
-  function getPianoEngineInstance(): PianoEngine {
-    return pianoEngine
-  }
-
-  /** 设置演奏模式 */
-  function setPlayMode(mode: 'auto' | 'piano'): void {
-    playMode.value = mode
-    // 切换模式时停止当前播放
-    if (isPreviewPlaying.value) {
-      stopPreviewPlayback()
+  /** 应用当前播放模式的过滤器（实时切换，无需重启播放） */
+  function applyPlayModeFilter() {
+    if (settingsStore.playMode === 'piano') {
+      const template = settingsStore.getCurrentTemplate()
+      if (template) {
+        const templatePitches = template.mappings.map((m) => m.pitch)
+        setNoteFilter(({ pitch }) => templatePitches.includes(pitch))
+        setPitchMapper((originalPitch: number): number | null => {
+          if (templatePitches.includes(originalPitch)) {
+            return originalPitch
+          }
+          let closestPitch = templatePitches[0] ?? 60
+          let minDiff = Math.abs(originalPitch - closestPitch)
+          for (const tp of templatePitches) {
+            const diff = Math.abs(originalPitch - tp)
+            if (diff < minDiff) {
+              minDiff = diff
+              closestPitch = tp
+            }
+          }
+          return closestPitch
+        })
+      } else {
+        setNoteFilter(null)
+        setPitchMapper(null)
+      }
+    } else {
+      setNoteFilter(null)
+      setPitchMapper(null)
     }
   }
 
@@ -611,13 +715,7 @@ export const usePlayerStore = defineStore('player', () => {
   function pausePreviewPlayback() {
     if (!isPreviewPlaying.value) return
     pausedAtTime = previewCurrentTime.value // 保存当前播放位置
-    // auto 模式才调用 midiPlayer pause
-    if (playMode.value === 'auto') {
-      pausePreview()
-    } else {
-      // piano 模式停止所有音符
-      pianoEngine.stopAll()
-    }
+    pausePreview()
     isPreviewPaused.value = true
     stopPreviewTimer()
   }
@@ -625,10 +723,8 @@ export const usePlayerStore = defineStore('player', () => {
   /** 继续试听 */
   function resumePreviewPlayback() {
     if (!isPreviewPaused.value) return
-    // auto 模式才调用 midiPlayer resume
-    if (playMode.value === 'auto') {
-      resumePreview()
-    }
+    // 调用 midiPlayer resume（piano 模式下也需要恢复播放）
+    resumePreview()
     isPreviewPaused.value = false
     startPreviewTimer()
   }
@@ -658,20 +754,13 @@ export const usePlayerStore = defineStore('player', () => {
     previewCurrentTime.value = time
     pausedAtTime = time
     if (!isDragging.value) {
-      // auto 模式需要加载 MIDI
-      if (playMode.value === 'auto') {
-        if (!currentMidi.value) return
-        const midiData = await invoke<number[]>('read_midi_data', {
-          filename: currentMidi.value.file_path,
-        })
-        const uint8Array = new Uint8Array(midiData)
-        await playMidi(uint8Array.buffer, speed.value)
-        seekTo(time)
-      } else {
-        // piano 模式：重置触发状态
-        triggeredNoteIndices = new Set()
-        pianoPrevActivePitches = new Set()
-      }
+      if (!currentMidi.value) return
+      const midiData = await invoke<number[]>('read_midi_data', {
+        filename: currentMidi.value.file_path,
+      })
+      const uint8Array = new Uint8Array(midiData)
+      await playMidi(uint8Array.buffer, speed.value)
+      seekTo(time)
       isPreviewPlaying.value = true
       isPreviewPaused.value = false
       playbackStartTime = performance.now() - time
@@ -684,12 +773,6 @@ export const usePlayerStore = defineStore('player', () => {
     stopPreviewTimer()
     playbackStartTime = performance.now() - pausedAtTime
 
-    // 如果是 piano 模式，重置触发状态
-    if (playMode.value === 'piano') {
-      triggeredNoteIndices = new Set()
-      pianoPrevActivePitches = new Set()
-    }
-
     previewTimer = setInterval(() => {
       // 如果不在拖拽中，用 performance.now() 计算时间
       if (!isDragging.value) {
@@ -699,37 +782,9 @@ export const usePlayerStore = defineStore('player', () => {
           previewCurrentTime.value = previewDuration.value
           stopPreviewTimer()
           isPreviewPlaying.value = false
-          // 停止所有钢琴音符
-          pianoEngine.stopAll()
           return
         }
         previewCurrentTime.value = Math.max(0, pausedAtTime)
-
-        // piano 模式：根据时间触发钢琴音符
-        if (playMode.value === 'piano') {
-          const currentTime = pausedAtTime
-          // 遍历 melody，根据 start_ms 触发音符
-          for (let i = 0; i < melody.value.length; i++) {
-            const note = melody.value[i]
-            const noteKey = `${note.pitch}-${note.start_ms}`
-            // 检查该音符是否在当前时间应该触发
-            if (!triggeredNoteIndices.has(i) && note.start_ms <= currentTime) {
-              triggeredNoteIndices.add(i)
-              pianoEngine.keyDown(note.pitch, (note.velocity ?? 80) / 127)
-            }
-            // 检查该音符是否应该在当前时间释放
-            const noteEndTime = note.start_ms + note.duration_ms
-            if (noteEndTime <= currentTime && pianoPrevActivePitches.has(note.pitch)) {
-              pianoEngine.keyUp(note.pitch)
-            }
-          }
-          // 更新上一帧活跃音符
-          pianoPrevActivePitches = new Set(
-            melody.value
-              .filter((n) => n.start_ms <= currentTime && n.start_ms + n.duration_ms > currentTime)
-              .map((n) => n.pitch)
-          )
-        }
       }
     }, 16) // 16ms ≈ 60fps
   }
@@ -940,7 +995,6 @@ export const usePlayerStore = defineStore('player', () => {
     previewDuration,
     previewVolume,
     isPreviewMuted,
-    playMode,
     // 方法
     loadMidiLibrary,
     importMidi,
@@ -962,6 +1016,7 @@ export const usePlayerStore = defineStore('player', () => {
     stopLogPolling,
     startPreview,
     stopPreviewPlayback,
+    restartPreview,
     pausePreviewPlayback,
     resumePreviewPlayback,
     seekPreview,
@@ -974,7 +1029,6 @@ export const usePlayerStore = defineStore('player', () => {
     playNext,
     toggleTrack,
     initPianoEngine,
-    getPianoEngineInstance,
-    setPlayMode,
+    applyPlayModeFilter,
   }
 })

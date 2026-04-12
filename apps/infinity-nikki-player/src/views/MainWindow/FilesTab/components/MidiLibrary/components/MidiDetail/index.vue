@@ -7,6 +7,8 @@ import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
+import { playNote } from '@/lib/midiPlayer'
+import { keyToCode } from '@/components/KeyboardPreview/constants'
 import type { KeyLogEntry } from '@/lib/keyboardMapper'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
@@ -50,6 +52,10 @@ watch(
   () => settingsStore.currentTemplateId,
   () => {
     initKeyboardMapper()
+    // 实时更新过滤器
+    if (playerStore.isPreviewPlaying) {
+      playerStore.applyPlayModeFilter()
+    }
   },
   { immediate: true }
 )
@@ -97,6 +103,28 @@ function handleClearKeyLog() {
 /** 切换音轨 */
 function handleToggleTrack(trackIndex: number) {
   playerStore.toggleTrack(trackIndex)
+}
+
+/** 按键代码到音符号的映射（用于点击发音） */
+const keyCodeToPitch = computed<Map<string, number>>(() => {
+  const map = new Map<string, number>()
+  const template = settingsStore.getCurrentTemplate()
+  if (template) {
+    for (const mapping of template.mappings) {
+      // 将模板的按键名称（如 "Q"）转换为键盘 code（如 "KeyQ"）
+      const code = keyToCode(mapping.key)
+      map.set(code, mapping.pitch)
+    }
+  }
+  return map
+})
+
+/** 点击键盘按键发音 */
+function handleKeyClick(code: string) {
+  const pitch = keyCodeToPitch.value.get(code)
+  if (pitch !== undefined) {
+    playNote(pitch, 80, 0.5) // 力度 80，持续 0.5 秒
+  }
 }
 
 /** 带翻译名称的音轨列表 */
@@ -151,6 +179,8 @@ function handleTemplateChange(value: unknown) {
             :key-log="keyLog"
             :get-key-log-by-chapters="getKeyLogByChapters"
             :clear-key-log="handleClearKeyLog"
+            :key-code-to-pitch="keyCodeToPitch"
+            @key-click="handleKeyClick"
           />
         </div>
       </div>

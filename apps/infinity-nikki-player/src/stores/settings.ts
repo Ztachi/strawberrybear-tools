@@ -17,6 +17,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 当前模板 ID
   const currentTemplateId = ref<string | null>(null)
 
+  // 演奏模式：'auto' | 'piano'
+  const playMode = ref<'auto' | 'piano'>('auto')
+
   // 模板列表（从后端加载）
   const templates = ref<KeyTemplate[]>([])
 
@@ -40,6 +43,11 @@ export const useSettingsStore = defineStore('settings', () => {
         const loc: LocaleType = systemLocale.startsWith('zh') ? 'zh-CN' : 'en-US'
         locale.value = loc
         i18n.global.locale.value = loc
+      }
+
+      // 设置演奏模式
+      if (settings.play_mode === 'auto' || settings.play_mode === 'piano') {
+        playMode.value = settings.play_mode
       }
 
       // 从后端加载模板
@@ -67,12 +75,19 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  /** 保存设置（只保存语言和当前模板 ID） */
+  /** 保存设置 */
   async function persistSettings() {
     await saveSettings({
       locale: locale.value,
       current_template_id: currentTemplateId.value,
+      play_mode: playMode.value,
     })
+  }
+
+  /** 设置演奏模式 */
+  async function setPlayMode(mode: 'auto' | 'piano') {
+    playMode.value = mode
+    await persistSettings()
   }
 
   /** 切换语言 */
@@ -128,6 +143,7 @@ export const useSettingsStore = defineStore('settings', () => {
     // 状态
     locale,
     currentTemplateId,
+    playMode,
     templates,
     // 方法
     loadSettings,
@@ -138,5 +154,6 @@ export const useSettingsStore = defineStore('settings', () => {
     saveTemplate,
     deleteTemplate,
     renameTemplate,
+    setPlayMode,
   }
 })

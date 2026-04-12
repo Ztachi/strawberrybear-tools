@@ -118,8 +118,8 @@ src/
 │       └── zh-CN.ts
 └── lib/
     ├── utils.ts                           # 工具函数
-    ├── keyboardMapper.ts                  # 键盘映射器（C 大调移调、白键量化）
-    └── pianoEngine.ts                     # 钢琴音频引擎（基于 Web Audio API）
+    ├── keyboardMapper.ts                   # 键盘映射器（C 大调移调、白键量化）
+    └── midiPlayer.ts                      # MIDI 播放器（集成 soundfont-player 发音）
 ```
 
 ## lib 模块说明
@@ -160,39 +160,25 @@ mapper.setTemplate(template)
 const activeKeys = mapper.getActiveKeys(currentTimeMs, melodyEvents)
 ```
 
-### pianoEngine.ts - 钢琴音频引擎
+### midiPlayer.ts - MIDI 播放器
 
-**功能**：基于原生 Web Audio API 的钢琴音色发音引擎，直接加载 Salamander Grand Piano 样本。
+**功能**：基于 midi-player-js + soundfont-player 的 MIDI 播放和钢琴发音引擎。
 
 **特性**：
 
-- 单例模式，全局共享
-- 使用原生 Web Audio API，无第三方依赖
+- 自动演奏模式：MIDI 播放器播放
+- 模板发音模式：根据 melody 数据同步触发钢琴音符
 - 支持音符按下/释放
-- 支持 MIDI 同步演奏
-- 可开关控制
+- 共享 soundfont-player 实例
 
-**使用示例**：
+**核心 API**：
 
 ```typescript
-import { getPianoEngine } from '@/lib/pianoEngine'
-
-// 获取单例
-const piano = getPianoEngine()
-
-// 初始化（异步加载样本）
-await piano.init()
-
-// 播放单个音符
-piano.keyDown(60, 0.8)  // C4，力度 0.8
-piano.keyUp(60)          // 释放
-
-// 启用/禁用
-piano.enabled = false    // 禁用发音
-piano.enabled = true     // 启用发音
-
-// 停止所有音符
-piano.stopAll()
+import {
+  playMidi, playNote, stopNote, stopAllNotes, ensureInstrument,
+} from '@/lib/midiPlayer'
+await playNote(60, 80, 1)  // C4，力度 80，持续 1 秒
+stopAllNotes()
 ```
 
 ## 组件存放规范

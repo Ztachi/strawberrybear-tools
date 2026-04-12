@@ -3,10 +3,11 @@
  */
 import { invoke } from '@tauri-apps/api/core'
 
-/** 应用设置数据结构（模板不再保存在此） */
+/** 应用设置数据结构 */
 export interface AppSettings {
   locale: string
   current_template_id: string | null
+  play_mode: 'auto' | 'piano'
 }
 
 /** 加载设置 */
