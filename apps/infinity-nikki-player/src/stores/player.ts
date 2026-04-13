@@ -179,6 +179,13 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       // 调用后端复制文件到库目录并获取信息
       const info = await invoke<MidiInfo>('import_midi', { sourcePath })
+      // 检查是否已存在于库中（Rust后端对已存在文件会直接返回信息）
+      const existingIndex = midiLibrary.value.findIndex((m) => m.filename === info.filename)
+      if (existingIndex !== -1) {
+        // 已存在，直接打开详情
+        await selectMidi(midiLibrary.value[existingIndex])
+        return true
+      }
       // 通过后端读取 MIDI 文件计算正确时长
       const midiData = await invoke<number[]>('read_midi_data', { filename: info.filename })
       const uint8Array = new Uint8Array(midiData)
