@@ -1,0 +1,21 @@
+{
+  "id": "14keys",
+  "name": "14键",
+  "is_builtin": true,
+  "mappings": [
+    { "pitch": 72, "key": "Q" },
+    { "pitch": 74, "key": "W" },
+    { "pitch": 76, "key": "E" },
+    { "pitch": 77, "key": "R" },
+    { "pitch": 79, "key": "T" },
+    { "pitch": 81, "key": "Y" },
+    { "pitch": 83, "key": "U" },
+    { "pitch": 60, "key": "A" },
+    { "pitch": 62, "key": "S" },
+    { "pitch": 64, "key": "D" },
+    { "pitch": 65, "key": "F" },
+    { "pitch": 67, "key": "G" },
+    { "pitch": 69, "key": "H" },
+    { "pitch": 71, "key": "J" }
+  ]
+}

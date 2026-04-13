@@ -84,6 +84,12 @@ export default {
     key: '按键',
     addMapping: '添加映射',
     mappings: '映射关系',
+    builtinNames: {
+      piano: '钢琴映射',
+      'game-4rows': 'FreePiano',
+      '21keys': '21键',
+      '14keys': '14键',
+    },
   },
   log: {
     title: '按键日志',

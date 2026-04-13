@@ -30,6 +30,17 @@ const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
+/**
+ * @description: 获取模板显示名称（内置模板使用国际化，自定义模板使用原始名称）
+ * @param {string} name 模板原始名称
+ * @param {string} id 模板 ID
+ * @return {string} 显示名称
+ */
+function getTemplateDisplayName(name: string, id: string): string {
+  const builtinNames = t(`template.builtinNames.${id}` as any)
+  return builtinNames && builtinNames !== `template.builtinNames.${id}` ? builtinNames : name
+}
+
 /** 键盘映射器实例 */
 const keyboardMapper = ref<KeyboardMapper | null>(null)
 
@@ -209,7 +220,7 @@ function handleTemplateChange(value: unknown) {
               <SelectContent>
                 <SelectLabel>{{ t('player.template') }}</SelectLabel>
                 <SelectItem v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
-                  {{ tmpl.name }}
+                  {{ getTemplateDisplayName(tmpl.name, tmpl.id) }}
                 </SelectItem>
               </SelectContent>
             </Select>

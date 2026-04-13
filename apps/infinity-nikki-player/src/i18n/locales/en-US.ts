@@ -84,6 +84,12 @@ export default {
     key: 'Key',
     addMapping: 'Add Mapping',
     mappings: 'Mappings',
+    builtinNames: {
+      piano: 'Piano',
+      'game-4rows': 'FreePiano',
+      '21keys': '21 Keys',
+      '14keys': '14 Keys',
+    },
   },
   log: {
     title: 'Key Log',

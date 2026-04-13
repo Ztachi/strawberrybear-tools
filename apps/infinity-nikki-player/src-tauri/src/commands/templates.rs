@@ -1,7 +1,10 @@
-use crate::types::{KeyMapping, KeyTemplate};
+use crate::types::{KeyTemplate};
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
+
+/// 内置模板 ID 列表
+const BUILTIN_TEMPLATE_IDS: &[&str] = &["piano", "game-4rows", "21keys", "14keys"];
 
 /// 获取模板文件夹路径
 fn get_templates_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -17,58 +20,117 @@ fn get_templates_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(templates_dir)
 }
 
-/// 获取内置模板
-fn get_builtin_templates() -> Vec<KeyTemplate> {
-    vec![
-        KeyTemplate {
+/// 获取打包资源中的内置模板
+fn get_builtin_template_ids() -> Vec<&'static str> {
+    BUILTIN_TEMPLATE_IDS.to_vec()
+}
+
+/// 初始化内置模板文件（从打包资源复制，如果不存在）
+fn ensure_builtin_templates(app: &tauri::AppHandle) -> Result<(), String> {
+    let templates_dir = get_templates_dir(app)?;
+    let builtin_ids = get_builtin_template_ids();
+
+    // 尝试从打包资源目录读取内置模板
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("获取资源目录失败: {}", e))?;
+    let bundled_templates_dir = resource_dir.join("templates");
+
+    for template_id in builtin_ids {
+        let file_path = templates_dir.join(format!("{}.json", template_id));
+        if !file_path.exists() {
+            // 优先从打包资源读取
+            let bundled_file = bundled_templates_dir.join(format!("{}.json", template_id));
+            if bundled_file.exists() {
+                fs::copy(&bundled_file, &file_path)
+                    .map_err(|e| format!("复制模板文件失败: {}", e))?;
+                log::info!("Copied bundled template: {:?}", file_path);
+            } else {
+                // 如果打包资源中也没有，生成默认模板
+                let template = create_default_template(template_id)?;
+                let content =
+                    serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
+                fs::write(&file_path, content).map_err(|e| e.to_string())?;
+                log::info!("Created default builtin template: {:?}", file_path);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// 创建默认内置模板
+fn create_default_template(template_id: &str) -> Result<KeyTemplate, String> {
+    match template_id {
+        "piano" => Ok(KeyTemplate {
             id: "piano".to_string(),
             name: "钢琴映射".to_string(),
             is_builtin: true,
             mappings: vec![
-                // F 行：C2-B2（低音+）
-                (36, "F1"), (38, "F2"), (40, "F3"), (41, "F4"), (43, "F5"), (45, "F6"), (47, "F7"),
-                // 数字行：C5-B5（高音）
-                (72, "1"), (74, "2"), (76, "3"), (77, "4"), (79, "5"), (81, "6"), (83, "7"),
-                // Q-P 行：C4-B4（中央）
-                (60, "Q"), (62, "W"), (64, "E"), (65, "R"), (67, "T"), (69, "Y"), (71, "U"),
-                // A-L 行：C3-B3（低音）
-                (48, "A"), (50, "S"), (52, "D"), (53, "F"), (55, "G"), (57, "H"), (59, "J"),
-                // Z-M 行：C2-B2（低音+）
-                (36, "Z"), (38, "X"), (40, "C"), (41, "V"), (43, "B"), (45, "N"), (47, "M"),
-            ].iter().map(|(p, k)| KeyMapping { pitch: *p, key: k.to_string() }).collect(),
-        },
-        KeyTemplate {
+                (84, "F1"), (86, "F2"), (88, "F3"), (89, "F4"), (91, "F5"), (93, "F6"),
+                (95, "F7"), (72, "1"), (74, "2"), (76, "3"), (77, "4"), (79, "5"), (81, "6"),
+                (83, "7"), (60, "Q"), (62, "W"), (64, "E"), (65, "R"), (67, "T"), (69, "Y"),
+                (71, "U"), (48, "A"), (50, "S"), (52, "D"), (53, "F"), (55, "G"), (57, "H"),
+                (59, "J"), (36, "Z"), (38, "X"), (40, "C"), (41, "V"), (43, "B"), (45, "N"),
+                (47, "M"),
+            ]
+            .iter()
+            .map(|(p, k)| crate::types::KeyMapping {
+                pitch: *p,
+                key: k.to_string(),
+            })
+            .collect(),
+        }),
+        "game-4rows" => Ok(KeyTemplate {
             id: "game-4rows".to_string(),
             name: "FreePiano".to_string(),
             is_builtin: true,
             mappings: vec![
-                // 数字行：C6-B6（最高音）
                 (84, "1"), (86, "2"), (88, "3"), (89, "4"), (91, "5"), (93, "6"), (95, "7"),
-                // Q-P 行：C5-B5（高音）
                 (72, "Q"), (74, "W"), (76, "E"), (77, "R"), (79, "T"), (81, "Y"), (83, "U"),
-                // A-L 行：C4-B4（中央）
                 (60, "A"), (62, "S"), (64, "D"), (65, "F"), (67, "G"), (69, "H"), (71, "J"),
-                // Z-M 行：C3-B3（低音）
                 (48, "Z"), (50, "X"), (52, "C"), (53, "V"), (55, "B"), (57, "N"), (59, "M"),
-            ].iter().map(|(p, k)| KeyMapping { pitch: *p, key: k.to_string() }).collect(),
-        },
-    ]
-}
-
-/// 初始化内置模板文件（如果不存在）
-fn ensure_builtin_templates(app: &tauri::AppHandle) -> Result<(), String> {
-    let templates_dir = get_templates_dir(app)?;
-    let builtins = get_builtin_templates();
-
-    for template in builtins {
-        let file_path = templates_dir.join(format!("{}.json", template.id));
-        if !file_path.exists() {
-            let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
-            fs::write(&file_path, content).map_err(|e| e.to_string())?;
-            log::info!("Created builtin template: {:?}", file_path);
-        }
+            ]
+            .iter()
+            .map(|(p, k)| crate::types::KeyMapping {
+                pitch: *p,
+                key: k.to_string(),
+            })
+            .collect(),
+        }),
+        "21keys" => Ok(KeyTemplate {
+            id: "21keys".to_string(),
+            name: "21键".to_string(),
+            is_builtin: true,
+            mappings: vec![
+                (72, "Q"), (74, "W"), (76, "E"), (77, "R"), (79, "T"), (81, "Y"), (83, "U"),
+                (60, "A"), (62, "S"), (64, "D"), (65, "F"), (67, "G"), (69, "H"), (71, "J"),
+                (48, "Z"), (50, "X"), (52, "C"), (53, "V"), (55, "B"), (57, "N"), (59, "M"),
+            ]
+            .iter()
+            .map(|(p, k)| crate::types::KeyMapping {
+                pitch: *p,
+                key: k.to_string(),
+            })
+            .collect(),
+        }),
+        "14keys" => Ok(KeyTemplate {
+            id: "14keys".to_string(),
+            name: "14键".to_string(),
+            is_builtin: true,
+            mappings: vec![
+                (72, "Q"), (74, "W"), (76, "E"), (77, "R"), (79, "T"), (81, "Y"), (83, "U"),
+                (60, "A"), (62, "S"), (64, "D"), (65, "F"), (67, "G"), (69, "H"), (71, "J"),
+            ]
+            .iter()
+            .map(|(p, k)| crate::types::KeyMapping {
+                pitch: *p,
+                key: k.to_string(),
+            })
+            .collect(),
+        }),
+        _ => Err(format!("Unknown builtin template: {}", template_id)),
     }
-    Ok(())
 }
 
 /// 获取所有模板（从文件加载）
@@ -117,8 +179,8 @@ pub fn save_template(app: tauri::AppHandle, template: KeyTemplate) -> Result<(),
 #[tauri::command]
 pub fn delete_template(app: tauri::AppHandle, template_id: String) -> Result<(), String> {
     // 不允许删除内置模板
-    let builtins = get_builtin_templates();
-    if builtins.iter().any(|t| t.id == template_id) {
+    let builtin_ids = get_builtin_template_ids();
+    if builtin_ids.iter().any(|id| *id == template_id) {
         return Err("不能删除内置模板".to_string());
     }
 
