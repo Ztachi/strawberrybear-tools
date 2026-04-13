@@ -13,6 +13,9 @@ pub struct AppSettings {
     /// 演奏模式："auto" | "piano"
     #[serde(default = "default_play_mode")]
     pub play_mode: String,
+    /// 是否启用键盘模拟（仅在模板演奏模式下生效）
+    #[serde(default)]
+    pub enable_keyboard_sim: bool,
 }
 
 fn default_play_mode() -> String {
@@ -25,6 +28,7 @@ impl Default for AppSettings {
             locale: "en-US".to_string(),
             current_template_id: None,
             play_mode: "auto".to_string(),
+            enable_keyboard_sim: false,
         }
     }
 }

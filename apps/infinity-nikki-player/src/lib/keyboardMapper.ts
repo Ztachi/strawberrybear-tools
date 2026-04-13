@@ -60,6 +60,9 @@ export interface KeyLogChapter {
 /** 按键日志更新回调类型 */
 export type KeyLogCallback = (entry: KeyLogEntry) => void
 
+/** 键盘模拟回调类型 */
+export type KeyboardSimCallback = (action: 'press' | 'release', key: string) => void
+
 /**
  * @description: 键盘映射器
  * 将 MIDI 音符移调并量化到 C 大调白键，然后映射到键盘按键
@@ -94,6 +97,8 @@ export class KeyboardMapper {
   private onNoteOn: ((pitch: number, originalPitch: number) => void) | undefined
   /** 音符释放回调（用于发音） */
   private onNoteOff: ((pitch: number, originalPitch: number) => void) | undefined
+  /** 键盘模拟回调 */
+  private keyboardSimCallback: KeyboardSimCallback | null = null
 
   constructor(options: KeyboardMapperOptions = {}) {
     this.rows = options.rows ?? KEYBOARD_ROWS
@@ -178,6 +183,14 @@ export class KeyboardMapper {
   }
 
   /**
+   * @description: 设置键盘模拟回调
+   * @param {KeyboardSimCallback | null} callback 回调函数
+   */
+  setKeyboardSimCallback(callback: KeyboardSimCallback | null): void {
+    this.keyboardSimCallback = callback
+  }
+
+  /**
    * @description: 设置音符回调（用于发音）
    * @param {((pitch: number, originalPitch: number) => void) | undefined} onNoteOn 音符按下回调
    * @param {((pitch: number, originalPitch: number) => void) | undefined} onNoteOff 音符释放回调
@@ -251,6 +264,11 @@ export class KeyboardMapper {
           }
           this.keyLog.push(entry)
           this.keyLogCallback?.(entry)
+          // 调用键盘模拟回调
+          const mapping = this.template?.mappings.find((m) => m.pitch === pitch)
+          if (mapping && this.keyboardSimCallback) {
+            this.keyboardSimCallback('press', mapping.key)
+          }
         }
       }
     }
@@ -270,6 +288,11 @@ export class KeyboardMapper {
           }
           this.keyLog.push(entry)
           this.keyLogCallback?.(entry)
+          // 调用键盘模拟回调
+          const mapping = this.template?.mappings.find((m) => m.pitch === pitch)
+          if (mapping && this.keyboardSimCallback) {
+            this.keyboardSimCallback('release', mapping.key)
+          }
         }
       }
     }

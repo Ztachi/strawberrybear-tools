@@ -8,6 +8,7 @@ export interface AppSettings {
   locale: string
   current_template_id: string | null
   play_mode: 'auto' | 'piano'
+  enable_keyboard_sim: boolean
 }
 
 /** 加载设置 */

@@ -129,7 +129,9 @@ pub fn import_midi(app: tauri::AppHandle, source_path: String) -> Result<MidiInf
     // 检查文件是否已存在于库目录
     let dest_path = library_dir.join(&source_filename);
     if dest_path.exists() {
-        return Err("文件已存在".to_string());
+        // 文件已存在，直接解析并返回信息
+        let (info, _events) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
+        return Ok(info);
     }
 
     // 复制文件

@@ -9,7 +9,8 @@ export default {
   tabs: {
     files: 'Files',
     templates: 'Templates',
-    logs: 'Logs',
+    comingSoon: 'Coming Soon',
+    comingSoonTip: 'This feature is under development...',
   },
   actions: {
     selectFile: 'Select MIDI File',
@@ -42,6 +43,9 @@ export default {
     pianoOff: 'Disable Piano',
     pianoMode: 'Piano Mode',
     autoMode: 'Auto Play',
+    keyboardSim: 'Simulate Keys',
+    keyboardSimTip:
+      'When enabled, keys in the log will be simulated as real keyboard input, can be used with game window (requires enabling Template Sound first)',
   },
   midi: {
     noFiles: 'No MIDI files',

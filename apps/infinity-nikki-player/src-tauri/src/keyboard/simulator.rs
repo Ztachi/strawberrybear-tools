@@ -16,25 +16,31 @@ impl KeySimulator {
         })
     }
 
-    /// 模拟按键按下（同步版本）
-    pub fn press_key_sync(&self, _pitch: u8, mapping: &KeyMapping) {
-        let key = &mapping.key;
+    /// 模拟按键按下
+    pub fn press_key(&self, key: &str) {
         if key.is_empty() {
             return;
         }
-
         let c = key.chars().next().unwrap();
         let _ = self.enigo.lock().key(enigo::Key::Unicode(c), Direction::Press);
     }
 
-    /// 模拟按键释放（同步版本）
-    pub fn release_key_sync(&self, _pitch: u8, mapping: &KeyMapping) {
-        let key = &mapping.key;
+    /// 模拟按键释放
+    pub fn release_key(&self, key: &str) {
         if key.is_empty() {
             return;
         }
-
         let c = key.chars().next().unwrap();
         let _ = self.enigo.lock().key(enigo::Key::Unicode(c), Direction::Release);
+    }
+
+    /// 模拟按键按下（同步版本）
+    pub fn press_key_sync(&self, _pitch: u8, mapping: &KeyMapping) {
+        self.press_key(&mapping.key);
+    }
+
+    /// 模拟按键释放（同步版本）
+    pub fn release_key_sync(&self, _pitch: u8, mapping: &KeyMapping) {
+        self.release_key(&mapping.key);
     }
 }

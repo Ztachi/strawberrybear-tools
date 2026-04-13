@@ -7,12 +7,11 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
-import { AlertCircle, Monitor, Music, LayoutGrid, FileText, Upload, Folder } from 'lucide-vue-next'
+import { AlertCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES } from '@/i18n'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import FilesTab from './FilesTab/index.vue'
 import TemplatesTab from './TemplatesTab/index.vue'
-import LogsTab from './LogsTab/index.vue'
 
 const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
@@ -134,10 +133,6 @@ async function enterOverlayMode() {
                 <LayoutGrid :size="16" />
                 {{ t('tabs.templates') }}
               </TabsTrigger>
-              <TabsTrigger value="logs" class="tab-trigger">
-                <FileText :size="16" />
-                {{ t('tabs.logs') }}
-              </TabsTrigger>
             </TabsList>
 
             <!-- 文件操作按钮 -->
@@ -161,11 +156,6 @@ async function enterOverlayMode() {
           <!-- 模板 Tab -->
           <TabsContent value="templates" class="tab-content flex-1">
             <TemplatesTab />
-          </TabsContent>
-
-          <!-- 日志 Tab -->
-          <TabsContent value="logs" class="tab-content flex-1">
-            <LogsTab />
           </TabsContent>
         </Tabs>
       </ScrollableContainer>

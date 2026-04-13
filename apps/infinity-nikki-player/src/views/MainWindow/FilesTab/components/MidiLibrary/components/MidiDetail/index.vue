@@ -4,6 +4,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { invoke } from '@tauri-apps/api/core'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
@@ -44,6 +45,16 @@ function initKeyboardMapper() {
       // 设置日志回调，实时更新日志
       keyboardMapper.value.setKeyLogCallback((entry) => {
         keyLog.value = [...keyLog.value, entry]
+      })
+      // 设置键盘模拟回调（仅在模板演奏+键盘模拟模式下生效）
+      keyboardMapper.value.setKeyboardSimCallback((action, key) => {
+        if (settingsStore.enableKeyboardSim && settingsStore.playMode === 'piano') {
+          if (action === 'press') {
+            invoke('simulate_key_down', { key }).catch(console.error)
+          } else {
+            invoke('simulate_key_up', { key }).catch(console.error)
+          }
+        }
       })
     }
     keyboardMapper.value.setTemplate(template)

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   SkipBack,
   SkipForward,
@@ -15,6 +16,7 @@ import {
   Square,
   Volume2,
   VolumeX,
+  HelpCircle,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -194,6 +196,28 @@ onUnmounted(() => {
         />
         <span class="mode-label">{{ t('player.pianoMode') }}</span>
       </div>
+      <TooltipProvider>
+        <div class="keyboard-sim-toggle">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <HelpCircle :size="14" class="help-icon" />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p class="tooltip-text">
+                {{ t('player.keyboardSimTip') }}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+          <Switch
+            :model-value="settingsStore.enableKeyboardSim"
+            :disabled="settingsStore.playMode !== 'piano'"
+            @update:model-value="(v) => settingsStore.setEnableKeyboardSim(!!v)"
+          />
+          <span class="mode-label" :class="{ disabled: settingsStore.playMode !== 'piano' }">
+            {{ t('player.keyboardSim') }}
+          </span>
+        </div>
+      </TooltipProvider>
     </div>
   </div>
 </template>
@@ -269,16 +293,33 @@ onUnmounted(() => {
 }
 
 .play-mode-row {
-  @apply flex;
+  @apply flex items-center justify-between;
 }
 
 .play-mode-toggle {
   @apply flex items-center gap-2;
 }
 
+.keyboard-sim-toggle {
+  @apply flex items-center gap-2;
+}
+
 .mode-label {
   @apply text-sm whitespace-nowrap;
   color: var(--color-muted);
+}
+
+.mode-label.disabled {
+  @apply opacity-50;
+}
+
+.help-icon {
+  @apply cursor-help;
+  color: var(--color-muted);
+}
+
+.tooltip-text {
+  @apply text-xs max-w-48;
 }
 
 .volume-popover {

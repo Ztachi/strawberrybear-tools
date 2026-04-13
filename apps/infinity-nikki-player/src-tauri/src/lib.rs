@@ -207,6 +207,8 @@ pub fn run() {
             commands::player::set_speed,
             commands::keyboard::get_key_logs,
             commands::keyboard::clear_key_logs,
+            commands::keyboard::simulate_key_down,
+            commands::keyboard::simulate_key_up,
             commands::window::create_overlay_window,
             commands::window::close_overlay_window,
             commands::templates::get_templates,

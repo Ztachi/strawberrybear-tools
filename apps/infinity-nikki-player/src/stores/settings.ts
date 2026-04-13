@@ -20,6 +20,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 演奏模式：'auto' | 'piano'
   const playMode = ref<'auto' | 'piano'>('auto')
 
+  // 是否启用键盘模拟
+  const enableKeyboardSim = ref(false)
+
   // 模板列表（从后端加载）
   const templates = ref<KeyTemplate[]>([])
 
@@ -48,6 +51,13 @@ export const useSettingsStore = defineStore('settings', () => {
       // 设置演奏模式
       if (settings.play_mode === 'auto' || settings.play_mode === 'piano') {
         playMode.value = settings.play_mode
+      }
+
+      // 设置键盘模拟（需要 play_mode 为 piano 时才生效）
+      if (settings.enable_keyboard_sim === true && playMode.value === 'piano') {
+        enableKeyboardSim.value = true
+      } else {
+        enableKeyboardSim.value = false
       }
 
       // 从后端加载模板
@@ -81,7 +91,16 @@ export const useSettingsStore = defineStore('settings', () => {
       locale: locale.value,
       current_template_id: currentTemplateId.value,
       play_mode: playMode.value,
+      enable_keyboard_sim: enableKeyboardSim.value,
     })
+  }
+
+  /** 设置键盘模拟开关 */
+  async function setEnableKeyboardSim(enabled: boolean) {
+    // 只有在模板演奏模式下才能开启键盘模拟
+    if (enabled && playMode.value !== 'piano') return
+    enableKeyboardSim.value = enabled
+    await persistSettings()
   }
 
   /** 设置演奏模式 */
@@ -144,6 +163,7 @@ export const useSettingsStore = defineStore('settings', () => {
     locale,
     currentTemplateId,
     playMode,
+    enableKeyboardSim,
     templates,
     // 方法
     loadSettings,
@@ -155,5 +175,6 @@ export const useSettingsStore = defineStore('settings', () => {
     deleteTemplate,
     renameTemplate,
     setPlayMode,
+    setEnableKeyboardSim,
   }
 })

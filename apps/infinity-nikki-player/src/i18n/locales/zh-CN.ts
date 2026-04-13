@@ -9,7 +9,8 @@ export default {
   tabs: {
     files: '文件',
     templates: '模板',
-    logs: '日志',
+    comingSoon: '即将上线',
+    comingSoonTip: '功能正在开发中，敬请期待...',
   },
   actions: {
     selectFile: '选择 MIDI 文件',
@@ -42,6 +43,9 @@ export default {
     pianoOff: '关闭发音',
     pianoMode: '模板发音',
     autoMode: '自动演奏',
+    keyboardSim: '模拟按键',
+    keyboardSimTip:
+      '开启后，按键日志中的按键会真实模拟键盘输入，可配合游戏窗口使用（需先开启模板发音）',
   },
   midi: {
     noFiles: '暂无 MIDI 文件',
