@@ -37,6 +37,11 @@ let disabledTracks: Set<number> = new Set()
 let onTimeUpdate: ((time: number) => void) | null = null
 let onEndCallback: (() => void) | null = null
 
+/** 活跃音符变化回调（用于同步键盘高亮） */
+let onActiveNotesChange:
+  | ((notes: Array<{ pitch: number; noteName: string; code?: string }>) => void)
+  | null = null
+
 /** 音符过滤器：返回 true 表示允许播放该音符 */
 let noteFilter: ((event: { noteName: string; pitch: number; velocity: number }) => boolean) | null =
   null
@@ -46,6 +51,9 @@ let pitchMapper: ((pitch: number) => number | null) | null = null
 
 /** 正在播放的音符节点（key 是 noteName，用于停止特定音符） */
 const activeNoteNodes = new Map<string, { stop: () => void }>()
+
+/** 当前活跃的音符列表（用于同步键盘高亮），key 是 pitch */
+const activeNotes = new Map<number, { pitch: number; noteName: string }>()
 
 /**
  * @description: 初始化音频上下文和合成器
@@ -82,8 +90,9 @@ function handleMidiEvent(
   }
 
   if (event.name === 'Note on' && event.velocity > 0 && event.noteName) {
-    // 从 noteName 获取 pitch
-    const originalPitch = noteNameToPitch(event.noteName)
+    // 直接使用 noteNumber（MIDI 标准），如果不存在则从 noteName 解析
+    const noteNumber = (event as any).noteNumber
+    const originalPitch = noteNumber ?? noteNameToPitch(event.noteName)
 
     // 如果有音高映射器，先转换音高
     let targetPitch = originalPitch ?? 60
@@ -115,6 +124,10 @@ function handleMidiEvent(
     })
     // 存储节点（用于停止特定音符）
     activeNoteNodes.set(targetNoteName, node)
+
+    // 追踪活跃音符（用于同步键盘高亮），用 pitch 作为唯一 key
+    activeNotes.set(targetPitch, { pitch: targetPitch, noteName: targetNoteName })
+    notifyActiveNotesChange()
   }
 
   // Note off 或 velocity 为 0 时不主动停止，让音符自然衰减
@@ -122,17 +135,33 @@ function handleMidiEvent(
     (event.name === 'Note off' || (event.name === 'Note on' && event.velocity === 0)) &&
     event.noteName
   ) {
-    // 不调用 stop()，音符自然衰减
-    // 注意：如果有 pitchMapper，Note off 也需要知道映射后的 noteName
-    const originalPitch = noteNameToPitch(event.noteName)
-    let targetNoteName = event.noteName
+    // 直接使用 noteNumber（MIDI 标准），如果不存在则从 noteName 解析
+    const noteNumber = (event as any).noteNumber
+    const originalPitch = noteNumber ?? noteNameToPitch(event.noteName)
+    let targetPitch = originalPitch ?? 0
+
     if (pitchMapper && originalPitch !== null) {
       const mappedPitch = pitchMapper(originalPitch)
-      if (mappedPitch !== null && mappedPitch !== originalPitch) {
-        targetNoteName = pitchToNoteName(mappedPitch)
+      if (mappedPitch !== null) {
+        targetPitch = mappedPitch
       }
     }
-    activeNoteNodes.delete(targetNoteName)
+    activeNoteNodes.delete(pitchToNoteName(targetPitch))
+    // 移除活跃音符
+    activeNotes.delete(targetPitch)
+    notifyActiveNotesChange()
+  }
+}
+
+/** 通知活跃音符变化 */
+function notifyActiveNotesChange() {
+  if (onActiveNotesChange) {
+    onActiveNotesChange(
+      Array.from(activeNotes.values()).map((note) => ({
+        pitch: note.pitch,
+        noteName: note.noteName,
+      }))
+    )
   }
 }
 
@@ -235,6 +264,9 @@ export function stop() {
     }
   }
   activeNoteNodes.clear()
+  // 清空活跃音符列表
+  activeNotes.clear()
+  notifyActiveNotesChange()
 }
 
 /**
@@ -489,4 +521,14 @@ export function setNoteFilter(
  */
 export function setPitchMapper(mapper: ((pitch: number) => number | null) | null): void {
   pitchMapper = mapper
+}
+
+/**
+ * @description: 设置活跃音符变化回调（用于同步键盘高亮）
+ * @param callback 回调函数，接收当前活跃的音符列表
+ */
+export function setOnActiveNotesChange(
+  callback: ((notes: Array<{ pitch: number; noteName: string }>) => void) | null
+): void {
+  onActiveNotesChange = callback
 }

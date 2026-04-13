@@ -112,12 +112,61 @@ export class KeyboardMapper {
   }
 
   /**
-   * @description: 设置模板并清除缓存
+   * @description: 设置模板并清除缓存（不清除按键状态，由 clearKeyState 处理）
    * @param {KeyTemplate} template 键盘映射模板
    */
   setTemplate(template: KeyTemplate): void {
     this.template = template
     this.pitchCache.clear()
+  }
+
+  /**
+   * @description: 强制清除所有按键状态并生成 release 日志（切换模板时调用）
+   * @param {number} currentTimeMs 当前播放时间
+   */
+  clearKeyState(currentTimeMs: number): void {
+    // 为 previousActiveKeys 中的所有按键生成 release 日志
+    for (const code of this.previousActiveKeys) {
+      const pitch = this.previousCodeToPitch.get(code)
+      const entry: KeyLogEntry = {
+        time: currentTimeMs,
+        key: pitch !== undefined ? this.pitchToNoteName(pitch) : code,
+        code: code,
+        pitch: pitch ?? 0,
+        originalPitch: pitch ?? 0,
+        action: 'release',
+      }
+      this.keyLog.push(entry)
+      this.keyLogCallback?.(entry)
+    }
+    // 清空状态
+    this.previousActiveKeys = new Set()
+    this.previousCodeToPitch = new Map()
+  }
+
+  /**
+   * @description: 重置所有状态（切换模板时调用，确保完全清空所有按键）
+   * @param {number} currentTimeMs 当前播放时间
+   */
+  resetState(currentTimeMs: number): void {
+    // 为所有 previousActiveKeys 生成 release 日志
+    for (const code of this.previousActiveKeys) {
+      const pitch = this.previousCodeToPitch.get(code)
+      const entry: KeyLogEntry = {
+        time: currentTimeMs,
+        key: pitch !== undefined ? this.pitchToNoteName(pitch) : code,
+        code: code,
+        pitch: pitch ?? 0,
+        originalPitch: pitch ?? 0,
+        action: 'release',
+      }
+      this.keyLog.push(entry)
+      this.keyLogCallback?.(entry)
+    }
+    // 完全重置所有状态
+    this.previousActiveKeys = new Set()
+    this.previousCodeToPitch = new Map()
+    this.keyLog = []
   }
 
   /**
@@ -139,6 +188,95 @@ export class KeyboardMapper {
   ): void {
     this.onNoteOn = onNoteOn
     this.onNoteOff = onNoteOff
+  }
+
+  /**
+   * @description: 设置当前活跃的音符（来自 midiPlayer，已映射后的音高）
+   * @param {Array<{pitch: number, noteName: string}>} notes 活跃音符列表
+   * @param {number} currentTimeMs 当前播放时间（毫秒）
+   */
+  setActiveNotes(notes: Array<{ pitch: number; noteName: string }>, currentTimeMs: number): void {
+    // 将音符映射到键盘 code
+    const active = new Set<string>()
+    const activeNotes: Array<{ pitch: number; code: string }> = []
+
+    for (const note of notes) {
+      // 查找该 pitch 对应的模板映射
+      for (const mapping of this.template?.mappings ?? []) {
+        if (mapping.pitch === note.pitch) {
+          const upperKey = mapping.key.toUpperCase()
+          const code = /^[0-9]$/.test(mapping.key) ? `Digit${upperKey}` : `Key${upperKey}`
+          active.add(code)
+          // 注意：recordKeyLog 需要原始 pitch，但这里没有原始 pitch
+          // 因为 midiPlayer 已经完成了映射，所以用 note.pitch 作为 originalPitch
+          activeNotes.push({ pitch: note.pitch, code })
+          break
+        }
+      }
+    }
+
+    // 记录按键日志
+    this.recordKeyLogForMappedNotes(currentTimeMs, active, activeNotes)
+  }
+
+  /**
+   * @description: 记录按键日志（用于已映射的音符）
+   * @param {number} currentTimeMs 当前时间
+   * @param {Set<string>} activeKeys 当前活跃的按键
+   * @param {Array<{pitch: number, code: string}>} activeNotes 当前活跃的音符
+   */
+  private recordKeyLogForMappedNotes(
+    currentTimeMs: number,
+    activeKeys: Set<string>,
+    activeNotes: Array<{ pitch: number; code: string }>
+  ): void {
+    // 构建当前活跃按键到 pitch 的映射
+    const codeToPitch = new Map<string, number>()
+    for (const noteInfo of activeNotes) {
+      codeToPitch.set(noteInfo.code, noteInfo.pitch)
+    }
+
+    // 检测 press（当前 active 但上一帧不 active）
+    for (const code of activeKeys) {
+      if (!this.previousActiveKeys.has(code)) {
+        const pitch = codeToPitch.get(code)
+        if (pitch !== undefined) {
+          const entry: KeyLogEntry = {
+            time: currentTimeMs,
+            key: this.pitchToNoteName(pitch),
+            code: code,
+            pitch: pitch,
+            originalPitch: pitch, // 已经是映射后的音高
+            action: 'press',
+          }
+          this.keyLog.push(entry)
+          this.keyLogCallback?.(entry)
+        }
+      }
+    }
+
+    // 检测 release（上一帧 active 但当前不 active）
+    for (const code of this.previousActiveKeys) {
+      if (!activeKeys.has(code)) {
+        const pitch = this.previousCodeToPitch.get(code)
+        if (pitch !== undefined) {
+          const entry: KeyLogEntry = {
+            time: currentTimeMs,
+            key: this.pitchToNoteName(pitch),
+            code: code,
+            pitch: pitch,
+            originalPitch: pitch,
+            action: 'release',
+          }
+          this.keyLog.push(entry)
+          this.keyLogCallback?.(entry)
+        }
+      }
+    }
+
+    // 保存当前帧的 code -> pitch 映射
+    this.previousCodeToPitch = codeToPitch
+    this.previousActiveKeys = new Set(activeKeys)
   }
 
   /**

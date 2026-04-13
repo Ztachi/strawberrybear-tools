@@ -23,6 +23,7 @@ import {
   setNoteFilter,
   setPitchMapper,
   ensureInstrument,
+  setOnActiveNotesChange,
 } from '@/lib/midiPlayer'
 import { useSettingsStore } from './settings'
 
@@ -61,6 +62,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   // 按键日志（最多 50 条）
   const keyLogs = ref<KeyLogEntry[]>([])
+
+  // 当前活跃的音符列表（来自 midiPlayer，用于同步键盘高亮）
+  const activeNotes = ref<Array<{ pitch: number; noteName: string }>>([])
 
   // 速度
   const speed = ref(1.0)
@@ -542,22 +546,42 @@ export const usePlayerStore = defineStore('player', () => {
         if (template) {
           // 提取模板中的所有音高
           const templatePitches = template.mappings.map((m) => m.pitch)
+          // C大调白键相对于八度起点的偏移量
+          const WHITE_KEY_OFFSETS = [0, 2, 4, 5, 7, 9, 11] // C, D, E, F, G, A, B
 
           // piano 模式：过滤只允许模板音高
           setNoteFilter(({ pitch }) => templatePitches.includes(pitch))
 
-          // 设置音高映射器（将非模板音高映射到最接近的模板音高）
+          // 设置音高映射器（先将音符量化到C大调白键，再映射到模板音高）
           setPitchMapper((originalPitch: number): number | null => {
-            // 在模板中查找完全匹配的音高
-            if (templatePitches.includes(originalPitch)) {
-              return originalPitch
+            // 步骤1：量化到C大调白键
+            const noteInOctave = originalPitch % 12
+            const octave = Math.floor(originalPitch / 12)
+
+            // 找到最接近的白键偏移量
+            let closestWhiteKeyOffset = WHITE_KEY_OFFSETS[0]
+            let minWhiteKeyDistance = 12
+            for (const offset of WHITE_KEY_OFFSETS) {
+              const distance = Math.abs(offset - noteInOctave)
+              if (distance < minWhiteKeyDistance) {
+                minWhiteKeyDistance = distance
+                closestWhiteKeyOffset = offset
+              }
             }
 
-            // 找到模板中音高最接近的音
+            // 计算量化后的白键音高
+            const whiteKeyPitch = octave * 12 + closestWhiteKeyOffset
+
+            // 步骤2：在模板中查找完全匹配
+            if (templatePitches.includes(whiteKeyPitch)) {
+              return whiteKeyPitch
+            }
+
+            // 步骤3：找不到则找模板中最接近的音高
             let closestPitch = templatePitches[0] ?? 60
-            let minDiff = Math.abs(originalPitch - closestPitch)
+            let minDiff = Math.abs(whiteKeyPitch - closestPitch)
             for (const tp of templatePitches) {
-              const diff = Math.abs(originalPitch - tp)
+              const diff = Math.abs(whiteKeyPitch - tp)
               if (diff < minDiff) {
                 minDiff = diff
                 closestPitch = tp
@@ -677,6 +701,15 @@ export const usePlayerStore = defineStore('player', () => {
   async function initPianoEngine(): Promise<void> {
     // 预热音频上下文和 instrument
     await ensureInstrument()
+    // 设置活跃音符变化回调（用于同步键盘高亮）
+    setOnActiveNotesChange((notes) => {
+      activeNotes.value = notes
+    })
+  }
+
+  /** 清空活跃音符（切换模板时调用） */
+  function clearActiveNotes(): void {
+    activeNotes.value = []
   }
 
   /** 应用当前播放模式的过滤器（实时切换，无需重启播放） */
@@ -685,15 +718,39 @@ export const usePlayerStore = defineStore('player', () => {
       const template = settingsStore.getCurrentTemplate()
       if (template) {
         const templatePitches = template.mappings.map((m) => m.pitch)
+        // C大调白键相对于八度起点的偏移量
+        const WHITE_KEY_OFFSETS = [0, 2, 4, 5, 7, 9, 11] // C, D, E, F, G, A, B
+
         setNoteFilter(({ pitch }) => templatePitches.includes(pitch))
         setPitchMapper((originalPitch: number): number | null => {
-          if (templatePitches.includes(originalPitch)) {
-            return originalPitch
+          // 步骤1：量化到C大调白键
+          const noteInOctave = originalPitch % 12
+
+          // 找到最接近的白键偏移量
+          let closestWhiteKeyOffset = WHITE_KEY_OFFSETS[0]
+          let minWhiteKeyDistance = 12
+          for (const offset of WHITE_KEY_OFFSETS) {
+            const distance = Math.abs(offset - noteInOctave)
+            if (distance < minWhiteKeyDistance) {
+              minWhiteKeyDistance = distance
+              closestWhiteKeyOffset = offset
+            }
           }
+
+          // 计算量化后的白键音高
+          // 正确公式：originalPitch - noteInOctave 得到该八度起点的音高，加上白键偏移量
+          const whiteKeyPitch = originalPitch - noteInOctave + closestWhiteKeyOffset
+
+          // 步骤2：在模板中查找完全匹配
+          if (templatePitches.includes(whiteKeyPitch)) {
+            return whiteKeyPitch
+          }
+
+          // 步骤3：找不到则找模板中最接近的音高
           let closestPitch = templatePitches[0] ?? 60
-          let minDiff = Math.abs(originalPitch - closestPitch)
+          let minDiff = Math.abs(whiteKeyPitch - closestPitch)
           for (const tp of templatePitches) {
-            const diff = Math.abs(originalPitch - tp)
+            const diff = Math.abs(whiteKeyPitch - tp)
             if (diff < minDiff) {
               minDiff = diff
               closestPitch = tp
@@ -985,6 +1042,7 @@ export const usePlayerStore = defineStore('player', () => {
     showDetail,
     playbackState,
     keyLogs,
+    activeNotes,
     activeKeys,
     speed,
     isLoading,
@@ -1030,5 +1088,6 @@ export const usePlayerStore = defineStore('player', () => {
     toggleTrack,
     initPianoEngine,
     applyPlayModeFilter,
+    clearActiveNotes,
   }
 })

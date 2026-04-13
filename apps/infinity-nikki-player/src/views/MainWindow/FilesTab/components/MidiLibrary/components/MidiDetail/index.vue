@@ -32,6 +32,9 @@ const settingsStore = useSettingsStore()
 /** 键盘映射器实例 */
 const keyboardMapper = ref<KeyboardMapper | null>(null)
 
+/** 按键日志（响应式）- 必须放在 watch 之前定义 */
+const keyLog = ref<KeyLogEntry[]>([])
+
 /** 初始化键盘映射器 */
 function initKeyboardMapper() {
   const template = settingsStore.getCurrentTemplate()
@@ -51,13 +54,35 @@ function initKeyboardMapper() {
 watch(
   () => settingsStore.currentTemplateId,
   () => {
-    initKeyboardMapper()
-    // 实时更新过滤器
+    // 切换模板时停止播放，让用户重新开始
     if (playerStore.isPreviewPlaying) {
-      playerStore.applyPlayModeFilter()
+      playerStore.stopPreviewPlayback()
     }
+    // 重置 keyboardMapper（包括清空日志）
+    if (keyboardMapper.value) {
+      keyboardMapper.value.reset()
+      // 清空本地日志
+      keyLog.value = []
+    }
+    initKeyboardMapper()
   },
   { immediate: true }
+)
+
+/** 监听活跃音符变化，同步到 KeyboardMapper 日志（仅在模板演奏模式下执行） */
+watch(
+  () => playerStore.activeNotes,
+  (notes) => {
+    // 非模板演奏模式不处理
+    if (settingsStore.playMode !== 'piano') return
+    if (!keyboardMapper.value) return
+    if (notes.length === 0) {
+      // 空音符时也要清空按键状态，避免残留
+      keyboardMapper.value.clearKeyState(playerStore.previewCurrentTime)
+    } else {
+      keyboardMapper.value.setActiveNotes(notes, playerStore.previewCurrentTime)
+    }
+  }
 )
 
 /** 监听当前 MIDI 变化（切换歌曲时重置映射器） */
@@ -73,20 +98,27 @@ watch(
 )
 
 
-/** 按键日志（响应式） */
-const keyLog = ref<KeyLogEntry[]>([])
-
-/** 当前激活的按键集合（根据禁用音轨过滤后计算） */
+/** 当前激活的按键集合（仅在模板演奏模式下显示） */
 const activeKeys = computed<Set<string>>(() => {
+  // 非模板演奏模式不显示按键状态
+  if (settingsStore.playMode !== 'piano') {
+    return new Set()
+  }
   if (!keyboardMapper.value) {
     return new Set()
   }
-  // 根据禁用的音轨过滤音符（disabledTracks 存储的是 midiPlayerTrackValue = eventTrackValue + 1）
-  // 而 allNotes.track 是原始的 event.track = eventTrackValue，所以需要 +1 来匹配
-  const filteredNotes = playerStore.allNotes.filter(
-    (note) => !playerStore.disabledTracks.has(note.track + 1)
-  )
-  return keyboardMapper.value.getActiveKeys(playerStore.previewCurrentTime, filteredNotes)
+  // 从 midiPlayer 传来的活跃音符（已经过过滤和映射）
+  const notes = playerStore.activeNotes
+  // 转换为键盘 code 集合
+  const codes = new Set<string>()
+  for (const note of notes) {
+    // 使用 keyboardMapper 将 pitch 映射到键盘 code
+    const result = keyboardMapper.value.mapPitch(note.pitch)
+    if (result) {
+      codes.add(result.code)
+    }
+  }
+  return codes
 })
 
 /** 获取章节化的按键日志 */
