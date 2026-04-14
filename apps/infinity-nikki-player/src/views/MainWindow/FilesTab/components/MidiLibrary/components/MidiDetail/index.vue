@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TrackInfo } from '@/types'
 
 const { t } = useI18n()
@@ -205,6 +206,9 @@ async function enterOverlayMode() {
     if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
       playerStore.selectMidi(playerStore.midiLibrary[0])
     }
+    // 停止播放
+    playerStore.stopPreviewPlayback()
+    playerStore.setPreviewTime(0)
     // 启用悬浮模式
     settingsStore.isOverlayMode = true
     settingsStore.setPlayMode('piano')
@@ -218,82 +222,95 @@ async function enterOverlayMode() {
 
 <template>
   <ScrollableContainer>
-    <div class="midi-detail">
-      <!-- 顶部区域：左侧播放器 + 右侧键盘预览 -->
-      <div class="detail-header">
-        <!-- 左侧：播放器 + 模板选择 -->
-        <div class="left-section">
-          <div class="preview-section">
-            <PreviewPlayer />
+    <TooltipProvider>
+      <div class="midi-detail">
+        <!-- 顶部区域：左侧播放器 + 右侧键盘预览 -->
+        <div class="detail-header">
+          <!-- 左侧：播放器 + 模板选择 -->
+          <div class="left-section">
+            <div class="preview-section">
+              <PreviewPlayer />
+            </div>
+            <div class="template-section">
+              <Select
+                :model-value="settingsStore.currentTemplateId"
+                @update:model-value="handleTemplateChange"
+              >
+                <SelectTrigger class="w-full">
+                  <SelectValue :placeholder="t('player.noTemplate')" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectLabel>{{ t('player.template') }}</SelectLabel>
+                  <SelectItem
+                    v-for="tmpl in settingsStore.templates"
+                    :key="tmpl.id"
+                    :value="tmpl.id"
+                  >
+                    {{ getTemplateDisplayName(tmpl.name, tmpl.id) }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <button class="overlay-btn" @click="enterOverlayMode">
+                    <Monitor :size="18" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{{ t('app.overlayMode') }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
-          <div class="template-section">
-            <Select
-              :model-value="settingsStore.currentTemplateId"
-              @update:model-value="handleTemplateChange"
-            >
-              <SelectTrigger class="w-full">
-                <SelectValue :placeholder="t('player.noTemplate')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectLabel>{{ t('player.template') }}</SelectLabel>
-                <SelectItem v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
-                  {{ getTemplateDisplayName(tmpl.name, tmpl.id) }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <button class="overlay-btn" :title="t('app.overlayMode')" @click="enterOverlayMode">
-              <Monitor :size="18" />
-            </button>
+          <!-- 右侧：键盘预览 -->
+          <div class="keyboard-section">
+            <KeyboardPreview
+              :active-keys="activeKeys"
+              :key-log="keyLog"
+              :get-key-log-by-chapters="getKeyLogByChapters"
+              :clear-key-log="handleClearKeyLog"
+              :key-code-to-pitch="keyCodeToPitch"
+              @key-click="handleKeyClick"
+            />
           </div>
         </div>
-        <!-- 右侧：键盘预览 -->
-        <div class="keyboard-section">
-          <KeyboardPreview
-            :active-keys="activeKeys"
-            :key-log="keyLog"
-            :get-key-log-by-chapters="getKeyLogByChapters"
-            :clear-key-log="handleClearKeyLog"
-            :key-code-to-pitch="keyCodeToPitch"
-            @key-click="handleKeyClick"
+
+        <!-- 音轨列表 -->
+        <div class="tracks-section">
+          <div class="section-header">
+            <div class="section-title-group">
+              <h3 class="section-title">
+                {{ t('midi.trackList') }}
+              </h3>
+              <div class="section-stats">
+                <span class="stat">
+                  <Music :size="14" class="text-success" />
+                  <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
+                  <span class="stat-label">{{ t('midi.tracks') }}</span>
+                </span>
+                <span class="stat">
+                  <Music2 :size="14" class="text-success" />
+                  <span class="stat-value">{{ playerStore.melody.length }}</span>
+                  <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <PianoRoll
+            :key="playerStore.currentMidi?.filename || 'empty'"
+            :notes="playerStore.currentMidi?.events || []"
+            :duration="playerStore.previewDuration"
+            :ticks-per-beat="playerStore.currentMidi?.ticks_per_beat || 480"
+            :tempo="playerStore.currentMidi?.tempo || 500000"
+            :tracks="translatedTracks"
+            :disabled-tracks="playerStore.disabledTracks"
+            :disabled-tracks-version="playerStore.disabledTracksVersion"
+            :current-time="playerStore.previewCurrentTime"
+            @toggle="handleToggleTrack"
           />
         </div>
       </div>
-
-      <!-- 音轨列表 -->
-      <div class="tracks-section">
-        <div class="section-header">
-          <div class="section-title-group">
-            <h3 class="section-title">
-              {{ t('midi.trackList') }}
-            </h3>
-            <div class="section-stats">
-              <span class="stat">
-                <Music :size="14" class="text-success" />
-                <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
-                <span class="stat-label">{{ t('midi.tracks') }}</span>
-              </span>
-              <span class="stat">
-                <Music2 :size="14" class="text-success" />
-                <span class="stat-value">{{ playerStore.melody.length }}</span>
-                <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
-              </span>
-            </div>
-          </div>
-        </div>
-        <PianoRoll
-          :key="playerStore.currentMidi?.filename || 'empty'"
-          :notes="playerStore.currentMidi?.events || []"
-          :duration="playerStore.previewDuration"
-          :ticks-per-beat="playerStore.currentMidi?.ticks_per_beat || 480"
-          :tempo="playerStore.currentMidi?.tempo || 500000"
-          :tracks="translatedTracks"
-          :disabled-tracks="playerStore.disabledTracks"
-          :disabled-tracks-version="playerStore.disabledTracksVersion"
-          :current-time="playerStore.previewCurrentTime"
-          @toggle="handleToggleTrack"
-        />
-      </div>
-    </div>
+    </TooltipProvider>
   </ScrollableContainer>
 </template>
 

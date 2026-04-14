@@ -4,6 +4,7 @@ mod keyboard;
 mod types;
 
 use commands::player::PlayerControl;
+use commands::window;
 use types::AppState;
 use std::env;
 use tauri::Manager;
@@ -166,6 +167,13 @@ pub fn run() {
                         // 全屏切换
                         if let Some(window) = app_handle.get_webview_window("main") {
                             let is_fullscreen = window.is_fullscreen().unwrap_or(false);
+                            if !is_fullscreen {
+                                // 进入全屏前保存状态
+                                window::save_state_before_fullscreen(&window);
+                            } else {
+                                // 退出全屏后恢复状态
+                                window::restore_state_after_fullscreen(&window);
+                            }
                             window.set_fullscreen(!is_fullscreen).ok();
                         }
                     }

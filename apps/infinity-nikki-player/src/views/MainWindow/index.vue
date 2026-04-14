@@ -73,6 +73,9 @@ async function enterOverlayMode() {
     if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
       playerStore.selectMidi(playerStore.midiLibrary[0])
     }
+    // 停止播放
+    playerStore.stopPreviewPlayback()
+    playerStore.setPreviewTime(0)
     // 启用悬浮模式
     settingsStore.isOverlayMode = true
     settingsStore.setPlayMode('piano')
@@ -189,9 +192,24 @@ async function enterOverlayMode() {
   background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--bg-white-95) 50%, var(--color-primary-light) 100%);
 }
 
+.main-window::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: url('@/assets/images/bg.jpeg') no-repeat center center/cover;
+  opacity: 0.2;
+}
+
 .main-window.overlay-mode {
   @apply overflow-visible;
   background: transparent;
+}
+
+.main-window.overlay-mode::before {
+  display: none;
 }
 
 /* 顶部导航栏 */

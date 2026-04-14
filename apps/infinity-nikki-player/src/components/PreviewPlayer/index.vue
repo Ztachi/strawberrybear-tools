@@ -7,6 +7,7 @@ import { Button } from '@/components/ui'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   SkipBack,
   SkipForward,
@@ -15,6 +16,7 @@ import {
   Square,
   Volume2,
   VolumeX,
+  HelpCircle,
 } from 'lucide-vue-next'
 
 /** 是否为精简模式（悬浮模式使用） */
@@ -194,25 +196,37 @@ onUnmounted(() => {
     </div>
 
     <!-- 演奏模式切换（非精简模式显示） -->
-    <div v-if="!compact" class="play-mode-row">
-      <div class="play-mode-toggle">
-        <Switch
-          :model-value="settingsStore.playMode === 'piano'"
-          @update:model-value="handleModeSwitch"
-        />
-        <span class="mode-label">{{ t('player.pianoMode') }}</span>
+    <TooltipProvider v-if="!compact">
+      <div class="play-mode-row">
+        <div class="play-mode-toggle">
+          <Switch
+            :model-value="settingsStore.playMode === 'piano'"
+            @update:model-value="handleModeSwitch"
+          />
+          <span class="mode-label">{{ t('player.pianoMode') }}</span>
+        </div>
+        <div class="keyboard-sim-toggle">
+          <Switch
+            :model-value="settingsStore.enableKeyboardSim"
+            :disabled="settingsStore.playMode !== 'piano'"
+            @update:model-value="(v) => settingsStore.setEnableKeyboardSim(!!v)"
+          />
+          <span class="mode-label" :class="{ disabled: settingsStore.playMode !== 'piano' }">
+            {{ t('player.keyboardSim') }}
+          </span>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <HelpCircle :size="14" class="help-icon" />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p class="tooltip-text">
+                {{ t('player.keyboardSimTip') }}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
-      <div class="keyboard-sim-toggle">
-        <Switch
-          :model-value="settingsStore.enableKeyboardSim"
-          :disabled="settingsStore.playMode !== 'piano'"
-          @update:model-value="(v) => settingsStore.setEnableKeyboardSim(!!v)"
-        />
-        <span class="mode-label" :class="{ disabled: settingsStore.playMode !== 'piano' }">
-          {{ t('player.keyboardSim') }}
-        </span>
-      </div>
-    </div>
+    </TooltipProvider>
   </div>
 </template>
 
