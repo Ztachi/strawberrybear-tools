@@ -1,42 +1,35 @@
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, LogicalSize};
 
-/// 创建悬浮窗口
+/// 进入悬浮模式 - 将主窗口转换为悬浮模式
 #[tauri::command]
-pub async fn create_overlay_window(app: AppHandle) -> Result<(), String> {
-    // 检查是否已存在
-    if app.get_webview_window("overlay").is_some() {
-        return Ok(());
+pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_decorations(false).map_err(|e| format!("设置窗口样式失败: {}", e))?;
+        window.set_always_on_top(true).map_err(|e| format!("设置置顶失败: {}", e))?;
+        window.set_resizable(false).map_err(|e| format!("设置不可调整大小失败: {}", e))?;
+        window.set_shadow(false).ok();
+        window.set_size(LogicalSize { width: 360.0, height: 110.0 })
+            .map_err(|e| format!("调整窗口大小失败: {}", e))?;
+        window.center().map_err(|e| format!("居中窗口失败: {}", e))?;
+
+        log::info!("Entered overlay mode");
     }
-
-    let overlay = WebviewWindowBuilder::new(
-        &app,
-        "overlay",
-        WebviewUrl::App("index.html?windowLabel=overlay".into()),
-    )
-    .title("Overlay")
-    .inner_size(320.0, 68.0)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .visible(false)
-    .resizable(false)
-    .focusable(true)
-    .skip_taskbar(true)
-    .build()
-    .map_err(|e| format!("创建悬浮窗口失败: {}", e))?;
-
-    overlay.show().map_err(|e| format!("显示悬浮窗口失败: {}", e))?;
-
-    log::info!("Overlay window created");
     Ok(())
 }
 
-/// 关闭悬浮窗口
+/// 退出悬浮模式 - 恢复主窗口
 #[tauri::command]
-pub async fn close_overlay_window(app: AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("overlay") {
-        window.close().map_err(|e| format!("关闭悬浮窗口失败: {}", e))?;
-        log::info!("Overlay window closed");
+pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_shadow(true).ok();
+        window.set_decorations(true).map_err(|e| format!("恢复窗口样式失败: {}", e))?;
+        window.set_always_on_top(false).map_err(|e| format!("取消置顶失败: {}", e))?;
+        window.set_resizable(true).map_err(|e| format!("设置可调整大小失败: {}", e))?;
+        window.set_size(LogicalSize { width: 960.0, height: 640.0 })
+            .map_err(|e| format!("恢复窗口大小失败: {}", e))?;
+        window.center().map_err(|e| format!("居中窗口失败: {}", e))?;
+
+        log::info!("Exited overlay mode");
     }
     Ok(())
 }

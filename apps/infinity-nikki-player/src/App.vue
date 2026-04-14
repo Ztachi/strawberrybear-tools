@@ -2,14 +2,12 @@
 /**
  * @description: 应用根组件
  */
-import { inject, onMounted, getCurrentInstance, ref } from 'vue'
+import { onMounted, getCurrentInstance, ref } from 'vue'
 import MainWindow from './views/MainWindow/index.vue'
-import OverlayWindow from './views/OverlayWindow.vue'
 import { Toaster } from '@/components/ui'
 import { toast } from 'vue-sonner'
 import { usePlayerStore } from './stores/player'
 
-const windowLabel = inject<string>('windowLabel', 'main')
 const playerStore = usePlayerStore()
 
 /** 是否显示加载中 */
@@ -36,6 +34,8 @@ onMounted(async () => {
   await playerStore.initPianoEngine()
 
   isLoading.value = false
+  // 移除背景图片
+  document.body.style.background = 'transparent'
 
   window.addEventListener('unhandledrejection', (event) => {
     event.preventDefault()
@@ -64,8 +64,7 @@ onMounted(async () => {
     </div>
   </Transition>
 
-  <MainWindow v-if="windowLabel === 'main'" />
-  <OverlayWindow v-else-if="windowLabel === 'overlay'" />
+  <MainWindow />
   <Toaster />
 </template>
 

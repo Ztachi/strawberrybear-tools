@@ -15,7 +15,7 @@ import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
 import PianoRoll from '@strawberrybear/piano-roll'
-import { Music, Music2 } from 'lucide-vue-next'
+import { Music, Music2, Monitor } from 'lucide-vue-next'
 import {
   Select,
   SelectContent,
@@ -57,9 +57,9 @@ function initKeyboardMapper() {
       keyboardMapper.value.setKeyLogCallback((entry) => {
         keyLog.value = [...keyLog.value, entry]
       })
-      // 设置键盘模拟回调（仅在模板演奏+键盘模拟模式下生效）
+      // 设置键盘模拟回调（仅在模板演奏+键盘模拟模式下生效，悬浮模式强制启用）
       keyboardMapper.value.setKeyboardSimCallback((action, key) => {
-        if (settingsStore.enableKeyboardSim && settingsStore.playMode === 'piano') {
+        if ((settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) && settingsStore.playMode === 'piano') {
           if (action === 'press') {
             invoke('simulate_key_down', { key }).catch(console.error)
           } else {
@@ -197,6 +197,23 @@ function handleTemplateChange(value: unknown) {
     settingsStore.selectTemplate(value)
   }
 }
+
+/** 进入悬浮模式 */
+async function enterOverlayMode() {
+  try {
+    // 确保当前 MIDI 已选中（详情页本身就是选中状态）
+    if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
+      playerStore.selectMidi(playerStore.midiLibrary[0])
+    }
+    // 启用悬浮模式
+    settingsStore.isOverlayMode = true
+    settingsStore.setPlayMode('piano')
+    // 调用 Rust 命令修改窗口
+    await invoke('enter_overlay_mode')
+  } catch (e) {
+    console.error('进入悬浮模式失败:', e)
+  }
+}
 </script>
 
 <template>
@@ -224,6 +241,9 @@ function handleTemplateChange(value: unknown) {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <button class="overlay-btn" :title="t('app.overlayMode')" @click="enterOverlayMode">
+              <Monitor :size="18" />
+            </button>
           </div>
         </div>
         <!-- 右侧：键盘预览 -->
@@ -298,6 +318,13 @@ function handleTemplateChange(value: unknown) {
 
 .template-section {
   @apply flex items-center gap-2 px-1;
+}
+
+.overlay-btn {
+  @apply w-10 h-10 flex items-center justify-center rounded-xl;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: white;
+  @apply hover:opacity-90 transition-opacity;
 }
 
 .keyboard-section {

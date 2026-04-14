@@ -23,6 +23,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 是否启用键盘模拟
   const enableKeyboardSim = ref(false)
 
+  // 是否处于悬浮模式
+  const isOverlayMode = ref(false)
+
   // 模板列表（从后端加载）
   const templates = ref<KeyTemplate[]>([])
 
@@ -164,6 +167,7 @@ export const useSettingsStore = defineStore('settings', () => {
     currentTemplateId,
     playMode,
     enableKeyboardSim,
+    isOverlayMode,
     templates,
     // 方法
     loadSettings,

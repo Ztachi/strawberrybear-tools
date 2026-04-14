@@ -103,7 +103,15 @@ export default {
   overlay: {
     expand: 'Expand',
     collapse: 'Collapse',
-    close: 'Close',
+    close: 'Close Overlay',
+    exitOverlay: 'Exit Overlay Mode',
+    noFile: 'No file selected',
+    playlist: 'Playlist',
+    playPrev: 'Previous',
+    playNext: 'Next',
+    stop: 'Stop',
+    mute: 'Mute',
+    unmute: 'Unmute',
   },
   status: {
     ready: 'Ready',

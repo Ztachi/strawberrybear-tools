@@ -103,7 +103,15 @@ export default {
   overlay: {
     expand: '展开',
     collapse: '收起',
-    close: '关闭',
+    close: '关闭悬浮',
+    exitOverlay: '退出悬浮模式',
+    noFile: '未选择文件',
+    playlist: '播放列表',
+    playPrev: '上一曲',
+    playNext: '下一曲',
+    stop: '停止',
+    mute: '静音',
+    unmute: '取消静音',
   },
   status: {
     ready: '就绪',

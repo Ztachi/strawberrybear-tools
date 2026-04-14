@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/**
+ * @description: 主窗口 - 包含正常模式和悬浮模式
+ */
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
@@ -12,6 +15,7 @@ import { SUPPORTED_LOCALES } from '@/i18n'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import FilesTab from './FilesTab/index.vue'
 import TemplatesTab from './TemplatesTab/index.vue'
+import OverlayView from './OverlayView.vue'
 
 const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
@@ -65,119 +69,132 @@ async function selectFolder() {
 /** 进入悬浮模式 */
 async function enterOverlayMode() {
   try {
-    await invoke('create_overlay_window')
+    // 如果没有选中 MIDI，自动选中第一个
+    if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
+      playerStore.selectMidi(playerStore.midiLibrary[0])
+    }
+    // 启用悬浮模式
+    settingsStore.isOverlayMode = true
+    settingsStore.setPlayMode('piano')
+    // 调用 Rust 命令修改窗口
+    await invoke('enter_overlay_mode')
   } catch (e) {
-    console.error('创建悬浮窗口失败:', e)
+    console.error('进入悬浮模式失败:', e)
   }
 }
 </script>
 
 <template>
-  <div class="main-window bg-gradient-warm">
-    <!-- 顶部导航栏 -->
-    <header class="header">
-      <div class="header-content">
-        <div class="logo-section">
-          <img src="@/assets/images/logo.png" alt="logo" class="logo-icon" />
-          <h1 class="title">
-            {{ t('app.title') }}
-          </h1>
-        </div>
+  <div class="main-window" :class="{ 'overlay-mode': settingsStore.isOverlayMode }">
+    <!-- 悬浮模式内容 -->
+    <template v-if="settingsStore.isOverlayMode">
+      <OverlayView />
+    </template>
 
-        <div class="header-actions">
-          <!-- 辅助功能权限提示 -->
-          <Button
-            v-if="!playerStore.hasAccessibility"
-            variant="destructive"
-            size="sm"
-            class="access-btn"
-            @click="openAccessibilitySettings"
-          >
-            <AlertCircle :size="14" />
-            {{ t('permissions.required') }}
-          </Button>
-
-          <Button variant="default" size="sm" class="overlay-btn" @click="enterOverlayMode">
-            <Monitor :size="16" />
-            {{ t('app.overlayMode') }}
-          </Button>
-
-          <!-- 语言切换 -->
-          <div class="locale-switch">
-            <button
-              v-for="loc in SUPPORTED_LOCALES"
-              :key="loc.value"
-              class="locale-btn"
-              :class="{ active: locale === loc.value }"
-              @click="switchLocale(loc.value)"
-            >
-              {{ loc.label }}
-            </button>
+    <!-- 正常模式内容 -->
+    <template v-else>
+      <!-- 顶部导航栏 -->
+      <header class="header">
+        <div class="header-content">
+          <div class="logo-section">
+            <img src="@/assets/images/logo.png" alt="logo" class="logo-icon" />
+            <h1 class="title">
+              {{ t('app.title') }}
+            </h1>
           </div>
-        </div>
-      </div>
-    </header>
 
-    <!-- 主内容区 -->
-    <main class="content">
-      <ScrollableContainer>
-        <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
-          <!-- 标签栏 + 操作按钮 -->
-          <div class="tabs-header sticky top-0 z-10">
-            <TabsList class="tabs-list">
-              <TabsTrigger value="files" class="tab-trigger">
-                <Music :size="16" />
-                {{ t('tabs.files') }}
-              </TabsTrigger>
-              <TabsTrigger value="templates" class="tab-trigger">
-                <LayoutGrid :size="16" />
-                {{ t('tabs.templates') }}
-              </TabsTrigger>
-            </TabsList>
+          <div class="header-actions">
+            <!-- 辅助功能权限提示 -->
+            <Button
+              v-if="!playerStore.hasAccessibility"
+              variant="destructive"
+              size="sm"
+              class="access-btn"
+              @click="openAccessibilitySettings"
+            >
+              <AlertCircle :size="14" />
+              {{ t('permissions.required') }}
+            </Button>
 
-            <!-- 文件操作按钮 -->
-            <div class="file-actions">
-              <Button variant="outline" size="sm" @click="selectFile">
-                <Upload :size="16" />
-                {{ t('actions.selectFile') }}
-              </Button>
-              <Button variant="outline" size="sm" @click="selectFolder">
-                <Folder :size="16" />
-                {{ t('actions.selectFolder') }}
-              </Button>
+            <Button variant="default" size="sm" class="overlay-btn" @click="enterOverlayMode">
+              <Monitor :size="16" />
+              {{ t('app.overlayMode') }}
+            </Button>
+
+            <!-- 语言切换 -->
+            <div class="locale-switch">
+              <button
+                v-for="loc in SUPPORTED_LOCALES"
+                :key="loc.value"
+                class="locale-btn"
+                :class="{ active: locale === loc.value }"
+                @click="switchLocale(loc.value)"
+              >
+                {{ loc.label }}
+              </button>
             </div>
           </div>
+        </div>
+      </header>
 
-          <!-- 文件 Tab -->
-          <TabsContent value="files" class="tab-content flex-1">
-            <FilesTab />
-          </TabsContent>
+      <!-- 主内容区 -->
+      <main class="content">
+        <ScrollableContainer>
+          <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
+            <!-- 标签栏 + 操作按钮 -->
+            <div class="tabs-header sticky top-0 z-10">
+              <TabsList class="tabs-list">
+                <TabsTrigger value="files" class="tab-trigger">
+                  <Music :size="16" />
+                  {{ t('tabs.files') }}
+                </TabsTrigger>
+                <TabsTrigger value="templates" class="tab-trigger">
+                  <LayoutGrid :size="16" />
+                  {{ t('tabs.templates') }}
+                </TabsTrigger>
+              </TabsList>
 
-          <!-- 模板 Tab -->
-          <TabsContent value="templates" class="tab-content flex-1">
-            <TemplatesTab />
-          </TabsContent>
-        </Tabs>
-      </ScrollableContainer>
-    </main>
+              <!-- 文件操作按钮 -->
+              <div class="file-actions">
+                <Button variant="outline" size="sm" @click="selectFile">
+                  <Upload :size="16" />
+                  {{ t('actions.selectFile') }}
+                </Button>
+                <Button variant="outline" size="sm" @click="selectFolder">
+                  <Folder :size="16" />
+                  {{ t('actions.selectFolder') }}
+                </Button>
+              </div>
+            </div>
+
+            <!-- 文件 Tab -->
+            <TabsContent value="files" class="tab-content flex-1">
+              <FilesTab />
+            </TabsContent>
+
+            <!-- 模板 Tab -->
+            <TabsContent value="templates" class="tab-content flex-1">
+              <TemplatesTab />
+            </TabsContent>
+          </Tabs>
+        </ScrollableContainer>
+      </main>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .main-window {
   @apply h-screen flex flex-col text-foreground overflow-hidden relative;
+  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--bg-white-95) 50%, var(--color-primary-light) 100%);
 }
 
-.main-window::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url('@/assets/images/bg.jpeg');
-  background-size: cover;
-  background-position: center;
-  opacity: 0.1;
+.main-window.overlay-mode {
+  @apply overflow-visible;
+  background: transparent;
 }
 
+/* 顶部导航栏 */
 .header {
   background: var(--bg-white-40);
   backdrop-filter: blur(30px);
