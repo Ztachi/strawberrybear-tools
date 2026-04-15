@@ -24,16 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 10
-
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: pnpm
+
+      - name: enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
