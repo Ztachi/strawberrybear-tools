@@ -9,25 +9,31 @@ permissions:
   contents: write
 
 jobs:
-  publish-tauri:
-    permissions:
-      contents: write
+  build:
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
+            target: 'aarch64-apple-darwin'
+            bundle: 'dmg'
           - platform: 'windows-latest'
-            args: ''
+            target: ''
+            bundle: 'msi'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10
 
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: pnpm
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -40,14 +46,22 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: install frontend dependencies
-        run: npm install -g pnpm && pnpm install
+        run: pnpm install
 
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Tauri app
+        run: pnpm tauri build --bundles ${{ matrix.bundle }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        working-directory: apps/infinity-nikki-player
+
+      - name: Upload macOS artifacts
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v4
         with:
-          releaseName: 'InfinityNikkiPlayer v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+          name: macos-bundle
+          path: apps/infinity-nikki-player/src-tauri/target/release/bundle/dmg/*.dmg
+
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundle
+          path: apps/infinity-nikki-player/src-tauri/target/release/bundle/msi/*.msi
