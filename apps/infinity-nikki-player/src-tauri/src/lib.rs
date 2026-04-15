@@ -9,6 +9,12 @@ use types::AppState;
 use std::env;
 use tauri::Manager;
 
+/// 检测是否以管理员权限运行（仅 Windows）
+#[cfg(target_os = "windows")]
+fn is_running_as_admin() -> bool {
+    check_elevation::is_elevated().unwrap_or(false)
+}
+
 /// 获取系统语言 - 调用 macOS 系统命令获取真实语言偏好
 fn get_system_lang() -> String {
     if let Ok(output) = std::process::Command::new("defaults")
@@ -41,6 +47,17 @@ fn get_system_lang() -> String {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Starting InfinityNikkiPlayer...");
+
+    // Windows 管理员权限检测
+    #[cfg(target_os = "windows")]
+    {
+        if !is_running_as_admin() {
+            log::warn!("应用未以管理员权限运行，驱动级键盘模拟可能无法工作");
+            log::warn!("建议：以管理员权限运行以启用完整的键盘模拟功能");
+        } else {
+            log::info!("管理员权限检测: 已获得");
+        }
+    }
 
     let is_zh = get_system_lang().starts_with("zh");
     log::info!("is_zh = {}", is_zh);

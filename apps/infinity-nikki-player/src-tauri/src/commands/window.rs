@@ -34,7 +34,10 @@ pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
             }
         }
 
+        // 隐藏窗口装饰（标题栏、菜单栏等）
         window.set_decorations(false).map_err(|e| format!("设置窗口样式失败: {}", e))?;
+        // 隐藏菜单栏
+        window.hide_menu().map_err(|e| format!("隐藏菜单栏失败: {}", e))?;
         window.set_always_on_top(true).map_err(|e| format!("设置置顶失败: {}", e))?;
         window.set_resizable(false).map_err(|e| format!("设置不可调整大小失败: {}", e))?;
         window.set_minimizable(false).map_err(|e| format!("设置不可最小化失败: {}", e))?;
@@ -76,6 +79,8 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
             window.set_max_size(Some(LogicalSize { width: 1440.0, height: 900.0 }))
                 .map_err(|e| format!("恢复最大尺寸失败: {}", e))?;
             window.set_shadow(true).ok();
+            // 恢复菜单栏
+            window.show_menu().map_err(|e| format!("显示菜单栏失败: {}", e))?;
             window.set_decorations(true).map_err(|e| format!("恢复窗口样式失败: {}", e))?;
 
             // 恢复保存的位置

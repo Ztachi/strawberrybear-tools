@@ -25,6 +25,11 @@ parking_lot = "0.12"
 uuid = { version = "1", features = ["v4"] }
 tauri-plugin-mcp-bridge = "0.10.0"
 
+# Windows 驱动级键盘模拟
+[target.'cfg(target_os = "windows")'.dependencies]
+rdev = "0.5"
+check_elevation = "0.2"
+
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26"
 

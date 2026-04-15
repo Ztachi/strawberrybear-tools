@@ -176,7 +176,16 @@ onMounted(() => {
 })
 
 /** 开始拖拽 */
-async function startDrag() {
+async function startDrag(e: MouseEvent) {
+  // Windows 上：如果点击的是交互元素（按钮、select等），不触发拖拽
+  // 因为 Windows 上 startDragging 会阻止按钮的点击事件
+  // macOS 上不需要这个判断，因为行为不同
+  if (navigator.platform.startsWith('Win')) {
+    const target = e.target as HTMLElement
+    if (target.closest('button, select, input, textarea, .playlist-item')) {
+      return
+    }
+  }
   const window = getCurrentWindow()
   await window.startDragging()
 }
