@@ -18,10 +18,10 @@ jobs:
           node-version: lts/*
           cache: pnpm
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-action@stable
-        with:
-          targets: aarch64-apple-darwin
+      - name: Install Rust
+        run: |
+          rustup set profile minimal
+          rustup target add aarch64-apple-darwin
 
       - name: Install dependencies
         run: pnpm install
@@ -47,8 +47,10 @@ jobs:
           node-version: lts/*
           cache: pnpm
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-action@stable
+      - name: Install Rust
+        run: |
+          rustup set profile minimal
+          rustup target add x86_64-pc-windows-msvc
 
       - name: Install dependencies
         run: pnpm install
