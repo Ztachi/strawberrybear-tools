@@ -38,6 +38,11 @@
     "resources": ["en.lproj", "zh-Hans.lproj", "templates"],
     "macOS": {
       "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
     }
   },
   "plugins": {}
