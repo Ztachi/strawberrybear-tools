@@ -18,7 +18,7 @@ src/
 2. 所有工具函数必须类型签名完整
 3. 使用 async/await 处理异步操作
 4. 错误处理必须包含具体错误信息
-5. **每次写完代码必须先 lint 检查，确保没问题后再提交**
+5. **每次写完代码必须先运行 `pnpm type-check && pnpm lint`，确保类型检查和 lint 都没问题后才能提交交付**
 
 ## ESLint + Prettier 代码规范
 
@@ -26,10 +26,10 @@ src/
 
 ### 配置文件
 
-| 文件 | 说明 |
-|------|------|
-| `.eslintrc.cjs` | ESLint 主配置 |
-| `.prettierrc` | Prettier 格式化配置 |
+| 文件                     | 说明                    |
+| ------------------------ | ----------------------- |
+| `.eslintrc.cjs`          | ESLint 主配置           |
+| `.prettierrc`            | Prettier 格式化配置     |
 | `lint-staged.config.mjs` | git commit 时自动格式化 |
 
 ### 依赖说明
@@ -46,16 +46,13 @@ src/
 
 ### 使用方式
 
-#### 1. 每次写完代码必须先 lint（强制要求）
+#### 1. 每次写完代码必须先运行类型检查和 lint（强制要求）
 
-完成代码编写后，**必须**先手动执行 lint 检查并修复问题，确保代码规范后再进行提交：
+完成代码编写后，**必须**先手动执行以下命令并修复所有问题，确保代码规范后再进行提交：
 
 ```bash
-# 检查并自动修复
-eslint --fix .
-
-# 格式化代码
-prettier --write .
+# 先运行类型检查，再运行 lint，两者都必须通过
+pnpm type-check && pnpm lint
 ```
 
 #### 2. 提交时自动格式化（推荐）
@@ -83,27 +80,27 @@ prettier --write .
 
 #### 3. lint-staged 规则
 
-| 文件模式 | 执行的命令 |
-|----------|------------|
+| 文件模式                        | 执行的命令                          |
+| ------------------------------- | ----------------------------------- |
 | `apps/**/*.{js,ts,mjs,cjs,vue}` | `eslint --fix` + `prettier --write` |
-| `server/**/*.ts` | `eslint --fix` + `prettier --write` |
-| `test/**/*.{ts,js}` | `eslint --fix` + `prettier --write` |
-| `*.{json,md,css,yaml,yml}` | `prettier --write` |
+| `server/**/*.ts`                | `eslint --fix` + `prettier --write` |
+| `test/**/*.{ts,js}`             | `eslint --fix` + `prettier --write` |
+| `*.{json,md,css,yaml,yml}`      | `prettier --write`                  |
 
 ### Prettier 格式化规则
 
-| 规则 | 值 | 说明 |
-|------|-----|------|
-| `semi` | `false` | 不使用分号 |
-| `singleQuote` | `true` | 使用单引号 |
-| `printWidth` | `100` | 单行最大宽度 |
-| `tabWidth` | `2` | 缩进宽度 |
-| `trailingComma` | `es5` | ES5 尾随逗号 |
-| `bracketSpacing` | `true` | 对象括号空格 |
+| 规则             | 值      | 说明         |
+| ---------------- | ------- | ------------ |
+| `semi`           | `false` | 不使用分号   |
+| `singleQuote`    | `true`  | 使用单引号   |
+| `printWidth`     | `100`   | 单行最大宽度 |
+| `tabWidth`       | `2`     | 缩进宽度     |
+| `trailingComma`  | `es5`   | ES5 尾随逗号 |
+| `bracketSpacing` | `true`  | 对象括号空格 |
 
 ### ESLint 规则
 
-- `@typescript-eslint/no-unused-vars`: 错误未使用的变量（_开头除外）
+- `@typescript-eslint/no-unused-vars`: 错误未使用的变量（\_开头除外）
 - `@typescript-eslint/consistent-type-imports`: 类型导入使用 `import type`
 - `prefer-const`: 必须使用 const
 - `no-console`: 控制台警告
@@ -112,6 +109,7 @@ prettier --write .
 ## 工具开发
 
 每个工具应包含：
+
 - 清晰的名称和描述
 - 完整的参数类型定义
 - 返回值类型注解
