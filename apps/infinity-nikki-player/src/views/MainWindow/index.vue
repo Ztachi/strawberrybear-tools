@@ -2,12 +2,13 @@
 /**
  * @description: 主窗口 - 包含正常模式和悬浮模式
  */
-import { ref, onMounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
+import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
 import { AlertCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
@@ -21,6 +22,206 @@ const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 const activeTab = ref('files')
+const isDragOverlayVisible = ref(false)
+const dragItemCount = ref(0)
+let dragEnterDepth = 0
+let removeDomDragListeners: (() => void) | null = null
+
+interface DataTransferItemWithEntry extends DataTransferItem {
+  webkitGetAsEntry?: () => FileSystemEntry | null
+}
+
+interface DroppedFilesResult {
+  files: File[]
+  containsDirectory: boolean
+}
+
+function getPathBasename(path: string) {
+  return path.split(/[/\\]/).pop() || path
+}
+
+function setDragOverlayVisible(visible: boolean) {
+  isDragOverlayVisible.value = visible
+  if (!visible) {
+    dragItemCount.value = 0
+  }
+}
+
+function isMidiFilename(filename: string) {
+  return /\.(mid|midi)$/i.test(filename)
+}
+
+function readFileAsUint8Array(file: File) {
+  return file.arrayBuffer().then((buffer) => new Uint8Array(buffer))
+}
+
+function readFileEntry(entry: FileSystemFileEntry) {
+  return new Promise<File>((resolve, reject) => {
+    entry.file(resolve, reject)
+  })
+}
+
+async function readAllDirectoryEntries(directory: FileSystemDirectoryEntry) {
+  const reader = directory.createReader()
+  const entries: FileSystemEntry[] = []
+
+  while (true) {
+    const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+      reader.readEntries(resolve, reject)
+    })
+
+    if (batch.length === 0) break
+    entries.push(...batch)
+  }
+
+  return entries
+}
+
+async function collectFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
+  if (entry.isFile) {
+    return [await readFileEntry(entry as FileSystemFileEntry)]
+  }
+
+  if (entry.isDirectory) {
+    const files: File[] = []
+    const entries = await readAllDirectoryEntries(entry as FileSystemDirectoryEntry)
+    for (const child of entries) {
+      files.push(...(await collectFilesFromEntry(child)))
+    }
+    return files
+  }
+
+  return []
+}
+
+async function getDroppedFiles(dataTransfer: DataTransfer | null): Promise<DroppedFilesResult> {
+  if (!dataTransfer) {
+    return {
+      files: [],
+      containsDirectory: false,
+    }
+  }
+
+  const entryItems = Array.from(dataTransfer.items).filter(
+    (item): item is DataTransferItemWithEntry => item.kind === 'file'
+  )
+
+  const filesFromEntries: File[] = []
+  let containsDirectory = false
+  for (const item of entryItems) {
+    const entry = item.webkitGetAsEntry?.()
+    if (!entry) continue
+    if (entry.isDirectory) {
+      containsDirectory = true
+    }
+    filesFromEntries.push(...(await collectFilesFromEntry(entry)))
+  }
+
+  if (filesFromEntries.length > 0) {
+    return {
+      files: filesFromEntries,
+      containsDirectory,
+    }
+  }
+
+  return {
+    files: Array.from(dataTransfer.files),
+    containsDirectory: false,
+  }
+}
+
+function formatInvalidDropDescription(paths: string[]) {
+  const preview = paths.slice(0, 3).map(getPathBasename).join(', ')
+  const suffix = paths.length > 3 ? '...' : ''
+  const baseMessage = t('dragdrop.invalidDescription')
+
+  return preview ? `${baseMessage} (${preview}${suffix})` : baseMessage
+}
+
+async function handleImportPaths(paths: string[]) {
+  const result = await playerStore.importPaths(paths)
+
+  if (result.invalidPaths.length > 0) {
+    toast.error(t('dragdrop.invalidTitle'), {
+      description: formatInvalidDropDescription(result.invalidPaths),
+      richColors: true,
+    })
+  }
+}
+
+async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean } = {}) {
+  const midiFiles = files.filter((file) => isMidiFilename(file.name))
+  const invalidFiles = files.filter((file) => !isMidiFilename(file.name)).map((file) => file.name)
+  const { autoSelect = true } = options
+
+  for (const file of midiFiles) {
+    const bytes = await readFileAsUint8Array(file)
+    await playerStore.importMidiBuffer(file.name, bytes, { autoSelect })
+  }
+
+  if (invalidFiles.length > 0) {
+    toast.error(t('dragdrop.invalidTitle'), {
+      description: formatInvalidDropDescription(invalidFiles),
+      richColors: true,
+    })
+  }
+}
+
+function bindDomDragEvents() {
+  const dragOptions = { capture: true }
+
+  const handleDragEnter = (event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    dragEnterDepth += 1
+    dragItemCount.value = event.dataTransfer?.items.length || event.dataTransfer?.files.length || 0
+    setDragOverlayVisible(true)
+  }
+
+  const handleDragOver = (event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy'
+      dragItemCount.value = event.dataTransfer.items.length || event.dataTransfer.files.length || 0
+    }
+    setDragOverlayVisible(true)
+  }
+
+  const handleDragLeave = (event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    dragEnterDepth = Math.max(0, dragEnterDepth - 1)
+
+    if (dragEnterDepth === 0) {
+      setDragOverlayVisible(false)
+    }
+  }
+
+  const handleDrop = (event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    dragEnterDepth = 0
+    setDragOverlayVisible(false)
+
+    void getDroppedFiles(event.dataTransfer).then((result) => {
+      if (result.files.length === 0) return
+      void handleDroppedFiles(result.files, { autoSelect: !result.containsDirectory })
+    })
+  }
+
+  window.addEventListener('dragenter', handleDragEnter, dragOptions)
+  window.addEventListener('dragover', handleDragOver, dragOptions)
+  window.addEventListener('dragleave', handleDragLeave, dragOptions)
+  window.addEventListener('drop', handleDrop, dragOptions)
+
+  return () => {
+    window.removeEventListener('dragenter', handleDragEnter, dragOptions)
+    window.removeEventListener('dragover', handleDragOver, dragOptions)
+    window.removeEventListener('dragleave', handleDragLeave, dragOptions)
+    window.removeEventListener('drop', handleDrop, dragOptions)
+  }
+}
 
 /** 切换语言 */
 function switchLocale(targetLocale: 'zh-CN' | 'en-US') {
@@ -40,6 +241,14 @@ onMounted(async () => {
   await playerStore.checkAccessibility()
   await settingsStore.loadSettings()
   await playerStore.loadMidiLibrary()
+  removeDomDragListeners = bindDomDragEvents()
+})
+
+onUnmounted(() => {
+  if (removeDomDragListeners) {
+    removeDomDragListeners()
+    removeDomDragListeners = null
+  }
 })
 
 /** 选择文件导入 */
@@ -50,9 +259,7 @@ async function selectFile() {
   })
   if (selected) {
     const files = Array.isArray(selected) ? selected : [selected]
-    for (const file of files) {
-      await playerStore.importMidi(file)
-    }
+    await handleImportPaths(files)
   }
 }
 
@@ -62,7 +269,7 @@ async function selectFolder() {
     directory: true,
   })
   if (selected) {
-    await playerStore.scanFolder(selected as string)
+    await handleImportPaths([selected as string])
   }
 }
 
@@ -89,6 +296,25 @@ async function enterOverlayMode() {
 
 <template>
   <div class="main-window" :class="{ 'overlay-mode': settingsStore.isOverlayMode }">
+    <div v-if="isDragOverlayVisible && !settingsStore.isOverlayMode" class="drag-overlay">
+      <div class="drag-overlay-card">
+        <div class="drag-overlay-icon">
+          <Upload :size="28" />
+        </div>
+        <p class="drag-overlay-title">
+          {{ t('dragdrop.title') }}
+        </p>
+        <p class="drag-overlay-hint">
+          {{ t('dragdrop.hint') }}
+        </p>
+        <p class="drag-overlay-hint">
+          {{ t('dragdrop.folderHint') }}
+        </p>
+        <p v-if="dragItemCount > 0" class="drag-overlay-count">
+          {{ dragItemCount }}
+        </p>
+      </div>
+    </div>
     <!-- 悬浮模式内容 -->
     <template v-if="settingsStore.isOverlayMode">
       <OverlayView />
@@ -213,6 +439,44 @@ async function enterOverlayMode() {
 }
 
 /* 顶部导航栏 */
+.drag-overlay {
+  @apply absolute inset-0 flex items-center justify-center p-6;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+
+.drag-overlay-card {
+  @apply w-full max-w-lg rounded-[28px] px-8 py-10 text-center;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 249, 0.98) 100%);
+  border: 2px dashed var(--border-primary);
+  box-shadow: 0 24px 80px rgba(201, 67, 127, 0.16);
+}
+
+.drag-overlay-icon {
+  @apply mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: var(--color-white);
+  box-shadow: var(--shadow-pink-sm);
+}
+
+.drag-overlay-title {
+  @apply text-xl font-semibold;
+  color: var(--color-foreground);
+}
+
+.drag-overlay-hint {
+  @apply mt-2 text-sm leading-6;
+  color: var(--color-muted-dark);
+}
+
+.drag-overlay-count {
+  @apply mt-5 inline-flex min-w-10 items-center justify-center rounded-full px-3 py-1 text-sm font-semibold;
+  background: var(--bg-primary-15);
+  color: var(--color-primary);
+}
+
 .header {
   background: var(--bg-white-40);
   backdrop-filter: blur(30px);

@@ -27,6 +27,18 @@ import {
 } from '@/lib/midiPlayer'
 import { useSettingsStore } from './settings'
 
+const MIDI_EXTENSIONS = new Set(['mid', 'midi'])
+
+export interface ImportPathsResult {
+  importedFiles: number
+  scannedFolders: number
+  invalidPaths: string[]
+}
+
+interface ImportMidiBufferOptions {
+  autoSelect?: boolean
+}
+
 export const usePlayerStore = defineStore('player', () => {
   // MIDI 库（已导入的文件列表）
   const midiLibrary = ref<MidiInfo[]>([])
@@ -223,7 +235,108 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  async function importMidiBuffer(
+    filename: string,
+    data: Uint8Array | number[],
+    options: ImportMidiBufferOptions = {}
+  ) {
+    isLoading.value = true
+    try {
+      const { autoSelect = true } = options
+      const payload = data instanceof Uint8Array ? Array.from(data) : data
+      const info = await invoke<MidiInfo>('import_midi_buffer', { filename, data: payload })
+      const existingIndex = midiLibrary.value.findIndex((m) => m.filename === info.filename)
+      if (existingIndex !== -1) {
+        if (autoSelect) {
+          await selectMidi(midiLibrary.value[existingIndex])
+        }
+        return true
+      }
+
+      const midiData = await invoke<number[]>('read_midi_data', { filename: info.filename })
+      const uint8Array = new Uint8Array(midiData)
+      const { duration } = await loadMidiForDuration(uint8Array.buffer)
+      info.duration_ms = Math.floor(duration)
+
+      const melody = await invoke<MelodyEvent[]>('extract_melody', {
+        events: info.events,
+        ticksPerBeat: info.ticks_per_beat,
+        tempo: 500000,
+      })
+      info.melody_note_count = melody.length
+
+      await invoke('save_midi_config', {
+        filename: info.filename,
+        durationMs: Math.floor(duration),
+        trackCount: info.track_count,
+        melodyNoteCount: melody.length,
+        ticksPerBeat: info.ticks_per_beat,
+        tempo: info.tempo,
+        disabledTracks: [],
+      })
+
+      midiLibrary.value.push(info)
+      if (autoSelect) {
+        await selectMidi(info)
+      }
+      return true
+    } catch (e) {
+      toast.error('瀵煎叆 MIDI 澶辫触', { description: String(e), richColors: true })
+      console.error('瀵煎叆 MIDI 澶辫触:', e)
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   /** 从库中删除 MIDI 文件 */
+  function getPathBasename(path: string) {
+    return path.split(/[/\\]/).pop() || path
+  }
+
+  function getPathExtension(path: string) {
+    const basename = getPathBasename(path)
+    const lastDotIndex = basename.lastIndexOf('.')
+    return lastDotIndex === -1 ? '' : basename.slice(lastDotIndex + 1).toLowerCase()
+  }
+
+  function isMidiPath(path: string) {
+    return MIDI_EXTENSIONS.has(getPathExtension(path))
+  }
+
+  function looksLikeDirectoryPath(path: string) {
+    return getPathExtension(path) === ''
+  }
+
+  async function importPaths(paths: string[]): Promise<ImportPathsResult> {
+    const result: ImportPathsResult = {
+      importedFiles: 0,
+      scannedFolders: 0,
+      invalidPaths: [],
+    }
+
+    const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)))
+
+    for (const path of uniquePaths) {
+      if (isMidiPath(path)) {
+        if (await importMidi(path)) {
+          result.importedFiles++
+        }
+        continue
+      }
+
+      if (looksLikeDirectoryPath(path)) {
+        await scanFolder(path)
+        result.scannedFolders++
+        continue
+      }
+
+      result.invalidPaths.push(path)
+    }
+
+    return result
+  }
+
   async function deleteMidi(filename: string) {
     try {
       await invoke('delete_midi_from_library', { filename })
@@ -1062,7 +1175,9 @@ export const usePlayerStore = defineStore('player', () => {
     isPreviewMuted,
     // 方法
     loadMidiLibrary,
+    importPaths,
     importMidi,
+    importMidiBuffer,
     deleteMidi,
     removeFromLibrary,
     selectMidi,

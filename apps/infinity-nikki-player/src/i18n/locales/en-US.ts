@@ -68,6 +68,14 @@ export default {
     trackIndex: 'Track {n}',
     percussionTrack: 'Percussion',
   },
+  dragdrop: {
+    title: 'Drop MIDI files here',
+    hint: 'Supports .mid and .midi files',
+    folderHint: 'Folders are also supported and will import MIDI files inside',
+    invalidTitle: 'Unsupported files',
+    invalidDescription:
+      'Only .mid and .midi files can be imported directly. You can also drop folders to batch import MIDI files.',
+  },
   permissions: {
     required: 'Accessibility Required',
   },

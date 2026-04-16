@@ -144,6 +144,33 @@ pub fn import_midi(app: tauri::AppHandle, source_path: String) -> Result<MidiInf
     Ok(info)
 }
 
+/// 通过前端拖拽读取到的文件字节导入 MIDI 到库
+#[tauri::command]
+pub fn import_midi_buffer(
+    app: tauri::AppHandle,
+    filename: String,
+    data: Vec<u8>,
+) -> Result<MidiInfo, String> {
+    let library_dir = get_midi_library_dir(&app)?;
+
+    let safe_filename = Path::new(&filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown.mid")
+        .to_string();
+
+    let dest_path = library_dir.join(&safe_filename);
+    if dest_path.exists() {
+        let (info, _events) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
+        return Ok(info);
+    }
+
+    fs::write(&dest_path, data).map_err(|e| format!("写入文件失败: {}", e))?;
+
+    let (info, _events) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
+    Ok(info)
+}
+
 /// 获取 MIDI 库列表（从应用数据目录加载）
 #[tauri::command]
 pub fn get_midi_library(app: tauri::AppHandle) -> Result<Vec<MidiInfo>, String> {

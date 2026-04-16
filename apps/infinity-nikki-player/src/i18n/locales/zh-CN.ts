@@ -68,6 +68,14 @@ export default {
     trackIndex: '音轨 {n}',
     percussionTrack: '打击乐器',
   },
+  dragdrop: {
+    title: '松开即可导入 MIDI 文件',
+    hint: '支持 .mid 和 .midi 文件',
+    folderHint: '也支持拖入文件夹，会自动导入其中的 MIDI 文件',
+    invalidTitle: '包含不支持的文件',
+    invalidDescription:
+      '只能直接导入 .mid 和 .midi 文件，也可以拖入文件夹批量导入其中的 MIDI 文件。',
+  },
   permissions: {
     required: '需要辅助功能权限',
   },

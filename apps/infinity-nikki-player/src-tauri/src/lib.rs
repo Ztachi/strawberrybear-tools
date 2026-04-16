@@ -220,6 +220,7 @@ pub fn run() {
             commands::midi::scan_folder,
             commands::midi::read_midi_data,
             commands::midi::import_midi,
+            commands::midi::import_midi_buffer,
             commands::midi::get_midi_library,
             commands::midi::delete_midi_from_library,
             commands::midi::load_midi_config,
