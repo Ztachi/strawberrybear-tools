@@ -27,7 +27,8 @@ const dragItemCount = ref(0)
 let dragEnterDepth = 0
 let removeDomDragListeners: (() => void) | null = null
 
-interface DataTransferItemWithEntry extends DataTransferItem {
+interface DataTransferItemWithEntry {
+  kind: string
   webkitGetAsEntry?: () => FileSystemEntry | null
 }
 
@@ -103,8 +104,8 @@ async function getDroppedFiles(dataTransfer: DataTransfer | null): Promise<Dropp
   }
 
   const entryItems = Array.from(dataTransfer.items).filter(
-    (item): item is DataTransferItemWithEntry => item.kind === 'file'
-  )
+    (item) => item.kind === 'file'
+  ) as DataTransferItemWithEntry[]
 
   const filesFromEntries: File[] = []
   let containsDirectory = false
