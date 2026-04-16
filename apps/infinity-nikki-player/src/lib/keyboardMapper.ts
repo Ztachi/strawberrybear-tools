@@ -91,6 +91,8 @@ export class KeyboardMapper {
   private previousActiveKeys = new Set<string>()
   /** 上一帧的 code -> pitch 映射（用于 release 事件） */
   private previousCodeToPitch = new Map<string, number>()
+  /** 按键引用计数（key字符 → 当前按住该键的音符数），用于同键冲突处理 */
+  private keyRefCount = new Map<string, number>()
   /** 日志更新回调 */
   private keyLogCallback: KeyLogCallback | null = null
   /** 音符按下回调（用于发音） */
@@ -171,6 +173,7 @@ export class KeyboardMapper {
     // 完全重置所有状态
     this.previousActiveKeys = new Set()
     this.previousCodeToPitch = new Map()
+    this.keyRefCount.clear()
     this.keyLog = []
   }
 
@@ -188,6 +191,104 @@ export class KeyboardMapper {
    */
   setKeyboardSimCallback(callback: KeyboardSimCallback | null): void {
     this.keyboardSimCallback = callback
+  }
+
+  /**
+   * @description: 处理音符按下事件（由 midiPlayer 直接同步调用，不经过 Vue 响应式）
+   * 使用引用计数：同一个按键被多个音符占用时，只在首次按下时发送 press
+   * @param {number} mappedPitch 映射后的模板音高
+   * @param {number} currentTimeMs 当前播放时间
+   */
+  noteOn(mappedPitch: number, currentTimeMs: number): void {
+    if (!this.template) return
+    const mapping = this.template.mappings.find((m) => m.pitch === mappedPitch)
+    if (!mapping) return
+
+    const key = mapping.key
+    const count = (this.keyRefCount.get(key) ?? 0) + 1
+    this.keyRefCount.set(key, count)
+
+    if (count === 1) {
+      // 首次按下该键 → 发送 press
+      this.keyboardSimCallback?.('press', key)
+
+      const upperKey = key.toUpperCase()
+      const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
+      const entry: KeyLogEntry = {
+        time: currentTimeMs,
+        key: this.pitchToNoteName(mappedPitch),
+        code,
+        pitch: mappedPitch,
+        originalPitch: mappedPitch,
+        action: 'press',
+      }
+      this.keyLog.push(entry)
+      this.keyLogCallback?.(entry)
+    }
+  }
+
+  /**
+   * @description: 处理音符释放事件（由 midiPlayer 直接同步调用，不经过 Vue 响应式）
+   * 引用计数归零时才发送 release，防止多音符共享同一按键时提前释放
+   * @param {number} mappedPitch 映射后的模板音高
+   * @param {number} currentTimeMs 当前播放时间
+   */
+  noteOff(mappedPitch: number, currentTimeMs: number): void {
+    if (!this.template) return
+    const mapping = this.template.mappings.find((m) => m.pitch === mappedPitch)
+    if (!mapping) return
+
+    const key = mapping.key
+    const count = this.keyRefCount.get(key) ?? 0
+    const newCount = Math.max(0, count - 1)
+    this.keyRefCount.set(key, newCount)
+
+    if (newCount === 0 && count > 0) {
+      // 最后一个占用该键的音符释放 → 发送 release
+      this.keyboardSimCallback?.('release', key)
+
+      const upperKey = key.toUpperCase()
+      const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
+      const entry: KeyLogEntry = {
+        time: currentTimeMs,
+        key: this.pitchToNoteName(mappedPitch),
+        code,
+        pitch: mappedPitch,
+        originalPitch: mappedPitch,
+        action: 'release',
+      }
+      this.keyLog.push(entry)
+      this.keyLogCallback?.(entry)
+    }
+  }
+
+  /**
+   * @description: 释放所有按下的键（播放停止或暂停时调用）
+   * @param {number} currentTimeMs 当前播放时间
+   */
+  releaseAll(currentTimeMs: number): void {
+    for (const [key, count] of this.keyRefCount) {
+      if (count > 0) {
+        this.keyboardSimCallback?.('release', key)
+
+        const mapping = this.template?.mappings.find((m) => m.key === key)
+        if (mapping) {
+          const upperKey = key.toUpperCase()
+          const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
+          const entry: KeyLogEntry = {
+            time: currentTimeMs,
+            key: this.pitchToNoteName(mapping.pitch),
+            code,
+            pitch: mapping.pitch,
+            originalPitch: mapping.pitch,
+            action: 'release',
+          }
+          this.keyLog.push(entry)
+          this.keyLogCallback?.(entry)
+        }
+      }
+    }
+    this.keyRefCount.clear()
   }
 
   /**
@@ -554,6 +655,7 @@ export class KeyboardMapper {
     this.keyLog = []
     this.previousActiveKeys.clear()
     this.previousCodeToPitch.clear()
+    this.keyRefCount.clear()
     this.template = null
   }
 

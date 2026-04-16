@@ -26,6 +26,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 是否处于悬浮模式
   const isOverlayMode = ref(false)
 
+  // 进入悬浮模式前保存的 playMode，退出时恢复
+  const modeBeforeOverlay = ref<'auto' | 'piano'>('auto')
+
   // 模板列表（从后端加载）
   const templates = ref<KeyTemplate[]>([])
 
@@ -168,6 +171,7 @@ export const useSettingsStore = defineStore('settings', () => {
     playMode,
     enableKeyboardSim,
     isOverlayMode,
+    modeBeforeOverlay,
     templates,
     // 方法
     loadSettings,

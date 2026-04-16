@@ -49,6 +49,13 @@ let noteFilter: ((event: { noteName: string; pitch: number; velocity: number }) 
 /** 音高映射器：piano 模式下将原始 pitch 映射到模板音高，返回 null 表示该音符不需要播放 */
 let pitchMapper: ((pitch: number) => number | null) | null = null
 
+/** 键盘事件回调（MIDI 事件处理时同步调用，不经过 Vue 响应式，精确到每个 NoteOn/NoteOff） */
+let keyboardEventCallback: ((type: 'on' | 'off', pitch: number, velocity: number) => void) | null =
+  null
+
+/** 播放停止回调（用于释放所有按键） */
+let onPlaybackStopCallback: (() => void) | null = null
+
 /** 正在播放的音符节点（key 是 noteName，用于停止特定音符） */
 const activeNoteNodes = new Map<string, { stop: () => void }>()
 
@@ -118,6 +125,9 @@ function handleMidiEvent(
       }
     }
 
+    // 同步通知键盘事件（精确到每个 NoteOn，不经过 Vue 批处理）
+    keyboardEventCallback?.('on', targetPitch, event.velocity)
+
     // 播放音符
     const node = instrument.play(targetNoteName, audioContext.currentTime, {
       gain: (event.velocity / 100) * currentVolume,
@@ -146,6 +156,10 @@ function handleMidiEvent(
         targetPitch = mappedPitch
       }
     }
+
+    // 同步通知键盘事件（精确到每个 NoteOff）
+    keyboardEventCallback?.('off', targetPitch, 0)
+
     activeNoteNodes.delete(pitchToNoteName(targetPitch))
     // 移除活跃音符
     activeNotes.delete(targetPitch)
@@ -216,6 +230,8 @@ export async function playMidi(
   player.on('endOfFile', () => {
     isPlaying = false
     isPaused = false
+    // 释放所有按键（与 stop() 保持一致）
+    onPlaybackStopCallback?.()
     onEndCallback?.()
   })
 
@@ -255,6 +271,8 @@ export function stop() {
   }
   isPlaying = false
   isPaused = false
+  // 通知释放所有按键
+  onPlaybackStopCallback?.()
   // 停止所有正在播放的音符
   for (const [_, node] of activeNoteNodes) {
     try {
@@ -531,4 +549,21 @@ export function setOnActiveNotesChange(
   callback: ((notes: Array<{ pitch: number; noteName: string }>) => void) | null
 ): void {
   onActiveNotesChange = callback
+}
+
+/**
+ * @description: 设置键盘事件回调（每个 NoteOn/NoteOff 同步调用，不经过 Vue 响应式）
+ * @param cb 回调函数，type='on' 表示按下，type='off' 表示释放，pitch 是映射后的音高
+ */
+export function setKeyboardEventCallback(
+  cb: ((type: 'on' | 'off', pitch: number, velocity: number) => void) | null
+): void {
+  keyboardEventCallback = cb
+}
+
+/**
+ * @description: 设置播放停止回调（用于释放所有按键）
+ */
+export function setOnPlaybackStopCallback(cb: (() => void) | null): void {
+  onPlaybackStopCallback = cb
 }

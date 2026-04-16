@@ -109,12 +109,19 @@ async function getDroppedFiles(dataTransfer: DataTransfer | null): Promise<Dropp
 
   const filesFromEntries: File[] = []
   let containsDirectory = false
+
+  // 必须同步收集所有 entry，await 之后 DataTransferItem 引用会失效
+  const entries: FileSystemEntry[] = []
   for (const item of entryItems) {
     const entry = item.webkitGetAsEntry?.()
     if (!entry) continue
     if (entry.isDirectory) {
       containsDirectory = true
     }
+    entries.push(entry)
+  }
+
+  for (const entry of entries) {
     filesFromEntries.push(...(await collectFilesFromEntry(entry)))
   }
 
@@ -153,11 +160,12 @@ async function handleImportPaths(paths: string[]) {
 async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean } = {}) {
   const midiFiles = files.filter((file) => isMidiFilename(file.name))
   const invalidFiles = files.filter((file) => !isMidiFilename(file.name)).map((file) => file.name)
-  const { autoSelect = true } = options
+  // 只有恰好 1 个 MIDI 文件时才自动进入详情
+  const shouldAutoSelect = (options.autoSelect ?? true) && midiFiles.length === 1
 
   for (const file of midiFiles) {
     const bytes = await readFileAsUint8Array(file)
-    await playerStore.importMidiBuffer(file.name, bytes, { autoSelect })
+    await playerStore.importMidiBuffer(file.name, bytes, { autoSelect: shouldAutoSelect })
   }
 
   if (invalidFiles.length > 0) {
@@ -207,7 +215,7 @@ function bindDomDragEvents() {
 
     void getDroppedFiles(event.dataTransfer).then((result) => {
       if (result.files.length === 0) return
-      void handleDroppedFiles(result.files, { autoSelect: !result.containsDirectory })
+      void handleDroppedFiles(result.files)
     })
   }
 
@@ -261,6 +269,10 @@ async function selectFile() {
   if (selected) {
     const files = Array.isArray(selected) ? selected : [selected]
     await handleImportPaths(files)
+    // 多个文件时关闭详情，只有单文件才保持自动进入详情
+    if (files.length > 1) {
+      playerStore.closeDetail()
+    }
   }
 }
 
@@ -284,6 +296,8 @@ async function enterOverlayMode() {
     // 停止播放
     playerStore.stopPreviewPlayback()
     playerStore.setPreviewTime(0)
+    // 保存进入前的 playMode，退出时恢复
+    settingsStore.modeBeforeOverlay = settingsStore.playMode
     // 启用悬浮模式
     settingsStore.isOverlayMode = true
     settingsStore.setPlayMode('piano')

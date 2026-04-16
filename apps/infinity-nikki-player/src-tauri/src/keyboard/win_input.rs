@@ -114,9 +114,17 @@ fn send_key_with_hold(key: &str, hold_time_ms: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// 发送按键按下
+/// 发送按键按下（仅按下，不释放——由 simulate_key_up 负责释放）
 pub fn send_key_down(key: &str) -> Result<(), String> {
-    send_key_with_hold(key, DEFAULT_HOLD_TIME_MS)
+    if key.is_empty() {
+        return Ok(());
+    }
+    let c = key.chars().next().unwrap();
+    let vk = char_to_vk(c).ok_or_else(|| format!("不支持的按键: {}", c))?;
+    let scan_code = vk_to_scan_code(vk);
+    unsafe {
+        send_key_event(vk, scan_code, false)
+    }
 }
 
 /// 发送按键释放

@@ -3,13 +3,17 @@
  * @description: 悬浮模式视图 - 可悬浮于游戏界面上方的播放器
  * 支持迷你悬浮条和展开面板两种形态
  */
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
+import {
+  setKeyboardEventCallback,
+  setOnPlaybackStopCallback,
+} from '@/lib/midiPlayer'
 import {
   SkipBack,
   SkipForward,
@@ -35,6 +39,19 @@ const settingsStore = useSettingsStore()
 
 /** 键盘映射器实例 */
 const keyboardMapper = ref<KeyboardMapper | null>(null)
+
+/** 悬浮层独立音量状态（与详情页的 previewVolume / isPreviewMuted 完全独立） */
+const overlayMuted = ref(false)
+const overlayVolume = ref(1)
+
+/** 悬浮层切换静音 */
+function toggleOverlayMute() {
+  overlayMuted.value = !overlayMuted.value
+  // 直接操作 midiPlayer 音量，不写入 playerStore
+  import('@/lib/midiPlayer').then(({ setVolume }) => {
+    setVolume(overlayMuted.value ? 0 : overlayVolume.value)
+  })
+}
 
 /** 倒计时秒数（悬浮模式播放/恢复时延迟） */
 const countdown = ref(0)
@@ -127,19 +144,31 @@ function initKeyboardMapper() {
       })
     }
     keyboardMapper.value.setTemplate(template)
+
+    // 直接同步键盘事件回调（绕过 Vue 响应式批处理，精确到每个 NoteOn/NoteOff）
+    setKeyboardEventCallback((type, pitch) => {
+      if (!keyboardMapper.value) return
+      if (!(settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) || settingsStore.playMode !== 'piano') return
+      if (type === 'on') {
+        keyboardMapper.value.noteOn(pitch, playerStore.previewCurrentTime)
+      } else {
+        keyboardMapper.value.noteOff(pitch, playerStore.previewCurrentTime)
+      }
+    })
+
+    // 播放停止时释放所有按键
+    setOnPlaybackStopCallback(() => {
+      keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
+    })
   }
 }
 
-/** 监听活跃音符变化，同步到 KeyboardMapper */
+/** 监听暂停状态变化，释放所有按键（暂停时游戏不应保持按键） */
 watch(
-  () => playerStore.activeNotes,
-  (notes) => {
-    if (settingsStore.playMode !== 'piano') return
-    if (!keyboardMapper.value) return
-    if (notes.length === 0) {
-      keyboardMapper.value.clearKeyState(playerStore.previewCurrentTime)
-    } else {
-      keyboardMapper.value.setActiveNotes(notes, playerStore.previewCurrentTime)
+  () => playerStore.isPreviewPaused,
+  (paused) => {
+    if (paused && keyboardMapper.value) {
+      keyboardMapper.value.releaseAll(playerStore.previewCurrentTime)
     }
   }
 )
@@ -175,6 +204,13 @@ onMounted(() => {
   initKeyboardMapper()
 })
 
+onUnmounted(() => {
+  // 清理直接回调，释放所有按键
+  setKeyboardEventCallback(null)
+  setOnPlaybackStopCallback(null)
+  keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
+})
+
 /** 开始拖拽 */
 async function startDrag(e: MouseEvent) {
   // Windows 上：如果点击的是交互元素（按钮、select等），不触发拖拽
@@ -204,6 +240,15 @@ async function toggleExpand() {
 /** 退出悬浮模式 */
 async function exitOverlayMode() {
   try {
+    playerStore.stopPreviewPlayback()
+    // 退出前清理键盘回调
+    setKeyboardEventCallback(null)
+    setOnPlaybackStopCallback(null)
+    keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
+    // 恢复进入前的 playMode
+    settingsStore.setPlayMode(settingsStore.modeBeforeOverlay)
+    // 恢复详情页的音量（悬浮层的音量独立管理，退出时还原）
+    playerStore.applyDetailVolume()
     settingsStore.isOverlayMode = false
     await invoke('exit_overlay_mode')
   } catch (e) {
@@ -212,8 +257,8 @@ async function exitOverlayMode() {
 }
 
 /** 播放指定 MIDI */
-function playMidi(midi: any) {
-  playerStore.selectMidi(midi)
+async function playMidi(midi: any) {
+  await playerStore.selectMidi(midi)
   playerStore.startPreview()
 }
 
@@ -343,15 +388,15 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             <TooltipTrigger as-child>
               <button
                 class="ctrl-btn"
-                :class="{ active: playerStore.isPreviewMuted }"
-                @click.stop="playerStore.toggleMute()"
+                :class="{ active: overlayMuted }"
+                @click.stop="toggleOverlayMute()"
               >
-                <VolumeX v-if="playerStore.isPreviewMuted" :size="16" />
+                <VolumeX v-if="overlayMuted" :size="16" />
                 <Volume2 v-else :size="16" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              {{ playerStore.isPreviewMuted ? t('overlay.unmute') : t('overlay.mute') }}
+              {{ overlayMuted ? t('overlay.unmute') : t('overlay.mute') }}
             </TooltipContent>
           </Tooltip>
 

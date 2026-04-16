@@ -926,6 +926,15 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  /** 将详情页当前音量应用到 midiPlayer（从悬浮层退出时调用） */
+  function applyDetailVolume() {
+    if (isPreviewMuted.value) {
+      setPreviewVolume(0)
+    } else {
+      setPreviewVolume(previewVolume.value)
+    }
+  }
+
   /** 跳转播放 */
   async function seekPreview(time: number) {
     previewCurrentTime.value = time
@@ -1205,6 +1214,7 @@ export const usePlayerStore = defineStore('player', () => {
     setDragging,
     setPreviewTime,
     toggleMute,
+    applyDetailVolume,
     playPrev,
     playNext,
     toggleTrack,
