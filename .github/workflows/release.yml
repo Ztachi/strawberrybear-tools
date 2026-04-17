@@ -10,7 +10,56 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # 单独构建 Tauri 应用
+  build-tauri:
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: '--bundles dmg'
+            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/dmg'
+          - os: windows-latest
+            args: '--bundles nsis'
+            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/nsis'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        run: pnpm --filter @strawberrybear/infinity-nikki-player tauri build ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: infinity-nikki-player-${{ matrix.os }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+
+  # 版本管理和发布
   release:
+    needs: build-tauri
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
@@ -56,75 +105,55 @@ jobs:
           git fetch origin main
           git checkout origin/main
 
-      - name: Get changed packages
-        id: changed_packages
-        if: steps.changeset.outputs.has_changes == 'true'
+      - name: Get app version
+        id: version
         run: |
-          echo "Finding changed packages..."
-          git diff --name-only HEAD~1 -- 'apps/*/package.json' > /tmp/changed_packages.txt
-          cat /tmp/changed_packages.txt
-          echo "packages_file=/tmp/changed_packages.txt" >> $GITHUB_OUTPUT
+          VERSION=$(grep '"version"' apps/infinity-nikki-player/package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build all changed packages
+      - name: Download macOS artifact
         if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          for pkg_file in $(cat ${{ steps.changed_packages.outputs.packages_file }}); do
-            pkg_dir=$(dirname "$pkg_file")
-            echo "Building $pkg_dir..."
-            cd "$pkg_dir"
-            pnpm build
-            cd - > /dev/null
-          done
+        uses: actions/download-artifact@v4
+        with:
+          name: infinity-nikki-player-macos-latest
+          path: ./macos
 
-      - name: Create release for each changed package
+      - name: Download Windows artifact
+        if: steps.changeset.outputs.has_changes == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: infinity-nikki-player-windows-latest
+          path: ./windows
+
+      - name: List artifacts
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
-          echo "Creating releases..."
-          
-          # Loop through changed packages
-          while IFS= read -r pkg_file; do
-            if [ -f "$pkg_file" ]; then
-              pkg_dir=$(dirname "$pkg_file")
-              pkg_name=$(grep '"name"' "$pkg_file" | head -1 | sed 's/.*"@strawberrybear\/\([^"]*\)".*/\1/')
-              pkg_version=$(grep '"version"' "$pkg_file" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
-              TAG_NAME="${pkg_name}@${pkg_version}"
-              CHANGELOG_FILE="apps/${pkg_name}/CHANGELOG.md"
-              
-              echo "Processing: $TAG_NAME"
-              
-              # Read changelog
-              if [ -f "$CHANGELOG_FILE" ]; then
-                BODY=$(cat "$CHANGELOG_FILE")
-              else
-                BODY="Release $TAG_NAME"
-              fi
-              
-              # Check for dist
-              if [ -d "$pkg_dir/dist" ]; then
-                echo "Creating archive for $pkg_name..."
-                cd "$pkg_dir"
-                tar -czf "${pkg_name}-${pkg_version}.tar.gz" dist/
-                ARCHIVE="${pkg_name}-${pkg_version}.tar.gz"
-                cd - > /dev/null
-                
-                echo "Creating release with archive: $ARCHIVE"
-                gh release create "$TAG_NAME" \
-                  --title "$TAG_NAME" \
-                  --notes "$BODY" \
-                  --draft=false \
-                  --prerelease=false \
-                  "$pkg_dir/$ARCHIVE"
-              else
-                echo "No dist found, creating release without artifact"
-                gh release create "$TAG_NAME" \
-                  --title "$TAG_NAME" \
-                  --notes "$BODY" \
-                  --draft=false \
-                  --prerelease=false
-              fi
-              
-              echo "Created: $TAG_NAME"
-            fi
-          done < "${{ steps.changed_packages.outputs.packages_file }}"
+          ls -la ./macos/
+          ls -la ./windows/
+
+      - name: Create Release
+        if: steps.changeset.outputs.has_changes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          tag_name: infinity-nikki-player@v${{ steps.version.outputs.version }}
+          release_name: InfinityNikkiPlayer v${{ steps.version.outputs.version }}
+          body: |
+            ## 安装说明
+
+            ### macOS
+            1. 下载 `.dmg` 文件
+            2. 打开 DMG，将 **InfinityNikkiPlayer.app** 拖入 Applications 文件夹
+            3. 首次打开时如果提示"无法验证开发者"：
+               - 前往 **系统设置 → 隐私与安全性**
+               - 滚动到底部，点击 **"仍要打开"**
+
+            ### Windows
+            下载 `.exe` 安装包，双击运行即可。
+          assets: |
+            ./macos/*.dmg
+            ./windows/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
