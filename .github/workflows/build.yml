@@ -19,11 +19,9 @@ jobs:
           - os: macos-latest
             args: '--bundles dmg'
             artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/dmg'
-            ext: dmg
           - os: windows-latest
             args: '--bundles nsis'
             artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/nsis'
-            ext: exe
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,18 +48,11 @@ jobs:
       - name: Build Tauri app
         run: pnpm --filter @strawberrybear/infinity-nikki-player tauri build ${{ matrix.args }}
 
-      - name: Find artifact
-        id: find_artifact
-        run: |
-          FILES=$(find ${{ matrix.artifact_path }} -type f -name "*.${{ matrix.ext }}" | head -1)
-          echo "artifact=$FILES" >> $GITHUB_OUTPUT
-          echo "filename=$(basename $FILES)" >> $GITHUB_OUTPUT
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: infinity-nikki-player-${{ matrix.os }}
-          path: ${{ steps.find_artifact.outputs.artifact }}
+          path: ${{ matrix.artifact_path }}
           if-no-files-found: error
 
   release:
