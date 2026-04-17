@@ -16,6 +16,8 @@
 
 ## 安装
 
+详细安装说明请查看 [用户指南](docs/USER_GUIDE.md)。
+
 ### macOS 安装
 
 1. 下载最新的 `.dmg` 文件
@@ -33,7 +35,8 @@
 
 ### Windows 安装
 
-下载 `.exe` 安装包，双击运行即可。
+1. 下载 `.exe` 安装包，双击运行即可
+2. **重要**：安装完成后，右键点击应用快捷方式 → 属性 → 兼容性 → 勾选"以管理员身份运行此程序"
 
 ---
 
@@ -87,6 +90,7 @@ pnpm --filter @strawberrybear/infinity-nikki-player tauri build
 
 | 文档                                   | 说明                |
 | -------------------------------------- | ------------------- |
+| [用户指南](docs/USER_GUIDE.md)         | 安装与使用说明      |
 | [设计文档](docs/design/README.md)      | UI 组件、主题规范   |
 | [UI 组件指南](docs/design/ui-guide.md) | shadcn-vue 组件使用 |
 | [错误文档](docs/error/README.md)       | 问题追踪            |
