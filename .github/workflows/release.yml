@@ -136,7 +136,7 @@ jobs:
           prerelease: false
           generate_release_notes: true
           tag_name: infinity-nikki-player@v${{ steps.version.outputs.version }}
-          release_name: InfinityNikkiPlayer v${{ steps.version.outputs.version }}
+          name: InfinityNikkiPlayer v${{ steps.version.outputs.version }}
           body: |
             ## 安装说明
 
@@ -149,7 +149,7 @@ jobs:
 
             ### Windows
             下载 `.exe` 安装包，双击运行即可。
-          assets: |
+          files: |
             ./macos/*.dmg
             ./windows/*.exe
         env:
