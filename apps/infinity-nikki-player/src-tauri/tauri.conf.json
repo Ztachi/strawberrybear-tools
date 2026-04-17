@@ -34,7 +34,7 @@
     }
   },
   "bundle": {
-    "targets": "all",
+    "targets": ["dmg", "nsis"],
     "icon": ["icons/icon.png", "icons/icon.icns"],
     "resources": ["en.lproj", "zh-Hans.lproj", "templates", "midi"],
     "macOS": {

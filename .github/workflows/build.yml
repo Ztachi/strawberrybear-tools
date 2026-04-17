@@ -17,8 +17,8 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            args: '--target aarch64-apple-darwin --bundles dmg'
-            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg'
+            args: '--bundles dmg'
+            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/dmg'
           - os: windows-latest
             args: '--bundles nsis'
             artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/nsis'
