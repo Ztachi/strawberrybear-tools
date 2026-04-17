@@ -111,28 +111,25 @@ jobs:
           VERSION=$(grep '"version"' apps/infinity-nikki-player/package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      # 下载 artifacts（移除 has_changes 条件，始终下载）
       - name: Download macOS artifact
-        if: steps.changeset.outputs.has_changes == 'true'
         uses: actions/download-artifact@v4
         with:
           name: infinity-nikki-player-macos-latest
           path: ./macos
 
       - name: Download Windows artifact
-        if: steps.changeset.outputs.has_changes == 'true'
         uses: actions/download-artifact@v4
         with:
           name: infinity-nikki-player-windows-latest
           path: ./windows
 
       - name: List artifacts
-        if: steps.changeset.outputs.has_changes == 'true'
         run: |
           ls -la ./macos/
           ls -la ./windows/
 
       - name: Create Release
-        if: steps.changeset.outputs.has_changes == 'true'
         uses: softprops/action-gh-release@v2
         with:
           draft: false
