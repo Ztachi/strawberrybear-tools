@@ -132,4 +132,12 @@ export default {
     parseFailed: '解析失败',
     playFailed: '播放失败',
   },
+  about: {
+    title: '关于',
+    version: '版本',
+    description:
+      '一款适用于无限暖暖的 MIDI 自动演奏工具。导入 MIDI 文件，应用会自动模拟游戏内按键操作。',
+    learnMore: '了解更多',
+    officialSite: '官方网站',
+  },
 }

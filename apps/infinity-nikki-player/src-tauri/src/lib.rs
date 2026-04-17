@@ -4,10 +4,9 @@ mod keyboard;
 mod types;
 
 use commands::player::PlayerControl;
-use commands::window;
 use types::AppState;
 use std::env;
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 
 /// 检测是否以管理员权限运行（仅 Windows）
 #[cfg(target_os = "windows")]
@@ -44,6 +43,59 @@ fn get_system_lang() -> String {
         .to_lowercase()
 }
 
+/// 将安装包内捆绑的 midi/ 目录中的文件首次复制到用户的 midi_library 目录。
+/// 已存在同名文件的不会覆盖，确保用户数据安全。
+fn seed_bundled_midi(app: &tauri::App) {
+    use std::fs;
+    use tauri::Manager;
+
+    let resource_dir = match app.path().resource_dir() {
+        Ok(d) => d,
+        Err(e) => { log::warn!("seed_bundled_midi: 获取资源目录失败: {}", e); return; }
+    };
+    let bundled_midi_dir = resource_dir.join("midi");
+    if !bundled_midi_dir.is_dir() {
+        log::info!("seed_bundled_midi: 无捆绑 MIDI 目录，跳过");
+        return;
+    }
+
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(e) => { log::warn!("seed_bundled_midi: 获取数据目录失败: {}", e); return; }
+    };
+    let library_dir = data_dir.join("midi_library");
+    if let Err(e) = fs::create_dir_all(&library_dir) {
+        log::warn!("seed_bundled_midi: 创建 midi_library 失败: {}", e);
+        return;
+    }
+
+    let entries = match fs::read_dir(&bundled_midi_dir) {
+        Ok(e) => e,
+        Err(e) => { log::warn!("seed_bundled_midi: 读取资源目录失败: {}", e); return; }
+    };
+
+    for entry in entries.flatten() {
+        let src = entry.path();
+        if !src.is_file() { continue; }
+        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if ext != "mid" && ext != "midi" { continue; }
+
+        let filename = match src.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        let dest = library_dir.join(&filename);
+        if dest.exists() {
+            log::info!("seed_bundled_midi: 已存在 {}，跳过", filename);
+            continue;
+        }
+        match fs::copy(&src, &dest) {
+            Ok(_) => log::info!("seed_bundled_midi: 导入默认 MIDI: {}", filename),
+            Err(e) => log::warn!("seed_bundled_midi: 复制 {} 失败: {}", filename, e),
+        }
+    }
+}
+
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Starting InfinityNikkiPlayer...");
@@ -73,28 +125,7 @@ pub fn run() {
                 let app_name = "无限暖暖自动演奏";
                 tauri::menu::Menu::with_items(app, &[
                     &tauri::menu::Submenu::with_items(app, app_name, true, &[
-                        &tauri::menu::MenuItem::with_id(app, "about", &format!("关于 {app_name}"), true, None::<&str>)?,
-                        &tauri::menu::PredefinedMenuItem::separator(app)?,
-                        &tauri::menu::MenuItem::with_id(app, "hide", "隐藏", true, None::<&str>)?,
                         &tauri::menu::MenuItem::with_id(app, "quit", &format!("退出 {app_name}"), true, None::<&str>)?,
-                    ])?,
-                    &tauri::menu::Submenu::with_items(app, "文件", true, &[
-                        &tauri::menu::MenuItem::with_id(app, "close", "关闭", true, None::<&str>)?,
-                    ])?,
-                    &tauri::menu::Submenu::with_items(app, "编辑", true, &[
-                        &tauri::menu::MenuItem::with_id(app, "undo", "撤销", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "redo", "重做", true, None::<&str>)?,
-                        &tauri::menu::PredefinedMenuItem::separator(app)?,
-                        &tauri::menu::MenuItem::with_id(app, "cut", "剪切", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "copy", "复制", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "paste", "粘贴", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "select_all", "全选", true, None::<&str>)?,
-                    ])?,
-                    &tauri::menu::Submenu::with_items(app, "窗口", true, &[
-                        &tauri::menu::MenuItem::with_id(app, "minimize", "最小化", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "zoom", "缩放", true, None::<&str>)?,
-                        &tauri::menu::PredefinedMenuItem::separator(app)?,
-                        &tauri::menu::MenuItem::with_id(app, "fullscreen", "切换到全屏幕", true, None::<&str>)?,
                     ])?,
                     &tauri::menu::Submenu::with_items(app, "帮助", true, &[
                         &tauri::menu::MenuItem::with_id(app, "help_about", &format!("关于 {app_name}"), true, None::<&str>)?,
@@ -103,28 +134,7 @@ pub fn run() {
             } else {
                 tauri::menu::Menu::with_items(app, &[
                     &tauri::menu::Submenu::with_items(app, "InfinityNikkiPlayer", true, &[
-                        &tauri::menu::MenuItem::with_id(app, "about", "About InfinityNikkiPlayer...", true, None::<&str>)?,
-                        &tauri::menu::PredefinedMenuItem::separator(app)?,
-                        &tauri::menu::MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?,
                         &tauri::menu::MenuItem::with_id(app, "quit", "Quit InfinityNikkiPlayer", true, None::<&str>)?,
-                    ])?,
-                    &tauri::menu::Submenu::with_items(app, "File", true, &[
-                        &tauri::menu::MenuItem::with_id(app, "close", "Close", true, None::<&str>)?,
-                    ])?,
-                    &tauri::menu::Submenu::with_items(app, "Edit", true, &[
-                        &tauri::menu::MenuItem::with_id(app, "undo", "Undo", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "redo", "Redo", true, None::<&str>)?,
-                        &tauri::menu::PredefinedMenuItem::separator(app)?,
-                        &tauri::menu::MenuItem::with_id(app, "cut", "Cut", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "copy", "Copy", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "paste", "Paste", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "select_all", "Select All", true, None::<&str>)?,
-                    ])?,
-                    &tauri::menu::Submenu::with_items(app, "Window", true, &[
-                        &tauri::menu::MenuItem::with_id(app, "minimize", "Minimize", true, None::<&str>)?,
-                        &tauri::menu::MenuItem::with_id(app, "zoom", "Zoom", true, None::<&str>)?,
-                        &tauri::menu::PredefinedMenuItem::separator(app)?,
-                        &tauri::menu::MenuItem::with_id(app, "fullscreen", "Enter Full Screen", true, None::<&str>)?,
                     ])?,
                     &tauri::menu::Submenu::with_items(app, "Help", true, &[
                         &tauri::menu::MenuItem::with_id(app, "help_about", "About InfinityNikkiPlayer", true, None::<&str>)?,
@@ -149,64 +159,17 @@ pub fn run() {
 
                 match id {
                     "quit" => {
-                        // 退出应用
                         app_handle.exit(0);
                     }
-                    "hide" => {
-                        // 隐藏应用
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            window.hide().ok();
-                        }
-                    }
-                    "close" => {
-                        // 关闭主窗口
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            window.close().ok();
-                        }
-                    }
-                    "minimize" => {
-                        // 最小化
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            window.minimize().ok();
-                        }
-                    }
-                    "zoom" => {
-                        // 缩放/最大化
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            if window.is_maximized().unwrap_or(false) {
-                                window.unmaximize().ok();
-                            } else {
-                                window.maximize().ok();
-                            }
-                        }
-                    }
-                    "fullscreen" => {
-                        // 全屏切换
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let is_fullscreen = window.is_fullscreen().unwrap_or(false);
-                            if !is_fullscreen {
-                                // 进入全屏前保存状态
-                                window::save_state_before_fullscreen(&window);
-                            } else {
-                                // 退出全屏后恢复状态
-                                window::restore_state_after_fullscreen(&window);
-                            }
-                            window.set_fullscreen(!is_fullscreen).ok();
-                        }
-                    }
-                    "about" | "help_about" => {
-                        // 关于对话框 - 简化处理
-                        let msg = if is_zh {
-                            "无限暖暖自动演奏 v0.0.1\n\n一款自动演奏MIDI音乐的应用。"
-                        } else {
-                            "InfinityNikkiPlayer v0.0.1\n\nAn auto-play MIDI music application."
-                        };
-                        let _ = msg;
-                        // macOS 标准关于窗口由系统处理，菜单的 About 暂时跳过
+                    "help_about" => {
+                        let _ = app_handle.emit("show_about", ());
                     }
                     _ => {}
                 }
             });
+
+            // 将打包的默认 MIDI 文件复制到用户库（仅首次）
+            seed_bundled_midi(app);
 
             log::info!("App setup complete");
             Ok(())
@@ -214,6 +177,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_version,
             commands::get_system_locale,
+            commands::open_url,
             commands::midi::parse_midi_file,
             commands::midi::extract_melody,
             commands::midi::extract_all_notes,

@@ -3,10 +3,6 @@
 //! 核心设计：把"事件"变成"状态曲线"
 //! 按键按下后保持一段时间，确保游戏帧轮询能检测到
 
-use std::thread;
-use std::time::Duration;
-use std::sync::Arc;
-use parking_lot::Mutex;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
     KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MapVirtualKeyW, MAP_VIRTUAL_KEY_TYPE,
@@ -18,12 +14,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VIRTUAL_KEY,
 };
 
-/// 默认按键保持时间（毫秒）
-const DEFAULT_HOLD_TIME_MS: u64 = 20;
-
 /// 初始化
 pub fn init() -> Result<(), String> {
-    log::info!("Windows 事件调度器键盘模拟初始化完成，保持时间: {}ms", DEFAULT_HOLD_TIME_MS);
+    log::info!("Windows 键盘模拟初始化完成");
     Ok(())
 }
 
@@ -48,16 +41,6 @@ fn char_to_vk(c: char) -> Option<VIRTUAL_KEY> {
         '4' => Some(VK_4), '5' => Some(VK_5), '6' => Some(VK_6), '7' => Some(VK_7),
         '8' => Some(VK_8), '9' => Some(VK_9),
         _ => None,
-    }
-}
-
-/// 高精度延迟（使用spinwait）
-fn high_res_delay(milliseconds: u64) {
-    let total_us = milliseconds * 1000;
-    let start = std::time::Instant::now();
-    while start.elapsed().as_micros() < total_us as u128 {
-        // busy-wait
-        std::hint::spin_loop();
     }
 }
 
@@ -89,31 +72,6 @@ unsafe fn send_key_event(_vk: VIRTUAL_KEY, scan_code: u16, is_release: bool) -> 
     Ok(())
 }
 
-/// 发送按键（按下 -> 保持 -> 释放）
-/// 这是核心函数：把"事件"变成"状态曲线"
-fn send_key_with_hold(key: &str, hold_time_ms: u64) -> Result<(), String> {
-    if key.is_empty() {
-        return Ok(());
-    }
-
-    let c = key.chars().next().unwrap();
-    let vk = char_to_vk(c).ok_or_else(|| format!("不支持的按键: {}", c))?;
-    let scan_code = vk_to_scan_code(vk);
-
-    unsafe {
-        // 1. 发送按下事件
-        send_key_event(vk, scan_code, false)?;
-
-        // 2. 保持一段时间（确保游戏帧轮询能检测到）
-        high_res_delay(hold_time_ms);
-
-        // 3. 发送释放事件
-        send_key_event(vk, scan_code, true)?;
-    }
-
-    Ok(())
-}
-
 /// 发送按键按下（仅按下，不释放——由 simulate_key_up 负责释放）
 pub fn send_key_down(key: &str) -> Result<(), String> {
     if key.is_empty() {
@@ -140,39 +98,6 @@ pub fn send_key_up(key: &str) -> Result<(), String> {
 
     unsafe {
         send_key_event(vk, scan_code, true)?;
-    }
-
-    Ok(())
-}
-
-/// 和弦输入：同时按下多个键
-pub fn send_chord(keys: &[&str], hold_time_ms: u64) -> Result<(), String> {
-    if keys.is_empty() {
-        return Ok(());
-    }
-
-    // 收集所有键的 vk 和 scan_code
-    let mut key_data: Vec<(VIRTUAL_KEY, u16)> = Vec::new();
-    for &key in keys {
-        let c = key.chars().next().unwrap();
-        let vk = char_to_vk(c).ok_or_else(|| format!("不支持的按键: {}", key))?;
-        let scan_code = vk_to_scan_code(vk);
-        key_data.push((vk, scan_code));
-    }
-
-    unsafe {
-        // 1. 同时按下所有键（不等待）
-        for (vk, scan_code) in &key_data {
-            send_key_event(*vk, *scan_code, false)?;
-        }
-
-        // 2. 保持一段时间
-        high_res_delay(hold_time_ms);
-
-        // 3. 同时释放所有键
-        for (vk, scan_code) in &key_data {
-            send_key_event(*vk, *scan_code, true)?;
-        }
     }
 
     Ok(())

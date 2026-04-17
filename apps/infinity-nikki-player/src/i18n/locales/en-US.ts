@@ -41,11 +41,11 @@ export default {
     noKeyLog: 'No key log yet',
     pianoOn: 'Enable Piano',
     pianoOff: 'Disable Piano',
-    pianoMode: 'Piano Mode',
+    pianoMode: 'Template Sound',
     autoMode: 'Auto Play',
     keyboardSim: 'Simulate Keys',
     keyboardSimTip:
-      'When enabled, keys in the log will be simulated as real keyboard input, can be used with game window (requires enabling Template Sound first)',
+      'When enabled, keys in the log are sent as real keyboard input and can be used with the game window (requires Template Sound to be enabled first)',
   },
   midi: {
     noFiles: 'No MIDI files',
@@ -131,5 +131,13 @@ export default {
     loadFailed: 'Load failed',
     parseFailed: 'Parse failed',
     playFailed: 'Play failed',
+  },
+  about: {
+    title: 'About',
+    version: 'Version',
+    description:
+      'A MIDI auto-play tool for Infinity Nikki. Import MIDI files and let the app simulate key presses in-game.',
+    learnMore: 'Learn More',
+    officialSite: 'Official Site',
   },
 }

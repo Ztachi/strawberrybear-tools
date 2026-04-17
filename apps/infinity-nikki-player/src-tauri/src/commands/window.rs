@@ -99,32 +99,4 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// 进入全屏模式 - 保存当前窗口状态
-pub fn save_state_before_fullscreen(window: &tauri::WebviewWindow) {
-    if let (Ok(size), Ok(pos)) = (window.outer_size(), window.outer_position()) {
-        let scale_factor = window.scale_factor().unwrap_or(1.0);
-        let mut saved = SAVED_WINDOW_STATE.lock().unwrap();
-        *saved = Some((
-            size.to_logical(scale_factor),
-            pos.to_logical(scale_factor),
-        ));
-        log::info!("Saved window state before fullscreen: {:?} {:?}", size, pos);
-    }
-}
 
-/// 退出全屏模式 - 恢复窗口状态
-pub fn restore_state_after_fullscreen(window: &tauri::WebviewWindow) {
-    let saved = {
-        let guard = SAVED_WINDOW_STATE.lock().unwrap();
-        guard.clone()
-    };
-
-    if let Some((saved_size, saved_pos)) = saved {
-        window.set_size(saved_size).ok();
-        window.set_position(saved_pos).ok();
-        log::info!("Restored window state after fullscreen");
-
-        let mut guard = SAVED_WINDOW_STATE.lock().unwrap();
-        *guard = None;
-    }
-}

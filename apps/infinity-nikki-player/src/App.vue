@@ -4,6 +4,7 @@
  */
 import { onMounted, getCurrentInstance, ref } from 'vue'
 import MainWindow from './views/MainWindow/index.vue'
+import AboutDialog from '@/components/AboutDialog/index.vue'
 import { Toaster } from '@/components/ui'
 import { toast } from 'vue-sonner'
 import { usePlayerStore } from './stores/player'
@@ -65,6 +66,7 @@ onMounted(async () => {
   </Transition>
 
   <MainWindow />
+  <AboutDialog />
   <Toaster />
 </template>
 
