@@ -26,8 +26,8 @@
 
 ### 下载地址
 
-- **macOS**: [InfinityNikkiPlayer.dmg](https://ztachi.com/tools/download/InfinityNikkiPlayer.dmg)
-- **Windows**: [InfinityNikkiPlayer.exe](https://ztachi.com/tools/download/InfinityNikkiPlayer.exe)
+- **macOS**: [InfinityNikkiPlayer.dmg](https://ztachi.com/tools/infinity-nikki-player/download/InfinityNikkiPlayer.dmg)
+- **Windows**: [InfinityNikkiPlayer.exe](https://ztachi.com/tools/infinity-nikki-player/download/InfinityNikkiPlayer.exe)
 
 ### macOS 安装
 
