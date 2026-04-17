@@ -14,6 +14,29 @@
 - **MIDI 解析**: midly
 - **键盘模拟**: enigo
 
+## 安装
+
+### macOS 安装
+
+1. 下载最新的 `.dmg` 文件
+2. 打开 DMG，将 **InfinityNikkiPlayer.app** 拖入 Applications 文件夹
+3. 首次打开时如果提示"无法验证开发者"：
+   - 前往 **系统设置 → 隐私与安全性**
+   - 滚动到底部，点击 **"仍要打开"**
+4. 之后即可正常运行
+
+> 如果提示"文件已损坏"，在终端执行：
+>
+> ```bash
+> sudo xattr -rd com.apple.quarantine /Applications/InfinityNikkiPlayer.app
+> ```
+
+### Windows 安装
+
+下载 `.exe` 安装包，双击运行即可。
+
+---
+
 ## 开发
 
 ```bash
