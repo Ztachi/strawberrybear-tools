@@ -1,9 +1,12 @@
-name: Release
+name: 'Release: infinity-nikki-player'
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'apps/infinity-nikki-player/**'
+      - '.changeset/**'
   workflow_dispatch:
 
 env:
@@ -111,6 +114,15 @@ jobs:
           VERSION=$(grep '"version"' apps/infinity-nikki-player/package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Get changelog entry
+        id: changelog
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          CONTENT=$(awk "/^## ${VERSION}/{flag=1; next} /^## [0-9]/{if(flag) exit} flag" apps/infinity-nikki-player/CHANGELOG.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       # 下载 artifacts（移除 has_changes 条件，始终下载）
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
@@ -134,21 +146,10 @@ jobs:
         with:
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
           tag_name: infinity-nikki-player@v${{ steps.version.outputs.version }}
           name: InfinityNikkiPlayer v${{ steps.version.outputs.version }}
-          body: |
-            ## 安装说明
-
-            ### macOS
-            1. 下载 `.dmg` 文件
-            2. 打开 DMG，将 **InfinityNikkiPlayer.app** 拖入 Applications 文件夹
-            3. 首次打开时如果提示"无法验证开发者"：
-               - 前往 **系统设置 → 隐私与安全性**
-               - 滚动到底部，点击 **"仍要打开"**
-
-            ### Windows
-            下载 `.exe` 安装包，双击运行即可。
+          body: ${{ steps.changelog.outputs.content }}
           files: |
             ./macos/*.dmg
             ./windows/*.exe
