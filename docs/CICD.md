@@ -6,10 +6,11 @@
 
 ## 当前 Workflow 一览
 
-| 文件                                | 触发条件                                             | 作用                             | 范围                     |
-| ----------------------------------- | ---------------------------------------------------- | -------------------------------- | ------------------------ |
-| `ci.yml`                            | push / PR 到 main（非纯文档变更）                    | 构建 + 类型检查 + Lint           | 仅对变更包及下游         |
-| `release-infinity-nikki-player.yml` | push 到 main，`apps/infinity-nikki-player/**` 有变化 | 构建 Tauri 包体 + Changeset 发版 | 仅 infinity-nikki-player |
+| 文件                                | 触发条件                                             | 作用                                 | 范围                     |
+| ----------------------------------- | ---------------------------------------------------- | ------------------------------------ | ------------------------ |
+| `ci.yml`                            | push / PR 到 main（非纯文档变更）                    | 构建 + 类型检查 + Lint               | 仅对变更包及下游         |
+| `release-dq7-shuffle.yml`           | push 到 main，`apps/dq7-shuffle/**` 有变化           | 构建 dist + Changeset 发版 + 附 dist | 仅 dq7-shuffle           |
+| `release-infinity-nikki-player.yml` | push 到 main，`apps/infinity-nikki-player/**` 有变化 | 构建 Tauri 包体 + Changeset 发版     | 仅 infinity-nikki-player |
 
 ---
 
@@ -24,7 +25,7 @@
 
 ## 新增 App 的 CICD 配置步骤
 
-### 情形一：普通 Web 应用（无需打包产物，只发 Release）
+### 情形一：普通 Web 应用（构建 dist 并作为 Release 附件）
 
 1. 在 `.github/workflows/` 下新建 `release-<app-name>.yml`，内容如下：
 
@@ -62,6 +63,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter @strawberrybear/<app-name> build
+
+      - name: Package dist
+        run: |
+          cd apps/<app-name>
+          zip -r ../../<app-name>-dist.zip dist/
 
       - name: Run changeset version
         id: changeset
@@ -113,11 +122,14 @@ jobs:
           tag_name: <app-name>@v${{ steps.version.outputs.version }}
           name: <AppDisplayName> v${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.content }}
+          files: <app-name>-dist.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 > 替换所有 `<app-name>` 和 `<AppDisplayName>` 为实际值。
+>
+> **注意**：如果应用的构建产物是单个文件（如全部内联的 `index.html`），可直接用 `files: apps/<app-name>/dist/index.html`，无需打 zip。
 
 ---
 

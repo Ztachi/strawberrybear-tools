@@ -32,6 +32,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build
+        run: pnpm --filter @strawberrybear/dq7-shuffle build
+
+      - name: Package dist
+        run: |
+          cd apps/dq7-shuffle
+          zip -r ../../dq7-shuffle-dist.zip dist/
+
       - name: Run changeset version
         id: changeset
         run: |
@@ -82,5 +90,6 @@ jobs:
           tag_name: dq7-shuffle@v${{ steps.version.outputs.version }}
           name: DQ7 Shuffle v${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.content }}
+          files: dq7-shuffle-dist.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
