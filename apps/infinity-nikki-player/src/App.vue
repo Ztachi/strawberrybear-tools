@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * @description: 应用根组件
+ * @description: 应用根组件 - 负责初始化全局状态、错误处理和加载状态管理
  */
 import { onMounted, getCurrentInstance, ref } from 'vue'
 import MainWindow from './views/MainWindow/index.vue'
@@ -9,17 +9,24 @@ import { Toaster } from '@/components/ui'
 import { toast } from 'vue-sonner'
 import { usePlayerStore } from './stores/player'
 
+/** 播放器 Store 实例 */
 const playerStore = usePlayerStore()
 
-/** 是否显示加载中 */
+/** 是否显示加载中状态 */
 const isLoading = ref(true)
 
-/** 显示错误 toast */
+/**
+ * @description: 显示错误 Toast 提示
+ * @param {string} title - 错误标题
+ * @param {string} message - 错误消息
+ */
 function showError(title: string, message: string) {
   toast.error(title, { description: message, richColors: true })
 }
 
-/** 设置 Vue 全局错误处理器 */
+/**
+ * @description: 设置 Vue 全局错误处理器 - 捕获所有未处理的 Vue 组件错误
+ */
 const app = getCurrentInstance()?.appContext.app
 if (app) {
   app.config.errorHandler = (err, _instance, info) => {
@@ -29,21 +36,25 @@ if (app) {
   }
 }
 
-/** 加载完成 */
+/** 组件挂载完成回调 - 初始化钢琴引擎、设置全局错误处理、监听未处理的 Promise 拒绝 */
 onMounted(async () => {
-  // 初始化钢琴引擎
+  // 初始化钢琴引擎（预热音频上下文）
   await playerStore.initPianoEngine()
 
+  // 加载完成，隐藏加载屏幕
   isLoading.value = false
-  // 移除背景图片
+
+  // 移除背景图片，设置透明背景
   document.body.style.background = 'transparent'
 
+  // 监听未处理的 Promise 拒绝
   window.addEventListener('unhandledrejection', (event) => {
     event.preventDefault()
     const message = event.reason?.message || event.reason?.toString() || String(event.reason)
     showError('未处理的异步错误', message)
   })
 
+  // 监听全局 JavaScript 错误
   window.onerror = (message) => {
     if (String(message).includes('ResizeObserver') || String(message).includes('Non-Error')) {
       return false
@@ -55,7 +66,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- Loading 过渡 -->
+  <!-- Loading 过渡动画 -->
   <Transition name="loading">
     <div v-if="isLoading" class="loading-screen">
       <div class="loading-content">
@@ -65,8 +76,13 @@ onMounted(async () => {
     </div>
   </Transition>
 
+  <!-- 主窗口 -->
   <MainWindow />
+
+  <!-- 关于对话框 -->
   <AboutDialog />
+
+  <!-- Toast 通知组件 -->
   <Toaster />
 </template>
 
@@ -98,7 +114,6 @@ onMounted(async () => {
   }
 }
 
-/* 过渡动画 */
 .loading-enter-active,
 .loading-leave-active {
   transition: opacity 0.3s ease;

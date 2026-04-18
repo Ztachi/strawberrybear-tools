@@ -1,45 +1,50 @@
 <script setup lang="ts">
 /**
  * @description: 可滚动容器组件
- * - 接管内部滚动
- * - 提供返回顶部功能
- * - 刷新按钮固定在右下角
+ * @description 接管内部滚动，提供返回顶部和刷新页面功能
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RotateCw, ArrowUp } from 'lucide-vue-next'
 
-/** 滚动容器引用 */
+/** 滚动容器 DOM 引用 */
 const containerRef = ref<HTMLElement | null>(null)
 
-/** 是否显示返回顶部按钮 */
+/** 是否显示返回顶部按钮 @return {boolean} */
 const showBackToTop = ref(false)
 
-/** 滚动阈值 */
+/** 滚动阈值（超过此值显示返回顶部按钮） */
 const SCROLL_THRESHOLD = 200
 
-/** 滚动事件处理 */
+/**
+ * @description: 滚动事件处理
+ * 根据滚动位置显示/隐藏返回顶部按钮
+ */
 function handleScroll() {
   if (containerRef.value) {
     showBackToTop.value = containerRef.value.scrollTop > SCROLL_THRESHOLD
   }
 }
 
-/** 返回顶部 */
+/**
+ * @description: 平滑滚动到顶部
+ */
 function scrollToTop() {
   containerRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-/** 刷新页面 */
+/**
+ * @description: 刷新整个页面
+ */
 function refreshPage() {
   window.location.reload()
 }
 
-/** 绑定滚动事件 */
+/** 组件挂载时绑定滚动事件 */
 onMounted(() => {
   containerRef.value?.addEventListener('scroll', handleScroll, { passive: true })
 })
 
-/** 解绑滚动事件 */
+/** 组件卸载时解绑滚动事件 */
 onUnmounted(() => {
   containerRef.value?.removeEventListener('scroll', handleScroll)
 })
@@ -54,7 +59,7 @@ onUnmounted(() => {
 
     <!-- 右下角浮动按钮组 -->
     <div class="fab-group">
-      <!-- 返回顶部 -->
+      <!-- 返回顶部按钮（滚动超过阈值时显示） -->
       <button
         v-show="showBackToTop"
         class="fab-btn back-to-top"
@@ -64,7 +69,7 @@ onUnmounted(() => {
         <ArrowUp :size="18" />
       </button>
 
-      <!-- 刷新页面 -->
+      <!-- 刷新页面按钮 -->
       <button class="fab-btn refresh" title="刷新页面" @click="refreshPage">
         <RotateCw :size="18" />
       </button>

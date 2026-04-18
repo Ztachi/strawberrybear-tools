@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * @description: MIDI 库组件
+ * @description 显示已导入的 MIDI 文件列表，支持选择、删除等操作
+ */
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
@@ -10,7 +14,14 @@ import MidiDetail from './components/MidiDetail/index.vue'
 const { t } = useI18n()
 const playerStore = usePlayerStore()
 
-/** 格式化时长 */
+/**
+ * @description: 格式化时长显示
+ * @param {number} ms - 时长（毫秒）
+ * @return {string} 格式化后的时长字符串 (M:SS)
+ *
+ * @example
+ * formatDuration(125000) // "2:05"
+ */
 function formatDuration(ms: number) {
   const seconds = Math.floor(ms / 1000)
   const minutes = Math.floor(seconds / 60)
@@ -21,8 +32,9 @@ function formatDuration(ms: number) {
 
 <template>
   <div class="midi-library h-full px-[10px] -translate-x-[10px] w-[calc(100%+20px)]">
-    <!-- 列表 -->
+    <!-- MIDI 文件列表 -->
     <div v-if="playerStore.midiLibrary.length > 0" class="library-list">
+      <!-- 遍历每个 MIDI 文件 -->
       <div
         v-for="midi in playerStore.midiLibrary"
         :key="midi.filename"
@@ -33,13 +45,17 @@ function formatDuration(ms: number) {
         @keydown.enter="playerStore.selectMidi(midi)"
         @keydown.space.prevent="playerStore.selectMidi(midi)"
       >
+        <!-- 文件图标 -->
         <div class="item-icon">
           <Music :size="18" />
         </div>
+
+        <!-- 文件信息 -->
         <div class="item-info">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger as-child>
+                <!-- 文件名（超长时截断） -->
                 <span class="filename">{{ midi.filename }}</span>
               </TooltipTrigger>
               <TooltipContent>
@@ -47,6 +63,8 @@ function formatDuration(ms: number) {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          <!-- 文件元数据 -->
           <span class="meta"
             >{{ formatDuration(midi.duration_ms) }} · {{ midi.track_count }}
             {{ t('midi.tracks') }} · {{ midi.melody_note_count || 0 }}
@@ -54,7 +72,7 @@ function formatDuration(ms: number) {
           >
         </div>
 
-        <!-- 更多菜单 - 使用 shadcn-vue Popover -->
+        <!-- 更多操作菜单 -->
         <Popover>
           <PopoverTrigger as-child>
             <button class="menu-trigger" @click.stop>
@@ -62,6 +80,7 @@ function formatDuration(ms: number) {
             </button>
           </PopoverTrigger>
           <PopoverContent class="w-40 p-1" align="end">
+            <!-- 删除按钮 -->
             <button class="menu-action" @click="playerStore.deleteMidi(midi.filename)">
               <Trash2 :size="14" />
               {{ t('actions.delete') }}
@@ -71,7 +90,7 @@ function formatDuration(ms: number) {
       </div>
     </div>
 
-    <!-- 空状态 -->
+    <!-- 空状态提示 -->
     <div v-else class="empty-state flex-1">
       <div class="empty-icon">
         <Music :size="40" />
@@ -80,7 +99,7 @@ function formatDuration(ms: number) {
       <span class="empty-desc">{{ t('midi.libraryEmptyTip') }}</span>
     </div>
 
-    <!-- MIDI 详情 Drawer -->
+    <!-- MIDI 详情抽屉 -->
     <Drawer v-model:open="playerStore.showDetail" direction="left" handle-only>
       <DrawerContent class="!inset-y-0 !right-0 !left-auto !w-full !max-w-full">
         <DrawerHeader class="flex flex-row items-center justify-between">
@@ -88,6 +107,7 @@ function formatDuration(ms: number) {
             <Tooltip>
               <TooltipTrigger as-child>
                 <div class="flex-1 min-w-0">
+                  <!-- 抽屉标题 -->
                   <DrawerTitle class="line-clamp-2">
                     {{ playerStore.currentMidi?.filename }}
                   </DrawerTitle>
@@ -100,10 +120,12 @@ function formatDuration(ms: number) {
           </TooltipProvider>
           <!-- 隐藏描述文字但保留 aria-describedby -->
           <DrawerDescription class="sr-only"> MIDI 详情 </DrawerDescription>
+          <!-- 关闭按钮 -->
           <button variant="ghost" size="icon" class="close-btn" @click="playerStore.closeDetail">
             <X :size="20" />
           </button>
         </DrawerHeader>
+        <!-- MIDI 详情内容 -->
         <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
       </DrawerContent>
     </Drawer>

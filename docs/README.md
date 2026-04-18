@@ -16,6 +16,7 @@
 - [Agent 规范](AGENT.md) - Agent 开发规范
 - [UI 交互规范](UI.md) - UI 组件使用与交互规范
 - [公共库规范](packages/README.md) - `@packages` 公共库开发标准
+- [代码注释规范](CODE_COMMENTARY.md) - 所有代码的注释标准（JSDoc 格式、函数注释、类型注释等）
 
 ## 国际化规范
 

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-/**
- * @description: MIDI 详情面板
- */
+// MIDI 详情面板组件 - 展示 MIDI 文件的详细信息，包括播放器、模板选择、键盘预览和钢琴卷帘
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
@@ -31,36 +29,34 @@ const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
-/**
- * @description: 获取模板显示名称（内置模板使用国际化，自定义模板使用原始名称）
- * @param {string} name 模板原始名称
- * @param {string} id 模板 ID
- * @return {string} 显示名称
- */
+// 获取模板显示名称（内置模板使用国际化，自定义模板使用原始名称）
 function getTemplateDisplayName(name: string, id: string): string {
   const builtinNames = t(`template.builtinNames.${id}` as any)
   return builtinNames && builtinNames !== `template.builtinNames.${id}` ? builtinNames : name
 }
 
-/** 键盘映射器实例 */
-const keyboardMapper = ref<KeyboardMapper | null>(null)
+// 键盘映射器实例（用于管理按键日志和键盘模拟）
+const keyboardMapper = ref<KeyboardMapper | null>(null) as any
 
-/** 按键日志（响应式）- 必须放在 watch 之前定义 */
+// 按键日志（响应式）- 必须放在 watch 之前定义
 const keyLog = ref<KeyLogEntry[]>([])
 
-/** 初始化键盘映射器 */
+// 初始化键盘映射器 - 创建键盘映射器实例，设置日志回调和键盘模拟回调
 function initKeyboardMapper() {
   const template = settingsStore.getCurrentTemplate()
   if (template) {
     if (!keyboardMapper.value) {
       keyboardMapper.value = new KeyboardMapper()
       // 设置日志回调，实时更新日志
-      keyboardMapper.value.setKeyLogCallback((entry) => {
+      keyboardMapper.value.setKeyLogCallback((entry: KeyLogEntry) => {
         keyLog.value = [...keyLog.value, entry]
       })
       // 设置键盘模拟回调（仅在模板演奏+键盘模拟模式下生效，悬浮模式强制启用）
-      keyboardMapper.value.setKeyboardSimCallback((action, key) => {
-        if ((settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) && settingsStore.playMode === 'piano') {
+      keyboardMapper.value.setKeyboardSimCallback((action: string, key: string) => {
+        if (
+          (settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) &&
+          settingsStore.playMode === 'piano'
+        ) {
           if (action === 'press') {
             invoke('simulate_key_down', { key }).catch(console.error)
           } else {
@@ -73,7 +69,7 @@ function initKeyboardMapper() {
   }
 }
 
-/** 监听模板变化 */
+// 监听模板变化 - 切换模板时停止播放、重置映射器并重新初始化
 watch(
   () => settingsStore.currentTemplateId,
   () => {
@@ -92,7 +88,7 @@ watch(
   { immediate: true }
 )
 
-/** 监听活跃音符变化，同步到 KeyboardMapper 日志（仅在模板演奏模式下执行） */
+// 监听活跃音符变化 - 将活跃音符同步到 KeyboardMapper，用于同步键盘高亮（仅在模板演奏模式下执行）
 watch(
   () => playerStore.activeNotes,
   (notes) => {
@@ -108,7 +104,7 @@ watch(
   }
 )
 
-/** 监听当前 MIDI 变化（切换歌曲时重置映射器） */
+// 监听当前 MIDI 变化 - 切换歌曲时重置映射器
 watch(
   () => playerStore.currentMidi?.filename,
   () => {
@@ -120,8 +116,7 @@ watch(
   }
 )
 
-
-/** 当前激活的按键集合（仅在模板演奏模式下显示） */
+// 当前激活的按键集合 - 根据当前活跃音符和模板映射计算激活的按键（仅在模板演奏模式下显示）
 const activeKeys = computed<Set<string>>(() => {
   // 非模板演奏模式不显示按键状态
   if (settingsStore.playMode !== 'piano') {
@@ -144,23 +139,23 @@ const activeKeys = computed<Set<string>>(() => {
   return codes
 })
 
-/** 获取章节化的按键日志 */
+// 获取章节化的按键日志
 function getKeyLogByChapters() {
   return keyboardMapper.value?.getKeyLogByChapters() ?? []
 }
 
-/** 清空按键日志 */
+// 清空按键日志
 function handleClearKeyLog() {
   keyboardMapper.value?.clearKeyLog()
   keyLog.value = []
 }
 
-/** 切换音轨 */
+// 切换音轨启用状态
 function handleToggleTrack(trackIndex: number) {
   playerStore.toggleTrack(trackIndex)
 }
 
-/** 按键代码到音符号的映射（用于点击发音） */
+// 按键代码到音符号的映射 - 用于点击键盘按键时发音
 const keyCodeToPitch = computed<Map<string, number>>(() => {
   const map = new Map<string, number>()
   const template = settingsStore.getCurrentTemplate()
@@ -174,7 +169,7 @@ const keyCodeToPitch = computed<Map<string, number>>(() => {
   return map
 })
 
-/** 点击键盘按键发音 */
+// 点击键盘按键发音
 function handleKeyClick(code: string) {
   const pitch = keyCodeToPitch.value.get(code)
   if (pitch !== undefined) {
@@ -182,24 +177,26 @@ function handleKeyClick(code: string) {
   }
 }
 
-/** 带翻译名称的音轨列表 */
+// 带翻译名称的音轨列表 - 将音轨信息中的名称字段替换为国际化后的名称
 const translatedTracks = computed<TrackInfo[]>(() => {
   return playerStore.tracks.map((track) => {
     if (track.name.includes('|percussion')) {
+      // 打击乐器音轨使用特殊翻译
       return { ...track, name: t('midi.percussionTrack') }
     }
+    // 普通音轨：数字 + i18n
     return { ...track, name: `${t('midi.trackIndex', { n: Number(track.name) })}` }
   })
 })
 
-/** 选择模板 */
+// 选择模板
 function handleTemplateChange(value: unknown) {
   if (typeof value === 'string') {
     settingsStore.selectTemplate(value)
   }
 }
 
-/** 进入悬浮模式 */
+// 进入悬浮模式 - 将窗口转换为悬浮模式，启用透明背景和置顶
 async function enterOverlayMode() {
   try {
     // 确保当前 MIDI 已选中（详情页本身就是选中状态）
@@ -228,10 +225,14 @@ async function enterOverlayMode() {
         <div class="detail-header">
           <!-- 左侧：播放器 + 模板选择 -->
           <div class="left-section">
+            <!-- 预览播放器 -->
             <div class="preview-section">
               <PreviewPlayer />
             </div>
+
+            <!-- 模板选择区 -->
             <div class="template-section">
+              <!-- 模板下拉选择器 -->
               <Select
                 :model-value="settingsStore.currentTemplateId"
                 @update:model-value="handleTemplateChange"
@@ -250,6 +251,8 @@ async function enterOverlayMode() {
                   </SelectItem>
                 </SelectContent>
               </Select>
+
+              <!-- 进入悬浮模式按钮 -->
               <Tooltip>
                 <TooltipTrigger as-child>
                   <button class="overlay-btn" @click="enterOverlayMode">
@@ -262,6 +265,7 @@ async function enterOverlayMode() {
               </Tooltip>
             </div>
           </div>
+
           <!-- 右侧：键盘预览 -->
           <div class="keyboard-section">
             <KeyboardPreview
@@ -275,7 +279,7 @@ async function enterOverlayMode() {
           </div>
         </div>
 
-        <!-- 音轨列表 -->
+        <!-- 音轨列表区域 -->
         <div class="tracks-section">
           <div class="section-header">
             <div class="section-title-group">
@@ -283,11 +287,13 @@ async function enterOverlayMode() {
                 {{ t('midi.trackList') }}
               </h3>
               <div class="section-stats">
+                <!-- 音轨数统计 -->
                 <span class="stat">
                   <Music :size="14" class="text-success" />
                   <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
                   <span class="stat-label">{{ t('midi.tracks') }}</span>
                 </span>
+                <!-- 旋律音符数统计 -->
                 <span class="stat">
                   <Music2 :size="14" class="text-success" />
                   <span class="stat-value">{{ playerStore.melody.length }}</span>
@@ -296,6 +302,8 @@ async function enterOverlayMode() {
               </div>
             </div>
           </div>
+
+          <!-- 钢琴卷帘组件 -->
           <PianoRoll
             :key="playerStore.currentMidi?.filename || 'empty'"
             :notes="playerStore.currentMidi?.events || []"
@@ -348,7 +356,6 @@ async function enterOverlayMode() {
   @apply flex items-center justify-center flex-1;
 }
 
-/* 音轨区域 */
 .tracks-section {
   @apply flex flex-col gap-3;
 }

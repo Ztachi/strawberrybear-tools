@@ -1,8 +1,5 @@
 <script setup lang="ts">
-/**
- * @description: 悬浮模式视图 - 可悬浮于游戏界面上方的播放器
- * 支持迷你悬浮条和展开面板两种形态
- */
+// 悬浮模式视图组件 - 可悬浮于游戏界面上方的迷你播放器，支持展开/收起面板、播放控制、模板切换
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
@@ -37,14 +34,14 @@ const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
-/** 键盘映射器实例 */
-const keyboardMapper = ref<KeyboardMapper | null>(null)
+// 键盘映射器实例
+const keyboardMapper = ref<KeyboardMapper | null>(null) as any
 
-/** 悬浮层独立音量状态（与详情页的 previewVolume / isPreviewMuted 完全独立） */
+// 悬浮层独立音量状态（与详情页的 previewVolume / isPreviewMuted 完全独立）
 const overlayMuted = ref(false)
 const overlayVolume = ref(1)
 
-/** 悬浮层切换静音 */
+// 切换悬浮层静音状态
 function toggleOverlayMute() {
   overlayMuted.value = !overlayMuted.value
   // 直接操作 midiPlayer 音量，不写入 playerStore
@@ -53,13 +50,13 @@ function toggleOverlayMute() {
   })
 }
 
-/** 倒计时秒数（悬浮模式播放/恢复时延迟） */
+// 倒计时秒数（悬浮模式播放/恢复时延迟 3 秒）
 const countdown = ref(0)
 
-/** 倒计时定时器 */
+// 倒计时定时器 ID
 let countdownTimer: number | null = null
 
-/** 开始倒计时播放 */
+// 开始倒计时播放 - 按下播放按钮时，先显示 3 秒倒计时，让用户有时间切换到游戏窗口
 function startWithCountdown() {
   // 清除之前的定时器
   if (countdownTimer) {
@@ -81,7 +78,7 @@ function startWithCountdown() {
   }, 1000)
 }
 
-/** 恢复播放（带倒计时） */
+// 恢复播放（带倒计时）
 function resumeWithCountdown() {
   // 清除之前的定时器
   if (countdownTimer) {
@@ -103,7 +100,7 @@ function resumeWithCountdown() {
   }, 1000)
 }
 
-/** 取消倒计时 */
+// 取消倒计时
 function cancelCountdown() {
   if (countdownTimer) {
     clearInterval(countdownTimer)
@@ -112,7 +109,7 @@ function cancelCountdown() {
   countdown.value = 0
 }
 
-/** 播放/暂停切换 */
+// 播放/暂停切换 - 根据当前播放状态决定是开始播放、暂停还是恢复播放
 function togglePlay() {
   if (playerStore.isPreviewPaused) {
     // 暂停状态 -> 恢复播放（带倒计时）
@@ -126,15 +123,18 @@ function togglePlay() {
   }
 }
 
-/** 初始化键盘映射器 */
+// 初始化键盘映射器 - 创建键盘映射器实例，设置键盘模拟回调
 function initKeyboardMapper() {
   const template = settingsStore.getCurrentTemplate()
   if (template) {
     if (!keyboardMapper.value) {
       keyboardMapper.value = new KeyboardMapper()
       // 设置键盘模拟回调（悬浮模式强制启用）
-      keyboardMapper.value.setKeyboardSimCallback((action, key) => {
-        if ((settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) && settingsStore.playMode === 'piano') {
+      keyboardMapper.value.setKeyboardSimCallback((action: string, key: string) => {
+        if (
+          (settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) &&
+          settingsStore.playMode === 'piano'
+        ) {
           if (action === 'press') {
             invoke('simulate_key_down', { key }).catch(console.error)
           } else {
@@ -148,7 +148,11 @@ function initKeyboardMapper() {
     // 直接同步键盘事件回调（绕过 Vue 响应式批处理，精确到每个 NoteOn/NoteOff）
     setKeyboardEventCallback((type, pitch) => {
       if (!keyboardMapper.value) return
-      if (!(settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) || settingsStore.playMode !== 'piano') return
+      if (
+        !(settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) ||
+        settingsStore.playMode !== 'piano'
+      )
+        return
       if (type === 'on') {
         keyboardMapper.value.noteOn(pitch, playerStore.previewCurrentTime)
       } else {
@@ -163,7 +167,7 @@ function initKeyboardMapper() {
   }
 }
 
-/** 监听暂停状态变化，释放所有按键（暂停时游戏不应保持按键） */
+// 监听暂停状态变化 - 暂停时释放所有按键（游戏不应保持按键状态）
 watch(
   () => playerStore.isPreviewPaused,
   (paused) => {
@@ -173,7 +177,7 @@ watch(
   }
 )
 
-/** 监听模板变化 */
+// 监听模板变化 - 切换模板时停止播放并重置映射器
 watch(
   () => settingsStore.currentTemplateId,
   () => {
@@ -188,7 +192,7 @@ watch(
   }
 )
 
-/** 监听当前 MIDI 变化 */
+// 监听当前 MIDI 变化 - 切换歌曲时重置映射器
 watch(
   () => playerStore.currentMidi?.filename,
   () => {
@@ -200,10 +204,12 @@ watch(
   }
 )
 
+// 组件挂载完成
 onMounted(() => {
   initKeyboardMapper()
 })
 
+// 组件卸载 - 清理回调，释放所有按键
 onUnmounted(() => {
   // 清理直接回调，释放所有按键
   setKeyboardEventCallback(null)
@@ -211,7 +217,7 @@ onUnmounted(() => {
   keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
 })
 
-/** 开始拖拽 */
+// 开始拖拽窗口 - 仅当点击的是非交互元素时才触发拖拽（Windows 上避免与按钮冲突）
 async function startDrag(e: MouseEvent) {
   // Windows 上：如果点击的是交互元素（按钮、select等），不触发拖拽
   // 因为 Windows 上 startDragging 会阻止按钮的点击事件
@@ -226,18 +232,19 @@ async function startDrag(e: MouseEvent) {
   await window.startDragging()
 }
 
-/** 是否展开面板 */
+// 是否展开面板
 const isExpanded = ref(false)
 
-/** 切换展开/收起 */
+// 切换展开/收起面板
 async function toggleExpand() {
   isExpanded.value = !isExpanded.value
   const window = getCurrentWindow()
+  // 迷你条高度 110，展开面板高度 280
   const height = isExpanded.value ? 280.0 : 110.0
   await window.setSize(new LogicalSize(360, height))
 }
 
-/** 退出悬浮模式 */
+// 退出悬浮模式 - 恢复窗口状态、保存配置、重置模式
 async function exitOverlayMode() {
   try {
     playerStore.stopPreviewPlayback()
@@ -256,13 +263,13 @@ async function exitOverlayMode() {
   }
 }
 
-/** 播放指定 MIDI */
+// 播放指定 MIDI
 async function playMidi(midi: any) {
   await playerStore.selectMidi(midi)
   playerStore.startPreview()
 }
 
-/** 格式化时长 */
+// 格式化时长
 function formatDuration(ms: number): string {
   const seconds = Math.floor(ms / 1000)
   const minutes = Math.floor(seconds / 60)
@@ -270,16 +277,18 @@ function formatDuration(ms: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-/** 获取模板显示名称 */
+// 获取模板显示名称
 function getTemplateDisplayName(name: string, id: string): string {
   const builtinNames = t(`template.builtinNames.${id}` as any)
   return builtinNames && builtinNames !== `template.builtinNames.${id}` ? builtinNames : name
 }
 
-/** 当前 MIDI 信息 */
-const currentMidiName = computed(() => playerStore.currentMidi?.filename || t('overlay.noFile'))
+// 当前 MIDI 文件名
+const currentMidiName = computed(
+  () => playerStore.currentMidi?.filename || t('overlay.noFile')
+)
 
-/** 播放状态 */
+// 是否正在播放
 const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.isPreviewPaused)
 </script>
 
@@ -304,6 +313,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             {{ currentMidiName }}
           </TooltipContent>
         </Tooltip>
+
         <!-- 操作按钮 -->
         <div class="action-buttons">
           <!-- 模板选择 -->
@@ -317,7 +327,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </option>
           </select>
 
-          <!-- 关闭 -->
+          <!-- 关闭按钮 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <button class="ctrl-btn close" @click.stop="exitOverlayMode">
@@ -329,8 +339,10 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </TooltipContent>
           </Tooltip>
         </div>
-        <!-- 播放控制 -->
+
+        <!-- 播放控制按钮 -->
         <div class="playback-controls">
+          <!-- 上一曲 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <button class="ctrl-btn" @click.stop="playerStore.playPrev">
@@ -342,6 +354,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </TooltipContent>
           </Tooltip>
 
+          <!-- 播放/暂停按钮 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <button class="ctrl-btn play" @click.stop="togglePlay">
@@ -358,6 +371,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </TooltipContent>
           </Tooltip>
 
+          <!-- 下一曲 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <button class="ctrl-btn" @click.stop="playerStore.playNext">
@@ -369,6 +383,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </TooltipContent>
           </Tooltip>
 
+          <!-- 停止按钮 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <button
@@ -383,7 +398,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </TooltipContent>
           </Tooltip>
 
-          <!-- 静音 -->
+          <!-- 静音按钮 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <button
@@ -400,7 +415,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </TooltipContent>
           </Tooltip>
 
-          <!-- 展开/收起 -->
+          <!-- 展开/收起按钮 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <button
@@ -419,7 +434,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
         </div>
       </div>
 
-      <!-- 展开面板 -->
+      <!-- 展开面板 - 显示播放列表 -->
       <div v-if="isExpanded" class="expand-panel">
         <div class="playlist">
           <div
@@ -439,6 +454,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
             </Tooltip>
             <span class="playlist-duration">{{ formatDuration(midi.duration_ms) }}</span>
           </div>
+          <!-- 空状态 -->
           <div v-if="playerStore.midiLibrary.length === 0" class="playlist-empty">
             {{ t('midi.libraryEmpty') }}
           </div>
@@ -454,7 +470,6 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   border-radius: 16px;
 }
 
-/* 迷你悬浮条 */
 .mini-bar {
   padding: 10px;
   display: grid;
@@ -465,11 +480,9 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   user-select: none;
 }
 
-/* 交互元素保持可点击 */
 .playback-controls {
   grid-column: 1 / -1;
 }
-
 
 .track-info {
   min-width: 0;
@@ -562,7 +575,6 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   background: white;
 }
 
-/* 展开面板 */
 .expand-panel {
   @apply flex-1 overflow-hidden;
   background: rgba(255, 255, 255, 0.92);

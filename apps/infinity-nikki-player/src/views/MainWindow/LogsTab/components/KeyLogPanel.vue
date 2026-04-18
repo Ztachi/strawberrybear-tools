@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * @description: 按键日志面板组件
+ * @description 显示游戏内演奏时的按键日志记录，支持实时查看按键动作历史
+ */
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { Button } from '@/components/ui'
@@ -7,7 +11,11 @@ import { FileText, ArrowRight, Keyboard } from 'lucide-vue-next'
 const { t } = useI18n()
 const playerStore = usePlayerStore()
 
-/** 音高转音名 */
+/**
+ * @description: 将 MIDI 音符号转换为音名
+ * @param {number} pitch - MIDI 音符号 (0-127)
+ * @return {string} 音名（如 "C4"、"F#5"）
+ */
 function pitchToName(pitch: number) {
   const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
   const octave = Math.floor(pitch / 12) - 1
@@ -15,7 +23,11 @@ function pitchToName(pitch: number) {
   return `${note}${octave}`
 }
 
-/** 格式化时间 */
+/**
+ * @description: 格式化时间戳
+ * @param {number} timestamp - Unix 时间戳（毫秒）
+ * @return {string} 本地化时间字符串
+ */
 function formatTime(timestamp: number) {
   const date = new Date(timestamp)
   return date.toLocaleTimeString()
@@ -24,14 +36,16 @@ function formatTime(timestamp: number) {
 
 <template>
   <div class="key-log-panel">
-    <!-- 头部 -->
+    <!-- 面板头部 -->
     <div class="panel-header">
       <div class="header-title">
         <FileText :size="18" />
         <span>{{ t('log.title') }}</span>
       </div>
       <div class="header-actions">
+        <!-- 日志数量 -->
         <span class="log-count">{{ t('log.count', { count: playerStore.keyLogs.length }) }}</span>
+        <!-- 清空按钮 -->
         <Button variant="ghost" size="sm" class="clear-btn" @click="playerStore.clearLogs()">
           {{ t('actions.clear') }}
         </Button>
@@ -40,20 +54,27 @@ function formatTime(timestamp: number) {
 
     <!-- 日志列表 -->
     <div class="log-list">
+      <!-- 遍历每个日志条目 -->
       <div
         v-for="entry in playerStore.keyLogs"
         :key="entry.id"
         :class="['log-entry', entry.action]"
       >
+        <!-- 时间 -->
         <span class="time">{{ formatTime(entry.timestamp) }}</span>
+        <!-- 音高 -->
         <span class="pitch">{{ pitchToName(entry.pitch) }}</span>
+        <!-- 箭头 -->
         <ArrowRight :size="12" class="arrow" />
+        <!-- 映射的按键 -->
         <span class="key">{{ entry.mapped_key }}</span>
+        <!-- 动作徽章 -->
         <span :class="['action-badge', entry.action]">
           {{ entry.action === 'press' ? t('log.action.press') : t('log.action.release') }}
         </span>
       </div>
 
+      <!-- 空状态 -->
       <div v-if="playerStore.keyLogs.length === 0" class="empty-state">
         <div class="empty-icon">
           <Keyboard :size="24" />
@@ -109,11 +130,13 @@ function formatTime(timestamp: number) {
   transition: all 0.15s;
 }
 
+/* 按下状态样式 */
 .log-entry.press {
   background: var(--bg-success-08);
   border: 1px solid var(--bg-success-15);
 }
 
+/* 释放状态样式 */
 .log-entry.release {
   background: var(--bg-primary-04);
   border: 1px solid var(--border-primary-10);

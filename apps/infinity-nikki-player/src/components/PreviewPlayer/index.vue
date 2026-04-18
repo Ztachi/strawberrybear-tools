@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * @description: 预览播放器组件
+ * @description 提供 MIDI 预览播放的完整控制界面，包括播放/暂停、进度拖拽、音量控制、演奏模式切换等功能
+ */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
@@ -19,7 +23,10 @@ import {
   HelpCircle,
 } from 'lucide-vue-next'
 
-/** 是否为精简模式（悬浮模式使用） */
+/**
+ * @description: 组件属性
+ * @param {boolean} compact - 是否为精简模式（悬浮模式使用），默认 false
+ */
 withDefaults(defineProps<{
   compact?: boolean
 }>(), {
@@ -30,12 +37,16 @@ const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
-/** 内部进度值（包装为响应式数组） */
+/** 内部进度值（包装为响应式数组，用于 Slider 组件绑定） */
 const internalPercentArray = ref<[number]>([0])
-/** 是否正在拖拽 */
+/** 是否正在拖拽进度条 */
 const isDragging = ref(false)
 
-/** 格式化时间 */
+/**
+ * @description: 格式化时间显示
+ * @param {number} seconds - 秒数
+ * @return {string} 格式化后的时间字符串 (MM:SS)
+ */
 function formatTime(seconds: number) {
   const safeSeconds = Math.max(0, seconds)
   const mins = Math.floor(safeSeconds / 60)
@@ -43,18 +54,21 @@ function formatTime(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-/** 当前播放时间对应的百分比 */
+/** 当前播放时间对应的百分比 @return {number} 0-100 */
 const currentPercent = computed(() => {
   if (!playerStore.previewDuration) return 0
   return (playerStore.previewCurrentTime / playerStore.previewDuration) * 100
 })
 
-/** 音量百分比 */
+/** 音量百分比 @return {number} 0-100 */
 const volumePercent = computed(() => {
   return Math.round(playerStore.previewVolume * 100)
 })
 
-/** 切换播放/暂停 */
+/**
+ * @description: 切换播放/暂停状态
+ * 根据当前状态调用 playerStore 的不同方法
+ */
 function togglePlay() {
   if (playerStore.isPreviewPlaying && !playerStore.isPreviewPaused) {
     playerStore.pausePreviewPlayback()
@@ -65,7 +79,11 @@ function togglePlay() {
   }
 }
 
-/** 切换演奏模式 */
+/**
+ * @description: 处理演奏模式切换
+ * @param {boolean} isPiano - 是否切换到钢琴模式
+ * 切换后实时更新过滤器，无需重启播放
+ */
 function handleModeSwitch(isPiano: boolean) {
   settingsStore.setPlayMode(isPiano ? 'piano' : 'auto')
   // 实时更新过滤器，无需重启播放
@@ -74,7 +92,9 @@ function handleModeSwitch(isPiano: boolean) {
   }
 }
 
-/** 停止播放并回到起点 */
+/**
+ * @description: 停止播放并回到起点
+ */
 function stopPlayback() {
   playerStore.stopPreviewPlayback()
   playerStore.setPreviewTime(0)
@@ -86,7 +106,10 @@ function onSliderPointerDown() {
   playerStore.setDragging(true)
 }
 
-/** 进度条值变化 */
+/**
+ * @description: 进度条值变化处理
+ * @param {number[] | undefined} value - Slider 当前值
+ */
 function onSliderUpdate(value: number[] | undefined) {
   if (value) {
     internalPercentArray.value = [value[0]]
@@ -96,30 +119,38 @@ function onSliderUpdate(value: number[] | undefined) {
   }
 }
 
-/** 进度条拖拽结束 */
+/**
+ * @description: 进度条拖拽结束处理
+ * 执行跳转并更新显示时间
+ */
 async function onSliderPointerUp() {
   if (isDragging.value) {
     const time = (internalPercentArray.value[0] / 100) * playerStore.previewDuration
     isDragging.value = false
     playerStore.setDragging(false)
     await playerStore.seekPreview(time)
-    //---处理点击进度条开始,禁止删除！！
+    // 处理点击进度条开始，禁止删除
     playerStore.setPreviewTime(time)
-    //---处理点击进度条结束
+    // 处理点击进度条结束
   }
 }
 
-/** 播放时同步进度条 */
+/**
+ * @description: 监听播放进度变化，同步更新进度条
+ * @param {number} newVal - 新的百分比值
+ */
 watch(currentPercent, (newVal) => {
   if (!isDragging.value) {
     internalPercentArray.value = [newVal]
   }
 })
 
+/** 组件挂载时添加全局指针释放事件监听 */
 onMounted(() => {
   window.addEventListener('pointerup', onSliderPointerUp)
 })
 
+/** 组件卸载时移除全局指针释放事件监听 */
 onUnmounted(() => {
   window.removeEventListener('pointerup', onSliderPointerUp)
 })
@@ -129,6 +160,7 @@ onUnmounted(() => {
   <div class="preview-player" :class="{ compact }">
     <!-- 进度条 -->
     <div class="progress-bar">
+      <!-- 当前播放时间 -->
       <span class="time current">{{ formatTime(playerStore.previewCurrentTime / 1000) }}</span>
       <div class="slider-wrapper">
         <Slider
@@ -140,6 +172,7 @@ onUnmounted(() => {
           @update:model-value="onSliderUpdate"
         />
       </div>
+      <!-- 总时长 -->
       <span class="time duration">{{ formatTime(playerStore.previewDuration / 1000) }}</span>
     </div>
 
@@ -178,16 +211,19 @@ onUnmounted(() => {
           </PopoverTrigger>
           <PopoverContent class="w-48 p-3" align="center" side="top">
             <div class="volume-popover">
+              <!-- 静音按钮 -->
               <Button variant="ghost" size="icon" class="mute-btn" @click="playerStore.toggleMute">
                 <VolumeX v-if="playerStore.isPreviewMuted" :size="16" />
                 <Volume2 v-else :size="16" />
               </Button>
+              <!-- 音量滑块 -->
               <Slider
                 :model-value="[playerStore.isPreviewMuted ? 0 : playerStore.previewVolume * 100]"
                 :max="100"
                 class="volume-slider"
                 @update:model-value="(v) => v && playerStore.setPreviewVolumeValue(v[0] / 100)"
               />
+              <!-- 音量百分比 -->
               <span class="volume-percent">{{ volumePercent }}%</span>
             </div>
           </PopoverContent>
@@ -198,6 +234,7 @@ onUnmounted(() => {
     <!-- 演奏模式切换（非精简模式显示） -->
     <TooltipProvider v-if="!compact">
       <div class="play-mode-row">
+        <!-- 钢琴模式开关 -->
         <div class="play-mode-toggle">
           <Switch
             :model-value="settingsStore.playMode === 'piano'"
@@ -205,6 +242,7 @@ onUnmounted(() => {
           />
           <span class="mode-label">{{ t('player.pianoMode') }}</span>
         </div>
+        <!-- 键盘模拟开关 -->
         <div class="keyboard-sim-toggle">
           <Switch
             :model-value="settingsStore.enableKeyboardSim"
@@ -214,6 +252,7 @@ onUnmounted(() => {
           <span class="mode-label" :class="{ disabled: settingsStore.playMode !== 'piano' }">
             {{ t('player.keyboardSim') }}
           </span>
+          <!-- 帮助提示 -->
           <Tooltip>
             <TooltipTrigger as-child>
               <HelpCircle :size="14" class="help-icon" />

@@ -4,11 +4,12 @@
  * @LastEditors: ztachi(legendryztachi@gmail.com)
  * @LastEditTime: 2026-04-17 10:55:59
  * @FilePath: \strawberrybear-tools\apps\infinity-nikki-player\src\components\AboutDialog\index.vue
- * @Description:
+ * @Description: 关于对话框组件
 -->
 <script setup lang="ts">
 /**
- * @description: 关于对话框 — 监听 Tauri 菜单 show_about 事件显示
+ * @description: 关于对话框组件
+ * @description 监听 Tauri 菜单的 show_about 事件显示，包含应用图标、版本号和描述信息
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,11 +25,20 @@ import {
 } from '@/components/ui/dialog'
 
 const { t } = useI18n()
+
+/** 对话框打开状态 @return {boolean} */
 const isOpen = ref(false)
+
+/** 应用版本号 @return {string} */
 const version = ref('')
 
+/** 事件监听取消函数 */
 let unlisten: (() => void) | undefined
 
+/**
+ * @description: 显示关于对话框
+ * 首次打开时获取应用版本号
+ */
 async function show() {
   if (!version.value) {
     version.value = await invoke<string>('get_app_version')
@@ -36,14 +46,20 @@ async function show() {
   isOpen.value = true
 }
 
+/**
+ * @description: 打开外部链接
+ * 跳转到应用官网
+ */
 async function openLink() {
   await invoke('open_url', { url: 'https://ztachi.com/tools/infinity-nikki-player' })
 }
 
+/** 组件挂载时监听 show_about 事件 */
 onMounted(async () => {
   unlisten = await listen('show_about', () => show())
 })
 
+/** 组件卸载时取消事件监听 */
 onUnmounted(() => {
   unlisten?.()
 })
@@ -51,9 +67,10 @@ onUnmounted(() => {
 
 <template>
   <Dialog v-model:open="isOpen">
+    <!-- 自定义样式对话框内容 -->
     <DialogContent class="!w-auto !max-w-none !bg-transparent !border-none !shadow-none !p-0">
       <div class="about-card">
-        <!-- Header -->
+        <!-- 头部区域：图标、名称、版本 -->
         <div class="about-header">
           <div class="about-icon">
             <img :src="appLogo" class="about-icon-img" alt="app icon" />
@@ -64,15 +81,15 @@ onUnmounted(() => {
           <span class="about-version-badge">v{{ version }}</span>
         </div>
 
-        <!-- Divider -->
+        <!-- 分隔线 -->
         <div class="about-divider" />
 
-        <!-- Description -->
+        <!-- 描述文本 -->
         <DialogDescription class="about-description">
           {{ t('about.description') }}
         </DialogDescription>
 
-        <!-- Link button -->
+        <!-- 外部链接按钮 -->
         <button class="about-link-btn" @click="openLink">
           <ExternalLink :size="14" />
           {{ t('about.learnMore') }}

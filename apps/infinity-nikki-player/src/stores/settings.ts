@@ -1,6 +1,6 @@
 /**
- * @description: 应用设置 Store - 管理语言、当前模板 ID 等全局设置
- * 注意：模板列表独立从后端加载，不再保存在 settings.json 中
+ * @fileOverview 应用设置状态管理
+ * @description 使用 Pinia 管理的设置状态，包含语言、当前模板 ID、演奏模式等功能
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -10,39 +10,59 @@ import type { KeyTemplate } from '@/types'
 import i18n from '@/i18n'
 import type { LocaleType } from '@/i18n'
 
+/**
+ * @description: 设置 Store - 管理所有应用设置
+ * @return {Object} 返回设置状态管理对象
+ */
 export const useSettingsStore = defineStore('settings', () => {
-  // 当前语言
+  // ============================================
+  // 状态定义
+  // ============================================
+
+  /** 当前语言 */
   const locale = ref<LocaleType>('en-US')
 
-  // 当前模板 ID
+  /** 当前模板 ID */
   const currentTemplateId = ref<string | null>(null)
 
-  // 演奏模式：'auto' | 'piano'
+  /** 演奏模式：'auto' | 'piano' */
   const playMode = ref<'auto' | 'piano'>('auto')
 
-  // 是否启用键盘模拟
+  /** 是否启用键盘模拟 */
   const enableKeyboardSim = ref(false)
 
-  // 是否处于悬浮模式
+  /** 是否处于悬浮模式 */
   const isOverlayMode = ref(false)
 
-  // 进入悬浮模式前保存的 playMode，退出时恢复
+  /** 进入悬浮模式前保存的 playMode，退出时恢复 */
   const modeBeforeOverlay = ref<'auto' | 'piano'>('auto')
 
-  // 模板列表（从后端加载）
+  /** 模板列表（从后端加载） */
   const templates = ref<KeyTemplate[]>([])
 
-  /** 从后端加载所有模板 */
+  // ============================================
+  // 方法
+  // ============================================
+
+  /**
+   * @description: 从后端加载所有模板
+   * @return Promise 模板列表
+   */
   async function loadTemplatesFromBackend(): Promise<KeyTemplate[]> {
     return await invoke<KeyTemplate[]>('get_templates')
   }
 
-  /** 加载设置 */
+  /**
+   * @description: 加载设置
+   * @description 从 Rust 后端加载保存的设置，并初始化语言和模板
+   * @return Promise
+   */
   async function loadSettings() {
     try {
+      // 从后端加载设置
       const settings = await loadSettingsApi()
 
-      // 设置语言 - 如果没有保存过，使用系统语言
+      // 设置语言
       if (settings.locale && (settings.locale === 'zh-CN' || settings.locale === 'en-US')) {
         locale.value = settings.locale
         i18n.global.locale.value = settings.locale
@@ -73,6 +93,7 @@ export const useSettingsStore = defineStore('settings', () => {
       if (settings.current_template_id) {
         currentTemplateId.value = settings.current_template_id
       } else if (templates.value.length > 0) {
+        // 默认选择第一个模板
         currentTemplateId.value = templates.value[0].id
       }
     } catch (e) {
@@ -91,7 +112,11 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  /** 保存设置 */
+  /**
+   * @description: 保存设置
+   * @description 将当前设置持久化到 Rust 后端
+   * @return Promise
+   */
   async function persistSettings() {
     await saveSettings({
       locale: locale.value,
@@ -101,39 +126,62 @@ export const useSettingsStore = defineStore('settings', () => {
     })
   }
 
-  /** 设置键盘模拟开关 */
+  /**
+   * @description: 设置键盘模拟开关
+   * @description 只有在模板演奏模式下才能开启键盘模拟
+   * @param {boolean} enabled - 是否启用
+   * @return Promise
+   */
   async function setEnableKeyboardSim(enabled: boolean) {
-    // 只有在模板演奏模式下才能开启键盘模拟
     if (enabled && playMode.value !== 'piano') return
     enableKeyboardSim.value = enabled
     await persistSettings()
   }
 
-  /** 设置演奏模式 */
+  /**
+   * @description: 设置演奏模式
+   * @param {'auto' | 'piano'} mode - 演奏模式
+   * @return Promise
+   */
   async function setPlayMode(mode: 'auto' | 'piano') {
     playMode.value = mode
     await persistSettings()
   }
 
-  /** 切换语言 */
+  /**
+   * @description: 切换语言
+   * @param {LocaleType} newLocale - 新的语言代码
+   * @return Promise
+   */
   async function setLocale(newLocale: LocaleType) {
     locale.value = newLocale
     i18n.global.locale.value = newLocale
     await persistSettings()
   }
 
-  /** 选择模板 */
+  /**
+   * @description: 选择模板
+   * @param {string} templateId - 模板 ID
+   * @return Promise
+   */
   async function selectTemplate(templateId: string) {
     currentTemplateId.value = templateId
     await persistSettings()
   }
 
-  /** 获取当前模板 */
+  /**
+   * @description: 获取当前模板
+   * @return {KeyTemplate | null} 当前模板或 null
+   */
   function getCurrentTemplate(): KeyTemplate | null {
     return templates.value.find((t) => t.id === currentTemplateId.value) || null
   }
 
-  /** 刷新模板列表（从后端重新加载） */
+  /**
+   * @description: 刷新模板列表
+   * @description 从后端重新加载模板列表，并确保当前模板 ID 仍然有效
+   * @return Promise
+   */
   async function refreshTemplates() {
     templates.value = await loadTemplatesFromBackend()
     // 确保当前模板 ID 仍然有效
@@ -142,27 +190,45 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  /** 保存模板到后端 */
+  /**
+   * @description: 保存模板到后端
+   * @param {KeyTemplate} template - 模板数据
+   * @return Promise
+   */
   async function saveTemplate(template: KeyTemplate) {
     await invoke('save_template', { template })
     await refreshTemplates()
   }
 
-  /** 删除模板 */
+  /**
+   * @description: 删除模板
+   * @param {string} templateId - 模板 ID
+   * @return Promise
+   */
   async function deleteTemplate(templateId: string) {
     await invoke('delete_template', { templateId })
     await refreshTemplates()
+    // 如果删除的是当前模板，切换到第一个
     if (currentTemplateId.value === templateId) {
       currentTemplateId.value = templates.value[0]?.id || null
       await persistSettings()
     }
   }
 
-  /** 重命名模板 */
+  /**
+   * @description: 重命名模板
+   * @param {string} templateId - 模板 ID
+   * @param {string} newName - 新名称
+   * @return Promise
+   */
   async function renameTemplate(templateId: string, newName: string) {
     await invoke('rename_template', { templateId, newName })
     await refreshTemplates()
   }
+
+  // ============================================
+  // 返回
+  // ============================================
 
   return {
     // 状态

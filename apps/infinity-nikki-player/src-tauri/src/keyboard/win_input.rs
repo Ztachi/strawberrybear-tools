@@ -1,7 +1,7 @@
-//! Windows 键盘模拟模块 - 事件调度器版本
+//! Windows 键盘模拟模块
 //!
-//! 核心设计：把"事件"变成"状态曲线"
-//! 按键按下后保持一段时间，确保游戏帧轮询能检测到
+//! 使用 Windows SendInput API 进行键盘模拟
+//! 核心设计：使用扫描码模式，确保跨键盘布局兼容
 
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
@@ -14,13 +14,31 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VIRTUAL_KEY,
 };
 
-/// 初始化
+/// 初始化键盘模拟模块
+///
+/// # Returns
+///
+/// 成功返回 Ok(())
+///
+/// # Notes
+///
+/// Windows 平台无需特殊初始化，此处仅记录日志
 pub fn init() -> Result<(), String> {
     log::info!("Windows 键盘模拟初始化完成");
     Ok(())
 }
 
 /// 将虚拟键码转换为硬件扫描码
+///
+/// 使用 MapVirtualKeyW 进行转换
+///
+/// # Arguments
+///
+/// * `vk` - 虚拟键码
+///
+/// # Returns
+///
+/// 对应的扫描码
 fn vk_to_scan_code(vk: VIRTUAL_KEY) -> u16 {
     unsafe {
         MapVirtualKeyW(vk.0 as u32, MAP_VIRTUAL_KEY_TYPE(0)) as u16
@@ -28,6 +46,18 @@ fn vk_to_scan_code(vk: VIRTUAL_KEY) -> u16 {
 }
 
 /// 将字符转换为虚拟键码
+///
+/// # Arguments
+///
+/// * `c` - 字符（会自动转换为大写）
+///
+/// # Returns
+///
+/// 对应的虚拟键码，不支持返回 None
+///
+/// # Notes
+///
+/// 目前支持 A-Z 和 0-9
 fn char_to_vk(c: char) -> Option<VIRTUAL_KEY> {
     match c.to_ascii_uppercase() {
         'A' => Some(VK_A), 'B' => Some(VK_B), 'C' => Some(VK_C), 'D' => Some(VK_D),
@@ -44,14 +74,31 @@ fn char_to_vk(c: char) -> Option<VIRTUAL_KEY> {
     }
 }
 
-/// 发送单个按键事件（按下或释放）
+/// 发送单个按键事件
+///
+/// # Arguments
+///
+/// * `_vk` - 虚拟键码（扫描码模式下设为 0）
+/// * `scan_code` - 硬件扫描码
+/// * `is_release` - 是否为释放事件
+///
+/// # Returns
+///
+/// 成功返回 Ok(())
+///
+/// # Notes
+///
+/// 使用 KEYEVENTF_SCANCODE 标志发送扫描码而非虚拟键码
+/// 这样可以确保在不同键盘布局下行为一致
 unsafe fn send_key_event(_vk: VIRTUAL_KEY, scan_code: u16, is_release: bool) -> Result<(), String> {
+    // 确定标志位
     let flags = if is_release {
         KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
     } else {
         KEYEVENTF_SCANCODE
     };
 
+    // 构建键盘输入结构
     let kb_input = KEYBDINPUT {
         wVk: VIRTUAL_KEY(0), // 扫描码模式下 wVk 必须为 0
         wScan: scan_code,
@@ -65,6 +112,7 @@ unsafe fn send_key_event(_vk: VIRTUAL_KEY, scan_code: u16, is_release: bool) -> 
         Anonymous: INPUT_0 { ki: kb_input },
     };
 
+    // 发送输入
     let result = SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
     if result != 1 {
         return Err(format!("SendInput 失败，返回值: {}", result));
@@ -72,7 +120,19 @@ unsafe fn send_key_event(_vk: VIRTUAL_KEY, scan_code: u16, is_release: bool) -> 
     Ok(())
 }
 
-/// 发送按键按下（仅按下，不释放——由 simulate_key_up 负责释放）
+/// 发送按键按下事件
+///
+/// # Arguments
+///
+/// * `key` - 按键字符
+///
+/// # Returns
+///
+/// 成功返回 Ok(())
+///
+/// # Errors
+///
+/// 不支持的按键返回错误
 pub fn send_key_down(key: &str) -> Result<(), String> {
     if key.is_empty() {
         return Ok(());
@@ -85,9 +145,20 @@ pub fn send_key_down(key: &str) -> Result<(), String> {
     }
 }
 
-/// 发送按键释放
+/// 发送按键释放事件
+///
+/// # Arguments
+///
+/// * `key` - 按键字符
+///
+/// # Returns
+///
+/// 成功返回 Ok(())
+///
+/// # Errors
+///
+/// 不支持的按键返回错误
 pub fn send_key_up(key: &str) -> Result<(), String> {
-    // 释放时不需要保持，直接发送
     if key.is_empty() {
         return Ok(());
     }

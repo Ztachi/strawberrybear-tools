@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * @description: 演奏控制组件
+ * @description 提供游戏内演奏的播放控制界面，包括播放/暂停、停止、速度调节等功能
+ */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
@@ -10,6 +14,7 @@ const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
+/** 状态文本 @return {string} 根据播放状态返回对应的本地化文本 */
 const statusText = computed(() => {
   switch (playerStore.playbackState.status) {
     case 'playing':
@@ -21,11 +26,17 @@ const statusText = computed(() => {
   }
 })
 
+/** 是否正在播放 @return {boolean} */
 const isPlaying = computed(() => playerStore.playbackState.status === 'playing')
+/** 是否已暂停 @return {boolean} */
 const isPaused = computed(() => playerStore.playbackState.status === 'paused')
+/** 是否空闲 @return {boolean} */
 const isIdle = computed(() => playerStore.playbackState.status === 'idle')
 
-/** 播放/暂停切换 */
+/**
+ * @description: 切换播放/暂停状态
+ * 根据当前状态调用 playerStore 的不同方法
+ */
 async function togglePlay() {
   if (isPlaying.value) {
     await playerStore.pausePlayback()
@@ -37,13 +48,20 @@ async function togglePlay() {
   }
 }
 
-/** 停止 */
+/**
+ * @description: 停止播放
+ * 停止播放并停止日志轮询
+ */
 async function stop() {
   await playerStore.stopPlayback()
   playerStore.stopLogPolling()
 }
 
-/** 速度调整 */
+/**
+ * @description: 调整播放速度
+ * @param {number} delta - 速度变化量（正数加速，负数减速）
+ * 速度范围限制在 0.5x - 2.0x
+ */
 async function adjustSpeed(delta: number) {
   const newSpeed = Math.max(0.5, Math.min(2.0, playerStore.speed + delta))
   await playerStore.setSpeed(newSpeed)
@@ -54,11 +72,14 @@ async function adjustSpeed(delta: number) {
   <div class="player-controls">
     <!-- 状态栏 -->
     <div class="status-bar">
+      <!-- 状态指示器 -->
       <div class="status-indicator" :class="playerStore.playbackState.status">
         <span class="indicator-dot" />
         <span class="indicator-glow" />
       </div>
+      <!-- 状态文本 -->
       <span class="status-text">{{ statusText }}</span>
+      <!-- 当前模板徽章 -->
       <span v-if="playerStore.currentMidi" class="template-badge">
         {{ settingsStore.getCurrentTemplate()?.name || t('player.noTemplate') }}
       </span>
@@ -66,6 +87,7 @@ async function adjustSpeed(delta: number) {
 
     <!-- 控制按钮 -->
     <div class="controls-bar">
+      <!-- 播放/暂停按钮 -->
       <Button
         :variant="isPlaying ? 'secondary' : 'default'"
         class="play-btn"
@@ -77,6 +99,7 @@ async function adjustSpeed(delta: number) {
         {{ isPlaying ? t('player.pause') : t('player.play') }}
       </Button>
 
+      <!-- 停止按钮 -->
       <Button variant="outline" class="stop-btn" :disabled="isIdle" @click="stop">
         <Square :size="18" />
         {{ t('player.stop') }}
@@ -84,10 +107,13 @@ async function adjustSpeed(delta: number) {
 
       <!-- 速度控制 -->
       <div class="speed-control">
+        <!-- 减速按钮 -->
         <button class="speed-btn" @click="adjustSpeed(-0.1)">
           <Minus :size="14" />
         </button>
+        <!-- 当前速度显示 -->
         <span class="speed-value">{{ playerStore.speed.toFixed(1) }}x</span>
+        <!-- 加速按钮 -->
         <button class="speed-btn" @click="adjustSpeed(0.1)">
           <Plus :size="14" />
         </button>

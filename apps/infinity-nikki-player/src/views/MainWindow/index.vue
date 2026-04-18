@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * @description: 主窗口 - 包含正常模式和悬浮模式
+ * @description: 主窗口组件
+ * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,26 +22,55 @@ import OverlayView from './OverlayView.vue'
 const { t, locale } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
+
+/** 当前激活的标签页 @return {string} */
 const activeTab = ref('files')
+
+/** 是否显示拖拽覆盖层 @return {boolean} */
 const isDragOverlayVisible = ref(false)
+
+/** 拖拽中的文件/目录数量 @return {number} */
 const dragItemCount = ref(0)
+
+/** 拖拽进入深度计数（用于处理嵌套拖拽） */
 let dragEnterDepth = 0
+
+/** DOM 拖拽事件解绑函数 */
 let removeDomDragListeners: (() => void) | null = null
 
+/**
+ * @description: DataTransferItem 扩展接口
+ * 用于访问 webkitGetAsEntry 方法
+ */
 interface DataTransferItemWithEntry {
   kind: string
   webkitGetAsEntry?: () => FileSystemEntry | null
 }
 
+/**
+ * @description: 拖拽文件结果
+ * @interface DroppedFilesResult
+ */
 interface DroppedFilesResult {
+  /** 文件列表 */
   files: File[]
+  /** 是否包含目录 */
   containsDirectory: boolean
 }
 
+/**
+ * @description: 从路径中提取文件名
+ * @param {string} path - 文件路径
+ * @return {string} 文件名
+ */
 function getPathBasename(path: string) {
   return path.split(/[/\\]/).pop() || path
 }
 
+/**
+ * @description: 设置拖拽覆盖层显示状态
+ * @param {boolean} visible - 是否显示
+ */
 function setDragOverlayVisible(visible: boolean) {
   isDragOverlayVisible.value = visible
   if (!visible) {
@@ -48,24 +78,45 @@ function setDragOverlayVisible(visible: boolean) {
   }
 }
 
+/**
+ * @description: 检查文件名是否为 MIDI 文件
+ * @param {string} filename - 文件名
+ * @return {boolean} 是否为 MIDI 文件
+ */
 function isMidiFilename(filename: string) {
   return /\.(mid|midi)$/i.test(filename)
 }
 
+/**
+ * @description: 将 File 对象转换为 Uint8Array
+ * @param {File} file - 文件对象
+ * @return Promise 字节数组
+ */
 function readFileAsUint8Array(file: File) {
   return file.arrayBuffer().then((buffer) => new Uint8Array(buffer))
 }
 
+/**
+ * @description: 读取 FileSystemFileEntry 为 File 对象
+ * @param {FileSystemFileEntry} entry - 文件系统条目
+ * @return Promise File 对象
+ */
 function readFileEntry(entry: FileSystemFileEntry) {
   return new Promise<File>((resolve, reject) => {
     entry.file(resolve, reject)
   })
 }
 
+/**
+ * @description: 递归读取目录中的所有条目
+ * @param {FileSystemDirectoryEntry} directory - 目录条目
+ * @return Promise 所有条目列表
+ */
 async function readAllDirectoryEntries(directory: FileSystemDirectoryEntry) {
   const reader = directory.createReader()
   const entries: FileSystemEntry[] = []
 
+  // 循环读取直到没有更多条目
   while (true) {
     const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
       reader.readEntries(resolve, reject)
@@ -78,6 +129,11 @@ async function readAllDirectoryEntries(directory: FileSystemDirectoryEntry) {
   return entries
 }
 
+/**
+ * @description: 从 FileSystemEntry 递归收集所有文件
+ * @param {FileSystemEntry} entry - 文件系统条目
+ * @return Promise 文件列表
+ */
 async function collectFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
   if (entry.isFile) {
     return [await readFileEntry(entry as FileSystemFileEntry)]
@@ -95,6 +151,11 @@ async function collectFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
   return []
 }
 
+/**
+ * @description: 从 DataTransfer 获取拖拽的文件
+ * @param {DataTransfer | null} dataTransfer - 拖拽数据
+ * @return Promise 拖拽结果
+ */
 async function getDroppedFiles(dataTransfer: DataTransfer | null): Promise<DroppedFilesResult> {
   if (!dataTransfer) {
     return {
@@ -103,6 +164,7 @@ async function getDroppedFiles(dataTransfer: DataTransfer | null): Promise<Dropp
     }
   }
 
+  // 筛选文件类型的条目
   const entryItems = Array.from(dataTransfer.items).filter(
     (item) => item.kind === 'file'
   ) as DataTransferItemWithEntry[]
@@ -121,6 +183,7 @@ async function getDroppedFiles(dataTransfer: DataTransfer | null): Promise<Dropp
     entries.push(entry)
   }
 
+  // 递归收集所有文件
   for (const entry of entries) {
     filesFromEntries.push(...(await collectFilesFromEntry(entry)))
   }
@@ -132,12 +195,18 @@ async function getDroppedFiles(dataTransfer: DataTransfer | null): Promise<Dropp
     }
   }
 
+  // 回退：使用 File API
   return {
     files: Array.from(dataTransfer.files),
     containsDirectory: false,
   }
 }
 
+/**
+ * @description: 格式化无效文件的描述文本
+ * @param {string[]} paths - 无效文件路径列表
+ * @return {string} 格式化后的描述
+ */
 function formatInvalidDropDescription(paths: string[]) {
   const preview = paths.slice(0, 3).map(getPathBasename).join(', ')
   const suffix = paths.length > 3 ? '...' : ''
@@ -146,6 +215,10 @@ function formatInvalidDropDescription(paths: string[]) {
   return preview ? `${baseMessage} (${preview}${suffix})` : baseMessage
 }
 
+/**
+ * @description: 处理导入的文件路径
+ * @param {string[]} paths - 文件路径列表
+ */
 async function handleImportPaths(paths: string[]) {
   const result = await playerStore.importPaths(paths)
 
@@ -157,17 +230,25 @@ async function handleImportPaths(paths: string[]) {
   }
 }
 
+/**
+ * @description: 处理拖拽的文件
+ * @param {File[]} files - 文件列表
+ * @param {Object} options - 选项
+ * @param {boolean} [options.autoSelect] - 是否自动选中（单文件时）
+ */
 async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean } = {}) {
   const midiFiles = files.filter((file) => isMidiFilename(file.name))
   const invalidFiles = files.filter((file) => !isMidiFilename(file.name)).map((file) => file.name)
   // 只有恰好 1 个 MIDI 文件时才自动进入详情
   const shouldAutoSelect = (options.autoSelect ?? true) && midiFiles.length === 1
 
+  // 导入 MIDI 文件
   for (const file of midiFiles) {
     const bytes = await readFileAsUint8Array(file)
     await playerStore.importMidiBuffer(file.name, bytes, { autoSelect: shouldAutoSelect })
   }
 
+  // 提示无效文件
   if (invalidFiles.length > 0) {
     toast.error(t('dragdrop.invalidTitle'), {
       description: formatInvalidDropDescription(invalidFiles),
@@ -176,9 +257,14 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
   }
 }
 
+/**
+ * @description: 绑定 DOM 拖拽事件
+ * @return {() => void} 解绑函数
+ */
 function bindDomDragEvents() {
   const dragOptions = { capture: true }
 
+  /** 处理 dragenter 事件 */
   const handleDragEnter = (event: DragEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -187,6 +273,7 @@ function bindDomDragEvents() {
     setDragOverlayVisible(true)
   }
 
+  /** 处理 dragover 事件 */
   const handleDragOver = (event: DragEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -197,6 +284,7 @@ function bindDomDragEvents() {
     setDragOverlayVisible(true)
   }
 
+  /** 处理 dragleave 事件 */
   const handleDragLeave = (event: DragEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -207,6 +295,7 @@ function bindDomDragEvents() {
     }
   }
 
+  /** 处理 drop 事件 */
   const handleDrop = (event: DragEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -219,11 +308,13 @@ function bindDomDragEvents() {
     })
   }
 
+  // 绑定事件
   window.addEventListener('dragenter', handleDragEnter, dragOptions)
   window.addEventListener('dragover', handleDragOver, dragOptions)
   window.addEventListener('dragleave', handleDragLeave, dragOptions)
   window.addEventListener('drop', handleDrop, dragOptions)
 
+  // 返回解绑函数
   return () => {
     window.removeEventListener('dragenter', handleDragEnter, dragOptions)
     window.removeEventListener('dragover', handleDragOver, dragOptions)
@@ -232,27 +323,39 @@ function bindDomDragEvents() {
   }
 }
 
-/** 切换语言 */
+/**
+ * @description: 切换语言
+ * @param {'zh-CN' | 'en-US'} targetLocale - 目标语言
+ */
 function switchLocale(targetLocale: 'zh-CN' | 'en-US') {
   settingsStore.setLocale(targetLocale)
 }
 
-/** 跳转到辅助功能权限设置 */
+/**
+ * @description: 打开辅助功能权限设置
+ */
 async function openAccessibilitySettings() {
   try {
     await invoke('open_accessibility_settings')
   } catch {
+    // 备用方案：直接打开系统偏好设置
     window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility')
   }
 }
 
+/** 组件挂载时初始化 */
 onMounted(async () => {
+  // 检查辅助功能权限
   await playerStore.checkAccessibility()
+  // 加载设置
   await settingsStore.loadSettings()
+  // 加载 MIDI 库
   await playerStore.loadMidiLibrary()
+  // 绑定拖拽事件
   removeDomDragListeners = bindDomDragEvents()
 })
 
+/** 组件卸载时清理 */
 onUnmounted(() => {
   if (removeDomDragListeners) {
     removeDomDragListeners()
@@ -260,7 +363,10 @@ onUnmounted(() => {
   }
 })
 
-/** 选择文件导入 */
+/**
+ * @description: 选择文件导入
+ * 使用系统文件对话框选择 MIDI 文件
+ */
 async function selectFile() {
   const selected = await open({
     multiple: true,
@@ -269,14 +375,17 @@ async function selectFile() {
   if (selected) {
     const files = Array.isArray(selected) ? selected : [selected]
     await handleImportPaths(files)
-    // 多个文件时关闭详情，只有单文件才保持自动进入详情
+    // 多个文件时关闭详情
     if (files.length > 1) {
       playerStore.closeDetail()
     }
   }
 }
 
-/** 选择文件夹导入 */
+/**
+ * @description: 选择文件夹导入
+ * 扫描文件夹中的所有 MIDI 文件
+ */
 async function selectFolder() {
   const selected = await open({
     directory: true,
@@ -286,17 +395,20 @@ async function selectFolder() {
   }
 }
 
-/** 进入悬浮模式 */
+/**
+ * @description: 进入悬浮模式
+ * 切换到紧凑的悬浮窗口模式
+ */
 async function enterOverlayMode() {
   try {
     // 如果没有选中 MIDI，自动选中第一个
     if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
       playerStore.selectMidi(playerStore.midiLibrary[0])
     }
-    // 停止播放
+    // 停止预览播放
     playerStore.stopPreviewPlayback()
     playerStore.setPreviewTime(0)
-    // 保存进入前的 playMode，退出时恢复
+    // 保存进入前的播放模式，退出时恢复
     settingsStore.modeBeforeOverlay = settingsStore.playMode
     // 启用悬浮模式
     settingsStore.isOverlayMode = true
@@ -311,6 +423,7 @@ async function enterOverlayMode() {
 
 <template>
   <div class="main-window" :class="{ 'overlay-mode': settingsStore.isOverlayMode }">
+    <!-- 拖拽覆盖层 -->
     <div v-if="isDragOverlayVisible && !settingsStore.isOverlayMode" class="drag-overlay">
       <div class="drag-overlay-card">
         <div class="drag-overlay-icon">
@@ -325,11 +438,13 @@ async function enterOverlayMode() {
         <p class="drag-overlay-hint">
           {{ t('dragdrop.folderHint') }}
         </p>
+        <!-- 拖拽计数 -->
         <p v-if="dragItemCount > 0" class="drag-overlay-count">
           {{ dragItemCount }}
         </p>
       </div>
     </div>
+
     <!-- 悬浮模式内容 -->
     <template v-if="settingsStore.isOverlayMode">
       <OverlayView />
@@ -340,6 +455,7 @@ async function enterOverlayMode() {
       <!-- 顶部导航栏 -->
       <header class="header">
         <div class="header-content">
+          <!-- Logo 和标题 -->
           <div class="logo-section">
             <img src="@/assets/images/logo.png" alt="logo" class="logo-icon" />
             <h1 class="title">
@@ -348,7 +464,7 @@ async function enterOverlayMode() {
           </div>
 
           <div class="header-actions">
-            <!-- 辅助功能权限提示 -->
+            <!-- 辅助功能权限提示（未授权时显示） -->
             <Button
               v-if="!playerStore.hasAccessibility"
               variant="destructive"
@@ -360,6 +476,7 @@ async function enterOverlayMode() {
               {{ t('permissions.required') }}
             </Button>
 
+            <!-- 悬浮模式按钮 -->
             <Button variant="default" size="sm" class="overlay-btn" @click="enterOverlayMode">
               <Monitor :size="16" />
               {{ t('app.overlayMode') }}
@@ -387,6 +504,7 @@ async function enterOverlayMode() {
           <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
             <!-- 标签栏 + 操作按钮 -->
             <div class="tabs-header sticky top-0 z-10">
+              <!-- 标签列表 -->
               <TabsList class="tabs-list">
                 <TabsTrigger value="files" class="tab-trigger">
                   <Music :size="16" />
@@ -453,7 +571,7 @@ async function enterOverlayMode() {
   display: none;
 }
 
-/* 顶部导航栏 */
+/* 拖拽覆盖层 */
 .drag-overlay {
   @apply absolute inset-0 flex items-center justify-center p-6;
   z-index: 40;
@@ -492,6 +610,7 @@ async function enterOverlayMode() {
   color: var(--color-primary);
 }
 
+/* 顶部导航栏 */
 .header {
   background: var(--bg-white-40);
   backdrop-filter: blur(30px);
