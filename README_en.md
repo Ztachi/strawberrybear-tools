@@ -23,11 +23,11 @@ cd apps/web-vue && pnpm dev
 
 ## Project List
 
-| Project | Type | Description |
-|---------|------|-------------|
-| `apps/web-vue` | Vite + Vue3 | Example project (for testing) |
+| Project          | Type         | Description                   |
+| ---------------- | ------------ | ----------------------------- |
+| `apps/web-vue`   | Vite + Vue3  | Example project (for testing) |
 | `apps/web-react` | Vite + React | Example project (for testing) |
-| `apps/cli` | Pure TS CLI | Example project (for testing) |
+| `apps/cli`       | Pure TS CLI  | Example project (for testing) |
 
 > **These are example/test projects** used to verify the monorepo architecture and CI/CD pipeline. Refer to them when creating your own projects.
 
@@ -98,11 +98,11 @@ Fix some issue
 
 ### 2. Changeset Type Reference
 
-| Type | Keyword | Meaning | Version Change |
-|------|---------|---------|---------------|
-| Patch | `patch` | Bug fix | `0.0.1` → `0.0.2` |
+| Type  | Keyword | Meaning                           | Version Change    |
+| ----- | ------- | --------------------------------- | ----------------- |
+| Patch | `patch` | Bug fix                           | `0.0.1` → `0.0.2` |
 | Minor | `minor` | New feature (backward compatible) | `0.0.1` → `0.1.0` |
-| Major | `major` | Breaking changes | `0.0.1` → `1.0.0` |
+| Major | `major` | Breaking changes                  | `0.0.1` → `1.0.0` |
 
 ### 3. Commit changeset
 
@@ -118,7 +118,7 @@ After push, GitHub Actions automatically executes:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Trigger: push to main branch with .changeset/ changes        │
+│ Trigger: push to main branch with app directory changes      │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
@@ -137,9 +137,10 @@ After push, GitHub Actions automatically executes:
 │    - Determine which packages changed                        │
 │    - Build only changed packages (pnpm build)                │
 │    - Run pnpm ci:version (bump versions)                   │
+│    - Skip release if no changeset version change             │
 │    - Generate CHANGELOG.md for each project                 │
 │    - Commit version changes to main branch                   │
-│    - Create GitHub Release (with changelog + dist artifacts) │
+│    - Create GitHub Release (<app-name>@vX.Y.Z)               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -149,9 +150,9 @@ After push, GitHub Actions automatically executes:
 
 After release, GitHub Release includes:
 
-| Content | Description |
-|---------|-------------|
-| **CHANGELOG** | Full version history and changelog |
+| Content         | Description                           |
+| --------------- | ------------------------------------- |
+| **CHANGELOG**   | Full version history and changelog    |
 | **dist.tar.gz** | Build artifact archive (downloadable) |
 
 **Example**: `web-react@0.2.1` Release includes `web-react-0.2.1.tar.gz` (downloadable build artifact)
@@ -177,6 +178,7 @@ Fix button click issue
 ```
 
 **Step 2**: After push, the system will only:
+
 - Update `my-new-tool` version
 - Generate CHANGELOG for `my-new-tool` only
 - Create GitHub Release for `my-new-tool` only
@@ -198,11 +200,11 @@ Unified theme colors
 
 ## Version Number Rules
 
-| Change Type | Changeset Keyword | From | To |
-|-------------|------------------|------|-----|
-| Bug fix | `patch` | `1.2.3` | `1.2.4` |
-| New feature | `minor` | `1.2.3` | `1.3.0` |
-| Breaking changes | `major` | `1.2.3` | `2.0.0` |
+| Change Type      | Changeset Keyword | From    | To      |
+| ---------------- | ----------------- | ------- | ------- |
+| Bug fix          | `patch`           | `1.2.3` | `1.2.4` |
+| New feature      | `minor`           | `1.2.3` | `1.3.0` |
+| Breaking changes | `major`           | `1.2.3` | `2.0.0` |
 
 ---
 
@@ -231,9 +233,9 @@ cd apps/web-vue && pnpm dev
 
 ## GitHub Actions Workflows
 
-| Workflow | File | Trigger | Purpose |
-|----------|------|---------|---------|
-| **CI** | `.github/workflows/ci.yml` | push / pull_request to main | Build + Type check |
+| Workflow    | File                            | Trigger                     | Purpose                  |
+| ----------- | ------------------------------- | --------------------------- | ------------------------ |
+| **CI**      | `.github/workflows/ci.yml`      | push / pull_request to main | Build + Type check       |
 | **Release** | `.github/workflows/release.yml` | push to main with changeset | Release + Create Release |
 
 ### View CI/CD Status

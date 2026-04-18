@@ -120,14 +120,14 @@ jobs:
           prerelease: false
           generate_release_notes: false
           tag_name: <app-name>@v${{ steps.version.outputs.version }}
-          name: <AppDisplayName> v${{ steps.version.outputs.version }}
+          name: <app-name>@v${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.content }}
           files: <app-name>-dist.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-> 替换所有 `<app-name>` 和 `<AppDisplayName>` 为实际值。
+> 替换所有 `<app-name>` 为实际值。
 >
 > **注意**：如果应用的构建产物是单个文件（如全部内联的 `index.html`），可直接用 `files: apps/<app-name>/dist/index.html`，无需打 zip。
 

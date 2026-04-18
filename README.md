@@ -247,10 +247,10 @@ cd apps/web-vue && pnpm dev
 
 ## GitHub Actions 工作流
 
-| Workflow    | 文件                                       | 触发条件                                           | 作用                                 |
-| ----------- | ------------------------------------------ | -------------------------------------------------- | ------------------------------------ |
-| **CI**      | `.github/workflows/ci.yml`                 | push / PR 到 main（非纯文档变更）                  | 只对变更包构建 + 类型检查 + Lint     |
-| **Release** | `.github/workflows/release-<app-name>.yml` | push 到 main，对应 app 目录或 `.changeset/` 有变化 | Changeset 发版 + 创建 GitHub Release |
+| Workflow    | 文件                                       | 触发条件                          | 作用                                |
+| ----------- | ------------------------------------------ | --------------------------------- | ----------------------------------- |
+| **CI**      | `.github/workflows/ci.yml`                 | push / PR 到 main（非纯文档变更） | 只对变更包构建 + 类型检查 + Lint    |
+| **Release** | `.github/workflows/release-<app-name>.yml` | push 到 main，对应 app 目录有变化 | 仅在检测到 changeset 版本变更时发版 |
 
 ### 查看 CI/CD 状态
 
