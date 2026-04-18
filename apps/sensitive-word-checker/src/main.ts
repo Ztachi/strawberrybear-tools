@@ -18,17 +18,12 @@ import { createPinia } from 'pinia'
 import { createVuetify } from 'vuetify'
 import { aliases, mdi } from 'vuetify/iconsets/mdi'
 import '@mdi/font/css/materialdesignicons.css'
-import { registerSW } from 'virtual:pwa-register'
 import 'vuetify/styles'
 import './style.css'
 
 import { i18n } from './i18n'
 import { useLexiconStore } from './stores/lexicon'
 import App from './App.vue'
-
-registerSW({
-  immediate: true,
-})
 
 const vuetify = createVuetify({
   icons: {

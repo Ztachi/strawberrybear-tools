@@ -56,7 +56,7 @@ let dbPromise: Promise<SensitiveDB> | null = null
 function getDB(): Promise<SensitiveDB> {
   if (!dbPromise) {
     dbPromise = openDB<SensitiveDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, _newVersion, transaction) {
+      async upgrade(db, oldVersion, _newVersion, transaction) {
         if (!db.objectStoreNames.contains(STORE_WORDS)) {
           const wordStore = db.createObjectStore(STORE_WORDS, { keyPath: 'id' })
           wordStore.createIndex('by-category', 'category', { unique: false })
@@ -77,19 +77,17 @@ function getDB(): Promise<SensitiveDB> {
           }
 
           // 将旧版本词条补齐 lexiconId 字段，避免索引为空导致后续无法按词库管理
-          const cursorReq = wordStore.openCursor()
-          cursorReq.onsuccess = () => {
-            const cursor = cursorReq.result
-            if (!cursor) return
+          let cursor = await wordStore.openCursor()
+          while (cursor) {
             const value = cursor.value as WordEntry
             if (!value.lexiconId) {
               const migrated: WordEntry = {
                 ...value,
                 lexiconId: 'default-sensitive-lexicon',
               }
-              cursor.update(migrated)
+              await cursor.update(migrated)
             }
-            cursor.continue()
+            cursor = await cursor.continue()
           }
         }
       },

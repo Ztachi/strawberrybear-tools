@@ -26,8 +26,10 @@ const localeOptions: { label: string; value: Locale }[] = [
   { label: 'EN', value: 'en-US' },
 ]
 
-function onLocaleChange(value: Locale) {
-  setLocale(value)
+function onLocaleChange(value: string) {
+  if (value === 'zh-CN' || value === 'en-US') {
+    setLocale(value)
+  }
 }
 </script>
 

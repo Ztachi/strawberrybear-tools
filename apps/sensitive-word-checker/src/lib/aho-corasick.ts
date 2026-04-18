@@ -69,7 +69,7 @@ export class AhoCorasick {
     const queue: number[] = []
     const root = this.nodes[0]
 
-    for (const [ch, childIdx] of root.children) {
+    for (const [, childIdx] of root.children) {
       this.nodes[childIdx].fail = 0
       queue.push(childIdx)
     }
