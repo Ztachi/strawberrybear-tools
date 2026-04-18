@@ -559,7 +559,7 @@ async function enterOverlayMode() {
   width: 100%;
   height: 100%;
   background: url('@/assets/images/bg.jpeg') no-repeat center center/cover;
-  opacity: 0.2;
+  opacity: 0.25;
 }
 
 .main-window.overlay-mode {
