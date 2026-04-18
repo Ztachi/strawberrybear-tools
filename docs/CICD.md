@@ -6,16 +6,16 @@
 
 ## 当前 Workflow 一览
 
-| 文件                                | 触发条件                                                                | 作用                             | 范围                     |
-| ----------------------------------- | ----------------------------------------------------------------------- | -------------------------------- | ------------------------ |
-| `ci.yml`                            | push / PR 到 main（非纯文档变更）                                       | 构建 + 类型检查 + Lint           | 仅对变更包及下游         |
-| `release-infinity-nikki-player.yml` | push 到 main，`apps/infinity-nikki-player/**` 或 `.changeset/**` 有变化 | 构建 Tauri 包体 + Changeset 发版 | 仅 infinity-nikki-player |
+| 文件                                | 触发条件                                             | 作用                             | 范围                     |
+| ----------------------------------- | ---------------------------------------------------- | -------------------------------- | ------------------------ |
+| `ci.yml`                            | push / PR 到 main（非纯文档变更）                    | 构建 + 类型检查 + Lint           | 仅对变更包及下游         |
+| `release-infinity-nikki-player.yml` | push 到 main，`apps/infinity-nikki-player/**` 有变化 | 构建 Tauri 包体 + Changeset 发版 | 仅 infinity-nikki-player |
 
 ---
 
 ## 设计原则
 
-1. **paths 过滤**：每个应用的 release workflow 只监听自己的目录 + `.changeset/**`，其他应用变更不会触发它。
+1. **paths 过滤**：每个应用的 release workflow 只监听自己的 `apps/<app-name>/**` 目录，其他应用变更不会触发它。`.changeset/**` **不加入** paths 过滤——若多个 workflow 都监听 `.changeset/**`，推一个 changeset 文件会导致所有 workflow 并发执行 `ci:version`，产生 git push 竞争冲突。若只推了 changeset 文件而无代码变更，请用 `workflow_dispatch` 手动触发。
 2. **CI 只跑变更包**：`ci.yml` 使用 `turbo --filter=...[HEAD^1]`，只构建/检查本次 push 涉及的包及其下游依赖，节省 CI 时间。
 3. **Changelog 来自 Changesets**：Release 的发布说明直接从应用自身的 `CHANGELOG.md` 中提取，不依赖 GitHub 自动生成。
 4. **一个应用一个 release workflow 文件**：职责清晰，互不干扰，便于维护。
@@ -37,7 +37,6 @@ on:
       - main
     paths:
       - 'apps/<app-name>/**'
-      - '.changeset/**'
   workflow_dispatch:
 
 env:

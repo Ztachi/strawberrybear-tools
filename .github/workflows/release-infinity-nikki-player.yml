@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'apps/infinity-nikki-player/**'
-      - '.changeset/**'
   workflow_dispatch:
 
 env:
