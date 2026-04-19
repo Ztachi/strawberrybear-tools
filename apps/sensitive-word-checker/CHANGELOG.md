@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- 9a9cd1f: 验证自动发版链路：补充 README 中用户说明书的发布说明，确保 changeset 由 GitHub Actions 在线消费并自动生成新版本与 Release。
+
 ## 0.1.0
 
 ### Minor Changes
