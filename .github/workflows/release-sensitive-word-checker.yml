@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'apps/sensitive-word-checker/**'
+      - '!apps/sensitive-word-checker/**/*.md'
   workflow_dispatch:
 
 env:

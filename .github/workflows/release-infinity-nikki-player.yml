@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'apps/infinity-nikki-player/**'
+      - '!apps/infinity-nikki-player/**/*.md'
   workflow_dispatch:
 
 env:

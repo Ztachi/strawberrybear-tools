@@ -17,7 +17,7 @@
 
 ## 设计原则
 
-1. **paths 过滤**：每个应用的 release workflow 只监听自己的 `apps/<app-name>/**` 目录，其他应用变更不会触发它。`.changeset/**` **不加入** paths 过滤——若多个 workflow 都监听 `.changeset/**`，推一个 changeset 文件会导致所有 workflow 并发执行 `ci:version`，产生 git push 竞争冲突。若只推了 changeset 文件而无代码变更，请用 `workflow_dispatch` 手动触发。
+1. **paths 过滤**：每个应用的 release workflow 只监听自己的 `apps/<app-name>/**` 目录，其他应用变更不会触发它。建议同时排除 `!apps/<app-name>/**/*.md`，避免仅文档更新时也触发构建、部署和发版。`.changeset/**` **不加入** paths 过滤——若多个 workflow 都监听 `.changeset/**`，推一个 changeset 文件会导致所有 workflow 并发执行 `ci:version`，产生 git push 竞争冲突。若只推了 changeset 文件而无代码变更，请用 `workflow_dispatch` 手动触发。
 2. **CI 只跑变更包**：`ci.yml` 使用 `turbo --filter=...[HEAD^1]`，只构建/检查本次 push 涉及的包及其下游依赖，节省 CI 时间。
 3. **Changelog 来自 Changesets**：Release 的发布说明直接从应用自身的 `CHANGELOG.md` 中提取，不依赖 GitHub 自动生成。
 4. **一个应用一个 release workflow 文件**：职责清晰，互不干扰，便于维护。
@@ -39,6 +39,7 @@ on:
       - main
     paths:
       - 'apps/<app-name>/**'
+      - '!apps/<app-name>/**/*.md'
   workflow_dispatch:
 
 env:
@@ -135,6 +136,8 @@ jobs:
 
 > 替换所有 `<app-name>` 为实际值。
 >
+> **推荐**：保留 `!apps/<app-name>/**/*.md` 规则，避免仅文档改动时触发发布链路。
+>
 > **注意**：如果应用的构建产物是单个文件（如全部内联的 `index.html`），可直接用 `files: apps/<app-name>/dist/index.html`，无需打 zip。
 
 ---
@@ -186,6 +189,8 @@ jobs:
 >
 > - `CLOUDFLARE_API_TOKEN`：Cloudflare API Token，需具备 Pages Write 权限
 > - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID（在 Cloudflare Dashboard 右侧边栏可找到）
+>
+> **触发建议**：沿用情形一的 `paths` 排除规则（`!apps/<app-name>/**/*.md`），避免仅更新应用文档时触发 Cloudflare 部署。
 >
 > **注意**：两个 job 各自独立执行 build，因为它们运行在不同的 runner 上，这是 GitHub Actions 的正常模式。
 
