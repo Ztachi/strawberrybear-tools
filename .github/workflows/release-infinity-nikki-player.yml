@@ -59,6 +59,7 @@ jobs:
           name: infinity-nikki-player-${{ matrix.os }}
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
+          retention-days: 3
 
   # 版本管理和发布
   release:

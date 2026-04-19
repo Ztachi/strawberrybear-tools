@@ -20,7 +20,11 @@
 1. **paths 过滤**：每个应用的 release workflow 只监听自己的 `apps/<app-name>/**` 目录，其他应用变更不会触发它。建议同时排除 `!apps/<app-name>/**/*.md`，避免仅文档更新时也触发构建、部署和发版。`.changeset/**` **不加入** paths 过滤——若多个 workflow 都监听 `.changeset/**`，推一个 changeset 文件会导致所有 workflow 并发执行 `ci:version`，产生 git push 竞争冲突。若只推了 changeset 文件而无代码变更，请用 `workflow_dispatch` 手动触发。
 2. **CI 只跑变更包**：`ci.yml` 使用 `turbo --filter=...[HEAD^1]`，只构建/检查本次 push 涉及的包及其下游依赖，节省 CI 时间。
 3. **Changelog 来自 Changesets**：Release 的发布说明直接从应用自身的 `CHANGELOG.md` 中提取，不依赖 GitHub 自动生成。
-4. **一个应用一个 release workflow 文件**：职责清晰，互不干扰，便于维护。
+4. **一个应用一个 release workflow 文件**：职责清晰，互不干扰，便于维护。5. **GitHub Artifacts 使用原则**：
+   - GitHub 免费账户的 Artifacts 存储空间有限，应严格控制使用范围。
+   - **仅**在多个 job 之间需要传递构建产物时才使用 `upload-artifact`（例如 Tauri 在 macOS/Windows 并行构建后需要将安装包传递给 release job）。
+   - 所有 `upload-artifact` 必须设置 `retention-days: 3`，workflow 运行完毕后 3 天自动清理，避免占用存储配额。
+   - **Web 应用禁止使用 `upload-artifact`**：在同一个 job 内完成构建、打包（zip）、上传至 Release，无需经过 Artifacts 中转。
 
 ---
 
@@ -210,6 +214,7 @@ jobs:
 - 构建命令：`pnpm --filter @strawberrybear/<app-name> tauri build <args>`
 - artifact 路径：`apps/<app-name>/src-tauri/target/release/bundle/<format>`
 - Release 需要 `files` 字段附带构建产物
+- `upload-artifact` 必须设置 `retention-days: 3`
 
 ---
 
