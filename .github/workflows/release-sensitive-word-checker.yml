@@ -40,7 +40,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   release:
-    needs: deploy-pages
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:

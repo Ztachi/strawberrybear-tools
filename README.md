@@ -247,10 +247,13 @@ cd apps/web-vue && pnpm dev
 
 ## GitHub Actions 工作流
 
-| Workflow    | 文件                                       | 触发条件                          | 作用                                |
-| ----------- | ------------------------------------------ | --------------------------------- | ----------------------------------- |
-| **CI**      | `.github/workflows/ci.yml`                 | push / PR 到 main（非纯文档变更） | 只对变更包构建 + 类型检查 + Lint    |
-| **Release** | `.github/workflows/release-<app-name>.yml` | push 到 main，对应 app 目录有变化 | 仅在检测到 changeset 版本变更时发版 |
+| Workflow             | 文件                                       | 触发条件                          | 作用                                          |
+| -------------------- | ------------------------------------------ | --------------------------------- | --------------------------------------------- |
+| **CI**               | `.github/workflows/ci.yml`                 | push / PR 到 main（非纯文档变更） | 只对变更包构建 + 类型检查 + Lint              |
+| **Release**          | `.github/workflows/release-<app-name>.yml` | push 到 main，对应 app 目录有变化 | 仅在检测到 changeset 版本变更时发版           |
+| **Release + 云部署** | `.github/workflows/release-<app-name>.yml` | push 到 main，对应 app 目录有变化 | 同上，**并行**额外自动部署到 Cloudflare Pages |
+
+> **Release + 云部署**属于一种特定配置模式：在同一个 workflow 文件中包含 `deploy-pages` 和 `release` 两个并行的 job。适用于需要将构建产物实时公开访问（如 Web 应用）的场景，详见 [CI/CD 规范](docs/CICD.md)。
 
 ### 查看 CI/CD 状态
 

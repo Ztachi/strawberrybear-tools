@@ -6,11 +6,12 @@
 
 ## 当前 Workflow 一览
 
-| 文件                                | 触发条件                                             | 作用                                 | 范围                     |
-| ----------------------------------- | ---------------------------------------------------- | ------------------------------------ | ------------------------ |
-| `ci.yml`                            | push / PR 到 main（非纯文档变更）                    | 构建 + 类型检查 + Lint               | 仅对变更包及下游         |
-| `release-dq7-shuffle.yml`           | push 到 main，`apps/dq7-shuffle/**` 有变化           | 构建 dist + Changeset 发版 + 附 dist | 仅 dq7-shuffle           |
-| `release-infinity-nikki-player.yml` | push 到 main，`apps/infinity-nikki-player/**` 有变化 | 构建 Tauri 包体 + Changeset 发版     | 仅 infinity-nikki-player |
+| 文件                                 | 触发条件                                              | 作用                                             | 范围                      |
+| ------------------------------------ | ----------------------------------------------------- | ------------------------------------------------ | ------------------------- |
+| `ci.yml`                             | push / PR 到 main（非纯文档变更）                     | 构建 + 类型检查 + Lint                           | 仅对变更包及下游          |
+| `release-dq7-shuffle.yml`            | push 到 main，`apps/dq7-shuffle/**` 有变化            | 构建 dist + Changeset 发版 + 附 dist             | 仅 dq7-shuffle            |
+| `release-infinity-nikki-player.yml`  | push 到 main，`apps/infinity-nikki-player/**` 有变化  | 构建 Tauri 包体 + Changeset 发版                 | 仅 infinity-nikki-player  |
+| `release-sensitive-word-checker.yml` | push 到 main，`apps/sensitive-word-checker/**` 有变化 | 部署到 Cloudflare Pages + Changeset 发版（并行） | 仅 sensitive-word-checker |
 
 ---
 
@@ -130,6 +131,58 @@ jobs:
 > 替换所有 `<app-name>` 为实际值。
 >
 > **注意**：如果应用的构建产物是单个文件（如全部内联的 `index.html`），可直接用 `files: apps/<app-name>/dist/index.html`，无需打 zip。
+
+---
+
+### 情形三：需同时部署到 Cloudflare Pages 的 Web 应用
+
+在情形一的基础上，额外增加一个 `deploy-pages` job，与 `release` job **并行**运行（两者互不依赖，互不阻塞）。
+
+```yaml
+jobs:
+  deploy-pages:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter @strawberrybear/<app-name> build
+
+      - name: Deploy to Cloudflare Pages
+        run: npx wrangler pages deploy apps/<app-name>/dist --project-name=<app-name> --branch=production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  release:
+    # 不依赖 deploy-pages，两个 job 并行执行
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # ... 与情形一相同
+```
+
+> **所需 GitHub Secrets**（在仓库 Settings → Secrets and variables → Actions 中配置）：
+>
+> - `CLOUDFLARE_API_TOKEN`：Cloudflare API Token，需具备 Pages Write 权限
+> - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID（在 Cloudflare Dashboard 右侧边栏可找到）
+>
+> **注意**：两个 job 各自独立执行 build，因为它们运行在不同的 runner 上，这是 GitHub Actions 的正常模式。
 
 ---
 

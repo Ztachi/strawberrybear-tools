@@ -233,10 +233,13 @@ cd apps/web-vue && pnpm dev
 
 ## GitHub Actions Workflows
 
-| Workflow    | File                            | Trigger                     | Purpose                  |
-| ----------- | ------------------------------- | --------------------------- | ------------------------ |
-| **CI**      | `.github/workflows/ci.yml`      | push / pull_request to main | Build + Type check       |
-| **Release** | `.github/workflows/release.yml` | push to main with changeset | Release + Create Release |
+| Workflow                   | File                                       | Trigger                             | Purpose                                                            |
+| -------------------------- | ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------ |
+| **CI**                     | `.github/workflows/ci.yml`                 | push / pull_request to main         | Build + Type check + Lint (changed pkgs only)                      |
+| **Release**                | `.github/workflows/release-<app-name>.yml` | push to main, app directory changes | Release only when changeset version change detected                |
+| **Release + Cloud Deploy** | `.github/workflows/release-<app-name>.yml` | push to main, app directory changes | Same as above, plus a **parallel** auto-deploy to Cloudflare Pages |
+
+> **Release + Cloud Deploy** is a specific configuration pattern: the same workflow file contains two parallel jobs — `deploy-pages` and `release` — with no dependency between them. Use this pattern when you need the build artifact to be publicly accessible at all times (e.g. web apps). See [CI/CD Guidelines](docs/CICD.md) for the template.
 
 ### View CI/CD Status
 
