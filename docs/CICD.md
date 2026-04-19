@@ -68,11 +68,6 @@ jobs:
       - name: Build
         run: pnpm --filter @strawberrybear/<app-name> build
 
-      - name: Package dist
-        run: |
-          cd apps/<app-name>
-          zip -r ../../<app-name>-dist.zip dist/
-
       - name: Run changeset version
         id: changeset
         run: |
@@ -84,12 +79,22 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Skip release (no changeset)
+        if: steps.changeset.outputs.has_changes != 'true'
+        run: 'echo "Skip release: no changeset version change detected"'
+
+      - name: Package dist
+        if: steps.changeset.outputs.has_changes == 'true'
+        run: |
+          cd apps/<app-name>
+          zip -r ../../<app-name>-dist.zip dist/
+
       - name: Commit and push version bump
         if: steps.changeset.outputs.has_changes == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
+          git add apps/ .changeset/
           git commit -m "chore: version bump"
           git push
 
