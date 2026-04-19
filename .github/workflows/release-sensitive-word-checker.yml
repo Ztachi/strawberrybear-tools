@@ -12,7 +12,34 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  deploy-pages:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter @strawberrybear/sensitive-word-checker build
+
+      - name: Deploy to Cloudflare Pages
+        run: npx wrangler pages deploy apps/sensitive-word-checker/dist --project-name=sensitive-word-checker --branch=production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
   release:
+    needs: deploy-pages
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:

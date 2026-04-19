@@ -2,7 +2,7 @@
  * @Author: ztachi(legendryztachi@gmail.com)
  * @Date: 2026-04-18 18:17:19
  * @LastEditors: ztachi(legendryztachi@gmail.com)
- * @LastEditTime: 2026-04-18 18:17:19
+ * @LastEditTime: 2026-04-19 13:06:22
  * @FilePath: /strawberrybear-tools/apps/sensitive-word-checker/vite.config.ts
  * @Description:
  */
@@ -105,5 +105,10 @@ export default defineConfig({
   },
   worker: {
     format: 'es',
+  },
+  server: {
+    host: '0.0.0.0',
+    port: 3002,
+    open: true,
   },
 })

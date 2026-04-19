@@ -277,16 +277,4 @@ async function copyResult() {
 .chip-off {
   opacity: 0.55;
 }
-
-:deep(.risk-tooltip) {
-  background: rgba(17, 24, 39, 0.96) !important;
-  color: #f9fafb !important;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.32);
-  font-size: 12px;
-  line-height: 1.4;
-  font-weight: 500;
-  padding: 6px 10px;
-  border-radius: 8px;
-}
 </style>

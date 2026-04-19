@@ -37,7 +37,7 @@ const {
 
 const open = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
-const snackbar = ref({ show: false, message: '', color: 'success' as 'success' | 'error' })
+const snackbar = ref({ show: false, message: '', color: 'success' as 'success' | 'error' | 'warning' })
 
 const showFormDialog = ref(false)
 const editingId = ref<string | null>(null)
@@ -47,6 +47,8 @@ const formError = ref('')
 
 const showDeleteDialog = ref(false)
 const pendingDelete = ref<LexiconSource | null>(null)
+
+const showClearDialog = ref(false)
 
 const headers = computed(() => [
   { title: '', key: 'status', sortable: false, width: 48 },
@@ -58,7 +60,7 @@ const headers = computed(() => [
 
 const canSubmitForm = computed(() => Boolean(formName.value.trim()) && Boolean(formUrl.value.trim()))
 
-function showMessage(message: string, color: 'success' | 'error') {
+function showMessage(message: string, color: 'success' | 'error' | 'warning') {
   snackbar.value = { show: true, message, color }
 }
 
@@ -123,9 +125,13 @@ async function onSubmitForm() {
 }
 
 async function onSyncRow(row: LexiconSource) {
+  if (syncingId.value !== null) {
+    showMessage(t('lexicon.syncInProgress'), 'warning')
+    return
+  }
   try {
-    const count = await lexicon.syncLexicon(row.id)
-    showMessage(t('lexicon.syncSuccess', { count }), 'success')
+    await lexicon.syncLexicon(row.id)
+    showMessage(t('lexicon.syncSuccess', { count: lexicon.wordCount }), 'success')
   } catch (err) {
     showMessage(t('lexicon.syncFailed', { error: String(err) }), 'error')
   }
@@ -157,6 +163,17 @@ async function confirmDelete() {
   }
 }
 
+async function onClearAll() {
+  try {
+    await lexicon.clearAllLexicons()
+    showMessage(t('lexicon.clearSuccess'), 'success')
+  } catch (err) {
+    showMessage(String(err), 'error')
+  } finally {
+    showClearDialog.value = false
+  }
+}
+
 function triggerFileInput() {
   fileInput.value?.click()
 }
@@ -180,14 +197,29 @@ async function onFileChange(event: Event) {
   <v-card variant="outlined" rounded="xl" class="border-primary-20">
     <v-card-text class="pa-4">
       <div class="flex items-center justify-between gap-2">
-        <div>
+        <div class="flex items-center gap-2">
           <p class="text-sm font-semibold">
             {{ t('lexicon.title') }}
           </p>
-          <p class="text-xs text-medium-emphasis mt-1">
-            {{ isLoaded ? t('lexicon.wordCount', { count: wordCount.toLocaleString() }) : t('lexicon.wordCountEmpty') }}
-          </p>
+          <v-tooltip location="top" content-class="danger-tooltip">
+            <template #activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-delete-sweep-outline"
+                size="x-small"
+                variant="text"
+                color="error"
+                class="clear-btn"
+                @click="showClearDialog = true"
+              />
+            </template>
+            <span>{{ t('lexicon.clearAll') }}</span>
+          </v-tooltip>
         </div>
+
+        <p class="text-xs text-medium-emphasis">
+          {{ isLoaded ? t('lexicon.wordCount', { count: wordCount.toLocaleString() }) : t('lexicon.wordCountEmpty') }}
+        </p>
 
         <v-btn
           color="primary"
@@ -411,6 +443,26 @@ async function onFileChange(event: Event) {
     </v-card>
   </v-dialog>
 
+  <v-dialog v-model="showClearDialog" max-width="460">
+    <v-card rounded="xl">
+      <v-card-title class="py-4 px-6">
+        {{ t('lexicon.clearAll') }}
+      </v-card-title>
+      <v-card-text class="px-6">
+        {{ t('lexicon.clearConfirm') }}
+      </v-card-text>
+      <v-card-actions class="px-6 pb-5">
+        <v-spacer />
+        <v-btn variant="text" @click="showClearDialog = false">
+          {{ t('common.button.cancel') }}
+        </v-btn>
+        <v-btn color="error" variant="flat" @click="onClearAll">
+          {{ t('common.button.confirm') }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
   <v-dialog v-model="showDeleteDialog" max-width="460">
     <v-card rounded="xl">
       <v-card-title class="py-4 px-6">
@@ -532,5 +584,14 @@ async function onFileChange(event: Event) {
 .secondary-action-btn :deep(.v-btn__append),
 .secondary-action-btn :deep(.v-icon) {
   color: rgb(var(--v-theme-primary)) !important;
+}
+
+.clear-btn {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.clear-btn :deep(.v-icon) {
+  font-size: 14px;
 }
 </style>

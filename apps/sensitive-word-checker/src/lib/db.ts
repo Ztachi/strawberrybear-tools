@@ -177,6 +177,11 @@ export async function deleteLexicon(lexiconId: string): Promise<void> {
   await tx.done
 }
 
+export async function clearAllWords(): Promise<void> {
+  const db = await getDB()
+  await db.clear(STORE_WORDS)
+}
+
 export async function getMeta(): Promise<LexiconMeta | undefined> {
   const db = await getDB()
   return db.get(STORE_META, 'main') as Promise<LexiconMeta | undefined>

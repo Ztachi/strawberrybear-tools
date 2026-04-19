@@ -25,6 +25,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
   appendWordsForLexicon,
+  clearAllWords,
   deleteLexicon,
   getAllLexicons,
   getAllWords,
@@ -112,6 +113,12 @@ export const useLexiconStore = defineStore('lexicon', () => {
   async function reload(): Promise<void> {
     const [dbLexicons, dbWords] = await Promise.all([getAllLexicons(), getAllWords()])
     const withDefault = ensureDefaultLexicon(dbLexicons)
+    console.log(
+      '[reload] dbWords.length:',
+      dbWords.length,
+      '| lexicons:',
+      withDefault.filter((i) => i.enabled).map((i) => ({ id: i.id, enabled: i.enabled }))
+    )
 
     const hasChanged =
       withDefault.length !== dbLexicons.length ||
@@ -241,7 +248,10 @@ export const useLexiconStore = defineStore('lexicon', () => {
         syncProgress.value = { current, total }
       })
 
-      await setWordsForLexicon(target.id, entries)
+      // 按 ID 去重，避免 IndexedDB put 时因 ID 冲突覆盖导致数据丢失
+      const uniqueEntries = Array.from(new Map(entries.map((e) => [e.id, e])).values())
+
+      await setWordsForLexicon(target.id, uniqueEntries)
 
       const updated: LexiconSource = {
         ...target,
@@ -251,8 +261,8 @@ export const useLexiconStore = defineStore('lexicon', () => {
       await putLexicon(updated)
 
       lexicons.value = sortLexicons(lexicons.value.map((item) => (item.id === id ? updated : item)))
-      allWords.value = [...allWords.value.filter((w) => w.lexiconId !== id), ...entries]
-      return entries.length
+      allWords.value = [...allWords.value.filter((w) => w.lexiconId !== id), ...uniqueEntries]
+      return uniqueEntries.length
     } catch (err) {
       const updated: LexiconSource = {
         ...target,
@@ -267,6 +277,11 @@ export const useLexiconStore = defineStore('lexicon', () => {
       syncingId.value = null
       syncProgress.value = { current: 0, total: 0 }
     }
+  }
+
+  async function clearAllLexicons(): Promise<void> {
+    await clearAllWords()
+    allWords.value = []
   }
 
   async function importLocalLexicon(file: File): Promise<number> {
@@ -329,6 +344,7 @@ export const useLexiconStore = defineStore('lexicon', () => {
     removeLexicon,
     syncLexicon,
     importLocalLexicon,
+    clearAllLexicons,
     DEFAULT_LEXICON_ID,
     IMPORTED_LEXICON_ID,
   }
