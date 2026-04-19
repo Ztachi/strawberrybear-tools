@@ -2,6 +2,11 @@
 
 本地单机版敏感词检测工具，基于 Vue 3 + Vuetify 3 + Vite 8 构建。
 
+## 用户说明书
+
+- 面向终端用户的详细操作文档见 `USER_GUIDE.md`
+- 适合部署后直接给使用者阅读，包含首次使用、词库管理、扫描流程、结果解读和常见问题
+
 ## 功能
 
 - 从 GitHub（konsheng/Sensitive-lexicon）同步中文敏感词库到本地 IndexedDB
@@ -9,6 +14,11 @@
 - 使用 Aho-Corasick 算法 + Web Worker 高效扫描文本
 - 按高/中/低风险等级高亮显示命中词语
 - 响应式布局，适配 PC 和手机
+
+## 文档分工
+
+- `README.md`：开发与项目概览
+- `USER_GUIDE.md`：用户使用手册
 
 ## 本地开发
 
