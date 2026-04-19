@@ -12,7 +12,7 @@
   --border-primary-30: rgba(247, 192, 193, 0.3);
 
   /* 粉色阴影 */
-  --shadow-pink: 0 8px 32px rgba(247, 192, 193, 0.15);
+  --shadow-pink: 0 8px 32px rgba(247, 192, 193, 0.2);
   --shadow-pink-sm: 0 2px 8px rgba(247, 192, 193, 0.08);
 }
 
