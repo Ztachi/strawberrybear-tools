@@ -49,6 +49,8 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  LC_ALL: C.UTF-8
+  LANG: en_US.UTF-8
 
 jobs:
   release:
