@@ -2,7 +2,7 @@
  * @Author: ztachi(legendryztachi@gmail.com)
  * @Date: 2026-04-23 17:27:52
  * @LastEditors: ztachi(legendryztachi@gmail.com)
- * @LastEditTime: 2026-04-23 21:00:00
+ * @LastEditTime: 2026-04-23 20:44:07
  * @FilePath: /strawberrybear-tools/apps/universe-explorer/src/views/StartView.vue
  * @Description: StartView — 游戏开始界面
 -->
@@ -161,7 +161,7 @@ function toggleLocale(): void {
     radial-gradient(2px 2px at 85% 75%, rgba(200,230,255,0.8) 0%, transparent 100%);
   background-size: 400px 400px;
   animation: starFloat 180s linear infinite reverse, starTwinkle2 6s ease-in-out infinite alternate;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .stars-medium {
