@@ -12,6 +12,7 @@ export default {
     subtitle: 'Explore the Infinite Cosmos',
     startButton: 'Start Game',
     backButton: 'Back to Menu',
+    homeButton: 'Return to Base',
     controls: {
       title: 'Controls',
       wasd: 'WASD — Move Forward / Back / Left / Right',

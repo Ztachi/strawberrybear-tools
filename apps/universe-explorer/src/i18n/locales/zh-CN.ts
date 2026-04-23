@@ -12,6 +12,7 @@ export default {
     subtitle: '探索无尽星空',
     startButton: '开始游戏',
     backButton: '返回主界面',
+    homeButton: '返回基地',
     controls: {
       title: '操控说明',
       wasd: 'WASD — 前后左右移动',

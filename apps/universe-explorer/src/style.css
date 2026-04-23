@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
 /* 主题色变量 */
 :root {
@@ -49,28 +47,7 @@
   box-shadow: 0 0 20px var(--color-btn-shadow);
 }
 
-/* 星空背景渐变 */
+/* 深空背景 */
 .bg-space {
-  background: radial-gradient(
-    ellipse at center,
-    var(--color-space-blue) 0%,
-    var(--color-space-dark) 100%
-  );
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#app {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background-color: var(--color-space-dark);
 }

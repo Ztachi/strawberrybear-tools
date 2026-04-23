@@ -18,6 +18,11 @@ import { useGameStore } from '../stores/game'
 import { i18n, setLocale } from '../i18n'
 import type { Locale } from '../i18n'
 
+const LOCALE_LABEL_MAP = {
+  'zh-CN': 'EN',
+  'en-US': '中文',
+} as const
+
 const { t } = useI18n()
 const gameStore = useGameStore()
 
@@ -30,6 +35,15 @@ onMounted(() => {
 
 function toggleLocale(): void {
   setLocale(currentLocale.value === 'zh-CN' ? 'en-US' : 'zh-CN')
+}
+
+function goToBase(): void {
+  // 与主站路径一致：hash 直接拼接
+  // zh-CN: '' → https://ztachi.com/games/universexplorer
+  // en-US: '/en' → https://ztachi.com/en/games/universexplorer
+  const hash = window.location.hash.replace('#/', '')
+  const basePath = hash === 'en' ? '/en' : ''
+  window.location.href = `https://ztachi.com${basePath}/games/universexplorer`
 }
 </script>
 
@@ -64,7 +78,7 @@ function toggleLocale(): void {
 
     <!-- 语言切换 -->
     <button class="lang-toggle" :class="{ mounted }" @click="toggleLocale">
-      {{ currentLocale === 'zh-CN' ? 'EN' : '中文' }}
+      {{ LOCALE_LABEL_MAP[currentLocale] }}
     </button>
 
     <!-- 主内容 -->
@@ -102,6 +116,11 @@ function toggleLocale(): void {
         <span class="start-btn-text">{{ t('game.startButton') }}</span>
         <span class="start-btn-glow" />
       </button>
+
+      <!-- 返回基地 -->
+      <a class="home-btn" :class="{ mounted }" @click.prevent="goToBase">
+        {{ t('game.homeButton') }}
+      </a>
     </div>
   </div>
 </template>
@@ -409,6 +428,38 @@ function toggleLocale(): void {
 }
 
 .lang-toggle:hover {
+  background: rgba(100,180,255,0.15);
+  color: #fff;
+  border-color: rgba(100,180,255,0.6);
+  box-shadow: 0 0 20px rgba(100,180,255,0.3);
+}
+
+/* ==================== 返回基地按钮 ==================== */
+.home-btn {
+  display: block;
+  width: fit-content;
+  padding: 0.5rem 1.2rem;
+  border-radius: 2rem;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(10px);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  border: 1px solid rgba(100,180,255,0.3);
+  cursor: pointer;
+  transition: all 0.4s ease;
+  opacity: 0;
+  transform: translateY(20px);
+  text-decoration: none;
+}
+
+.home-btn.mounted {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-btn:hover {
   background: rgba(100,180,255,0.15);
   color: #fff;
   border-color: rgba(100,180,255,0.6);

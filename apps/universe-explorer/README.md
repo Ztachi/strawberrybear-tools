@@ -10,13 +10,13 @@
 | 技术            | 版本  | 说明                         |
 | --------------- | ----- | ---------------------------- |
 | Vue 3           | 3.5.x | 组合式 API，`<script setup>` |
-| TypeScript      | 5.9.x | strict 模式                  |
+| TypeScript      | 6.0.x | strict 模式                  |
 | Vite            | 8.x   | 构建工具                     |
-| Babylon.js      | 7.x   | WebGPU / WebGL 渲染引擎      |
-| Tailwind CSS    | 3.x   | UI 样式                      |
-| Pinia           | 3.x   | 状态管理                     |
-| vue-i18n        | 10.x  | 国际化（zh-CN / en-US）      |
-| Lucide Vue Next | 0.5.x | 图标库                       |
+| Babylon.js      | 9.4.x | WebGPU / WebGL 渲染引擎      |
+| Tailwind CSS    | 4.2.x | UI 样式                      |
+| Pinia           | 3.0.x | 状态管理                     |
+| vue-i18n        | 11.x  | 国际化（zh-CN / en-US）      |
+| Lucide Vue Next | 1.0.x | 图标库                       |
 
 ## 目录结构
 

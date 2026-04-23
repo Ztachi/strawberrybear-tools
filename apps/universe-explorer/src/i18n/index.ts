@@ -24,10 +24,13 @@ const LOCALE_KEY = 'universe-explorer-locale'
  * @return {Locale} 当前语言
  */
 function getInitialLocale(): Locale {
-  // 优先从 URL Hash 读取（支持分享链接）
+  // 优先从 URL Hash 读取（与主站路径一致：空 → zh-CN，/en → en-US）
   const hash = window.location.hash.replace('#/', '')
-  if (hash === 'zh-CN' || hash === 'en-US') {
-    return hash
+  if (hash === '' || hash === 'zh-CN') {
+    return 'zh-CN'
+  }
+  if (hash === 'en' || hash === 'en-US') {
+    return 'en-US'
   }
   // 其次从 localStorage 读取
   const saved = localStorage.getItem(LOCALE_KEY)
@@ -56,8 +59,8 @@ export function setLocale(locale: Locale): void {
   i18n.global.locale.value = locale
   // 持久化到 localStorage
   localStorage.setItem(LOCALE_KEY, locale)
-  // 更新 URL Hash（支持分享）
-  window.location.hash = `/${locale}`
+  // 更新 URL Hash（与主站路径一致：zh-CN → 空，en-US → /en）
+  window.location.hash = locale === 'zh-CN' ? '' : '/en'
 }
 
 /**
@@ -65,8 +68,12 @@ export function setLocale(locale: Locale): void {
  */
 window.addEventListener('hashchange', () => {
   const hash = window.location.hash.replace('#/', '')
-  if (hash === 'zh-CN' || hash === 'en-US') {
-    i18n.global.locale.value = hash
-    localStorage.setItem(LOCALE_KEY, hash)
+  if (hash === '' || hash === 'zh-CN') {
+    i18n.global.locale.value = 'zh-CN'
+    localStorage.setItem(LOCALE_KEY, 'zh-CN')
+  }
+  if (hash === 'en' || hash === 'en-US') {
+    i18n.global.locale.value = 'en-US'
+    localStorage.setItem(LOCALE_KEY, 'en-US')
   }
 })
