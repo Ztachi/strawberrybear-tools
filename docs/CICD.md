@@ -12,6 +12,7 @@
 | `release-dq7-shuffle.yml`            | push 到 main，`apps/dq7-shuffle/**` 有变化            | 构建 dist + Changeset 发版 + 附 dist             | 仅 dq7-shuffle            |
 | `release-infinity-nikki-player.yml`  | push 到 main，`apps/infinity-nikki-player/**` 有变化  | 构建 Tauri 包体 + Changeset 发版                 | 仅 infinity-nikki-player  |
 | `release-sensitive-word-checker.yml` | push 到 main，`apps/sensitive-word-checker/**` 有变化 | 部署到 Cloudflare Pages + Changeset 发版（并行） | 仅 sensitive-word-checker |
+| `release-universe-explorer.yml`      | push 到 main，`apps/universe-explorer/**` 有变化      | 部署到 Cloudflare Pages + Changeset 发版（并行） | 仅 universe-explorer      |
 
 ---
 
