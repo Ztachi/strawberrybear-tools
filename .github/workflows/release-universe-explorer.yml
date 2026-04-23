@@ -37,7 +37,16 @@ jobs:
         run: pnpm --filter @strawberrybear/universe-explorer build
 
       - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy apps/universe-explorer/dist --project-name=universe-explorer --branch=production
+        # --commit-message overrides the auto-detected git commit message.
+        # Wrangler reads git log and passes it to the Cloudflare API; if the
+        # message contains non-ASCII characters, Cloudflare rejects it with
+        # error code 8000111 even though the string is valid UTF-8 (CF bug).
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          npx wrangler pages deploy apps/universe-explorer/dist \
+            --project-name=universe-explorer \
+            --branch=production \
+            --commit-message="ci: deploy ${COMMIT_SHA}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

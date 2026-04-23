@@ -177,7 +177,16 @@ jobs:
         run: pnpm --filter @strawberrybear/<app-name> build
 
       - name: Deploy to Cloudflare Pages
-        run: npx wrangler pages deploy apps/<app-name>/dist --project-name=<app-name> --branch=production
+        # --commit-message overrides the auto-detected git commit message.
+        # Wrangler reads git log and passes it to the Cloudflare API; if the
+        # message contains non-ASCII characters, Cloudflare rejects it with
+        # error code 8000111 even though the string is valid UTF-8 (CF bug).
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          npx wrangler pages deploy apps/<app-name>/dist \
+            --project-name=<app-name> \
+            --branch=production \
+            --commit-message="ci: deploy ${COMMIT_SHA}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -200,6 +209,8 @@ jobs:
 > **触发建议**：沿用情形一的 `paths` 排除规则（`!apps/<app-name>/**/*.md`），避免仅更新应用文档时触发 Cloudflare 部署。
 >
 > **注意**：两个 job 各自独立执行 build，因为它们运行在不同的 runner 上，这是 GitHub Actions 的正常模式。
+>
+> **⚠️ Cloudflare 已知 Bug**：wrangler 默认会读取 `git log -1` 的 commit message 并发送给 Cloudflare API。若 commit message 含非 ASCII 字符（如中文），Cloudflare 服务端会返回 `Invalid commit message [code: 8000111]`（即便内容是合法 UTF-8）。规避方式：**必须**通过 `--commit-message` 参数显式传入 ASCII 字符串，如上方模板所示。
 
 ---
 
