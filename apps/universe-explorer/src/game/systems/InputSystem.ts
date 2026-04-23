@@ -37,4 +37,9 @@ export class InputSystem implements ISystem {
   update(_deltaTime: number): void {
     // 输入平滑、组合键检测等可在此扩展
   }
+
+  /** @description: 销毁，释放输入服务资源 */
+  dispose(): void {
+    this._inputService.dispose()
+  }
 }

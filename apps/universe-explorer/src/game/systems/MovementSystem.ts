@@ -61,4 +61,9 @@ export class MovementSystem implements ISystem {
       },
     })
   }
+
+  /** @description: 销毁（无资源需释放） */
+  dispose(): void {
+    // MovementSystem 无需释放的资源
+  }
 }

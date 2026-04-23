@@ -135,4 +135,10 @@ export class RenderSystem implements ISystem {
     ps.blendMode = ParticleSystem.BLENDMODE_ADD
     ps.start()
   }
+
+  /** @description: 销毁，释放渲染资源 */
+  dispose(): void {
+    this._pipeline.dispose()
+    this._camera.dispose()
+  }
 }

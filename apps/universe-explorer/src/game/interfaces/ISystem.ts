@@ -19,4 +19,6 @@ export interface ISystem {
    * @param {number} deltaTime - 距上一帧的时间差（秒）
    */
   update(deltaTime: number): void
+  /** 系统销毁，释放资源 */
+  dispose(): void
 }

@@ -127,6 +127,15 @@ export class GameManager {
   dispose(): void {
     window.removeEventListener('resize', this._onResize)
     this._engine.stopRenderLoop()
+
+    // 调用所有系统的 dispose（从后往前，与注册顺序相反）
+    for (let i = this._systems.length - 1; i >= 0; i--) {
+      const system = this._systems[i]
+      if ('dispose' in system && typeof system.dispose === 'function') {
+        system.dispose()
+      }
+    }
+
     this._inputService?.dispose()
     this._scene.dispose()
     this._engine.dispose()

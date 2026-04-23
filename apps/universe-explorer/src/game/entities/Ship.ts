@@ -15,6 +15,9 @@ import { MeshBuilder, StandardMaterial, Color3, DynamicTexture } from '@babylonj
 import type { Mesh, Scene } from '@babylonjs/core'
 import { Entity } from './Entity'
 
+/** Canvas 2D 绘图上下文类型 */
+type Canvas2D = CanvasRenderingContext2D
+
 export class Ship extends Entity {
   override readonly mesh: Mesh
   private readonly _upLabel!: Mesh
@@ -64,7 +67,7 @@ export class Ship extends Entity {
     const plane = MeshBuilder.CreatePlane(name, { width: 0.8, height: 0.3 }, scene)
 
     const tex = new DynamicTexture(`${name}Tex`, { width: 128, height: 48 }, scene, false)
-    const ctx = tex.getContext()
+    const ctx = tex.getContext() as Canvas2D
     ctx.clearRect(0, 0, 128, 48)
     ctx.font = 'bold 24px Arial'
     ctx.fillStyle = '#ffffff'
@@ -97,7 +100,7 @@ export class Ship extends Entity {
       false
     )
     tex.hasAlpha = true
-    const ctx = tex.getContext()
+    const ctx = tex.getContext() as Canvas2D
 
     // 透明背景
     ctx.clearRect(0, 0, texWidth, texHeight)
