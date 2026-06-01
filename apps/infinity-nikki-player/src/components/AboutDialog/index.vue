@@ -45,7 +45,6 @@ const updaterButtonText = computed(() => {
       ? t('updater.downloading')
       : t('updater.downloadingProgress', { progress: updater.progress.value })
   }
-  if (updater.lastError.value) return t('updater.openRelease')
   if (updater.hasUpdate.value) return t('updater.updateNow')
   return t('updater.checkNow')
 })
@@ -54,7 +53,6 @@ const updaterButtonIcon = computed(() => {
   if (updater.isChecking.value || updater.isDownloading.value || updater.isInstalling.value) {
     return Loader2
   }
-  if (updater.lastError.value) return ExternalLink
   if (updater.hasUpdate.value) return Download
   return RefreshCw
 })
@@ -79,11 +77,6 @@ async function openLink() {
 }
 
 async function handleUpdaterClick() {
-  if (updater.lastError.value) {
-    await updater.openReleasePage()
-    return
-  }
-
   if (updater.hasUpdate.value) {
     await updater.downloadAndInstallUpdate()
     return
@@ -120,7 +113,7 @@ onUnmounted(() => {
             <span class="about-version-badge">v{{ version }}</span>
             <button
               class="about-update-btn"
-              :disabled="updater.isBusy.value && !updater.lastError.value"
+              :disabled="updater.isBusy.value"
               @click="handleUpdaterClick"
             >
               <component

@@ -88,7 +88,7 @@ onMounted(async () => {
   <AboutDialog />
 
   <!-- Toast 通知组件 -->
-  <Toaster />
+  <Toaster close-button />
 </template>
 
 <style scoped>

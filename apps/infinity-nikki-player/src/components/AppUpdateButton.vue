@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Download, ExternalLink, Loader2 } from 'lucide-vue-next'
+import { Loader2, Sparkles } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 
@@ -14,32 +14,25 @@ const buttonText = computed(() => {
       ? t('updater.downloading')
       : t('updater.downloadingProgress', { progress: updater.progress.value })
   }
-  if (updater.lastError.value) return t('updater.openRelease')
   return t('updater.updateNow')
 })
 
 const buttonIcon = computed(() => {
   if (updater.isDownloading.value || updater.isInstalling.value) return Loader2
-  if (updater.lastError.value) return ExternalLink
-  return Download
+  return Sparkles
 })
 
 async function handleClick() {
-  if (updater.lastError.value) {
-    await updater.openReleasePage()
-    return
-  }
-
   await updater.downloadAndInstallUpdate()
 }
 </script>
 
 <template>
   <button
-    v-if="updater.hasUpdate.value || updater.lastError.value"
+    v-if="updater.hasUpdate.value"
     class="app-update-button fab-btn"
     :class="{ busy: updater.isDownloading.value || updater.isInstalling.value }"
-    :disabled="updater.isBusy.value && !updater.lastError.value"
+    :disabled="updater.isBusy.value"
     :title="buttonText"
     @click="handleClick"
   >
@@ -49,6 +42,7 @@ async function handleClick() {
       :class="{ spinning: updater.isDownloading.value || updater.isInstalling.value }"
       :size="18"
     />
+    <span class="update-label">{{ buttonText }}</span>
     <span
       v-if="updater.progress.value !== null && updater.isDownloading.value"
       class="progress-badge"
@@ -61,10 +55,33 @@ async function handleClick() {
 <style scoped>
 .app-update-button {
   position: relative;
+  width: auto !important;
+  min-width: 72px;
+  padding: 0 14px !important;
+  gap: 6px;
+  background: #ef4444 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.28);
+}
+
+.app-update-button:hover:not(:disabled) {
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.34);
+  transform: translateY(-1px);
 }
 
 .update-icon {
   flex-shrink: 0;
+}
+
+.update-label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .spinning {
