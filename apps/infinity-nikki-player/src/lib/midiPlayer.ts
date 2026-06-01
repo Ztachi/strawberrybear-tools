@@ -25,12 +25,20 @@ let audioContext: AudioContext | null = null
 /** 合成器 */
 let instrument: soundfont.Player | null = null
 
-/** MIDI 力度归一化基准，保留现有播放响度曲线 */
-const MIDI_VELOCITY_NORMALIZER = 100
-/** 预览输出增益倍率，用于补偿本地 soundfont 音量偏低 */
-const PREVIEW_OUTPUT_GAIN = 12
-/** 单音最大增益，避免高力度音符被过度放大 */
-const MAX_NOTE_GAIN = 16
+/** 主输出增益节点 */
+let masterGainNode: GainNode | null = null
+
+/** 动态压缩节点，用于提升响度并限制峰值 */
+let compressorNode: DynamicsCompressorNode | null = null
+
+/** MIDI 力度归一化基准，127 对应最大力度 */
+const MIDI_VELOCITY_NORMALIZER = 127
+/** 单音预增益，保持不同力度的相对动态 */
+const NOTE_INPUT_GAIN = 2
+/** 主输出最大补偿倍率，100% 音量时用于补偿 WebView/soundfont 偏小 */
+const PREVIEW_MASTER_GAIN = 12
+/** 静音外的最低有效增益，避免低音量段完全听不见 */
+const MIN_AUDIBLE_GAIN = 0.02
 
 /** 播放状态 */
 let isPlaying = false
@@ -77,13 +85,46 @@ async function initInstrument() {
     audioContext = new AudioContext()
   }
 
+  initOutputNodes()
+
   if (!instrument) {
     // 从本地加载音色（public 目录下的文件可被直接访问）
     instrument = await soundfont.instrument(
       audioContext,
-      '/soundfonts/acoustic_grand_piano-mp3.js' as never
+      '/soundfonts/acoustic_grand_piano-mp3.js' as never,
+      { destination: masterGainNode }
     )
   }
+}
+
+/**
+ * @description: 初始化预览输出链路
+ */
+function initOutputNodes() {
+  if (!audioContext || masterGainNode || compressorNode) return
+
+  masterGainNode = audioContext.createGain()
+  compressorNode = audioContext.createDynamicsCompressor()
+  compressorNode.threshold.value = -18
+  compressorNode.knee.value = 18
+  compressorNode.ratio.value = 8
+  compressorNode.attack.value = 0.003
+  compressorNode.release.value = 0.22
+
+  masterGainNode.connect(compressorNode)
+  compressorNode.connect(audioContext.destination)
+  applyMasterVolume()
+}
+
+/**
+ * @description: 将当前音量应用到主输出增益
+ */
+function applyMasterVolume() {
+  if (!masterGainNode || !audioContext) return
+
+  const targetGain =
+    currentVolume <= 0 ? 0 : Math.max(MIN_AUDIBLE_GAIN, currentVolume * PREVIEW_MASTER_GAIN)
+  masterGainNode.gain.setTargetAtTime(targetGain, audioContext.currentTime, 0.01)
 }
 
 /**
@@ -92,8 +133,9 @@ async function initInstrument() {
  * @return {number} 应用于 soundfont-player 的增益
  */
 function getNoteGain(velocity: number): number {
-  const normalizedVelocity = Math.max(0, velocity) / MIDI_VELOCITY_NORMALIZER
-  return Math.min(MAX_NOTE_GAIN, normalizedVelocity * currentVolume * PREVIEW_OUTPUT_GAIN)
+  const normalizedVelocity =
+    Math.max(0, Math.min(MIDI_VELOCITY_NORMALIZER, velocity)) / MIDI_VELOCITY_NORMALIZER
+  return Math.max(0.05, normalizedVelocity) * NOTE_INPUT_GAIN
 }
 
 /**
@@ -366,6 +408,7 @@ export function seekTo(timeMs: number) {
  */
 export function setVolume(value: number) {
   currentVolume = Math.max(0, Math.min(1, value))
+  applyMasterVolume()
 }
 
 /**

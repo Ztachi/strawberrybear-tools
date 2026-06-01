@@ -11,11 +11,12 @@
  * @description: 关于对话框组件
  * @description 监听 Tauri 菜单的 show_about 事件显示，包含应用图标、版本号和描述信息
  */
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { ExternalLink } from 'lucide-vue-next'
+import { Download, ExternalLink, Loader2, RefreshCw } from 'lucide-vue-next'
+import { useAppUpdater } from '@/composables/useAppUpdater'
 import appLogo from '@/assets/images/logo.png'
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 
 const { t } = useI18n()
+const updater = useAppUpdater()
 
 /** 对话框打开状态 @return {boolean} */
 const isOpen = ref(false)
@@ -34,6 +36,28 @@ const version = ref('')
 
 /** 事件监听取消函数 */
 let unlisten: (() => void) | undefined
+
+const updaterButtonText = computed(() => {
+  if (updater.isChecking.value) return t('updater.checking')
+  if (updater.isInstalling.value) return t('updater.installing')
+  if (updater.isDownloading.value) {
+    return updater.progress.value === null
+      ? t('updater.downloading')
+      : t('updater.downloadingProgress', { progress: updater.progress.value })
+  }
+  if (updater.lastError.value) return t('updater.openRelease')
+  if (updater.hasUpdate.value) return t('updater.updateNow')
+  return t('updater.checkNow')
+})
+
+const updaterButtonIcon = computed(() => {
+  if (updater.isChecking.value || updater.isDownloading.value || updater.isInstalling.value) {
+    return Loader2
+  }
+  if (updater.lastError.value) return ExternalLink
+  if (updater.hasUpdate.value) return Download
+  return RefreshCw
+})
 
 /**
  * @description: 显示关于对话框
@@ -52,6 +76,20 @@ async function show() {
  */
 async function openLink() {
   await invoke('open_url', { url: 'https://ztachi.com/tools/infinity-nikki-player' })
+}
+
+async function handleUpdaterClick() {
+  if (updater.lastError.value) {
+    await updater.openReleasePage()
+    return
+  }
+
+  if (updater.hasUpdate.value) {
+    await updater.downloadAndInstallUpdate()
+    return
+  }
+
+  await updater.checkUpdate({ notifyNoUpdate: true, silent: false })
 }
 
 /** 组件挂载时监听 show_about 事件 */
@@ -78,7 +116,21 @@ onUnmounted(() => {
           <DialogTitle class="about-app-name">
             {{ t('app.title') }}
           </DialogTitle>
-          <span class="about-version-badge">v{{ version }}</span>
+          <div class="about-version-row">
+            <span class="about-version-badge">v{{ version }}</span>
+            <button
+              class="about-update-btn"
+              :disabled="updater.isBusy.value && !updater.lastError.value"
+              @click="handleUpdaterClick"
+            >
+              <component
+                :is="updaterButtonIcon"
+                :size="12"
+                :class="{ spinning: updater.isBusy.value }"
+              />
+              {{ updaterButtonText }}
+            </button>
+          </div>
         </div>
 
         <!-- 分隔线 -->
@@ -157,6 +209,46 @@ onUnmounted(() => {
   padding: 2px 10px;
 }
 
+.about-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.about-update-btn {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--color-primary);
+  background: var(--bg-white-80);
+  border: 1px solid var(--border-primary-20);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.about-update-btn:hover:not(:disabled) {
+  color: white;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  box-shadow: var(--shadow-pink-sm);
+}
+
+.about-update-btn:disabled {
+  cursor: progress;
+  opacity: 0.8;
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
 .about-divider {
   width: 100%;
   height: 1px;
@@ -192,5 +284,11 @@ onUnmounted(() => {
 .about-link-btn:hover {
   opacity: 0.88;
   box-shadow: 0 4px 16px rgba(247, 192, 193, 0.45);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

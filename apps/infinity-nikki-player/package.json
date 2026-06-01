@@ -18,6 +18,8 @@
     "@strawberrybear/piano-roll": "workspace:*",
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@tonejs/piano": "^0.2.1",
     "@vueuse/core": "^14.2.1",
     "class-variance-authority": "^0.7.1",

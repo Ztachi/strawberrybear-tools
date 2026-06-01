@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0.0",
   "productName": "InfinityNikkiPlayer",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "identifier": "com.strawberrybear.infinity-nikki-player",
   "build": {
     "devUrl": "http://localhost:1421",
@@ -35,6 +35,7 @@
   },
   "bundle": {
     "targets": ["dmg", "nsis"],
+    "createUpdaterArtifacts": true,
     "icon": ["icons/icon.png", "icons/icon.icns"],
     "resources": ["en.lproj", "zh-Hans.lproj", "templates", "midi"],
     "macOS": {
@@ -47,5 +48,15 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBMDY0QUI1N0EyNDZBODMKUldTRGFpUjZ0VW9HYXBCNklibGJ3WVp3SmpWU21MbHVQTDNXZDk3UURQRkhZVUVkUVRqTWJzdmUK",
+      "endpoints": [
+        "https://github.com/Ztachi/strawberrybear-tools/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }

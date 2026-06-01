@@ -173,6 +173,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         // 注册 dialog 插件（用于文件选择对话框）
         .plugin(tauri_plugin_dialog::init())
+        // 注册 updater 插件（用于官方自动更新）
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // 注册 process 插件（用于更新完成后重启应用）
+        .plugin(tauri_plugin_process::init())
         // 注册 MCP 桥接插件
         .plugin(tauri_plugin_mcp_bridge::init())
         // 管理应用状态

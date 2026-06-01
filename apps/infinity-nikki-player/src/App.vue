@@ -8,9 +8,11 @@ import AboutDialog from '@/components/AboutDialog/index.vue'
 import { Toaster } from '@/components/ui'
 import { toast } from 'vue-sonner'
 import { usePlayerStore } from './stores/player'
+import { useAppUpdater } from '@/composables/useAppUpdater'
 
 /** 播放器 Store 实例 */
 const playerStore = usePlayerStore()
+const appUpdater = useAppUpdater()
 
 /** 是否显示加载中状态 */
 const isLoading = ref(true)
@@ -46,6 +48,9 @@ onMounted(async () => {
 
   // 移除背景图片，设置透明背景
   document.body.style.background = 'transparent'
+
+  // 启动后静默检查更新，无更新或检查失败时不打扰用户
+  appUpdater.checkUpdate({ silent: true })
 
   // 监听未处理的 Promise 拒绝
   window.addEventListener('unhandledrejection', (event) => {
