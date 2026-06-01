@@ -2,7 +2,7 @@
  * @Author: ztachi(legendryztachi@gmail.com)
  * @Date: 2026-04-08 13:42:27
  * @LastEditors: ztachi(legendryztachi@gmail.com)
- * @LastEditTime: 2026-04-09 21:56:03
+ * @LastEditTime: 2026-06-01 15:44:45
  * @FilePath: /strawberrybear-tools/apps/infinity-nikki-player/src/lib/midiPlayer.ts
  * @Description:
  */
@@ -24,6 +24,13 @@ let audioContext: AudioContext | null = null
 
 /** 合成器 */
 let instrument: soundfont.Player | null = null
+
+/** MIDI 力度归一化基准，保留现有播放响度曲线 */
+const MIDI_VELOCITY_NORMALIZER = 100
+/** 预览输出增益倍率，用于补偿本地 soundfont 音量偏低 */
+const PREVIEW_OUTPUT_GAIN = 12
+/** 单音最大增益，避免高力度音符被过度放大 */
+const MAX_NOTE_GAIN = 16
 
 /** 播放状态 */
 let isPlaying = false
@@ -80,6 +87,16 @@ async function initInstrument() {
 }
 
 /**
+ * @description: 计算音符播放增益
+ * @param {number} velocity - MIDI 力度
+ * @return {number} 应用于 soundfont-player 的增益
+ */
+function getNoteGain(velocity: number): number {
+  const normalizedVelocity = Math.max(0, velocity) / MIDI_VELOCITY_NORMALIZER
+  return Math.min(MAX_NOTE_GAIN, normalizedVelocity * currentVolume * PREVIEW_OUTPUT_GAIN)
+}
+
+/**
  * @description: 播放 MIDI 事件
  */
 function handleMidiEvent(
@@ -130,7 +147,7 @@ function handleMidiEvent(
 
     // 播放音符
     const node = instrument.play(targetNoteName, audioContext.currentTime, {
-      gain: (event.velocity / 100) * currentVolume,
+      gain: getNoteGain(event.velocity),
     })
     // 存储节点（用于停止特定音符）
     activeNoteNodes.set(targetNoteName, node)
@@ -455,7 +472,7 @@ export async function playNote(
   if (!instrument || !audioContext) return
 
   const noteName = pitchToNoteName(pitch)
-  const gain = (velocity / 100) * currentVolume
+  const gain = getNoteGain(velocity)
 
   // 如果该音高正在播放，先停止它
   const existing = activeNoteNodes.get(noteName)
