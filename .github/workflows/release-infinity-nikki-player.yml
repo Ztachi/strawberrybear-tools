@@ -7,6 +7,8 @@ on:
     paths:
       - 'apps/infinity-nikki-player/**'
       - '!apps/infinity-nikki-player/**/*.md'
+      - '.changeset/**'
+      - '.github/workflows/release-infinity-nikki-player.yml'
   workflow_dispatch:
 
 env:
@@ -207,6 +209,7 @@ jobs:
           }
 
           const windowsFiles = walk('windows').sort()
+          const macosFiles = walk('macos').sort()
           const installerPath = windowsFiles.find((file) => file.toLowerCase().endsWith('.exe'))
           if (!installerPath) {
             throw new Error('Windows NSIS installer was not found')
@@ -220,11 +223,28 @@ jobs:
             throw new Error('Windows updater signature was not found')
           }
 
+          const macosUpdaterPath = macosFiles.find((file) => file.toLowerCase().endsWith('.app.tar.gz'))
+          if (!macosUpdaterPath) {
+            throw new Error('macOS updater archive was not found')
+          }
+
+          const macosSignaturePath =
+            macosFiles.find((file) => file === `${macosUpdaterPath}.sig`) ||
+            macosFiles.find((file) => file.toLowerCase().endsWith('.app.tar.gz.sig'))
+          if (!macosSignaturePath) {
+            throw new Error('macOS updater signature was not found')
+          }
+
           const assetName = path.basename(installerPath)
+          const macosAssetName = path.basename(macosUpdaterPath)
           const latestJson = {
             version,
             pub_date: new Date().toISOString(),
             platforms: {
+              'darwin-aarch64': {
+                signature: fs.readFileSync(macosSignaturePath, 'utf8').trim(),
+                url: `https://github.com/${repository}/releases/download/${tagName}/${encodeURIComponent(macosAssetName)}`,
+              },
               'windows-x86_64': {
                 signature: fs.readFileSync(signaturePath, 'utf8').trim(),
                 url: `https://github.com/${repository}/releases/download/${tagName}/${encodeURIComponent(assetName)}`,

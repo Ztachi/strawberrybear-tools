@@ -1,7 +1,7 @@
 /**
  * @description: Tauri 官方自动更新状态与操作
  */
-import { computed, ref } from 'vue'
+import { computed, markRaw, ref, shallowRef } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
@@ -15,7 +15,7 @@ const isDownloading = ref(false)
 const isInstalling = ref(false)
 const downloadedBytes = ref(0)
 const contentLength = ref<number | null>(null)
-const availableUpdate = ref<Update | null>(null)
+const availableUpdate = shallowRef<Update | null>(null)
 const lastError = ref<string | null>(null)
 
 const hasUpdate = computed(() => availableUpdate.value !== null)
@@ -62,7 +62,7 @@ export function useAppUpdater() {
 
     try {
       const update = await check()
-      availableUpdate.value = update
+      availableUpdate.value = update ? markRaw(update) : null
 
       if (update) {
         lastError.value = null
@@ -83,14 +83,16 @@ export function useAppUpdater() {
       return update
     } catch (error) {
       const message = getErrorMessage(error)
+      console.warn('[updater] check failed:', message, error)
 
       if (!options.silent) {
-        toast.error(t('updater.checkFailed'), {
-          description: message,
-          richColors: true,
+        toast.info(t('updater.noUpdateTitle'), {
+          description: t('updater.noUpdateDescription'),
         })
       }
 
+      availableUpdate.value = null
+      lastError.value = null
       return null
     } finally {
       isChecking.value = false
@@ -115,9 +117,10 @@ export function useAppUpdater() {
       await relaunch()
     } catch (error) {
       const message = getErrorMessage(error)
+      console.error('[updater] install failed:', error)
       lastError.value = message
       toast.error(t('updater.installFailed'), {
-        description: message,
+        description: t('updater.installFailedDescription'),
         richColors: true,
       })
     } finally {
