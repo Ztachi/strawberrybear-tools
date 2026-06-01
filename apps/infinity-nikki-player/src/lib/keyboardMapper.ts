@@ -63,6 +63,25 @@ export type KeyLogCallback = (entry: KeyLogEntry) => void
 /** 键盘模拟回调类型 */
 export type KeyboardSimCallback = (action: 'press' | 'release', key: string) => void
 
+const DEFAULT_PLAYBACK_FPS = 60
+
+function getKeyboardTimingProfile() {
+  const fps = DEFAULT_PLAYBACK_FPS
+  return {
+    fps,
+    holdMs: Math.ceil(2000 / fps + 4),
+    releaseMs: Math.ceil(1000 / fps + 1),
+  }
+}
+
+const KEY_TIMING_PROFILE = getKeyboardTimingProfile()
+
+interface KeySimulationState {
+  isDown: boolean
+  nextAvailableAt: number
+  timers: number[]
+}
+
 /**
  * @description: 键盘映射器
  * 将 MIDI 音符移调并量化到 C 大调白键，然后映射到键盘按键
@@ -101,6 +120,7 @@ export class KeyboardMapper {
   private onNoteOff: ((pitch: number, originalPitch: number) => void) | undefined
   /** 键盘模拟回调 */
   private keyboardSimCallback: KeyboardSimCallback | null = null
+  private keySimulationState = new Map<string, KeySimulationState>()
 
   constructor(options: KeyboardMapperOptions = {}) {
     this.rows = options.rows ?? KEYBOARD_ROWS
@@ -132,6 +152,8 @@ export class KeyboardMapper {
    * @param {number} currentTimeMs 当前播放时间
    */
   clearKeyState(currentTimeMs: number): void {
+    this.releaseAllKeyboardSimulation()
+
     // 为 previousActiveKeys 中的所有按键生成 release 日志
     for (const code of this.previousActiveKeys) {
       const pitch = this.previousCodeToPitch.get(code)
@@ -156,6 +178,8 @@ export class KeyboardMapper {
    * @param {number} currentTimeMs 当前播放时间
    */
   resetState(currentTimeMs: number): void {
+    this.releaseAllKeyboardSimulation()
+
     // 为所有 previousActiveKeys 生成 release 日志
     for (const code of this.previousActiveKeys) {
       const pitch = this.previousCodeToPitch.get(code)
@@ -174,6 +198,7 @@ export class KeyboardMapper {
     this.previousActiveKeys = new Set()
     this.previousCodeToPitch = new Map()
     this.keyRefCount.clear()
+    this.keySimulationState.clear()
     this.keyLog = []
   }
 
@@ -193,6 +218,54 @@ export class KeyboardMapper {
     this.keyboardSimCallback = callback
   }
 
+  private getKeySimulationState(key: string): KeySimulationState {
+    let state = this.keySimulationState.get(key)
+    if (!state) {
+      state = {
+        isDown: false,
+        nextAvailableAt: 0,
+        timers: [],
+      }
+      this.keySimulationState.set(key, state)
+    }
+    return state
+  }
+
+  private scheduleKeyboardPulse(key: string): void {
+    const state = this.getKeySimulationState(key)
+    const now = performance.now()
+    const pressAt = Math.max(now, state.nextAvailableAt)
+    const releaseAt = pressAt + KEY_TIMING_PROFILE.holdMs
+    state.nextAvailableAt = releaseAt + KEY_TIMING_PROFILE.releaseMs
+
+    const pressTimer = window.setTimeout(() => {
+      if (state.isDown) {
+        this.keyboardSimCallback?.('release', key)
+      }
+      state.isDown = true
+      this.keyboardSimCallback?.('press', key)
+    }, pressAt - now)
+    const releaseTimer = window.setTimeout(() => {
+      if (!state.isDown) return
+      this.keyboardSimCallback?.('release', key)
+      state.isDown = false
+    }, releaseAt - now)
+
+    state.timers.push(pressTimer, releaseTimer)
+  }
+
+  private releaseAllKeyboardSimulation(): void {
+    for (const [key, state] of this.keySimulationState) {
+      for (const timer of state.timers) {
+        clearTimeout(timer)
+      }
+      if (state.isDown) {
+        this.keyboardSimCallback?.('release', key)
+      }
+    }
+    this.keySimulationState.clear()
+  }
+
   /**
    * @description: 处理音符按下事件（由 midiPlayer 直接同步调用，不经过 Vue 响应式）
    * 使用引用计数：同一个按键被多个音符占用时，只在首次按下时发送 press
@@ -207,11 +280,10 @@ export class KeyboardMapper {
     const key = mapping.key
     const count = (this.keyRefCount.get(key) ?? 0) + 1
     this.keyRefCount.set(key, count)
+    this.scheduleKeyboardPulse(key)
 
     if (count === 1) {
       // 首次按下该键 → 发送 press
-      this.keyboardSimCallback?.('press', key)
-
       const upperKey = key.toUpperCase()
       const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
       const entry: KeyLogEntry = {
@@ -245,8 +317,6 @@ export class KeyboardMapper {
 
     if (newCount === 0 && count > 0) {
       // 最后一个占用该键的音符释放 → 发送 release
-      this.keyboardSimCallback?.('release', key)
-
       const upperKey = key.toUpperCase()
       const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
       const entry: KeyLogEntry = {
@@ -267,10 +337,10 @@ export class KeyboardMapper {
    * @param {number} currentTimeMs 当前播放时间
    */
   releaseAll(currentTimeMs: number): void {
+    this.releaseAllKeyboardSimulation()
+
     for (const [key, count] of this.keyRefCount) {
       if (count > 0) {
-        this.keyboardSimCallback?.('release', key)
-
         const mapping = this.template?.mappings.find((m) => m.key === key)
         if (mapping) {
           const upperKey = key.toUpperCase()
@@ -651,12 +721,12 @@ export class KeyboardMapper {
    * @description: 重置缓存（切换歌曲时调用）
    */
   reset(): void {
+    this.releaseAllKeyboardSimulation()
     this.pitchCache.clear()
     this.keyLog = []
     this.previousActiveKeys.clear()
     this.previousCodeToPitch.clear()
     this.keyRefCount.clear()
-    this.template = null
   }
 
   // ==================== 私有方法 ====================
