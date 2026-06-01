@@ -7,6 +7,8 @@ on:
     paths:
       - 'apps/infinity-nikki-player/**'
       - '!apps/infinity-nikki-player/**/*.md'
+      - '.changeset/**'
+      - '.github/workflows/release-infinity-nikki-player.yml'
   workflow_dispatch:
 
 env:
