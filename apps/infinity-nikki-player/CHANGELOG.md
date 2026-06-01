@@ -1,5 +1,11 @@
 # @strawberrybear/infinity-nikki-player
 
+## 0.2.3
+
+### Patch Changes
+
+- d4d7057: 新增 4 首默认 MIDI 示例曲目到应用内置资源，首次安装后可直接在默认曲库中使用：`Interstellar（钢琴版）汉斯·季默`、`sky03`、`菊次郎的夏天-Summer`、`霞光`。
+
 ## 0.2.2
 
 ### Patch Changes
