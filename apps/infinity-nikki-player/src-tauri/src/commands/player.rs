@@ -10,6 +10,51 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::State;
 
+/// 播放按键调度参数
+///
+/// 当前使用固定 60FPS。后续如果接入游戏帧率检测，只需要替换
+/// `get_current_playback_timing_profile` 的内部实现。
+#[derive(Debug, Clone, Copy)]
+struct PlaybackTimingProfile {
+    /// 游戏逻辑帧率
+    fps: f64,
+    /// 按键至少保持时长
+    hold_ms: u64,
+    /// 同键重复间隔预留值，当前不参与绝对时间调度
+    interval_ms: u64,
+    /// Sleep 精度波动安全余量
+    safety_margin_ms: u64,
+}
+
+impl PlaybackTimingProfile {
+    fn fixed_60fps() -> Self {
+        Self::from_fps(60.0)
+    }
+
+    fn from_fps(fps: f64) -> Self {
+        let safe_fps = if fps.is_finite() && fps > 0.0 {
+            fps
+        } else {
+            60.0
+        };
+        let safety_margin_ms = 20;
+        let recommended_ms = (2000.0 / safe_fps + safety_margin_ms as f64).ceil() as u64;
+
+        Self {
+            fps: safe_fps,
+            hold_ms: recommended_ms,
+            interval_ms: recommended_ms,
+            safety_margin_ms,
+        }
+    }
+}
+
+fn get_current_playback_timing_profile() -> PlaybackTimingProfile {
+    // 当前版本先固定 60FPS。后续可在这里接入游戏 FPS 检测，并保持
+    // start_playback 的调用和调度结构不变。
+    PlaybackTimingProfile::fixed_60fps()
+}
+
 /// 播放控制状态
 ///
 /// 使用 Arc<Mutex<>> 实现线程安全的可共享状态
@@ -102,6 +147,14 @@ pub async fn start_playback(
     let current_tick = player.current_tick.clone();
     let is_playing = player.is_playing.clone();
     let logs = state.key_logs.clone();
+    let timing_profile = get_current_playback_timing_profile();
+    log::info!(
+        "Playback timing profile: fps={}, hold_ms={}, interval_ms={}, safety_margin_ms={}",
+        timing_profile.fps,
+        timing_profile.hold_ms,
+        timing_profile.interval_ms,
+        timing_profile.safety_margin_ms
+    );
 
     // 在阻塞线程中运行（使用 thread scope，Enigo 在线程内创建）
     std::thread::scope(|s| {
@@ -174,8 +227,9 @@ pub async fn start_playback(
                     }
 
                     // 等待音符时长
-                    let duration_ms = (event.duration_ms as f64 / speed) as u64;
-                    std::thread::sleep(Duration::from_millis(duration_ms.max(50)));
+                    let midi_duration_ms = (event.duration_ms as f64 / speed) as u64;
+                    let hold_ms = midi_duration_ms.max(timing_profile.hold_ms);
+                    std::thread::sleep(Duration::from_millis(hold_ms));
 
                     // 释放按键
                     if let Err(e) = simulator.release_key_sync(event.pitch, mapping) {
@@ -220,6 +274,32 @@ pub async fn start_playback(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PlaybackTimingProfile;
+
+    #[test]
+    fn fixed_60fps_uses_recommended_frame_hold() {
+        let profile = PlaybackTimingProfile::fixed_60fps();
+
+        assert_eq!(profile.fps, 60.0);
+        assert_eq!(profile.hold_ms, 54);
+        assert_eq!(profile.interval_ms, 54);
+        assert_eq!(profile.safety_margin_ms, 20);
+    }
+
+    #[test]
+    fn invalid_fps_falls_back_to_60fps() {
+        for fps in [0.0, -1.0, f64::NAN] {
+            let profile = PlaybackTimingProfile::from_fps(fps);
+
+            assert_eq!(profile.fps, 60.0);
+            assert_eq!(profile.hold_ms, 54);
+            assert_eq!(profile.interval_ms, 54);
+        }
+    }
 }
 
 /// 暂停播放

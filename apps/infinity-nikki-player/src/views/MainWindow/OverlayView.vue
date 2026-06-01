@@ -7,6 +7,7 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
+import type { MidiInfo } from '@/types'
 import {
   setKeyboardEventCallback,
   setOnPlaybackStopCallback,
@@ -56,8 +57,7 @@ const countdown = ref(0)
 // 倒计时定时器 ID
 let countdownTimer: number | null = null
 
-// 开始倒计时播放 - 按下播放按钮时，先显示 3 秒倒计时，让用户有时间切换到游戏窗口
-function startWithCountdown() {
+function runAfterCountdown(action: () => void | Promise<void>) {
   // 清除之前的定时器
   if (countdownTimer) {
     clearInterval(countdownTimer)
@@ -72,32 +72,24 @@ function startWithCountdown() {
         clearInterval(countdownTimer)
         countdownTimer = null
       }
-      // 倒计时结束，开始播放
-      playerStore.startPreview()
+      Promise.resolve(action()).catch(console.error)
     }
   }, 1000)
 }
 
+function resetOverlayKeyboardState() {
+  keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
+  keyboardMapper.value?.reset()
+}
+
+// 开始倒计时播放 - 按下播放按钮时，先显示 3 秒倒计时，让用户有时间切换到游戏窗口
+function startWithCountdown() {
+  runAfterCountdown(() => playerStore.startPreview())
+}
+
 // 恢复播放（带倒计时）
 function resumeWithCountdown() {
-  // 清除之前的定时器
-  if (countdownTimer) {
-    clearInterval(countdownTimer)
-    countdownTimer = null
-  }
-  countdown.value = 3
-  countdownTimer = window.setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      countdown.value = 0
-      if (countdownTimer) {
-        clearInterval(countdownTimer)
-        countdownTimer = null
-      }
-      // 倒计时结束，恢复播放
-      playerStore.resumePreviewPlayback()
-    }
-  }, 1000)
+  runAfterCountdown(() => playerStore.resumePreviewPlayback())
 }
 
 // 取消倒计时
@@ -121,6 +113,19 @@ function togglePlay() {
     // 空闲状态 -> 开始播放（带倒计时）
     startWithCountdown()
   }
+}
+
+async function playFromStartWithCountdown(midi?: MidiInfo) {
+  cancelCountdown()
+  playerStore.stopPreviewPlayback()
+  resetOverlayKeyboardState()
+
+  if (midi) {
+    await playerStore.selectMidi(midi)
+    resetOverlayKeyboardState()
+  }
+
+  startWithCountdown()
 }
 
 // 初始化键盘映射器 - 创建键盘映射器实例，设置键盘模拟回调
@@ -264,9 +269,26 @@ async function exitOverlayMode() {
 }
 
 // 播放指定 MIDI
-async function playMidi(midi: any) {
-  await playerStore.selectMidi(midi)
-  playerStore.startPreview()
+async function playMidi(midi: MidiInfo) {
+  await playFromStartWithCountdown(midi)
+}
+
+async function playRelativeMidi(direction: 'prev' | 'next') {
+  if (playerStore.midiLibrary.length === 0) return
+
+  const currentIndex = playerStore.midiLibrary.findIndex(
+    (m) => m.filename === playerStore.currentMidi?.filename
+  )
+  const lastIndex = playerStore.midiLibrary.length - 1
+  let targetIndex = 0
+
+  if (direction === 'prev') {
+    targetIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1
+  } else {
+    targetIndex = currentIndex >= lastIndex ? 0 : currentIndex + 1
+  }
+
+  await playFromStartWithCountdown(playerStore.midiLibrary[targetIndex])
 }
 
 // 格式化时长
@@ -345,7 +367,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
           <!-- 上一曲 -->
           <Tooltip>
             <TooltipTrigger as-child>
-              <button class="ctrl-btn" @click.stop="playerStore.playPrev">
+              <button class="ctrl-btn" @click.stop="playRelativeMidi('prev')">
                 <SkipBack :size="16" />
               </button>
             </TooltipTrigger>
@@ -374,7 +396,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
           <!-- 下一曲 -->
           <Tooltip>
             <TooltipTrigger as-child>
-              <button class="ctrl-btn" @click.stop="playerStore.playNext">
+              <button class="ctrl-btn" @click.stop="playRelativeMidi('next')">
                 <SkipForward :size="16" />
               </button>
             </TooltipTrigger>
