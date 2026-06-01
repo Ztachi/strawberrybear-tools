@@ -2,12 +2,9 @@
 //!
 //! 提供按键日志查询和键盘模拟功能
 
+use crate::keyboard::KeySimulator;
 use crate::types::KeyLogEntry;
 use crate::AppState;
-#[cfg(not(target_os = "windows"))]
-use crate::keyboard::KeySimulator;
-#[cfg(target_os = "windows")]
-use crate::keyboard::{self, init_driver};
 use tauri::State;
 
 /// 获取按键日志
@@ -51,7 +48,8 @@ pub fn clear_key_logs(state: State<'_, AppState>) {
 /// # Platform
 ///
 /// - Windows: 使用 SendInput API
-/// - macOS/Linux: 使用 Enigo 库
+/// - macOS: 使用物理键码事件
+/// - Linux: 使用 Enigo 字符输入回退
 ///
 /// # Returns
 ///
@@ -60,14 +58,10 @@ pub fn clear_key_logs(state: State<'_, AppState>) {
 /// # Errors
 ///
 /// 模拟失败时返回错误
-#[cfg(target_os = "windows")]
 #[tauri::command]
 pub fn simulate_key_down(key: String) -> Result<(), String> {
-    // 初始化驱动（如果需要）
-    let _ = init_driver();
-
-    // 使用 Windows SendInput 发送按键
-    keyboard::win_input::send_key_down(&key)
+    let simulator = KeySimulator::new()?;
+    simulator.press_key(&key)
 }
 
 /// 模拟按键释放
@@ -79,51 +73,8 @@ pub fn simulate_key_down(key: String) -> Result<(), String> {
 /// # See
 ///
 /// [simulate_key_down]
-#[cfg(target_os = "windows")]
-#[tauri::command]
-pub fn simulate_key_up(key: String) -> Result<(), String> {
-    let _ = init_driver();
-    keyboard::win_input::send_key_up(&key)
-}
-
-/// 模拟按键按下（macOS/Linux）
-///
-/// # Arguments
-///
-/// * `key` - 按键标识符
-///
-/// # Returns
-///
-/// 成功返回 Ok(())
-///
-/// # Errors
-///
-/// 创建模拟器或发送按键失败时返回错误
-#[cfg(not(target_os = "windows"))]
-#[tauri::command]
-pub fn simulate_key_down(key: String) -> Result<(), String> {
-    let simulator = KeySimulator::new()?;
-    simulator.press_key(&key);
-    Ok(())
-}
-
-/// 模拟按键释放（macOS/Linux）
-///
-/// # Arguments
-///
-/// * `key` - 按键标识符
-///
-/// # Returns
-///
-/// 成功返回 Ok(())
-///
-/// # Errors
-///
-/// 创建模拟器或发送按键失败时返回错误
-#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub fn simulate_key_up(key: String) -> Result<(), String> {
     let simulator = KeySimulator::new()?;
-    simulator.release_key(&key);
-    Ok(())
+    simulator.release_key(&key)
 }

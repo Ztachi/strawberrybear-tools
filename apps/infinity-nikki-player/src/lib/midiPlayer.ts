@@ -2,7 +2,7 @@
  * @Author: ztachi(legendryztachi@gmail.com)
  * @Date: 2026-04-08 13:42:27
  * @LastEditors: ztachi(legendryztachi@gmail.com)
- * @LastEditTime: 2026-04-09 21:56:03
+ * @LastEditTime: 2026-06-01 15:44:45
  * @FilePath: /strawberrybear-tools/apps/infinity-nikki-player/src/lib/midiPlayer.ts
  * @Description:
  */
@@ -24,6 +24,21 @@ let audioContext: AudioContext | null = null
 
 /** 合成器 */
 let instrument: soundfont.Player | null = null
+
+/** 主输出增益节点 */
+let masterGainNode: GainNode | null = null
+
+/** 动态压缩节点，用于提升响度并限制峰值 */
+let compressorNode: DynamicsCompressorNode | null = null
+
+/** MIDI 力度归一化基准，127 对应最大力度 */
+const MIDI_VELOCITY_NORMALIZER = 127
+/** 单音预增益，保持不同力度的相对动态 */
+const NOTE_INPUT_GAIN = 2
+/** 主输出最大补偿倍率，100% 音量时用于补偿 WebView/soundfont 偏小 */
+const PREVIEW_MASTER_GAIN = 12
+/** 静音外的最低有效增益，避免低音量段完全听不见 */
+const MIN_AUDIBLE_GAIN = 0.02
 
 /** 播放状态 */
 let isPlaying = false
@@ -70,13 +85,57 @@ async function initInstrument() {
     audioContext = new AudioContext()
   }
 
+  initOutputNodes()
+
   if (!instrument) {
     // 从本地加载音色（public 目录下的文件可被直接访问）
     instrument = await soundfont.instrument(
       audioContext,
-      '/soundfonts/acoustic_grand_piano-mp3.js' as never
+      '/soundfonts/acoustic_grand_piano-mp3.js' as never,
+      { destination: masterGainNode }
     )
   }
+}
+
+/**
+ * @description: 初始化预览输出链路
+ */
+function initOutputNodes() {
+  if (!audioContext || masterGainNode || compressorNode) return
+
+  masterGainNode = audioContext.createGain()
+  compressorNode = audioContext.createDynamicsCompressor()
+  compressorNode.threshold.value = -18
+  compressorNode.knee.value = 18
+  compressorNode.ratio.value = 8
+  compressorNode.attack.value = 0.003
+  compressorNode.release.value = 0.22
+
+  masterGainNode.connect(compressorNode)
+  compressorNode.connect(audioContext.destination)
+  applyMasterVolume()
+}
+
+/**
+ * @description: 将当前音量应用到主输出增益
+ */
+function applyMasterVolume() {
+  if (!masterGainNode || !audioContext) return
+
+  const targetGain =
+    currentVolume <= 0 ? 0 : Math.max(MIN_AUDIBLE_GAIN, currentVolume * PREVIEW_MASTER_GAIN)
+  masterGainNode.gain.setTargetAtTime(targetGain, audioContext.currentTime, 0.01)
+}
+
+/**
+ * @description: 计算音符播放增益
+ * @param {number} velocity - MIDI 力度
+ * @return {number} 应用于 soundfont-player 的增益
+ */
+function getNoteGain(velocity: number): number {
+  const normalizedVelocity =
+    Math.max(0, Math.min(MIDI_VELOCITY_NORMALIZER, velocity)) / MIDI_VELOCITY_NORMALIZER
+  return Math.max(0.05, normalizedVelocity) * NOTE_INPUT_GAIN
 }
 
 /**
@@ -130,7 +189,7 @@ function handleMidiEvent(
 
     // 播放音符
     const node = instrument.play(targetNoteName, audioContext.currentTime, {
-      gain: (event.velocity / 100) * currentVolume,
+      gain: getNoteGain(event.velocity),
     })
     // 存储节点（用于停止特定音符）
     activeNoteNodes.set(targetNoteName, node)
@@ -349,6 +408,7 @@ export function seekTo(timeMs: number) {
  */
 export function setVolume(value: number) {
   currentVolume = Math.max(0, Math.min(1, value))
+  applyMasterVolume()
 }
 
 /**
@@ -455,7 +515,7 @@ export async function playNote(
   if (!instrument || !audioContext) return
 
   const noteName = pitchToNoteName(pitch)
-  const gain = (velocity / 100) * currentVolume
+  const gain = getNoteGain(velocity)
 
   // 如果该音高正在播放，先停止它
   const existing = activeNoteNodes.get(noteName)

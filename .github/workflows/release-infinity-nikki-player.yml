@@ -15,8 +15,88 @@ env:
   LANG: en_US.UTF-8
 
 jobs:
-  # 单独构建 Tauri 应用
+  # 版本管理必须先于 Tauri 构建，否则 updater 产物版本会与 release tag 不一致
+  version:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      has_changes: ${{ steps.changeset.outputs.has_changes }}
+      version: ${{ steps.version.outputs.version }}
+      release_sha: ${{ steps.commit.outputs.release_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run changeset version and sync Tauri versions
+        id: changeset
+        run: |
+          pnpm ci:version
+          node <<'NODE'
+          const fs = require('fs')
+          const packagePath = 'apps/infinity-nikki-player/package.json'
+          const tauriConfigPath = 'apps/infinity-nikki-player/src-tauri/tauri.conf.json'
+          const cargoTomlPath = 'apps/infinity-nikki-player/src-tauri/Cargo.toml'
+
+          const version = JSON.parse(fs.readFileSync(packagePath, 'utf8')).version
+          const tauriConfig = JSON.parse(fs.readFileSync(tauriConfigPath, 'utf8'))
+          tauriConfig.version = version
+          fs.writeFileSync(tauriConfigPath, `${JSON.stringify(tauriConfig, null, 2)}\n`)
+
+          const cargoToml = fs.readFileSync(cargoTomlPath, 'utf8')
+          fs.writeFileSync(
+            cargoTomlPath,
+            cargoToml.replace(
+              /^version = "[^"]+"/m,
+              `version = "${version}"`
+            )
+          )
+          NODE
+          CHANGESET_SUMMARY=$(git status --porcelain)
+          if [ -n "$CHANGESET_SUMMARY" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip release (no changeset)
+        if: steps.changeset.outputs.has_changes != 'true'
+        run: 'echo "Skip release: no changeset version change detected"'
+
+      - name: Get app version
+        id: version
+        if: steps.changeset.outputs.has_changes == 'true'
+        run: |
+          VERSION=$(node -p "require('./apps/infinity-nikki-player/package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit and push version bump
+        id: commit
+        if: steps.changeset.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: version bump"
+          git push
+          echo "release_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  # 构建 Tauri 应用
   build-tauri:
+    needs: version
+    if: needs.version.outputs.has_changes == 'true'
     timeout-minutes: 60
     runs-on: ${{ matrix.os }}
     strategy:
@@ -24,14 +104,16 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            args: '--bundles dmg'
-            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/dmg'
+            args: '--bundles app,dmg'
+            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle'
           - os: windows-latest
             args: '--bundles nsis'
-            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle/nsis'
+            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle'
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.release_sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -53,6 +135,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_INFINITY_NIKKI_PLAYER }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         run: pnpm --filter @strawberrybear/infinity-nikki-player tauri build ${{ matrix.args }}
 
       - name: Upload artifacts
@@ -63,9 +148,12 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  # 版本管理和发布
+  # 发布 GitHub Release 和 updater latest.json
   release:
-    needs: build-tauri
+    needs:
+      - version
+      - build-tauri
+    if: needs.version.outputs.has_changes == 'true'
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
@@ -73,66 +161,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
         with:
-          node-version: '24'
-
-      - name: Install pnpm
-        run: npm install -g pnpm@10
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run changeset version
-        id: changeset
-        run: |
-          pnpm ci:version
-          CHANGESET_SUMMARY=$(git status --porcelain)
-          if [ -n "$CHANGESET_SUMMARY" ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Skip release (no changeset)
-        if: steps.changeset.outputs.has_changes != 'true'
-        run: 'echo "Skip release: no changeset version change detected"'
-
-      - name: Commit and push version bump
-        if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "chore: version bump"
-          git push
-
-      - name: Fetch latest commit
-        if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          git fetch origin main
-          git checkout origin/main
-
-      - name: Get app version
-        id: version
-        if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          VERSION=$(grep '"version"' apps/infinity-nikki-player/package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          ref: ${{ needs.version.outputs.release_sha }}
 
       - name: Get changelog entry
         id: changelog
-        if: steps.changeset.outputs.has_changes == 'true'
         run: |
-          VERSION=${{ steps.version.outputs.version }}
+          VERSION=${{ needs.version.outputs.version }}
           CONTENT=$(awk "/^## ${VERSION}/{flag=1; next} /^## [0-9]/{if(flag) exit} flag" apps/infinity-nikki-player/CHANGELOG.md)
           echo "content<<EOF" >> $GITHUB_OUTPUT
           echo "$CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # 下载 artifacts（移除 has_changes 条件，始终下载）
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
@@ -145,23 +185,77 @@ jobs:
           name: infinity-nikki-player-windows-latest
           path: ./windows
 
+      - name: Generate latest.json
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+
+          const version = process.env.VERSION
+          const repository = process.env.GITHUB_REPOSITORY
+          const tagName = `infinity-nikki-player@v${version}`
+
+          function walk(dir) {
+            if (!fs.existsSync(dir)) return []
+            return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+              const fullPath = path.join(dir, entry.name)
+              return entry.isDirectory() ? walk(fullPath) : [fullPath]
+            })
+          }
+
+          const windowsFiles = walk('windows').sort()
+          const installerPath = windowsFiles.find((file) => file.toLowerCase().endsWith('.exe'))
+          if (!installerPath) {
+            throw new Error('Windows NSIS installer was not found')
+          }
+
+          const signaturePath =
+            windowsFiles.find((file) => file === `${installerPath}.sig`) ||
+            windowsFiles.find((file) => file.toLowerCase().endsWith('.exe.sig')) ||
+            windowsFiles.find((file) => file.toLowerCase().endsWith('.sig'))
+          if (!signaturePath) {
+            throw new Error('Windows updater signature was not found')
+          }
+
+          const assetName = path.basename(installerPath)
+          const latestJson = {
+            version,
+            pub_date: new Date().toISOString(),
+            platforms: {
+              'windows-x86_64': {
+                signature: fs.readFileSync(signaturePath, 'utf8').trim(),
+                url: `https://github.com/${repository}/releases/download/${tagName}/${encodeURIComponent(assetName)}`,
+              },
+            },
+          }
+
+          fs.writeFileSync('latest.json', `${JSON.stringify(latestJson, null, 2)}\n`)
+          NODE
+
       - name: List artifacts
         run: |
-          ls -la ./macos/
-          ls -la ./windows/
+          find ./macos -maxdepth 4 -type f -print
+          find ./windows -maxdepth 4 -type f -print
+          cat ./latest.json
 
       - name: Create Release
-        if: steps.changeset.outputs.has_changes == 'true'
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: false
           generate_release_notes: false
-          tag_name: infinity-nikki-player@v${{ steps.version.outputs.version }}
-          name: infinity-nikki-player@v${{ steps.version.outputs.version }}
+          tag_name: infinity-nikki-player@v${{ needs.version.outputs.version }}
+          name: infinity-nikki-player@v${{ needs.version.outputs.version }}
           body: ${{ steps.changelog.outputs.content }}
           files: |
-            ./macos/*.dmg
-            ./windows/*.exe
+            ./macos/**/*.dmg
+            ./macos/**/*.tar.gz
+            ./macos/**/*.sig
+            ./windows/**/*.exe
+            ./windows/**/*.sig
+            ./latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

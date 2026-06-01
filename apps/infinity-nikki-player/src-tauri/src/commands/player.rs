@@ -144,7 +144,11 @@ pub async fn start_playback(
                 // 查找该音高对应的键盘映射
                 if let Some(mapping) = template.iter().find(|m| m.pitch == event.pitch) {
                     // 按下按键
-                    simulator.press_key_sync(event.pitch, mapping);
+                    if let Err(e) = simulator.press_key_sync(event.pitch, mapping) {
+                        log::error!("按键按下失败: {}", e);
+                        *is_playing.lock() = false;
+                        break;
+                    }
                     *current_tick.lock() = event.start_ms as u32;
 
                     // 记录按键日志
@@ -174,7 +178,11 @@ pub async fn start_playback(
                     std::thread::sleep(Duration::from_millis(duration_ms.max(50)));
 
                     // 释放按键
-                    simulator.release_key_sync(event.pitch, mapping);
+                    if let Err(e) = simulator.release_key_sync(event.pitch, mapping) {
+                        log::error!("按键释放失败: {}", e);
+                        *is_playing.lock() = false;
+                        break;
+                    }
 
                     // 记录释放日志
                     {
@@ -259,7 +267,10 @@ pub fn resume_playback(player: State<'_, PlayerControl>) -> Result<(), String> {
 ///
 /// 设置 should_stop 标志，播放线程会在下一个检查点退出
 #[tauri::command]
-pub fn stop_playback(player: State<'_, PlayerControl>, state: State<'_, AppState>) -> Result<(), String> {
+pub fn stop_playback(
+    player: State<'_, PlayerControl>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     *player.should_stop.lock() = true;
     *player.is_paused.lock() = false;
     {
