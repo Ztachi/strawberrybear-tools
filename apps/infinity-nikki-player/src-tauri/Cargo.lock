@@ -1768,6 +1768,7 @@ version = "0.0.1"
 dependencies = [
  "check_elevation",
  "cocoa",
+ "core-graphics 0.24.0",
  "enigo",
  "env_logger",
  "log",
