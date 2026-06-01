@@ -147,6 +147,7 @@ export default {
     noUpdateDescription: 'No update is available for this version',
     checkFailed: 'Update check failed',
     installFailed: 'Update failed',
+    installFailedDescription: 'Please try again later. Details were logged to the console.',
     openRelease: 'Open releases',
     retry: 'Check again',
   },

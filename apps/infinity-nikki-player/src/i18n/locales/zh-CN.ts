@@ -147,6 +147,7 @@ export default {
     noUpdateDescription: '当前版本无需更新',
     checkFailed: '检查更新失败',
     installFailed: '更新失败',
+    installFailedDescription: '请稍后重试，详细错误已记录到控制台',
     openRelease: '打开发布页',
     retry: '重试检查更新',
   },
