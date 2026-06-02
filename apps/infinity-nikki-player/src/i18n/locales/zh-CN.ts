@@ -78,6 +78,8 @@ export default {
   },
   permissions: {
     required: '需要辅助功能权限',
+    reauthorizeTip:
+      '如果更新后仍提示未授权，请先在系统设置的辅助功能中删除旧应用项，然后重启应用并重新授权。',
   },
   template: {
     title: '模板管理',
@@ -158,5 +160,7 @@ export default {
       '一款适用于无限暖暖的 MIDI 自动演奏工具。导入 MIDI 文件，应用会自动模拟游戏内按键操作。',
     learnMore: '了解更多',
     officialSite: '官方网站',
+    contact: '联系方式',
+    qq: 'QQ：414135950',
   },
 }

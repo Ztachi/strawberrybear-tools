@@ -78,6 +78,8 @@ export default {
   },
   permissions: {
     required: 'Accessibility Required',
+    reauthorizeTip:
+      'If macOS still reports no permission after an update, remove the old app entry from Accessibility, restart the app, and authorize it again.',
   },
   template: {
     title: 'Template Management',
@@ -158,5 +160,7 @@ export default {
       'A MIDI auto-play tool for Infinity Nikki. Import MIDI files and let the app simulate key presses in-game.',
     learnMore: 'Learn More',
     officialSite: 'Official Site',
+    contact: 'Contact',
+    qq: 'QQ: 414135950',
   },
 }

@@ -134,6 +134,11 @@ onUnmounted(() => {
           {{ t('about.description') }}
         </DialogDescription>
 
+        <div class="about-contact">
+          <span class="about-contact-label">{{ t('about.contact') }}</span>
+          <span class="about-contact-value">{{ t('about.qq') }}</span>
+        </div>
+
         <!-- 外部链接按钮 -->
         <button class="about-link-btn" @click="openLink">
           <ExternalLink :size="14" />
@@ -254,8 +259,31 @@ onUnmounted(() => {
   color: var(--color-muted-dark) !important;
   line-height: 1.65;
   text-align: center;
-  margin: 0 0 20px;
+  margin: 0 0 14px;
   width: 100%;
+}
+
+.about-contact {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 18px;
+  border-radius: 10px;
+  background: var(--bg-primary-10);
+  color: var(--color-muted-dark);
+  font-size: 12px;
+}
+
+.about-contact-label {
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.about-contact-value {
+  font-weight: 600;
 }
 
 .about-link-btn {

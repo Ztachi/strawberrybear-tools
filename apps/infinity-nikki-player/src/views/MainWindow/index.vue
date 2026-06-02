@@ -11,6 +11,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
 import { AlertCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES } from '@/i18n'
@@ -465,16 +466,24 @@ async function enterOverlayMode() {
 
           <div class="header-actions">
             <!-- 辅助功能权限提示（未授权时显示） -->
-            <Button
-              v-if="!playerStore.hasAccessibility"
-              variant="destructive"
-              size="sm"
-              class="access-btn"
-              @click="openAccessibilitySettings"
-            >
-              <AlertCircle :size="14" />
-              {{ t('permissions.required') }}
-            </Button>
+            <TooltipProvider v-if="!playerStore.hasAccessibility">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    class="access-btn"
+                    @click="openAccessibilitySettings"
+                  >
+                    <AlertCircle :size="14" />
+                    {{ t('permissions.required') }}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" align="end" class="access-tooltip">
+                  {{ t('permissions.reauthorizeTip') }}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <!-- 悬浮模式按钮 -->
             <Button variant="default" size="sm" class="overlay-btn" @click="enterOverlayMode">
@@ -664,6 +673,12 @@ async function enterOverlayMode() {
 .access-btn {
   @apply gap-1.5;
   animation: pulse 2s ease-in-out infinite;
+}
+
+.access-tooltip {
+  max-width: 280px;
+  line-height: 1.5;
+  white-space: normal;
 }
 
 @keyframes pulse {
