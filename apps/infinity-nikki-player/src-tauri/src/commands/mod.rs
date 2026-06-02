@@ -136,15 +136,24 @@ pub fn open_accessibility_settings() -> Result<(), String> {
 pub fn open_url(url: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        Command::new("open").arg(&url).spawn().map_err(|e| e.to_string())?;
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd").args(["/C", "start", "", &url]).spawn().map_err(|e| e.to_string())?;
+        Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        Command::new("xdg-open").arg(&url).spawn().map_err(|e| e.to_string())?;
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -160,21 +169,19 @@ fn check_accessibility_impl() -> bool {
 
 /// 检查辅助功能权限实现（macOS 发布模式）
 ///
-/// 使用 osascript 执行 AppleScript 查询 UI Elements 是否启用
+/// 使用 Accessibility 原生 API 检查当前进程是否已被 TCC 信任。
+/// 不能使用 osascript 间接查询，否则检查的是脚本进程语义，更新后容易误判。
 #[cfg(target_os = "macos")]
 #[cfg(not(debug_assertions))]
 fn check_accessibility_impl() -> bool {
-    let output = Command::new("osascript")
-        .args([
-            "-e",
-            "tell application \"System Events\" to return UI elements enabled",
-        ])
-        .output();
+    unsafe { AXIsProcessTrusted() != 0 }
+}
 
-    match output {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_lowercase() == "true",
-        Err(_) => false,
-    }
+#[cfg(target_os = "macos")]
+#[cfg(not(debug_assertions))]
+#[link(name = "ApplicationServices", kind = "framework")]
+unsafe extern "C" {
+    fn AXIsProcessTrusted() -> std::os::raw::c_uchar;
 }
 
 /// 检查辅助功能权限实现（非 macOS 平台）
