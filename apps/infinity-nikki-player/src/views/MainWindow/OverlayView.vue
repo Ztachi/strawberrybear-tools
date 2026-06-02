@@ -11,44 +11,60 @@ import type { MidiInfo } from '@/types'
 import {
   setKeyboardEventCallback,
   setOnPlaybackStopCallback,
+  setVolume as setMidiPreviewVolume,
 } from '@/lib/midiPlayer'
-import {
-  SkipBack,
-  SkipForward,
-  Play,
-  Pause,
-  Square,
-  ChevronDown,
-  ChevronUp,
-  X,
-  VolumeX,
-  Volume2,
-} from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, X } from 'lucide-vue-next'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
+import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
+const OVERLAY_WIDTH = 360
+const OVERLAY_COLLAPSED_HEIGHT = 136
+const OVERLAY_EXPANDED_HEIGHT = 320
+
 // 键盘映射器实例
 const keyboardMapper = ref<KeyboardMapper | null>(null) as any
 
 // 悬浮层独立音量状态（与详情页的 previewVolume / isPreviewMuted 完全独立）
-const overlayMuted = ref(false)
+const overlayMuted = ref(true)
 const overlayVolume = ref(1)
+const detailVolumeBeforeOverlay = ref(1)
+const detailMutedBeforeOverlay = ref(false)
+
+function applyOverlayVolume() {
+  setMidiPreviewVolume(overlayMuted.value ? 0 : overlayVolume.value)
+}
+
+function setOverlayVolume(value: number) {
+  overlayVolume.value = Math.min(1, Math.max(0, value))
+  if (overlayVolume.value > 0) {
+    overlayMuted.value = false
+  }
+  applyOverlayVolume()
+}
 
 // 切换悬浮层静音状态
 function toggleOverlayMute() {
   overlayMuted.value = !overlayMuted.value
   // 直接操作 midiPlayer 音量，不写入 playerStore
-  import('@/lib/midiPlayer').then(({ setVolume }) => {
-    setVolume(overlayMuted.value ? 0 : overlayVolume.value)
-  })
+  applyOverlayVolume()
+}
+
+function muteOverlayFromDetailState() {
+  detailVolumeBeforeOverlay.value = playerStore.previewVolume
+  detailMutedBeforeOverlay.value = playerStore.isPreviewMuted
+  overlayVolume.value = playerStore.previewVolume > 0 ? playerStore.previewVolume : 1
+  overlayMuted.value = true
+  applyOverlayVolume()
 }
 
 // 倒计时秒数（悬浮模式播放/恢复时延迟 3 秒）
@@ -117,7 +133,7 @@ function togglePlay() {
 
 async function playFromStartWithCountdown(midi?: MidiInfo) {
   cancelCountdown()
-  playerStore.stopPreviewPlayback()
+  await playerStore.stopPreviewPlayback()
   resetOverlayKeyboardState()
 
   if (midi) {
@@ -126,6 +142,11 @@ async function playFromStartWithCountdown(midi?: MidiInfo) {
   }
 
   startWithCountdown()
+}
+
+function stopOverlayPlayback() {
+  cancelCountdown()
+  void playerStore.stopPreviewPlayback()
 }
 
 // 初始化键盘映射器 - 创建键盘映射器实例，设置键盘模拟回调
@@ -187,7 +208,7 @@ watch(
   () => settingsStore.currentTemplateId,
   () => {
     if (playerStore.isPreviewPlaying) {
-      playerStore.stopPreviewPlayback()
+      void playerStore.stopPreviewPlayback()
     }
     cancelCountdown()
     if (keyboardMapper.value) {
@@ -209,9 +230,21 @@ watch(
   }
 )
 
+async function resizeOverlayWindow(expanded = isExpanded.value) {
+  const window = getCurrentWindow()
+  await window.setSize(
+    new LogicalSize(
+      OVERLAY_WIDTH,
+      expanded ? OVERLAY_EXPANDED_HEIGHT : OVERLAY_COLLAPSED_HEIGHT
+    )
+  )
+}
+
 // 组件挂载完成
 onMounted(() => {
   initKeyboardMapper()
+  muteOverlayFromDetailState()
+  void resizeOverlayWindow(false).catch(console.error)
 })
 
 // 组件卸载 - 清理回调，释放所有按键
@@ -243,24 +276,24 @@ const isExpanded = ref(false)
 // 切换展开/收起面板
 async function toggleExpand() {
   isExpanded.value = !isExpanded.value
-  const window = getCurrentWindow()
-  // 迷你条高度 110，展开面板高度 280
-  const height = isExpanded.value ? 280.0 : 110.0
-  await window.setSize(new LogicalSize(360, height))
+  await resizeOverlayWindow()
 }
 
 // 退出悬浮模式 - 恢复窗口状态、保存配置、重置模式
 async function exitOverlayMode() {
   try {
-    playerStore.stopPreviewPlayback()
+    void playerStore.stopPreviewPlayback()
     // 退出前清理键盘回调
     setKeyboardEventCallback(null)
     setOnPlaybackStopCallback(null)
     keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
     // 恢复进入前的 playMode
     settingsStore.setPlayMode(settingsStore.modeBeforeOverlay)
-    // 恢复详情页的音量（悬浮层的音量独立管理，退出时还原）
-    playerStore.applyDetailVolume()
+    // 恢复进入悬浮前的主窗口音量状态，悬浮期间的音量改动不带回主窗口。
+    await playerStore.restorePreviewVolumeState(
+      detailVolumeBeforeOverlay.value,
+      detailMutedBeforeOverlay.value
+    )
     settingsStore.isOverlayMode = false
     await invoke('exit_overlay_mode')
   } catch (e) {
@@ -362,80 +395,34 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
           </Tooltip>
         </div>
 
+        <div class="overlay-progress" @mousedown.stop @pointerdown.stop>
+          <PreviewProgressBar
+            variant="overlay"
+            :current-time="playerStore.previewCurrentTime"
+            :duration="playerStore.previewDuration"
+            @dragging="playerStore.setDragging"
+            @preview="playerStore.setPreviewTime"
+            @seek="playerStore.seekPreview"
+          />
+        </div>
+
         <!-- 播放控制按钮 -->
-        <div class="playback-controls">
-          <!-- 上一曲 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <button class="ctrl-btn" @click.stop="playRelativeMidi('prev')">
-                <SkipBack :size="16" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {{ t('overlay.playPrev') }}
-            </TooltipContent>
-          </Tooltip>
-
-          <!-- 播放/暂停按钮 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <button class="ctrl-btn play" @click.stop="togglePlay">
-                <!-- 倒计时状态 -->
-                <span v-if="countdown > 0" class="countdown-text">{{ countdown }}</span>
-                <!-- 暂停状态 -->
-                <Pause v-else-if="isPlaying" :size="18" />
-                <!-- 空闲状态 -->
-                <Play v-else :size="18" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {{ isPlaying ? t('player.pause') : t('player.play') }}
-            </TooltipContent>
-          </Tooltip>
-
-          <!-- 下一曲 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <button class="ctrl-btn" @click.stop="playRelativeMidi('next')">
-                <SkipForward :size="16" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {{ t('overlay.playNext') }}
-            </TooltipContent>
-          </Tooltip>
-
-          <!-- 停止按钮 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <button
-                class="ctrl-btn"
-                @click.stop="cancelCountdown(); playerStore.stopPreviewPlayback()"
-              >
-                <Square :size="14" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {{ t('overlay.stop') }}
-            </TooltipContent>
-          </Tooltip>
-
-          <!-- 静音按钮 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <button
-                class="ctrl-btn"
-                :class="{ active: overlayMuted }"
-                @click.stop="toggleOverlayMute()"
-              >
-                <VolumeX v-if="overlayMuted" :size="16" />
-                <Volume2 v-else :size="16" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {{ overlayMuted ? t('overlay.unmute') : t('overlay.mute') }}
-            </TooltipContent>
-          </Tooltip>
+        <div class="playback-controls" @mousedown.stop @pointerdown.stop>
+          <PreviewTransportControls
+            variant="overlay"
+            :is-playing="isPlaying"
+            :is-paused="playerStore.isPreviewPaused"
+            :has-media="!!playerStore.currentMidi"
+            :volume="overlayVolume"
+            :muted="overlayMuted"
+            :countdown="countdown"
+            @previous="playRelativeMidi('prev')"
+            @next="playRelativeMidi('next')"
+            @toggle-play="togglePlay"
+            @stop="stopOverlayPlayback"
+            @toggle-mute="toggleOverlayMute"
+            @set-volume="setOverlayVolume"
+          />
 
           <!-- 展开/收起按钮 -->
           <Tooltip>
@@ -496,10 +483,14 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   padding: 10px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 8px 10px;
   background: linear-gradient(135deg, rgba(247, 192, 193, 0.8) 0%, rgba(245, 184, 192, 0.8) 100%);
   cursor: move;
   user-select: none;
+}
+
+.overlay-progress {
+  grid-column: 1 / -1;
 }
 
 .playback-controls {
@@ -553,20 +544,6 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
 .ctrl-btn:hover {
   background: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-.ctrl-btn.play {
-  @apply w-10 h-10 rounded-full text-white;
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.ctrl-btn.play:hover {
-  background: rgba(255, 255, 255, 0.4);
-}
-
-.countdown-text {
-  @apply text-sm font-bold;
   color: white;
 }
 

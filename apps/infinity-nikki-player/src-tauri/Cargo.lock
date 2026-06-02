@@ -1809,7 +1809,7 @@ dependencies = [
 
 [[package]]
 name = "infinity-nikki-player"
-version = "0.2.3"
+version = "0.3.2"
 dependencies = [
  "check_elevation",
  "cocoa",

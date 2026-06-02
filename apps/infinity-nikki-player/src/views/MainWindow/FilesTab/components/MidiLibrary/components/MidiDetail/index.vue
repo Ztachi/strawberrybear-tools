@@ -75,7 +75,7 @@ watch(
   () => {
     // 切换模板时停止播放，让用户重新开始
     if (playerStore.isPreviewPlaying) {
-      playerStore.stopPreviewPlayback()
+      void playerStore.stopPreviewPlayback()
     }
     // 重置 keyboardMapper（包括清空日志）
     if (keyboardMapper.value) {
@@ -204,14 +204,18 @@ async function enterOverlayMode() {
       playerStore.selectMidi(playerStore.midiLibrary[0])
     }
     // 停止播放
-    playerStore.stopPreviewPlayback()
+    void playerStore.stopPreviewPlayback()
     playerStore.setPreviewTime(0)
-    // 启用悬浮模式
-    settingsStore.isOverlayMode = true
+    // 保存进入前的播放模式，退出时恢复
+    settingsStore.modeBeforeOverlay = settingsStore.playMode
     settingsStore.setPlayMode('piano')
     // 调用 Rust 命令修改窗口
     await invoke('enter_overlay_mode')
+    // Rust 已保存主窗口状态并调整尺寸后，再切换前端悬浮 UI。
+    settingsStore.isOverlayMode = true
   } catch (e) {
+    settingsStore.setPlayMode(settingsStore.modeBeforeOverlay)
+    settingsStore.isOverlayMode = false
     console.error('进入悬浮模式失败:', e)
   }
 }

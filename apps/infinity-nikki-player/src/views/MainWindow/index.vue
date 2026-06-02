@@ -407,16 +407,18 @@ async function enterOverlayMode() {
       playerStore.selectMidi(playerStore.midiLibrary[0])
     }
     // 停止预览播放
-    playerStore.stopPreviewPlayback()
+    void playerStore.stopPreviewPlayback()
     playerStore.setPreviewTime(0)
     // 保存进入前的播放模式，退出时恢复
     settingsStore.modeBeforeOverlay = settingsStore.playMode
-    // 启用悬浮模式
-    settingsStore.isOverlayMode = true
     settingsStore.setPlayMode('piano')
     // 调用 Rust 命令修改窗口
     await invoke('enter_overlay_mode')
+    // Rust 已保存主窗口状态并调整尺寸后，再切换前端悬浮 UI。
+    settingsStore.isOverlayMode = true
   } catch (e) {
+    settingsStore.setPlayMode(settingsStore.modeBeforeOverlay)
+    settingsStore.isOverlayMode = false
     console.error('进入悬浮模式失败:', e)
   }
 }

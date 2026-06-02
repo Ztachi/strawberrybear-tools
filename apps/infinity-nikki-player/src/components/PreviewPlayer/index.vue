@@ -3,25 +3,14 @@
  * @description: 预览播放器组件
  * @description 提供 MIDI 预览播放的完整控制界面，包括播放/暂停、进度拖拽、音量控制、演奏模式切换等功能
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
-import { Button } from '@/components/ui'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  SkipBack,
-  SkipForward,
-  Play,
-  Pause,
-  Square,
-  Volume2,
-  VolumeX,
-  HelpCircle,
-} from 'lucide-vue-next'
+import { HelpCircle } from 'lucide-vue-next'
+import PreviewProgressBar from './PreviewProgressBar.vue'
+import PreviewTransportControls from './PreviewTransportControls.vue'
 
 /**
  * @description: 组件属性
@@ -36,34 +25,6 @@ withDefaults(defineProps<{
 const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
-
-/** 内部进度值（包装为响应式数组，用于 Slider 组件绑定） */
-const internalPercentArray = ref<[number]>([0])
-/** 是否正在拖拽进度条 */
-const isDragging = ref(false)
-
-/**
- * @description: 格式化时间显示
- * @param {number} seconds - 秒数
- * @return {string} 格式化后的时间字符串 (MM:SS)
- */
-function formatTime(seconds: number) {
-  const safeSeconds = Math.max(0, seconds)
-  const mins = Math.floor(safeSeconds / 60)
-  const secs = Math.floor(safeSeconds % 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
-/** 当前播放时间对应的百分比 @return {number} 0-100 */
-const currentPercent = computed(() => {
-  if (!playerStore.previewDuration) return 0
-  return (playerStore.previewCurrentTime / playerStore.previewDuration) * 100
-})
-
-/** 音量百分比 @return {number} 0-100 */
-const volumePercent = computed(() => {
-  return Math.round(playerStore.previewVolume * 100)
-})
 
 /**
  * @description: 切换播放/暂停状态
@@ -96,140 +57,34 @@ function handleModeSwitch(isPiano: boolean) {
  * @description: 停止播放并回到起点
  */
 function stopPlayback() {
-  playerStore.stopPreviewPlayback()
+  void playerStore.stopPreviewPlayback()
   playerStore.setPreviewTime(0)
 }
-
-/** 进度条拖拽开始 */
-function onSliderPointerDown() {
-  isDragging.value = true
-  playerStore.setDragging(true)
-}
-
-/**
- * @description: 进度条值变化处理
- * @param {number[] | undefined} value - Slider 当前值
- */
-function onSliderUpdate(value: number[] | undefined) {
-  if (value) {
-    internalPercentArray.value = [value[0]]
-    if (isDragging.value) {
-      playerStore.setPreviewTime((value[0] / 100) * playerStore.previewDuration)
-    }
-  }
-}
-
-/**
- * @description: 进度条拖拽结束处理
- * 执行跳转并更新显示时间
- */
-async function onSliderPointerUp() {
-  if (isDragging.value) {
-    const time = (internalPercentArray.value[0] / 100) * playerStore.previewDuration
-    isDragging.value = false
-    playerStore.setDragging(false)
-    await playerStore.seekPreview(time)
-    // 处理点击进度条开始，禁止删除
-    playerStore.setPreviewTime(time)
-    // 处理点击进度条结束
-  }
-}
-
-/**
- * @description: 监听播放进度变化，同步更新进度条
- * @param {number} newVal - 新的百分比值
- */
-watch(currentPercent, (newVal) => {
-  if (!isDragging.value) {
-    internalPercentArray.value = [newVal]
-  }
-})
-
-/** 组件挂载时添加全局指针释放事件监听 */
-onMounted(() => {
-  window.addEventListener('pointerup', onSliderPointerUp)
-})
-
-/** 组件卸载时移除全局指针释放事件监听 */
-onUnmounted(() => {
-  window.removeEventListener('pointerup', onSliderPointerUp)
-})
 </script>
 
 <template>
   <div class="preview-player" :class="{ compact }">
-    <!-- 进度条 -->
-    <div class="progress-bar">
-      <!-- 当前播放时间 -->
-      <span class="time current">{{ formatTime(playerStore.previewCurrentTime / 1000) }}</span>
-      <div class="slider-wrapper">
-        <Slider
-          v-model="internalPercentArray"
-          :max="100"
-          :step="0.1"
-          class="progress-slider"
-          @pointerdown="onSliderPointerDown"
-          @update:model-value="onSliderUpdate"
-        />
-      </div>
-      <!-- 总时长 -->
-      <span class="time duration">{{ formatTime(playerStore.previewDuration / 1000) }}</span>
-    </div>
+    <PreviewProgressBar
+      :current-time="playerStore.previewCurrentTime"
+      :duration="playerStore.previewDuration"
+      @dragging="playerStore.setDragging"
+      @preview="playerStore.setPreviewTime"
+      @seek="playerStore.seekPreview"
+    />
 
-    <!-- 控制按钮 -->
-    <div class="controls">
-      <!-- 上一曲 -->
-      <Button variant="ghost" size="icon" class="control-btn prev" @click="playerStore.playPrev">
-        <SkipBack :size="18" />
-      </Button>
-
-      <!-- 播放/暂停 -->
-      <Button variant="default" size="icon" class="control-btn play" @click="togglePlay">
-        <Pause v-if="playerStore.isPreviewPlaying && !playerStore.isPreviewPaused" :size="20" />
-        <Play v-else :size="20" />
-      </Button>
-
-      <!-- 下一曲 -->
-      <Button variant="ghost" size="icon" class="control-btn next" @click="playerStore.playNext">
-        <SkipForward :size="18" />
-      </Button>
-
-      <!-- 右侧控制区 -->
-      <div class="right-controls">
-        <!-- 停止按钮 -->
-        <Button variant="ghost" size="icon" class="control-btn stop" @click="stopPlayback">
-          <Square :size="16" fill="currentColor" />
-        </Button>
-
-        <!-- 音量控制 -->
-        <Popover>
-          <PopoverTrigger as-child>
-            <Button variant="ghost" size="icon" class="control-btn volume">
-              <VolumeX v-if="playerStore.isPreviewMuted" :size="18" />
-              <Volume2 v-else :size="18" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="w-48 p-3" align="center" side="top">
-            <div class="volume-popover">
-              <!-- 静音按钮 -->
-              <Button variant="ghost" size="icon" class="mute-btn" @click="playerStore.toggleMute">
-                <VolumeX v-if="playerStore.isPreviewMuted" :size="16" />
-                <Volume2 v-else :size="16" />
-              </Button>
-              <!-- 音量滑块 -->
-              <Slider
-                :model-value="[playerStore.isPreviewMuted ? 0 : playerStore.previewVolume * 100]"
-                :max="100"
-                class="volume-slider"
-                @update:model-value="(v) => v && playerStore.setPreviewVolumeValue(v[0] / 100)"
-              />
-              <!-- 音量百分比 -->
-              <span class="volume-percent">{{ volumePercent }}%</span>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-    </div>
+    <PreviewTransportControls
+      :is-playing="playerStore.isPreviewPlaying && !playerStore.isPreviewPaused"
+      :is-paused="playerStore.isPreviewPaused"
+      :has-media="!!playerStore.currentMidi"
+      :volume="playerStore.previewVolume"
+      :muted="playerStore.isPreviewMuted"
+      @previous="playerStore.playPrev"
+      @next="playerStore.playNext"
+      @toggle-play="togglePlay"
+      @stop="stopPlayback"
+      @toggle-mute="playerStore.toggleMute"
+      @set-volume="playerStore.setPreviewVolumeValue"
+    />
 
     <!-- 演奏模式切换（非精简模式显示） -->
     <TooltipProvider v-if="!compact">
@@ -278,71 +133,6 @@ onUnmounted(() => {
   @apply gap-2;
 }
 
-.progress-bar {
-  @apply flex items-center gap-3;
-}
-
-.time {
-  @apply text-xs font-mono w-10 text-center;
-  color: var(--color-muted);
-}
-
-.time.current {
-  color: var(--color-primary);
-}
-
-.slider-wrapper {
-  @apply flex-1 cursor-pointer;
-}
-
-.progress-slider {
-  @apply w-full cursor-pointer;
-}
-
-.controls {
-  @apply relative flex items-center justify-center gap-2;
-}
-
-.control-btn {
-  color: var(--color-primary);
-}
-
-.control-btn:hover {
-  background: var(--bg-primary-10);
-}
-
-.control-btn.play {
-  @apply w-12 h-12 rounded-full;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
-}
-
-.control-btn.play :deep(svg) {
-  color: var(--color-white);
-}
-
-.control-btn.play:hover {
-  opacity: 0.9;
-}
-
-.control-btn.prev,
-.control-btn.next {
-  @apply w-10 h-10 rounded-xl;
-}
-
-.control-btn.volume {
-  @apply w-10 h-10 rounded-xl;
-}
-
-.control-btn.stop {
-  @apply w-10 h-10 rounded-xl;
-}
-
-.right-controls {
-  @apply absolute flex items-center gap-1;
-  right: 0;
-}
-
 .play-mode-row {
   @apply flex items-center justify-between;
 }
@@ -371,27 +161,5 @@ onUnmounted(() => {
 
 .tooltip-text {
   @apply text-xs max-w-48;
-}
-
-.volume-popover {
-  @apply flex items-center gap-2;
-}
-
-.mute-btn {
-  @apply w-8 h-8 rounded-lg;
-  color: var(--color-primary);
-}
-
-.mute-btn:hover {
-  background: var(--bg-primary-10);
-}
-
-.volume-slider {
-  @apply flex-1 cursor-pointer;
-}
-
-.volume-percent {
-  @apply text-xs w-8 text-right font-mono;
-  color: var(--color-muted);
 }
 </style>
