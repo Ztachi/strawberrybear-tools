@@ -455,8 +455,8 @@ async function enterOverlayMode() {
 
     <!-- 正常模式内容 -->
     <template v-else>
-      <!-- 顶部导航栏 -->
-      <header class="header">
+      <!-- 全局菜单条 -->
+      <header class="header" data-tauri-drag-region>
         <div class="header-content">
           <!-- Logo 和标题 -->
           <div class="logo-section">
@@ -559,6 +559,7 @@ async function enterOverlayMode() {
 <style scoped>
 .main-window {
   @apply h-screen flex flex-col text-foreground overflow-hidden relative;
+  --global-menu-height: 46px;
   background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--bg-white-95) 50%, var(--color-primary-light) 100%);
 }
 
@@ -621,31 +622,36 @@ async function enterOverlayMode() {
   color: var(--color-primary);
 }
 
-/* 顶部导航栏 */
+/* 全局菜单条 */
 .header {
-  background: var(--bg-white-40);
+  @apply fixed left-0 right-0 top-0;
+  z-index: 2147483000;
+  height: var(--global-menu-height);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.4) 100%),
+    linear-gradient(90deg, rgba(247, 192, 193, 0.18) 0%, rgba(255, 255, 255, 0.08) 48%, rgba(245, 184, 192, 0.14) 100%);
   backdrop-filter: blur(30px);
-  border-bottom: 1px solid var(--border-primary-10);
+  box-shadow: 0 8px 28px rgba(201, 67, 127, 0.05);
 }
 
 .header-content {
-  @apply flex items-center justify-between px-6 py-4;
+  @apply flex h-full items-center justify-between px-4;
+  padding-left: 90px;
 }
 
 .logo-section {
-  @apply flex items-center gap-3;
+  @apply flex items-center gap-2.5 min-w-0;
 }
 
 .logo-icon {
-  @apply w-10 h-10 rounded-xl flex items-center justify-center;
+  @apply w-7 h-7 rounded-lg flex items-center justify-center;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
   color: white;
 }
 
 .title {
-  @apply text-xl font-semibold;
+  @apply text-sm font-semibold truncate;
   color: var(--color-foreground);
-  letter-spacing: -0.02em;
 }
 
 .header-actions {
@@ -653,13 +659,13 @@ async function enterOverlayMode() {
 }
 
 .locale-switch {
-  @apply flex items-center gap-1 p-1 rounded-lg;
+  @apply flex h-8 items-center gap-0.5 rounded-lg p-0.5;
   background: var(--bg-primary-10);
   border: 1px solid var(--border-primary-20);
 }
 
 .locale-btn {
-  @apply px-2 py-1 text-xs font-medium rounded-md transition-all;
+  @apply h-7 px-2 text-xs font-medium rounded-md transition-all;
   color: var(--color-muted);
 }
 
@@ -673,7 +679,7 @@ async function enterOverlayMode() {
 }
 
 .access-btn {
-  @apply gap-1.5;
+  @apply h-8 gap-1.5 px-3 text-xs;
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -689,13 +695,14 @@ async function enterOverlayMode() {
 }
 
 .overlay-btn {
-  @apply gap-2 font-medium;
+  @apply h-8 gap-1.5 px-3 text-xs font-medium;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   color: var(--color-white);
 }
 
 .content {
   @apply flex-1 p-0 overflow-hidden;
+  padding-top: var(--global-menu-height);
 }
 
 .tabs-container {

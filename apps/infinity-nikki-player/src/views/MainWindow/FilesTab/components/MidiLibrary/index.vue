@@ -100,8 +100,8 @@ function formatDuration(ms: number) {
     </div>
 
     <!-- MIDI 详情抽屉 -->
-    <Drawer v-model:open="playerStore.showDetail" direction="left" handle-only>
-      <DrawerContent class="!inset-y-0 !right-0 !left-auto !w-full !max-w-full">
+    <Drawer v-model:open="playerStore.showDetail" direction="left" :modal="false" handle-only>
+      <DrawerContent class="!top-[46px] !right-0 !bottom-0 !left-auto !w-full !max-w-full">
         <DrawerHeader class="flex flex-row items-center justify-between">
           <TooltipProvider>
             <Tooltip>

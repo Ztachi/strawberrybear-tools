@@ -273,6 +273,7 @@ pub fn run() {
                 if let Err(e) = window.set_title(window_title) {
                     log::error!("Failed to set window title: {}", e);
                 }
+                commands::window::apply_immersive_titlebar(&window);
             }
 
             // 菜单事件处理

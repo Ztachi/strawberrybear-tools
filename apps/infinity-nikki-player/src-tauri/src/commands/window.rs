@@ -8,6 +8,19 @@ const OVERLAY_WIDTH: f64 = 360.0;
 const OVERLAY_COLLAPSED_HEIGHT: f64 = 136.0;
 const OVERLAY_EXPANDED_HEIGHT: f64 = 320.0;
 
+#[cfg(target_os = "macos")]
+pub fn apply_immersive_titlebar(window: &tauri::WebviewWindow) {
+    if let Err(e) = window.set_title_bar_style(tauri::TitleBarStyle::Overlay) {
+        log::warn!("应用沉浸式标题栏失败: {}", e);
+    }
+    if let Err(e) = window.set_title("") {
+        log::warn!("隐藏原生标题文字失败: {}", e);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn apply_immersive_titlebar(_window: &tauri::WebviewWindow) {}
+
 /// 保存进入悬浮窗前的窗口状态
 ///
 /// 在进入悬浮模式前保存窗口的大小和位置，退出时恢复
@@ -186,6 +199,7 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
             window
                 .set_decorations(true)
                 .map_err(|e| format!("恢复窗口样式失败: {}", e))?;
+            apply_immersive_titlebar(&window);
 
             // 恢复保存的位置
             window
