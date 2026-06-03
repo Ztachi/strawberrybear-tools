@@ -3,7 +3,7 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
@@ -402,9 +402,9 @@ async function selectFolder() {
  */
 async function enterOverlayMode() {
   try {
-    // 如果没有选中 MIDI，自动选中第一个
+    // 没有选中 MIDI 时自动选中第一首，仅用于悬浮列表展示与播放，不打开主界面详情抽屉
     if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
-      playerStore.selectMidi(playerStore.midiLibrary[0])
+      await playerStore.selectMidi(playerStore.midiLibrary[0], { openDetail: false })
     }
     // 停止预览播放
     void playerStore.stopPreviewPlayback()
@@ -412,10 +412,11 @@ async function enterOverlayMode() {
     // 保存进入前的播放模式，退出时恢复
     settingsStore.modeBeforeOverlay = settingsStore.playMode
     settingsStore.setPlayMode('piano')
-    // 调用 Rust 命令修改窗口
-    await invoke('enter_overlay_mode')
-    // Rust 已保存主窗口状态并调整尺寸后，再切换前端悬浮 UI。
+    // 先切换前端悬浮视图并等待渲染完成，再调整原生窗口尺寸/装饰，
+    // 避免缩小后的窗口里短暂闪现主界面布局（顺序颠倒会导致主界面被挤在悬浮窗里闪烁）
     settingsStore.isOverlayMode = true
+    await nextTick()
+    await invoke('enter_overlay_mode')
   } catch (e) {
     settingsStore.setPlayMode(settingsStore.modeBeforeOverlay)
     settingsStore.isOverlayMode = false
@@ -455,18 +456,24 @@ async function enterOverlayMode() {
 
     <!-- 正常模式内容 -->
     <template v-else>
-      <!-- 全局菜单条 -->
+      <!-- 全局菜单条：data-tauri-drag-region 由 Tauri 原生处理拖拽/双击缩放，
+           需逐个标注到非交互的叶子元素上（drag.js 只校验事件 target 自身的属性，不向上查找祖先） -->
       <header class="header" data-tauri-drag-region>
-        <div class="header-content">
+        <div class="header-content" data-tauri-drag-region>
           <!-- Logo 和标题 -->
-          <div class="logo-section">
-            <img src="@/assets/images/logo.png" alt="logo" class="logo-icon" />
-            <h1 class="title">
+          <div class="logo-section" data-tauri-drag-region>
+            <img
+              src="@/assets/images/logo.png"
+              alt="logo"
+              class="logo-icon"
+              data-tauri-drag-region
+            />
+            <h1 class="title" data-tauri-drag-region>
               {{ t('app.title') }}
             </h1>
           </div>
 
-          <div class="header-actions">
+          <div class="header-actions" data-tauri-drag-region>
             <!-- 辅助功能权限提示（未授权时显示） -->
             <TooltipProvider v-if="!playerStore.hasAccessibility">
               <Tooltip>
@@ -481,7 +488,7 @@ async function enterOverlayMode() {
                     {{ t('permissions.required') }}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" align="end" class="access-tooltip">
+                <TooltipContent side="bottom" align="end" class="access-tooltip !z-[100]">
                   {{ t('permissions.reauthorizeTip') }}
                 </TooltipContent>
               </Tooltip>
@@ -625,13 +632,15 @@ async function enterOverlayMode() {
 /* 全局菜单条 */
 .header {
   @apply fixed left-0 right-0 top-0;
-  z-index: 2147483000;
+  z-index: 30;
   height: var(--global-menu-height);
-  background:
+  /* background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.4) 100%),
     linear-gradient(90deg, rgba(247, 192, 193, 0.18) 0%, rgba(255, 255, 255, 0.08) 48%, rgba(245, 184, 192, 0.14) 100%);
   backdrop-filter: blur(30px);
-  box-shadow: 0 8px 28px rgba(201, 67, 127, 0.05);
+  box-shadow: 0 8px 28px rgba(201, 67, 127, 0.05); */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .header-content {

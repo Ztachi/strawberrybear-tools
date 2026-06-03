@@ -765,11 +765,14 @@ export const usePlayerStore = defineStore('player', () => {
   // ============================================
 
   /**
-   * @description: 选中 MIDI 并打开详情
+   * @description: 选中 MIDI（默认打开详情抽屉）
    * @param {MidiInfo} midi - MIDI 文件信息
+   * @param {Object} [options] - 选项
+   * @param {boolean} [options.openDetail=true] - 是否打开主界面详情抽屉；悬浮模式仅读取列表播放，应传 false 避免影响主界面状态
    * @return Promise
    */
-  async function selectMidi(midi: MidiInfo) {
+  async function selectMidi(midi: MidiInfo, options: { openDetail?: boolean } = {}) {
+    const { openDetail = true } = options
     currentMidi.value = midi
     try {
       // 从缓存的 events 提取旋律（包含 pitch_name）
@@ -805,7 +808,9 @@ export const usePlayerStore = defineStore('player', () => {
       toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
     }
-    showDetail.value = true
+    if (openDetail) {
+      showDetail.value = true
+    }
   }
 
   /**

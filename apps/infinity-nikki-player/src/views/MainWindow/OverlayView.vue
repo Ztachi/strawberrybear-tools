@@ -137,7 +137,8 @@ async function playFromStartWithCountdown(midi?: MidiInfo) {
   resetOverlayKeyboardState()
 
   if (midi) {
-    await playerStore.selectMidi(midi)
+    // 悬浮模式只读取列表播放，不打开主界面详情抽屉，避免影响主界面页面状态
+    await playerStore.selectMidi(midi, { openDetail: false })
     resetOverlayKeyboardState()
   }
 
@@ -240,11 +241,10 @@ async function resizeOverlayWindow(expanded = isExpanded.value) {
   )
 }
 
-// 组件挂载完成
+// 组件挂载完成（窗口尺寸/装饰由 Rust enter_overlay_mode 统一设置，这里不再重复 resize）
 onMounted(() => {
   initKeyboardMapper()
   muteOverlayFromDetailState()
-  void resizeOverlayWindow(false).catch(console.error)
 })
 
 // 组件卸载 - 清理回调，释放所有按键
@@ -255,16 +255,15 @@ onUnmounted(() => {
   keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
 })
 
-// 开始拖拽窗口 - 仅当点击的是非交互元素时才触发拖拽（Windows 上避免与按钮冲突）
+// 开始拖拽窗口 - 仅当点击的是非交互元素时才触发拖拽
 async function startDrag(e: MouseEvent) {
-  // Windows 上：如果点击的是交互元素（按钮、select等），不触发拖拽
-  // 因为 Windows 上 startDragging 会阻止按钮的点击事件
-  // macOS 上不需要这个判断，因为行为不同
-  if (navigator.platform.startsWith('Win')) {
-    const target = e.target as HTMLElement
-    if (target.closest('button, select, input, textarea, .playlist-item')) {
-      return
-    }
+  const target = e.target as HTMLElement
+  if (
+    target.closest(
+      'button, select, input, textarea, [role="button"], .playlist-item, .overlay-progress, .playback-controls',
+    )
+  ) {
+    return
   }
   const window = getCurrentWindow()
   await window.startDragging()

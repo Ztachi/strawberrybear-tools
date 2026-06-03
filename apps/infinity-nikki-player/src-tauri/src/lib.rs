@@ -6,6 +6,7 @@ mod commands;
 mod midi;
 mod keyboard;
 mod types;
+mod window_state;
 
 use commands::player::PlayerControl;
 use types::AppState;
@@ -270,10 +271,11 @@ pub fn run() {
                 "InfinityNikkiPlayer"
             };
             if let Some(window) = app.get_webview_window("main") {
+                // 沉浸式标题栏（FullSizeContentView + 透明 + 隐藏标题）由 tauri.conf.json
+                // 的 titleBarStyle/hiddenTitle 在窗口创建时声明式应用，无需运行时再设置。
                 if let Err(e) = window.set_title(window_title) {
                     log::error!("Failed to set window title: {}", e);
                 }
-                commands::window::apply_immersive_titlebar(&window);
             }
 
             // 菜单事件处理

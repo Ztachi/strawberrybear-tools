@@ -2,11 +2,22 @@
 //!
 //! 提供进入/退出悬浮模式、窗口状态保存与恢复等功能
 
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager};
+use crate::window_state::{self, WindowStateSnapshot};
+use tauri::{AppHandle, LogicalSize, Manager};
 
 const OVERLAY_WIDTH: f64 = 360.0;
 const OVERLAY_COLLAPSED_HEIGHT: f64 = 136.0;
 const OVERLAY_EXPANDED_HEIGHT: f64 = 320.0;
+/// 主窗口尺寸下限（退出悬浮后恢复）
+const MAIN_MIN_WIDTH: f64 = 800.0;
+const MAIN_MIN_HEIGHT: f64 = 640.0;
+/// 主窗口尺寸上限（退出悬浮后恢复）
+const MAIN_MAX_WIDTH: f64 = 1440.0;
+const MAIN_MAX_HEIGHT: f64 = 900.0;
+/// 退出悬浮后等待 set_decorations 异步 styleMask 落地的时间
+const DECORATION_SETTLE_MS: u64 = 80;
+/// 还原窗口几何后、再进入全屏前的稳定时间
+const FULLSCREEN_RESTORE_SETTLE_MS: u64 = 60;
 
 #[cfg(target_os = "macos")]
 pub fn apply_immersive_titlebar(window: &tauri::WebviewWindow) {
@@ -21,10 +32,8 @@ pub fn apply_immersive_titlebar(window: &tauri::WebviewWindow) {
 #[cfg(not(target_os = "macos"))]
 pub fn apply_immersive_titlebar(_window: &tauri::WebviewWindow) {}
 
-/// 保存进入悬浮窗前的窗口状态
-///
-/// 在进入悬浮模式前保存窗口的大小和位置，退出时恢复
-static SAVED_WINDOW_STATE: std::sync::Mutex<Option<(LogicalSize<f64>, LogicalPosition<f64>)>> =
+/// 保存进入悬浮窗前的窗口状态快照（含全屏标记），退出时据此精确还原
+static SAVED_WINDOW_STATE: std::sync::Mutex<Option<WindowStateSnapshot>> =
     std::sync::Mutex::new(None);
 
 /// 进入悬浮模式
@@ -56,28 +65,14 @@ static SAVED_WINDOW_STATE: std::sync::Mutex<Option<(LogicalSize<f64>, LogicalPos
 #[tauri::command]
 pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        let is_fullscreen = window.is_fullscreen().unwrap_or(false);
+        // 1) 复用窗口状态机制：若处于全屏，先退出并等待动画结束（macOS 异步），
+        //    再读取真实窗口化几何，避免悬浮窗残留全屏尺寸（整屏宽）。
+        let was_fullscreen = window_state::leave_fullscreen(&window).await?;
+        // 2) 快照进入前的窗口化几何与全屏标记，退出时据此精确还原
+        let snapshot = window_state::snapshot(&window, was_fullscreen);
+        *SAVED_WINDOW_STATE.lock().unwrap() = Some(snapshot);
 
-        if is_fullscreen {
-            // 全屏状态下进入悬浮窗：先退出全屏
-            window
-                .set_fullscreen(false)
-                .map_err(|e| format!("退出全屏失败: {}", e))?;
-            // macOS 恢复窗口后，获取新的 outer_size/position 保存
-            if let (Ok(size), Ok(pos)) = (window.outer_size(), window.outer_position()) {
-                let scale_factor = window.scale_factor().unwrap_or(1.0);
-                let mut saved = SAVED_WINDOW_STATE.lock().unwrap();
-                *saved = Some((size.to_logical(scale_factor), pos.to_logical(scale_factor)));
-            }
-        } else {
-            // 正常窗口状态，直接保存当前窗口大小和位置
-            if let (Ok(size), Ok(pos)) = (window.outer_size(), window.outer_position()) {
-                let scale_factor = window.scale_factor().unwrap_or(1.0);
-                let mut saved = SAVED_WINDOW_STATE.lock().unwrap();
-                *saved = Some((size.to_logical(scale_factor), pos.to_logical(scale_factor)));
-            }
-        }
-
+        // 3) 变形为悬浮窗
         // 隐藏窗口装饰（标题栏、菜单栏等）
         window
             .set_decorations(false)
@@ -153,19 +148,11 @@ pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        // 获取保存的状态
-        let saved = {
-            let guard = SAVED_WINDOW_STATE.lock().unwrap();
-            guard.clone()
-        };
+        // 取出进入前的状态快照（lock 立即 clone 释放，避免跨 await 持锁）
+        let saved = SAVED_WINDOW_STATE.lock().unwrap().clone();
 
-        if let Some((saved_size, saved_pos)) = saved {
-            // 先恢复窗口大小
-            window
-                .set_size(saved_size)
-                .map_err(|e| format!("恢复窗口大小失败: {}", e))?;
-
-            // 恢复窗口属性
+        if let Some(snapshot) = saved {
+            // 1) 恢复主窗口属性
             window
                 .set_resizable(true)
                 .map_err(|e| format!("设置可调整大小失败: {}", e))?;
@@ -175,46 +162,48 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
             window
                 .set_always_on_top(false)
                 .map_err(|e| format!("取消置顶失败: {}", e))?;
-
-            // 恢复主窗口的尺寸限制
             window
                 .set_min_size(Some(LogicalSize {
-                    width: 800.0,
-                    height: 640.0,
+                    width: MAIN_MIN_WIDTH,
+                    height: MAIN_MIN_HEIGHT,
                 }))
                 .map_err(|e| format!("恢复最小尺寸失败: {}", e))?;
             window
                 .set_max_size(Some(LogicalSize {
-                    width: 1440.0,
-                    height: 900.0,
+                    width: MAIN_MAX_WIDTH,
+                    height: MAIN_MAX_HEIGHT,
                 }))
                 .map_err(|e| format!("恢复最大尺寸失败: {}", e))?;
-            // 恢复窗口阴影
             window.set_shadow(true).ok();
-            // 恢复菜单栏
             window
                 .show_menu()
                 .map_err(|e| format!("显示菜单栏失败: {}", e))?;
-            // 恢复窗口装饰
             window
                 .set_decorations(true)
                 .map_err(|e| format!("恢复窗口样式失败: {}", e))?;
+
+            // 2) 复用窗口状态机制：还原窗口化几何（尺寸 + 位置）
+            window_state::restore_geometry(&window, &snapshot)?;
+
+            // 3) 等 set_decorations 的异步 styleMask 落地后，再补回沉浸式标题栏。
+            //    macOS 上 set_decorations(true) 异步修改 styleMask 且不含 FullSizeContentView，
+            //    若同步补回会被随后的异步 mask 覆盖，导致菜单条错位、webview 失焦致 hover 失效。
+            tokio::time::sleep(std::time::Duration::from_millis(DECORATION_SETTLE_MS)).await;
             apply_immersive_titlebar(&window);
 
-            // 恢复保存的位置
-            window
-                .set_position(saved_pos)
-                .map_err(|e| format!("恢复窗口位置失败: {}", e))?;
-
-            // 强制刷新窗口焦点状态
-            window
-                .set_focus()
-                .map_err(|e| format!("设置焦点失败: {}", e))?;
+            // 4) 按需恢复全屏：在窗口化几何就绪后再进入，确保日后手动退出全屏回到正确尺寸。
+            //    非全屏场景则重新聚焦，保证退出悬浮后 hover 立即可用。
+            if snapshot.fullscreen {
+                tokio::time::sleep(std::time::Duration::from_millis(FULLSCREEN_RESTORE_SETTLE_MS))
+                    .await;
+                window_state::restore_fullscreen(&window, &snapshot)?;
+            } else if let Err(e) = window.set_focus() {
+                log::warn!("退出悬浮模式后聚焦失败: {}", e);
+            }
         }
 
         // 清除保存的状态
-        let mut guard = SAVED_WINDOW_STATE.lock().unwrap();
-        *guard = None;
+        *SAVED_WINDOW_STATE.lock().unwrap() = None;
 
         log::info!("Exited overlay mode");
     }

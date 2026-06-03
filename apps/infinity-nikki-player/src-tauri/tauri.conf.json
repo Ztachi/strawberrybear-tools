@@ -23,6 +23,8 @@
         "center": true,
         "resizable": true,
         "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
         "visible": true,
         "transparent": true,
         "dragDropEnabled": false
