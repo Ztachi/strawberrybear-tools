@@ -5,10 +5,15 @@
  */
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
+import { Drawer, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Music, MoreVertical, Trash2, X } from 'lucide-vue-next'
+import {
+  DrawerContent as VaulDrawerContent,
+  DrawerOverlay as VaulDrawerOverlay,
+  DrawerPortal,
+} from 'vaul-vue'
 import MidiDetail from './components/MidiDetail/index.vue'
 
 const { t } = useI18n()
@@ -101,33 +106,42 @@ function formatDuration(ms: number) {
 
     <!-- MIDI 详情抽屉 -->
     <Drawer v-model:open="playerStore.showDetail" direction="left" :modal="false" handle-only>
-      <DrawerContent class="!top-[46px] !right-0 !bottom-0 !left-auto !w-full !max-w-full">
-        <DrawerHeader class="flex flex-row items-center justify-between">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <div class="flex-1 min-w-0">
-                  <!-- 抽屉标题 -->
-                  <DrawerTitle class="line-clamp-2">
-                    {{ playerStore.currentMidi?.filename }}
-                  </DrawerTitle>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{{ playerStore.currentMidi?.filename }}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <!-- 隐藏描述文字但保留 aria-describedby -->
-          <DrawerDescription class="sr-only"> MIDI 详情 </DrawerDescription>
-          <!-- 关闭按钮 -->
-          <button variant="ghost" size="icon" class="close-btn" @click="playerStore.closeDetail">
-            <X :size="20" />
-          </button>
-        </DrawerHeader>
-        <!-- MIDI 详情内容 -->
-        <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
-      </DrawerContent>
+      <DrawerPortal to="#main-window-portal-root">
+        <VaulDrawerOverlay
+          data-slot="drawer-overlay"
+          class="absolute inset-0 z-40 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        />
+        <VaulDrawerContent
+          data-slot="drawer-content"
+          class="bg-background absolute inset-0 z-50 flex h-auto w-full max-w-full flex-col"
+        >
+          <DrawerHeader class="flex flex-row items-center justify-between">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <div class="flex-1 min-w-0">
+                    <!-- 抽屉标题 -->
+                    <DrawerTitle class="line-clamp-2">
+                      {{ playerStore.currentMidi?.filename }}
+                    </DrawerTitle>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{{ playerStore.currentMidi?.filename }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <!-- 隐藏描述文字但保留 aria-describedby -->
+            <DrawerDescription class="sr-only"> MIDI 详情 </DrawerDescription>
+            <!-- 关闭按钮 -->
+            <button variant="ghost" size="icon" class="close-btn" @click="playerStore.closeDetail">
+              <X :size="20" />
+            </button>
+          </DrawerHeader>
+          <!-- MIDI 详情内容 -->
+          <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
+        </VaulDrawerContent>
+      </DrawerPortal>
     </Drawer>
   </div>
 </template>

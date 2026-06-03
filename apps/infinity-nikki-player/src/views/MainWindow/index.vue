@@ -3,7 +3,7 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
@@ -38,14 +38,6 @@ let dragEnterDepth = 0
 
 /** DOM 拖拽事件解绑函数 */
 let removeDomDragListeners: (() => void) | null = null
-
-watch(
-  () => settingsStore.isOverlayMode,
-  (isOverlayMode) => {
-    document.body.classList.toggle('infinity-nikki-overlay-mode', isOverlayMode)
-  },
-  { immediate: true }
-)
 
 /**
  * @description: DataTransferItem 扩展接口
@@ -370,7 +362,6 @@ onUnmounted(() => {
     removeDomDragListeners()
     removeDomDragListeners = null
   }
-  document.body.classList.remove('infinity-nikki-overlay-mode')
 })
 
 /**
@@ -526,7 +517,8 @@ async function enterOverlayMode() {
       </header>
 
       <!-- 主内容区 -->
-      <main class="content">
+      <main id="main-window-body" class="content">
+        <div id="main-window-portal-root" class="content-portal-root" />
         <ScrollableContainer>
           <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
             <!-- 标签栏 + 操作按钮 -->
@@ -600,12 +592,7 @@ async function enterOverlayMode() {
 }
 
 .normal-mode-shell {
-  display: contents;
-}
-
-:global(body.infinity-nikki-overlay-mode [data-slot='drawer-overlay']),
-:global(body.infinity-nikki-overlay-mode [data-slot='drawer-content']) {
-  display: none !important;
+  @apply flex h-full min-h-0 flex-col;
 }
 
 /* 拖拽覆盖层 */
@@ -649,7 +636,7 @@ async function enterOverlayMode() {
 
 /* 全局菜单条 */
 .header {
-  @apply fixed left-0 right-0 top-0;
+  @apply relative z-30 shrink-0;
   z-index: 30;
   height: var(--global-menu-height);
   /* background:
@@ -728,8 +715,16 @@ async function enterOverlayMode() {
 }
 
 .content {
-  @apply flex-1 p-0 overflow-hidden;
-  padding-top: var(--global-menu-height);
+  @apply relative flex-1 p-0 overflow-hidden min-h-0;
+}
+
+.content-portal-root {
+  @apply absolute inset-0 z-40 pointer-events-none;
+}
+
+.content-portal-root :global([data-slot='drawer-overlay']),
+.content-portal-root :global([data-slot='drawer-content']) {
+  pointer-events: auto;
 }
 
 .tabs-container {
