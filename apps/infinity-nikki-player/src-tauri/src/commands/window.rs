@@ -9,11 +9,8 @@ const OVERLAY_WIDTH: f64 = 360.0;
 const OVERLAY_COLLAPSED_HEIGHT: f64 = 136.0;
 const OVERLAY_EXPANDED_HEIGHT: f64 = 320.0;
 /// 主窗口尺寸下限（退出悬浮后恢复）
-const MAIN_MIN_WIDTH: f64 = 800.0;
+const MAIN_MIN_WIDTH: f64 = 900.0;
 const MAIN_MIN_HEIGHT: f64 = 640.0;
-/// 主窗口尺寸上限（退出悬浮后恢复）
-const MAIN_MAX_WIDTH: f64 = 1440.0;
-const MAIN_MAX_HEIGHT: f64 = 900.0;
 /// 退出悬浮后等待 set_decorations 异步 styleMask 落地的时间
 const DECORATION_SETTLE_MS: u64 = 80;
 /// 还原窗口几何后、再进入全屏前的稳定时间
@@ -169,10 +166,7 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
                 }))
                 .map_err(|e| format!("恢复最小尺寸失败: {}", e))?;
             window
-                .set_max_size(Some(LogicalSize {
-                    width: MAIN_MAX_WIDTH,
-                    height: MAIN_MAX_HEIGHT,
-                }))
+                .set_max_size(None::<LogicalSize<f64>>)
                 .map_err(|e| format!("恢复最大尺寸失败: {}", e))?;
             window.set_shadow(true).ok();
             window

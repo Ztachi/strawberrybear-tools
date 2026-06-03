@@ -8,12 +8,13 @@ import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { invoke } from '@tauri-apps/api/core'
+import { emit } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
-import { AlertCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
+import { AlertCircle, HelpCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES } from '@/i18n'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import FilesTab from './FilesTab/index.vue'
@@ -333,6 +334,13 @@ function switchLocale(targetLocale: 'zh-CN' | 'en-US') {
 }
 
 /**
+ * @description: 打开帮助/关于对话框
+ */
+async function openHelp() {
+  await emit('show_about')
+}
+
+/**
  * @description: 打开辅助功能权限设置
  */
 async function openAccessibilitySettings() {
@@ -512,6 +520,18 @@ async function enterOverlayMode() {
                 {{ loc.label }}
               </button>
             </div>
+
+            <!-- 帮助按钮 -->
+            <Button
+              variant="ghost"
+              size="icon"
+              class="help-btn"
+              :title="t('about.title')"
+              :aria-label="t('about.title')"
+              @click="openHelp"
+            >
+              <HelpCircle :size="17" />
+            </Button>
           </div>
         </div>
       </header>
@@ -712,6 +732,19 @@ async function enterOverlayMode() {
   @apply h-8 gap-1.5 px-3 text-xs font-medium;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   color: var(--color-white);
+}
+
+.help-btn {
+  @apply h-8 w-8 rounded-lg;
+  color: var(--color-primary);
+  background: var(--bg-primary-10);
+  border: 1px solid var(--border-primary-20);
+}
+
+.help-btn:hover {
+  color: var(--color-white);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  border-color: transparent;
 }
 
 .content {
