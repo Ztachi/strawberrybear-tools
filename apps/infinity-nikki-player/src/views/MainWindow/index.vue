@@ -3,7 +3,7 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
@@ -38,6 +38,14 @@ let dragEnterDepth = 0
 
 /** DOM 拖拽事件解绑函数 */
 let removeDomDragListeners: (() => void) | null = null
+
+watch(
+  () => settingsStore.isOverlayMode,
+  (isOverlayMode) => {
+    document.body.classList.toggle('infinity-nikki-overlay-mode', isOverlayMode)
+  },
+  { immediate: true }
+)
 
 /**
  * @description: DataTransferItem 扩展接口
@@ -362,6 +370,7 @@ onUnmounted(() => {
     removeDomDragListeners()
     removeDomDragListeners = null
   }
+  document.body.classList.remove('infinity-nikki-overlay-mode')
 })
 
 /**
@@ -454,8 +463,8 @@ async function enterOverlayMode() {
       <OverlayView />
     </template>
 
-    <!-- 正常模式内容 -->
-    <template v-else>
+    <!-- 正常模式内容：用 v-show 保留 DOM 和滚动状态，避免退出悬浮后页面重新创建 -->
+    <div v-show="!settingsStore.isOverlayMode" class="normal-mode-shell">
       <!-- 全局菜单条：data-tauri-drag-region 由 Tauri 原生处理拖拽/双击缩放，
            需逐个标注到非交互的叶子元素上（drag.js 只校验事件 target 自身的属性，不向上查找祖先） -->
       <header class="header" data-tauri-drag-region>
@@ -559,7 +568,7 @@ async function enterOverlayMode() {
           </Tabs>
         </ScrollableContainer>
       </main>
-    </template>
+    </div>
   </div>
 </template>
 
@@ -588,6 +597,15 @@ async function enterOverlayMode() {
 
 .main-window.overlay-mode::before {
   display: none;
+}
+
+.normal-mode-shell {
+  display: contents;
+}
+
+:global(body.infinity-nikki-overlay-mode [data-slot='drawer-overlay']),
+:global(body.infinity-nikki-overlay-mode [data-slot='drawer-content']) {
+  display: none !important;
 }
 
 /* 拖拽覆盖层 */
