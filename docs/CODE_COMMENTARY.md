@@ -244,6 +244,50 @@ for (let i = 0; i < 10; i++) { ... }
 
 对于复杂算法、业务逻辑或容易出错的地方，必须添加详细注释。
 
+### 6.0 函数内部关键逻辑注释
+
+函数头注释只能说明“这个函数做什么”；函数内部关键逻辑必须说明“为什么这样做”和“这一步保证什么”。以下情况需要在函数内部逐行或逐段添加注释：
+
+- **状态切换**：如编辑/预览模式切换、捕获状态进入/退出、播放状态变化
+- **安全校验**：如路径、ID、权限、白名单、重复数据校验
+- **数据清洗**：如 trim、大小写归一化、去重、排序、冲突覆盖规则
+- **坐标/算法换算**：如 Canvas 坐标、滚动偏移、音高到琴键位置、黑白键命中顺序
+- **异常分支**：如提前 return、兜底值、错误提示和失败恢复
+- **跨模块契约**：如前端白名单需要和 Rust 键盘模拟器支持范围保持一致
+
+示例：
+
+```typescript
+function normalizeMappings(mappings: KeyMapping[]): KeyMapping[] {
+  // 按音高索引最终映射，保证同一音高只会保留一条记录。
+  const byPitch = new Map<number, KeyMapping>()
+  // 按物理键索引已占用音高，保证同一按键不会同时映射多个音。
+  const usedKeys = new Map<string, number>()
+
+  for (const mapping of mappings) {
+    // 先把用户输入归一化，避免 a/A 被当成两个不同按键。
+    const key = mapping.key.trim().toUpperCase()
+
+    // 非法音高或当前模拟器不支持的按键不能进入模板文件。
+    if (!isValidPitch(mapping.pitch) || !isSupportedKey(key)) {
+      continue
+    }
+
+    // 新映射占用同一按键时，移除旧音高，保持“一键一音”。
+    const previousPitch = usedKeys.get(key)
+    if (previousPitch !== undefined) {
+      byPitch.delete(previousPitch)
+    }
+
+    usedKeys.set(key, mapping.pitch)
+    byPitch.set(mapping.pitch, { pitch: mapping.pitch, key })
+  }
+
+  // 保存前排序，保证导出的 JSON 稳定、可读。
+  return Array.from(byPitch.values()).sort((a, b) => a.pitch - b.pitch)
+}
+```
+
 ### 6.1 算法注释
 
 ```typescript

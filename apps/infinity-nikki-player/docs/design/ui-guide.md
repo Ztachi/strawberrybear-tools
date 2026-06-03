@@ -557,6 +557,41 @@ const className = cn('text-red-500', isActive && 'bg-primary')
 const className = cn('px-4 py-2', className)
 ```
 
+## TailwindCSS 使用规范
+
+新增页面和组件必须严格使用 TailwindCSS Utility Classes：
+
+1. 常规布局、间距、颜色、字体、边框、圆角、阴影、状态样式必须直接写在模板 `class` 属性中。
+2. 禁止在 `<style scoped>` 中为常规样式定义 class，例如 `.card { @apply flex gap-3 p-4 }`。
+3. `<style scoped>` 仅用于 Tailwind utility 难以表达的复杂样式，例如 Canvas 尺寸约束、特殊动画、复杂渐变、动态计算样式。
+4. 全局主题变量继续维护在 `src/style.css` 的 base/theme 变量区，组件内优先通过 Tailwind 主题色和已有 utility 使用。
+
+正确示例：
+
+```vue
+<template>
+  <div class="flex items-center gap-3 rounded-xl bg-white p-4">
+    <span class="text-sm font-medium text-slate-900">标题</span>
+  </div>
+</template>
+```
+
+错误示例：
+
+```vue
+<template>
+  <div class="my-card">标题</div>
+</template>
+
+<style scoped>
+.my-card {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+}
+</style>
+```
+
 ## 自定义样式类
 
 项目在 `style.css` 中定义了额外的工具类（在 `@layer components` 中）：
@@ -570,7 +605,7 @@ const className = cn('px-4 py-2', className)
 | `.shadow-card`      | 卡片阴影           |
 | `.border-subtle`    | 柔和粉色边框       |
 
-**注意**: 在 Vue scoped styles 中使用 `@apply` 时，无法引用全局定义的工具类。如需使用，应直接在模板的 class 属性中添加类名：
+**注意**: 新增组件应优先直接使用 Tailwind utility。只有复杂样式确实不能由 utility 表达时，才在 Vue scoped styles 中保留少量样式。
 
 ```vue
 <!-- 正确做法：在模板中使用类名 -->

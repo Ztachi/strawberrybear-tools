@@ -187,6 +187,7 @@ export const useSettingsStore = defineStore('settings', () => {
     // 确保当前模板 ID 仍然有效
     if (currentTemplateId.value && !templates.value.find((t) => t.id === currentTemplateId.value)) {
       currentTemplateId.value = templates.value[0]?.id || null
+      await persistSettings()
     }
   }
 
@@ -198,6 +199,31 @@ export const useSettingsStore = defineStore('settings', () => {
   async function saveTemplate(template: KeyTemplate) {
     await invoke('save_template', { template })
     await refreshTemplates()
+    currentTemplateId.value = template.id
+    await persistSettings()
+  }
+
+  /**
+   * @description: 导入模板 JSON 文件
+   * @param {string} sourcePath - 模板 JSON 路径
+   * @return Promise 导入后的模板
+   */
+  async function importTemplate(sourcePath: string): Promise<KeyTemplate> {
+    const template = await invoke<KeyTemplate>('import_template', { sourcePath })
+    await refreshTemplates()
+    currentTemplateId.value = template.id
+    await persistSettings()
+    return template
+  }
+
+  /**
+   * @description: 导出模板 JSON 文件
+   * @param {string} templateId - 模板 ID
+   * @param {string} targetPath - 导出路径
+   * @return Promise
+   */
+  async function exportTemplate(templateId: string, targetPath: string) {
+    await invoke('export_template', { templateId, targetPath })
   }
 
   /**
@@ -246,6 +272,8 @@ export const useSettingsStore = defineStore('settings', () => {
     getCurrentTemplate,
     refreshTemplates,
     saveTemplate,
+    importTemplate,
+    exportTemplate,
     deleteTemplate,
     renameTemplate,
     setPlayMode,
