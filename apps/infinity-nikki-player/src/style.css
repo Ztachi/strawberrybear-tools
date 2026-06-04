@@ -171,7 +171,6 @@
 /* 拖拽区域样式 */
 [data-tauri-drag-region] {
   -webkit-app-region: drag;
-  cursor: move;
 }
 
 [data-tauri-drag-region] button,
