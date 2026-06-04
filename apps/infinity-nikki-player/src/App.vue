@@ -3,12 +3,13 @@
  * @description: 应用根组件 - 负责初始化全局状态、错误处理和加载状态管理
  */
 import { onMounted, getCurrentInstance, ref } from 'vue'
+import { App as AntApp, ConfigProvider } from 'antdv-next'
 import MainWindow from './views/MainWindow/index.vue'
 import AboutDialog from '@/components/AboutDialog/index.vue'
-import { Toaster } from '@/components/ui'
-import { toast } from 'vue-sonner'
+import { feedback as toast } from '@/lib/feedback'
 import { usePlayerStore } from './stores/player'
 import { useAppUpdater } from '@/composables/useAppUpdater'
+import { infinityNikkiTheme } from '@/theme/infinityNikkiTheme'
 
 /** 播放器 Store 实例 */
 const playerStore = usePlayerStore()
@@ -71,24 +72,25 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- Loading 过渡动画 -->
-  <Transition name="loading">
-    <div v-if="isLoading" class="loading-screen">
-      <div class="loading-content">
-        <div class="loading-spinner" />
-        <span class="loading-text">loading</span>
-      </div>
-    </div>
-  </Transition>
+  <ConfigProvider :theme="infinityNikkiTheme">
+    <AntApp>
+      <!-- Loading 过渡动画 -->
+      <Transition name="loading">
+        <div v-if="isLoading" class="loading-screen">
+          <div class="loading-content">
+            <div class="loading-spinner" />
+            <span class="loading-text">loading</span>
+          </div>
+        </div>
+      </Transition>
 
-  <!-- 主窗口 -->
-  <MainWindow />
+      <!-- 主窗口 -->
+      <MainWindow />
 
-  <!-- 关于对话框 -->
-  <AboutDialog />
-
-  <!-- Toast 通知组件 -->
-  <Toaster close-button />
+      <!-- 关于对话框 -->
+      <AboutDialog />
+    </AntApp>
+  </ConfigProvider>
 </template>
 
 <style scoped>

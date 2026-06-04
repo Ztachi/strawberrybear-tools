@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Slider } from '@/components/ui/slider'
+import { Slider } from 'antdv-next'
 
 const props = withDefaults(
   defineProps<{
@@ -19,7 +19,7 @@ const emit = defineEmits<{
   dragging: [dragging: boolean]
 }>()
 
-const internalPercentArray = ref<[number]>([0])
+const internalPercent = ref(0)
 const isDragging = ref(false)
 
 const currentPercent = computed(() => {
@@ -43,17 +43,18 @@ function onSliderPointerDown() {
   emit('dragging', true)
 }
 
-function onSliderUpdate(value: number[] | undefined) {
-  if (!value) return
-  internalPercentArray.value = [value[0]]
+function onSliderUpdate(value: number | number[] | undefined) {
+  if (value === undefined) return
+  const nextPercent = Array.isArray(value) ? value[0] : value
+  internalPercent.value = nextPercent
   if (isDragging.value) {
-    emit('preview', percentToTime(value[0]))
+    emit('preview', percentToTime(nextPercent))
   }
 }
 
 function onSliderPointerUp() {
   if (!isDragging.value) return
-  const time = percentToTime(internalPercentArray.value[0])
+  const time = percentToTime(internalPercent.value)
   isDragging.value = false
   emit('dragging', false)
   emit('seek', time)
@@ -61,7 +62,7 @@ function onSliderPointerUp() {
 
 watch(currentPercent, (newVal) => {
   if (!isDragging.value) {
-    internalPercentArray.value = [newVal]
+    internalPercent.value = newVal
   }
 })
 
@@ -79,12 +80,12 @@ onUnmounted(() => {
     <span class="time current">{{ formatTime(currentTime) }}</span>
     <div class="slider-wrapper">
       <Slider
-        v-model="internalPercentArray"
+        v-model:value="internalPercent"
         :max="100"
         :step="0.1"
         class="progress-slider"
         @pointerdown="onSliderPointerDown"
-        @update:model-value="onSliderUpdate"
+        @update:value="onSliderUpdate"
       />
     </div>
     <span class="time duration">{{ formatTime(duration) }}</span>

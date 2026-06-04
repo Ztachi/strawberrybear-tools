@@ -18,12 +18,7 @@ import { listen } from '@tauri-apps/api/event'
 import { Download, ExternalLink, Loader2, RefreshCw } from 'lucide-vue-next'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import appLogo from '@/assets/images/logo.png'
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog'
+import { Modal } from 'antdv-next'
 
 const { t } = useI18n()
 const updater = useAppUpdater()
@@ -97,56 +92,54 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Dialog v-model:open="isOpen">
+  <Modal v-model:open="isOpen" :footer="null" width="auto" centered root-class="about-modal-root">
     <!-- 自定义样式对话框内容 -->
-    <DialogContent class="!w-auto !max-w-none !bg-transparent !border-none !shadow-none !p-0">
-      <div class="about-card">
-        <!-- 头部区域：图标、名称、版本 -->
-        <div class="about-header">
-          <div class="about-icon">
-            <img :src="appLogo" class="about-icon-img" alt="app icon" />
-          </div>
-          <DialogTitle class="about-app-name">
-            {{ t('app.title') }}
-          </DialogTitle>
-          <div class="about-version-row">
-            <span class="about-version-badge">v{{ version }}</span>
-            <button
-              class="about-update-btn"
-              :disabled="updater.isBusy.value"
-              @click="handleUpdaterClick"
-            >
-              <component
-                :is="updaterButtonIcon"
-                :size="12"
-                :class="{ spinning: updater.isBusy.value }"
-              />
-              {{ updaterButtonText }}
-            </button>
-          </div>
+    <div class="about-card">
+      <!-- 头部区域：图标、名称、版本 -->
+      <div class="about-header">
+        <div class="about-icon">
+          <img :src="appLogo" class="about-icon-img" alt="app icon" />
         </div>
-
-        <!-- 分隔线 -->
-        <div class="about-divider" />
-
-        <!-- 描述文本 -->
-        <DialogDescription class="about-description">
-          {{ t('about.description') }}
-        </DialogDescription>
-
-        <div class="about-contact">
-          <span class="about-contact-label">{{ t('about.contact') }}</span>
-          <span class="about-contact-value">{{ t('about.qq') }}</span>
+        <h2 class="about-app-name">
+          {{ t('app.title') }}
+        </h2>
+        <div class="about-version-row">
+          <span class="about-version-badge">v{{ version }}</span>
+          <button
+            class="about-update-btn"
+            :disabled="updater.isBusy.value"
+            @click="handleUpdaterClick"
+          >
+            <component
+              :is="updaterButtonIcon"
+              :size="12"
+              :class="{ spinning: updater.isBusy.value }"
+            />
+            {{ updaterButtonText }}
+          </button>
         </div>
-
-        <!-- 外部链接按钮 -->
-        <button class="about-link-btn" @click="openLink">
-          <ExternalLink :size="14" />
-          {{ t('about.learnMore') }}
-        </button>
       </div>
-    </DialogContent>
-  </Dialog>
+
+      <!-- 分隔线 -->
+      <div class="about-divider" />
+
+      <!-- 描述文本 -->
+      <p class="about-description">
+        {{ t('about.description') }}
+      </p>
+
+      <div class="about-contact">
+        <span class="about-contact-label">{{ t('about.contact') }}</span>
+        <span class="about-contact-value">{{ t('about.qq') }}</span>
+      </div>
+
+      <!-- 外部链接按钮 -->
+      <button class="about-link-btn" @click="openLink">
+        <ExternalLink :size="14" />
+        {{ t('about.learnMore') }}
+      </button>
+    </div>
+  </Modal>
 </template>
 
 <style scoped>
@@ -162,6 +155,20 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 0;
+}
+
+:deep(.about-modal-root .ant-modal-content) {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:deep(.about-modal-root .ant-modal-body) {
+  padding: 0;
+}
+
+:deep(.about-modal-root .ant-modal-close) {
+  color: var(--color-primary);
 }
 
 .about-header {

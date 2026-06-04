@@ -2,35 +2,29 @@
 
 ## 概述
 
-本文档描述 Infinity Nikki Player 的设计决策、技术架构和界面规范。
+本文档描述 Infinity Nikki Player 的界面架构、主题规范和组件使用约定。当前 UI 框架为 `antdv-next`，样式层继续使用 Tailwind CSS v3 与项目 CSS 变量。
 
-## 目录结构
+## 文档目录
 
-```
-docs/
-├── README.md           # 文档索引（本文件）
-├── design/             # 设计文档
-│   ├── README.md       # 设计文档索引
-│   ├── ui-guide.md     # UI 组件使用指南
-│   └── theme.md        # 主题和样式规范
-└── error/              # 错误文档
-    ├── README.md
-    └── ISSUE-001-*.md
-```
+| 文档                       | 说明                                                 |
+| -------------------------- | ---------------------------------------------------- |
+| [ui-guide.md](ui-guide.md) | antdv-next 组件、Tailwind 原子类、弹层和反馈使用规范 |
+| [theme.md](theme.md)       | 无限暖暖主题 token、CSS 变量和视觉原则               |
 
 ## 技术栈
 
 ### 前端
 
-| 技术         | 版本   | 说明       |
-| ------------ | ------ | ---------- |
-| Vue 3        | 3.5.x  | 组合式 API |
-| TypeScript   | 5.7.x  | 类型安全   |
-| Vite         | 8.0.x  | 构建工具   |
-| Tailwind CSS | 3.4.x  | CSS 框架   |
-| shadcn-vue   | latest | UI 组件库  |
-| vue-i18n     | 10.x   | 国际化     |
-| Pinia        | 3.x    | 状态管理   |
+| 技术            | 版本    | 说明               |
+| --------------- | ------- | ------------------ |
+| Vue 3           | 3.5.x   | 组合式 API         |
+| TypeScript      | 5.7.x   | 类型安全           |
+| Vite            | 8.0.x   | 构建工具           |
+| Tailwind CSS    | 3.4.x   | 原子类和项目语义色 |
+| antdv-next      | 1.3.3   | Vue 3 UI 组件库    |
+| lucide-vue-next | 0.469.x | 图标库             |
+| vue-i18n        | 10.x    | 国际化             |
+| Pinia           | 3.x     | 状态管理           |
 
 ### 后端
 
@@ -41,80 +35,67 @@ docs/
 | midly | 0.5    | MIDI 解析 |
 | enigo | 0.3    | 键盘模拟  |
 
-## UI 设计
+## UI 架构
 
-### 组件库
+应用根节点在 `src/App.vue` 使用 `ConfigProvider` 和 `App` 注入 antdv-next 主题上下文。主题配置集中在 `src/theme/infinityNikkiTheme.ts`，反馈提示统一通过 `src/lib/feedback.ts` 调用。
 
-本项目使用 [shadcn-vue](https://www.shadcn-vue.com/) 作为 UI 组件库。
+业务组件直接从 `antdv-next` 导入所需组件，不使用自动导入插件。本项目不维护本地 UI 框架源码树。
 
-shadcn-vue 不是传统意义上的 npm 包，而是一组可复制、可定制的组件源码，直接拷贝到项目中。
+常用组件：
 
-#### 常用组件
+- `Button`、`Input`、`Switch`、`Slider`、`Select`
+- `Tabs`、`Popover`、`Tooltip`
+- `Modal`、`Drawer`
+- `Table`、`Pagination`、`Tag`
 
-- `Button` - 按钮组件
-- `Tabs / TabsList / TabsTrigger / TabsContent` - 标签页
-- `Card / CardHeader / CardTitle / CardContent` - 卡片
-- `Input` - 输入框
-- `Badge` - 徽章
-- `Slider` - 滑块
+## 主题色彩
 
-### 主题色彩
+主色调为 `#F7C0C1`，用于表达《无限暖暖》的柔和粉色风格。
 
-主色调沿用项目特色：`#F7C0C1`（淡粉色）
+| 用途                 | 色值                  |
+| -------------------- | --------------------- |
+| Primary              | `#F7C0C1`             |
+| Primary Hover        | `#F5AAB8`             |
+| Primary Active       | `#E98CA2`             |
+| Layout Background    | `#FFF7FA`             |
+| Container Background | `#FFFFFF` / `#FFF9FC` |
+| Text                 | `#4A3F3F`             |
+| Secondary Text       | `#6B5A5A`             |
+| Border               | `#F3CAD0`             |
 
-#### 明亮主题（当前默认）
+## 目录结构
 
-使用温暖的粉色系配色，适配《无限暖暖》的清新可爱风格：
-
-- 背景：渐变粉色 `#fdf6f7 → #fef9fa`
-- 卡片：半透明白色 `rgba(255,255,255,0.9)`
-- 强调：`#f7c0c1` 粉色系
-
-#### 暗色主题（计划中）
-
-待实现，将支持跟随系统自动切换。
-
-### 国际化
-
-使用 `vue-i18n` 管理多语言支持。
-
-| 语言    | 代码  | 状态 |
-| ------- | ----- | ---- |
-| 中文    | zh-CN | 默认 |
-| English | en-US | 支持 |
-
-翻译文件位于 `src/i18n/locales/` 目录。
-
-## 架构设计
-
-### 目录结构
-
-```
+```text
 src/
-├── components/         # Vue 组件
-│   ├── ui/            # shadcn-vue UI 组件
-│   │   ├── button/
-│   │   ├── tabs/
-│   │   ├── card/
-│   │   └── ...
-│   └── ...            # 业务组件
-├── views/             # 视图
-│   ├── MainWindow.vue
-│   └── OverlayWindow.vue
-├── stores/            # Pinia 状态
-├── i18n/              # 国际化
-│   ├── index.ts
-│   └── locales/
-│       ├── zh-CN.ts
-│       └── en-US.ts
-└── types/             # TypeScript 类型
+├── components/              # 可跨页面复用的业务组件
+│   ├── AboutDialog/
+│   ├── KeyboardPreview/
+│   ├── PlayerControls/
+│   ├── PreviewPlayer/
+│   └── ScrollableContainer.vue
+├── views/                   # 页面和页面私有组件
+│   └── MainWindow/
+│       ├── FilesTab/
+│       ├── TemplatesTab/
+│       ├── LogsTab/
+│       ├── OverlayView.vue
+│       └── index.vue
+├── stores/                  # Pinia 状态
+├── lib/                     # 业务逻辑和 UI 适配封装
+│   ├── feedback.ts
+│   ├── keyboardMapper.ts
+│   └── midiPlayer.ts
+├── theme/                   # antdv-next 主题和弹层容器规则
+│   └── infinityNikkiTheme.ts
+├── i18n/
+└── types/
 ```
 
-### 窗口模型
+## 窗口模型
 
-| 窗口     | 标签    | 说明         |
-| -------- | ------- | ------------ |
-| 主窗口   | main    | 完整功能界面 |
-| 悬浮窗口 | overlay | 极简播放控制 |
+| 窗口     | 说明                                    |
+| -------- | --------------------------------------- |
+| 主窗口   | 文件管理、MIDI 详情、模板编辑和设置入口 |
+| 悬浮模式 | 游戏窗口上方的透明迷你播放器            |
 
-窗口通过 URL 参数 `windowLabel` 区分。
+主窗口顶部菜单高度固定为 46px。MIDI 详情和模板编辑抽屉必须挂载到主内容区容器，不能覆盖顶部菜单栏。

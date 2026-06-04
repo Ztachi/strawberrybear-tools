@@ -14,12 +14,7 @@ import {
   setVolume as setMidiPreviewVolume,
 } from '@/lib/midiPlayer'
 import { ChevronDown, ChevronUp, X } from 'lucide-vue-next'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip } from 'antdv-next'
 import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
 import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
 
@@ -347,129 +342,107 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 </script>
 
 <template>
-  <TooltipProvider :delay-duration="200">
-    <div class="overlay-view" :class="{ expanded: isExpanded }">
-      <!-- 迷你悬浮条 - 整个区域可拖拽 -->
-      <div class="mini-bar" @mousedown="startDrag">
-        <!-- 曲目名称（走马灯效果）- 悬停显示全名 -->
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <div class="track-info">
-              <div class="marquee-wrapper">
-                <div class="marquee-track">
-                  <span class="marquee-text">{{ currentMidiName }}</span>
-                  <span class="marquee-text" aria-hidden="true">{{ currentMidiName }}</span>
-                </div>
-              </div>
+  <div class="overlay-view" :class="{ expanded: isExpanded }">
+    <!-- 迷你悬浮条 - 整个区域可拖拽 -->
+    <div class="mini-bar" @mousedown="startDrag">
+      <!-- 曲目名称（走马灯效果）- 悬停显示全名 -->
+      <Tooltip :title="currentMidiName">
+        <div class="track-info">
+          <div class="marquee-wrapper">
+            <div class="marquee-track">
+              <span class="marquee-text">{{ currentMidiName }}</span>
+              <span class="marquee-text" aria-hidden="true">{{ currentMidiName }}</span>
             </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {{ currentMidiName }}
-          </TooltipContent>
+          </div>
+        </div>
+      </Tooltip>
+
+      <!-- 操作按钮 -->
+      <div class="action-buttons">
+        <!-- 模板选择 -->
+        <select
+          class="template-select"
+          :value="settingsStore.currentTemplateId"
+          @change="(e) => settingsStore.selectTemplate((e.target as HTMLSelectElement).value)"
+        >
+          <option v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
+            {{ getTemplateDisplayName(tmpl.name, tmpl.id) }}
+          </option>
+        </select>
+
+        <!-- 关闭按钮 -->
+        <Tooltip :title="t('overlay.close')">
+          <button class="ctrl-btn close" @click.stop="exitOverlayMode">
+            <X :size="16" />
+          </button>
         </Tooltip>
-
-        <!-- 操作按钮 -->
-        <div class="action-buttons">
-          <!-- 模板选择 -->
-          <select
-            class="template-select"
-            :value="settingsStore.currentTemplateId"
-            @change="(e) => settingsStore.selectTemplate((e.target as HTMLSelectElement).value)"
-          >
-            <option v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
-              {{ getTemplateDisplayName(tmpl.name, tmpl.id) }}
-            </option>
-          </select>
-
-          <!-- 关闭按钮 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <button class="ctrl-btn close" @click.stop="exitOverlayMode">
-                <X :size="16" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {{ t('overlay.close') }}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-
-        <div class="overlay-progress" @mousedown.stop @pointerdown.stop>
-          <PreviewProgressBar
-            variant="overlay"
-            :current-time="playerStore.previewCurrentTime"
-            :duration="playerStore.previewDuration"
-            @dragging="playerStore.setDragging"
-            @preview="playerStore.setPreviewTime"
-            @seek="playerStore.seekPreview"
-          />
-        </div>
-
-        <!-- 播放控制按钮 -->
-        <div class="playback-controls" @mousedown.stop @pointerdown.stop>
-          <PreviewTransportControls
-            variant="overlay"
-            :is-playing="isPlaying"
-            :is-paused="playerStore.isPreviewPaused"
-            :has-media="!!playerStore.currentMidi"
-            :volume="overlayVolume"
-            :muted="overlayMuted"
-            :countdown="countdown"
-            @previous="playRelativeMidi('prev')"
-            @next="playRelativeMidi('next')"
-            @toggle-play="togglePlay"
-            @stop="stopOverlayPlayback"
-            @toggle-mute="toggleOverlayMute"
-            @set-volume="setOverlayVolume"
-          />
-
-          <!-- 展开/收起按钮 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <button
-                class="ctrl-btn justify-self-end"
-                :class="{ active: isExpanded }"
-                @click.stop="toggleExpand"
-              >
-                <ChevronUp v-if="isExpanded" :size="16" />
-                <ChevronDown v-else :size="16" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {{ isExpanded ? t('overlay.collapse') : t('overlay.expand') }}
-            </TooltipContent>
-          </Tooltip>
-        </div>
       </div>
 
-      <!-- 展开面板 - 显示播放列表 -->
-      <div v-if="isExpanded" class="expand-panel">
-        <div class="playlist">
-          <div
-            v-for="midi in playerStore.midiLibrary"
-            :key="midi.filename"
-            class="playlist-item"
-            :class="{ active: playerStore.currentMidi?.filename === midi.filename }"
-            @click="playMidi(midi)"
+      <div class="overlay-progress" @mousedown.stop @pointerdown.stop>
+        <PreviewProgressBar
+          variant="overlay"
+          :current-time="playerStore.previewCurrentTime"
+          :duration="playerStore.previewDuration"
+          @dragging="playerStore.setDragging"
+          @preview="playerStore.setPreviewTime"
+          @seek="playerStore.seekPreview"
+        />
+      </div>
+
+      <!-- 播放控制按钮 -->
+      <div class="playback-controls" @mousedown.stop @pointerdown.stop>
+        <PreviewTransportControls
+          variant="overlay"
+          :is-playing="isPlaying"
+          :is-paused="playerStore.isPreviewPaused"
+          :has-media="!!playerStore.currentMidi"
+          :volume="overlayVolume"
+          :muted="overlayMuted"
+          :countdown="countdown"
+          @previous="playRelativeMidi('prev')"
+          @next="playRelativeMidi('next')"
+          @toggle-play="togglePlay"
+          @stop="stopOverlayPlayback"
+          @toggle-mute="toggleOverlayMute"
+          @set-volume="setOverlayVolume"
+        />
+
+        <!-- 展开/收起按钮 -->
+        <Tooltip :title="isExpanded ? t('overlay.collapse') : t('overlay.expand')">
+          <button
+            class="ctrl-btn justify-self-end"
+            :class="{ active: isExpanded }"
+            @click.stop="toggleExpand"
           >
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <span class="playlist-name">{{ midi.filename }}</span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {{ midi.filename }}
-              </TooltipContent>
-            </Tooltip>
-            <span class="playlist-duration">{{ formatDuration(midi.duration_ms) }}</span>
-          </div>
-          <!-- 空状态 -->
-          <div v-if="playerStore.midiLibrary.length === 0" class="playlist-empty">
-            {{ t('midi.libraryEmpty') }}
-          </div>
+            <ChevronUp v-if="isExpanded" :size="16" />
+            <ChevronDown v-else :size="16" />
+          </button>
+        </Tooltip>
+      </div>
+    </div>
+
+    <!-- 展开面板 - 显示播放列表 -->
+    <div v-if="isExpanded" class="expand-panel">
+      <div class="playlist">
+        <div
+          v-for="midi in playerStore.midiLibrary"
+          :key="midi.filename"
+          class="playlist-item"
+          :class="{ active: playerStore.currentMidi?.filename === midi.filename }"
+          @click="playMidi(midi)"
+        >
+          <Tooltip :title="midi.filename">
+            <span class="playlist-name">{{ midi.filename }}</span>
+          </Tooltip>
+          <span class="playlist-duration">{{ formatDuration(midi.duration_ms) }}</span>
+        </div>
+        <!-- 空状态 -->
+        <div v-if="playerStore.midiLibrary.length === 0" class="playlist-empty">
+          {{ t('midi.libraryEmpty') }}
         </div>
       </div>
     </div>
-  </TooltipProvider>
+  </div>
 </template>
 
 <style scoped>

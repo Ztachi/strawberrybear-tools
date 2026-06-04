@@ -2,1041 +2,164 @@
 
 ## 技术栈
 
-- **UI 框架**: shadcn-vue (基于 Vue 3 + Tailwind CSS)
-- **组件库**: 组件代码直接复制到项目中，可自由定制
-- **构建工具**: Vite
-- **图标库**: lucide-vue-next (基于 Lucide Icons)
+- **UI 框架**: `antdv-next@1.3.3`
+- **样式方案**: Tailwind CSS v3 + 项目 CSS 变量
+- **主题入口**: `src/theme/infinityNikkiTheme.ts`
+- **反馈入口**: `src/lib/feedback.ts`
+- **图标库**: `lucide-vue-next`
 
-## 手势操作禁止规范
+官方参考：
 
-**规则**: 桌面应用中，禁止使用任何触摸手势相关的操作，包括但不限于：
+- antdv-next LLMs: <https://www.antdv-next.cn/llms.txt>
+- antdv-next Skills: <https://www.antdv-next.cn/docs/vue/skills-cn>
+- antdv-next 主题定制: <https://www.antdv-next.cn/docs/vue/customize-theme-cn>
 
-- 禁止使用 `touchstart`、`touchmove`、`touchend` 事件
-- 禁止使用 `pinch-zoom`、`pan` 等手势操作
-- 禁止使用 `pointerdown`/`pointermove` 的手势相关属性（如 `pointerType`）
-- 仅允许鼠标点击、拖拽等桌面原生交互方式
+## 组件导入
 
-**原因**: 桌面应用不需要手势操作，手势会与正常的拖拽、滚动等操作产生冲突。
-
-**示例**:
-
-```vue
-<!-- 错误：使用了 pointerdown 手势 -->
-<Slider @pointerdown="onDragStart" />
-
-<!-- 正确：使用原生浏览器行为 -->
-<Slider @update:model-value="onValueChange" />
-```
-
-```vue
-<!-- 错误：禁止手势操作 -->
-<div @touchstart="handleTouch" @touchmove="handleMove" />
-
-<!-- 正确：只处理鼠标事件 -->
-<div @mousedown="handleMouseDown" />
-```
-
-## 安装组件
-
-### shadcn-vue 组件
-
-使用 pnpm 添加 shadcn-vue 组件：
-
-```bash
-# 初始化项目（首次）
-pnpm dlx shadcn-vue@latest init --defaults
-
-# 添加组件
-pnpm dlx shadcn-vue@latest add button
-pnpm dlx shadcn-vue@latest add tabs
-pnpm dlx shadcn-vue@latest add card
-pnpm dlx shadcn-vue@latest add badge
-pnpm dlx shadcn-vue@latest add input
-pnpm dlx shadcn-vue@latest add slider
-pnpm dlx shadcn-vue@latest add popover
-pnpm dlx shadcn-vue@latest add drawer
-pnpm dlx shadcn-vue@latest add tooltip
-pnpm dlx shadcn-vue@latest add sonner
-```
-
-### lucide-vue-next 图标
-
-lucide-vue-next 已安装。如需添加新图标：
-
-```bash
-pnpm add lucide-vue-next
-```
-
-## 项目目录结构
-
-```
-src/
-├── assets/
-│   └── images/
-│       └── logo.png      # 应用 Logo
-├── components/                      # 全局组件
-│   ├── PreviewPlayer/               # 试听播放器
-│   │   └── index.vue
-│   ├── PlayerControls.vue           # 演奏控制组件
-│   └── ui/                          # shadcn-vue 全局公共组件
-│       ├── button/
-│       ├── card/
-│       ├── tabs/
-│       ├── badge/
-│       ├── input/
-│       ├── slider/
-│       ├── popover/
-│       ├── drawer/
-│       ├── tooltip/
-│       ├── sonner/
-│       └── index.ts
-├── views/
-│   ├── MainWindow/                       # 主窗口（页面级组件）
-│   │   ├── index.vue                     # 主窗口入口
-│   │   ├── FilesTab/                     # 文件页面
-│   │   │   ├── index.vue
-│   │   │   └── components/
-│   │   │       └── MidiLibrary/          # MIDI 列表
-│   │   │           ├── index.vue
-│   │   │           └── components/
-│   │   │               └── MidiDetail/  # MIDI 详情
-│   │   │                   └── index.vue
-│   │   ├── TemplatesTab/                 # 模板页面
-│   │   │   ├── index.vue
-│   │   │   └── components/
-│   │   │       └── TemplateEditor.vue
-│   │   └── LogsTab/                      # 日志页面
-│   │       ├── index.vue
-│   │       └── components/
-│   │           └── KeyLogPanel.vue
-│   └── OverlayWindow.vue                 # 悬浮模式窗口
-├── stores/
-│   └── player.ts                         # 播放器状态管理
-├── i18n/
-│   └── locales/
-│       ├── en-US.ts
-│       └── zh-CN.ts
-└── lib/
-    ├── utils.ts                           # 工具函数
-    ├── keyboardMapper.ts                   # 键盘映射器（C 大调移调、白键量化）
-    └── midiPlayer.ts                      # MIDI 播放器（集成 soundfont-player 发音）
-```
-
-## lib 模块说明
-
-### keyboardMapper.ts - 键盘映射器
-
-**功能**：将 MIDI 音符移调并量化到 C 大调白键，然后映射到物理键盘按键。
-
-**核心算法**：
-
-1. **移调（Transpose）**：计算原曲主音到中央 C（60）的半音偏移量，统一移调
-2. **白键量化（Quantize）**：将移调后的音符映射到最近的 C 大调自然音（C/D/E/F/G/A/B）
-3. **键盘映射**：根据模板定义，将音符号映射到具体键盘按键
-
-**使用示例**：
-
-```typescript
-import { KeyboardMapper } from '@/lib/keyboardMapper'
-
-const mapper = new KeyboardMapper({
-  rows: 5,              // 键盘行数（5 八度）
-  middleCPitch: 60,     // 中央 C
-  originalTonic: 60,    // 原曲主音（C 大调）
-  onNoteOn: (pitch, originalPitch) => {
-    // 音符按下回调，可用于发音
-    pianoEngine.keyDown(pitch)
-  },
-  onNoteOff: (pitch, originalPitch) => {
-    // 音符释放回调
-    pianoEngine.keyUp(pitch)
-  },
-})
-
-// 设置模板
-mapper.setTemplate(template)
-
-// 获取当前激活的按键
-const activeKeys = mapper.getActiveKeys(currentTimeMs, melodyEvents)
-```
-
-### midiPlayer.ts - MIDI 播放器
-
-**功能**：基于 midi-player-js + soundfont-player 的 MIDI 播放和钢琴发音引擎。
-
-**特性**：
-
-- 自动演奏模式：MIDI 播放器播放
-- 模板发音模式：根据 melody 数据同步触发钢琴音符
-- 支持音符按下/释放
-- 共享 soundfont-player 实例
-
-**核心 API**：
-
-```typescript
-import {
-  playMidi, playNote, stopNote, stopAllNotes, ensureInstrument,
-} from '@/lib/midiPlayer'
-await playNote(60, 80, 1)  // C4，力度 80，持续 1 秒
-stopAllNotes()
-```
-
-## 组件存放规范
-
-### 核心原则
-
-**组件分为三类：全局公共组件、页面级组件 和 滚动容器组件**
-
-| 类型         | 存放位置                  | 说明                                                         |
-| ------------ | ------------------------- | ------------------------------------------------------------ |
-| 全局公共组件 | `components/ui/`          | 可在项目任何位置使用的组件，如 shadcn-vue 组件、业务公共组件 |
-| 页面级组件   | `views/xxx/`              | 仅属于特定页面的组件，不可跨页面复用                         |
-| 滚动容器组件 | `ScrollableContainer.vue` | 统一管理页面滚动、返回顶部、刷新按钮的容器组件               |
-
-| 类型         | 存放位置         | 说明                                                         |
-| ------------ | ---------------- | ------------------------------------------------------------ |
-| 全局公共组件 | `components/ui/` | 可在项目任何位置使用的组件，如 shadcn-vue 组件、业务公共组件 |
-| 页面级组件   | `views/xxx/`     | 仅属于特定页面的组件，不可跨页面复用                         |
-
-### 目录组织规则
-
-**规则 1：有子组件的页面必须使用文件夹结构**
-
-```
-# 错误：页面与子组件同名且同级
-views/
-├── MainWindow.vue      # 页面
-└── MainWindow.vue      # 子组件（同名，错误！）
-
-# 正确：页面使用文件夹，子组件放入 components
-views/
-└── MainWindow/
-    ├── index.vue           # 页面入口
-    └── components/        # 子组件目录
-        └── xxx.vue        # 子组件
-```
-
-**规则 2：组件命名遵循小驼峰**
-
-```
-views/
-└── MainWindow/
-    ├── index.vue
-    └── components/
-        ├── filesTab.vue       # 错误： kebab-case
-        ├── FilesTab.vue        # 错误： PascalCase（除非是全局组件）
-        └── files-tab.vue       # 错误： kebab-case
-        └── FilesTab.vue        # 正确： PascalCase（页面级组件）
-```
-
-**规则 3：嵌套层级**
-
-页面组件可以继续拆分更小的子组件，遵循相同规则：
-
-```
-src/
-├── components/                      # 全局组件（可在任何页面复用）
-│   ├── PreviewPlayer/
-│   │   └── index.vue               # 试听播放器（可能在悬浮窗调用）
-│   └── PlayerControls.vue          # 演奏控制（可能在悬浮窗调用）
-│
-└── views/
-    └── MainWindow/                  # 主窗口（页面级）
-        ├── index.vue                 # 主窗口布局
-        │
-        ├── FilesTab/                 # 文件页面
-        │   ├── index.vue
-        │   └── components/          # 子组件
-        │       └── MidiLibrary/      # 继续拆分的子模块
-        │           ├── index.vue
-        │           └── components/   # 子子组件
-        │               └── MidiDetail/
-        │                   └── index.vue
-        │
-        ├── TemplatesTab/
-        │   ├── index.vue
-        │   └── components/
-        │       └── TemplateEditor.vue
-        │
-        └── LogsTab/
-            ├── index.vue
-            └── components/
-                └── KeyLogPanel.vue
-```
-
-**嵌套判定**：当组件是特定页面的子模块，且该子模块还有更小的子组件时，继续使用相同规则（文件夹 + components 子目录）。
-
-### 示例：创建新页面组件
-
-假设需要创建一个新的「设置」页面：
-
-```bash
-# 1. 创建目录结构
-views/
-└── Settings/
-    ├── index.vue          # 设置页面入口
-    └── components/        # 设置页面的子组件
-        ├── GeneralTab.vue
-        └── AdvancedTab.vue
-```
-
-```vue
-<!-- views/Settings/index.vue -->
-<script setup lang="ts">
-import GeneralTab from './components/GeneralTab.vue'
-import AdvancedTab from './components/AdvancedTab.vue'
-</script>
-
-<template>
-  <div class="settings">
-    <GeneralTab />
-    <AdvancedTab />
-  </div>
-</template>
-```
-
-### 判定标准：何时应该创建文件夹
-
-满足以下任一条件时，应该创建文件夹：
-
-1. 页面有 2 个或以上的子组件
-2. 组件内部需要进一步拆分
-3. 组件与其他组件有明显的上下级关系
-
-### 拆分边界：避免机械拆分
-
-组件拆分应降低复杂度，而不是把同一个页面流程拆成多个彼此通信的小碎片：
-
-- 页面主体内容（例如列表、搜索栏、批量操作栏、分页状态）应保留在页面或页面主组件中，方便读者从一个文件理解主流程。
-- 只有重编辑区域、复杂抽屉、独立业务面板、可复用业务模块，才适合拆成页面子组件。
-- 只服务某个重编辑区域的确认弹窗，应与该编辑组件放在一起，避免父子之间传递过多临时状态。
-- 行级轻量操作（例如表格行的更多菜单）可以直接写在当前表格行内；除非被多处复用，否则不要额外拆组件。
-- 新增拆分前应确认它减少了状态耦合、重复模板或文件长度压力；如果只是把 20 行模板移到另一个文件，通常不应拆分。
-
-### 全局公共组件判定
-
-满足以下条件时，应该放在 `components/` 目录：
-
-1. 可在项目任意位置复用
-2. 不与特定页面绑定
-3. 独立功能，可抽离
-
-**示例**：
-
-- `components/ui/` 下的所有 shadcn-vue 组件（Button、Card 等）
-- 工具类组件（Tooltip、Popover 等）
-- 业务公共组件（如 `PreviewPlayer`、`PlayerControls` 等可能在悬浮窗等场景调用）
-
-## shadcn-vue 组件结构
-
-```
-src/components/ui/
-├── button/          # 按钮组件
-│   ├── Button.vue
-│   └── index.ts
-├── card/            # 卡片组件
-│   ├── Card.vue
-│   ├── CardHeader.vue
-│   ├── CardTitle.vue
-│   ├── CardContent.vue
-│   └── index.ts
-├── tabs/            # 标签页组件
-│   ├── Tabs.vue
-│   ├── TabsList.vue
-│   ├── TabsTrigger.vue
-│   ├── TabsContent.vue
-│   └── index.ts
-├── badge/           # 徽章组件
-│   ├── Badge.vue
-│   └── index.ts
-├── input/           # 输入框组件
-│   ├── Input.vue
-│   └── index.ts
-├── slider/          # 滑块组件
-│   ├── Slider.vue
-│   └── index.ts
-├── popover/         # 弹出框组件
-│   ├── Popover.vue
-│   ├── PopoverTrigger.vue
-│   ├── PopoverContent.vue
-│   ├── PopoverAnchor.vue
-│   └── index.ts
-├── table/           # 表格组件
-│   ├── Table.vue
-│   ├── TableHeader.vue
-│   ├── TableBody.vue
-│   ├── TableRow.vue
-│   ├── TableHead.vue
-│   ├── TableCell.vue
-│   └── index.ts
-├── pagination/      # 分页组件
-│   ├── Pagination.vue
-│   └── index.ts
-├── drawer/          # 抽屉组件
-│   ├── Drawer.vue
-│   ├── DrawerTrigger.vue
-│   ├── DrawerContent.vue
-│   ├── DrawerHeader.vue
-│   ├── DrawerTitle.vue
-│   ├── DrawerFooter.vue
-│   ├── DrawerClose.vue
-│   ├── DrawerOverlay.vue
-│   ├── DrawerDescription.vue
-│   └── index.ts
-└── index.ts         # barrel export
-```
-
-## 导入方式
-
-推荐从 `@/components/ui` 导入所有组件：
+业务组件直接从 `antdv-next` 按需导入，不新增自动导入插件。
 
 ```vue
 <script setup lang="ts">
-import {
-  Button,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-  Badge,
-  Input,
-  Slider,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-  Pagination,
-  Drawer,
-  DrawerContent,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui'
+import { Button, Drawer, Input, Modal, Select, SelectOption } from 'antdv-next'
 </script>
-```
 
-## Button 按钮
-
-```vue
 <template>
-  <!-- 默认按钮 -->
-  <Button>Default</Button>
-
-  <!-- 变体 -->
-  <Button variant="outline">Outline</Button>
-  <Button variant="secondary">Secondary</Button>
-  <Button variant="destructive">Destructive</Button>
-  <Button variant="ghost">Ghost</Button>
-  <Button variant="link">Link</Button>
-
-  <!-- 尺寸 -->
-  <Button size="sm">Small</Button>
-  <Button size="lg">Large</Button>
-  <Button size="icon">Icon</Button>
+  <Button type="primary" size="small">保存</Button>
+  <Input v-model:value="name" />
+  <Select v-model:value="templateId">
+    <SelectOption value="piano">Piano</SelectOption>
+  </Select>
 </template>
 ```
 
-## Tabs 标签页
+常见 v-model 规则：
+
+| 组件     | 写法                                  |
+| -------- | ------------------------------------- |
+| `Input`  | `v-model:value`                       |
+| `Select` | `v-model:value`                       |
+| `Slider` | `v-model:value`                       |
+| `Switch` | `v-model:checked`                     |
+| `Modal`  | `v-model:open` 或 `:open` + `@cancel` |
+| `Drawer` | `:open` + `@update:open`              |
+
+## Tailwind 使用
+
+保留 Tailwind CSS v3。新增 UI 样式优先使用 Tailwind 原子类；只有以下情况才新增 scoped CSS：
+
+- 需要覆盖 antdv-next 内部语义结构，例如 Drawer body padding。
+- 需要表达已有项目变量或渐变。
+- Canvas、播放器、键盘预览等复杂组件已有稳定局部样式。
+
+不要为新 UI 建立一套新的 class 系统。既有 custom class 可以保留，除非它直接依赖已移除的 UI 框架行为。
+
+## 主题和 App 上下文
+
+`src/App.vue` 必须用 `ConfigProvider` 和 `App` 包裹主界面：
 
 ```vue
-<template>
-  <Tabs v-model="activeTab">
-    <TabsList>
-      <TabsTrigger value="tab1">Tab 1</TabsTrigger>
-      <TabsTrigger value="tab2">Tab 2</TabsTrigger>
-    </TabsList>
-    <TabsContent value="tab1">Content 1</TabsContent>
-    <TabsContent value="tab2">Content 2</TabsContent>
-  </Tabs>
-</template>
-
-<script setup>
-const activeTab = ref('tab1')
-</script>
+<ConfigProvider :theme="infinityNikkiTheme">
+  <AntApp>
+    <MainWindow />
+    <AboutDialog />
+  </AntApp>
+</ConfigProvider>
 ```
 
-## Card 卡片
+静态 notification/message/modal 不会自动继承根 `ConfigProvider`，启动时由 `configureAntdvStaticContext()` 配置 holder。不要在业务模块直接调用 antdv-next 静态通知 API，统一使用 `feedback`。
 
-```vue
-<template>
-  <Card>
-    <CardHeader>
-      <CardTitle>Card Title</CardTitle>
-    </CardHeader>
-    <CardContent>
-      Card content here
-    </CardContent>
-  </Card>
-</template>
+```ts
+import { feedback } from '@/lib/feedback'
+
+feedback.success(t('template.saved'))
+feedback.error(t('template.saveFailed'), { description: String(error) })
 ```
 
-## Badge 徽章
+## 抽屉容器规则
+
+主窗口顶部菜单高度为 46px。MIDI 详情和模板编辑抽屉只允许覆盖内容区，不能覆盖顶部菜单栏。
+
+抽屉必须使用主内容区 portal：
 
 ```vue
-<template>
-  <Badge>Default</Badge>
-  <Badge variant="secondary">Secondary</Badge>
-  <Badge variant="destructive">Destructive</Badge>
-  <Badge variant="outline">Outline</Badge>
-</template>
+<Drawer
+  :open="open"
+  placement="left"
+  width="100%"
+  :get-container="getMainWindowPopupContainer"
+  :root-style="getContentDrawerRootStyle()"
+>
+  ...
+</Drawer>
 ```
 
-## Input 输入框
+`getContentDrawerRootStyle()` 必须返回 `position: 'absolute'`。这是 antdv-next Drawer 自定义容器的必要条件，否则 Drawer 仍会按视口 fixed 定位。
+
+## 表格和分页
+
+列表型数据使用 antdv-next `Table` 和 `Pagination`。如果业务需要跨分页保留选择，不要强行使用 Table 内置 rowSelection；可以保留页面内的 `Set` 状态并在列中渲染复选框。
 
 ```vue
-<template>
-  <Input type="text" placeholder="Enter text..." />
-  <Input type="email" placeholder="email@example.com" />
-</template>
-```
+<Table
+  :data-source="pagedTemplates"
+  :pagination="false"
+  :row-key="(template) => template.id"
+  size="small"
+>
+  <TableColumn key="name" :title="t('template.name')" />
+</Table>
 
-## Slider 滑块
-
-```vue
-<template>
-  <Slider
-    v-model="[value]"
-    :min="0"
-    :max="100"
-    :step="1"
-  />
-</template>
-
-<script setup>
-const value = ref([50])
-</script>
-```
-
-## Popover 弹出框
-
-Popover 需要使用 `PopoverTrigger` 和 `PopoverContent` 子组件：
-
-```vue
-<template>
-  <Popover>
-    <PopoverTrigger as-child>
-      <Button variant="outline">打开菜单</Button>
-    </PopoverTrigger>
-    <PopoverContent class="w-40 p-1" align="end">
-      <button class="menu-action">删除</button>
-    </PopoverContent>
-  </Popover>
-</template>
-```
-
-**注意**：
-
-- 使用 `as-child` 让 Trigger 包裹的按钮保留其原始行为
-- `PopoverContent` 的 `w-40` 设置宽度，`p-1` 设置内边距
-- `align="end"` 让弹出框右对齐
-- 表格行操作优先使用 `MoreVertical` 图标按钮 + Popover 菜单，不要把所有操作按钮横向展开成宽列
-
-## Table 表格
-
-列表型数据应使用 `components/ui/table` 封装组件，不要在业务页面裸写 `<table>`：
-
-```vue
-<template>
-  <div class="min-h-0 flex-1 overflow-auto">
-    <Table>
-      <TableHeader class="sticky top-0 bg-white/95">
-        <TableRow>
-          <TableHead>名称</TableHead>
-          <TableHead class="w-40">数量</TableHead>
-          <TableHead class="w-16 text-right"></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        <TableRow>
-          <TableCell>示例</TableCell>
-          <TableCell>12</TableCell>
-          <TableCell class="text-right">...</TableCell>
-        </TableRow>
-      </TableBody>
-    </Table>
-  </div>
-</template>
-```
-
-**布局规则**：
-
-- 表格外层容器使用 `min-h-0 flex-1 overflow-auto`，让滚动条出现在表格区域内。
-- 页面外层使用 `flex min-h-0 flex-col`，避免表格把页面整体撑高。
-- 内部 ID、随机 ID、数据库键等不可作为默认展示列；只展示用户关心的名称、状态和业务指标。
-
-## Pagination 分页
-
-分页应使用 `components/ui/pagination`，由分页组件统一展示总数、当前页和页大小：
-
-```vue
 <Pagination
-  :page="currentPage"
+  :current="currentPage"
   :page-size="pageSize"
-  :total="filteredRows.length"
-  :page-size-options="[10, 20, 50]"
-  @update:page="currentPage = $event"
-  @update:page-size="pageSize = $event"
+  :total="filteredTemplates.length"
+  show-size-changer
+  @change="handlePaginationChange"
 />
 ```
 
-分页组件已经展示总数，不要在工具栏重复展示“已选/共几个”等统计文字，除非该统计是当前任务的核心反馈。
+## 弹层组件
 
-## Drawer 抽屉
+- Tooltip: 用 `:title` 传入文本，直接包裹触发元素。
+- Popover: 用 `trigger="click"` 和 `#content` 渲染菜单内容。
+- Modal: 用 `:footer="null"` 时，业务按钮写在默认插槽里。
+- Drawer: 内容区抽屉必须遵守上面的容器规则。
 
-```vue
-<template>
-  <Drawer :open="isOpen" @close="isOpen = false">
-    <DrawerContent>
-      <DrawerHeader>
-        <DrawerTitle>标题</DrawerTitle>
-        <DrawerDescription>描述文字</DrawerDescription>
-      </DrawerHeader>
-      <div class="p-4">
-        抽屉内容
-      </div>
-      <DrawerFooter>
-        <DrawerClose as-child>
-          <Button variant="outline">取消</Button>
-        </DrawerClose>
-        <Button>确认</Button>
-      </DrawerFooter>
-    </DrawerContent>
-  </Drawer>
-</template>
+## 桌面交互限制
 
-<script setup>
-const isOpen = ref(false)
-</script>
+桌面应用中禁止使用触摸手势相关交互：
+
+- 禁止使用 `touchstart`、`touchmove`、`touchend`。
+- 禁止使用 `pinch-zoom`、`pan` 等移动端手势。
+- 禁止通过 `pointerType` 分支实现触摸手势。
+- 允许鼠标点击、拖拽、滚轮、键盘快捷键和原生输入控件。
+
+例外：Canvas 或 Slider 可以使用普通 pointer 事件处理桌面拖拽，但不能加入移动端手势语义。
+
+## 组件存放规范
+
+全局可复用业务组件放在 `src/components/`，页面私有组件放在对应 `src/views/**/components/`。本项目不维护本地 UI 框架源码目录。
+
+```text
+src/
+├── components/
+│   ├── KeyboardPreview/
+│   ├── PlayerControls/
+│   └── PreviewPlayer/
+└── views/
+    └── MainWindow/
+        ├── FilesTab/
+        ├── TemplatesTab/
+        └── LogsTab/
 ```
 
-### 详情式 Drawer
+组件拆分应降低复杂度。页面主体状态、搜索、分页、批量操作可保留在页面主组件中；复杂编辑器、抽屉和可复用播放器适合拆成子组件。
 
-主窗口内的详情/编辑抽屉应对齐 MIDI 详情行为：
+## 业务边界
 
-- 使用 `DrawerPortal to="#main-window-portal-root"` 挂载到主内容 portal。
-- 使用 `:modal="false"` 和全内容区域覆盖，避免普通弹窗与主页面滚动状态冲突。
-- 复杂编辑抽屉内部维护自身 dirty guard 和离开确认；父页面只调用其暴露的 `confirmLeaveIfNeeded`。
+UI 框架迁移不应改变业务逻辑：
 
-## cn 工具函数
-
-用于合并 Tailwind CSS 类名：
-
-```typescript
-import { cn } from '@/lib/utils'
-
-// 基础用法
-const className = cn('text-red-500', 'bg-blue-500')
-
-// 条件合并
-const className = cn('text-red-500', isActive && 'bg-primary')
-
-// 覆盖样式
-const className = cn('px-4 py-2', className)
-```
-
-## TailwindCSS 使用规范
-
-新增页面和组件必须严格使用 TailwindCSS Utility Classes：
-
-1. 常规布局、间距、颜色、字体、边框、圆角、阴影、状态样式必须直接写在模板 `class` 属性中。
-2. 禁止在 `<style scoped>` 中为常规样式定义 class，例如 `.card { @apply flex gap-3 p-4 }`。
-3. `<style scoped>` 仅用于 Tailwind utility 难以表达的复杂样式，例如 Canvas 尺寸约束、特殊动画、复杂渐变、动态计算样式。
-4. 全局主题变量继续维护在 `src/style.css` 的 base/theme 变量区，组件内优先通过 Tailwind 主题色和已有 utility 使用。
-
-正确示例：
-
-```vue
-<template>
-  <div class="flex items-center gap-3 rounded-xl bg-white p-4">
-    <span class="text-sm font-medium text-slate-900">标题</span>
-  </div>
-</template>
-```
-
-错误示例：
-
-```vue
-<template>
-  <div class="my-card">标题</div>
-</template>
-
-<style scoped>
-.my-card {
-  display: flex;
-  gap: 12px;
-  padding: 16px;
-}
-</style>
-```
-
-## 自定义样式类
-
-项目在 `style.css` 中定义了额外的工具类（在 `@layer components` 中）：
-
-| 类名                | 说明               |
-| ------------------- | ------------------ |
-| `.bg-gradient-warm` | 温暖的粉色渐变背景 |
-| `.glass`            | 玻璃态效果         |
-| `.glass-subtle`     | 淡玻璃态效果       |
-| `.shadow-soft`      | 柔和粉色阴影       |
-| `.shadow-card`      | 卡片阴影           |
-| `.border-subtle`    | 柔和粉色边框       |
-
-**注意**: 新增组件应优先直接使用 Tailwind utility。只有复杂样式确实不能由 utility 表达时，才在 Vue scoped styles 中保留少量样式。
-
-```vue
-<!-- 正确做法：在模板中使用类名 -->
-<template>
-  <div class="main-window bg-gradient-warm">
-    ...
-  </div>
-</template>
-
-<style scoped>
-.main-window {
-  @apply h-screen flex flex-col text-foreground overflow-hidden;
-}
-</style>
-```
-
-## 国际化使用
-
-```vue
-<script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import { Button } from '@/components/ui'
-
-const { t } = useI18n()
-</script>
-
-<template>
-  <Button>{{ t('actions.save') }}</Button>
-</template>
-```
-
-翻译 key 格式：`section.key`，例如 `player.status.playing`
-
-## 设计原则
-
-1. **组件优先**: 优先使用 shadcn-vue 提供的组件，而非自定义
-2. **直接修改源码**: shadcn-vue 的组件代码在项目中，可以直接修改
-3. **Tailwind 工具类**: 使用 Tailwind CSS 的工具类进行样式定制
-4. **CSS 变量**: 使用 `hsl()` 函数的 CSS 变量保持主题一致性
-
-## lucide-vue-next 图标使用
-
-图标库已集成到项目中，使用方式如下：
-
-### 安装新图标
-
-所有图标均为按需导入，无需额外安装：
-
-```bash
-# lucide-vue-next 已预装
-pnpm add lucide-vue-next
-```
-
-### 基本用法
-
-```vue
-<script setup lang="ts">
-import { Music, Play, Pause, Trash2 } from 'lucide-vue-next'
-</script>
-
-<template>
-  <!-- 基础图标 -->
-  <Music :size="24" />
-
-  <!-- 带样式 -->
-  <Play :size="20" class="text-pink-500" />
-
-  <!-- 在按钮中使用 -->
-  <Button>
-    <Pause :size="16" />
-    暂停
-  </Button>
-</template>
-```
-
-### 常用图标映射
-
-| 场景   | 图标 | 导入名         |
-| ------ | ---- | -------------- |
-| 音乐   | ♪    | `Music`        |
-| 播放   | ▶    | `Play`         |
-| 暂停   | ⏸    | `Pause`        |
-| 停止   | ⏹    | `Square`       |
-| 文件   | 📄   | `FileText`     |
-| 文件夹 | 📁   | `Folder`       |
-| 上传   | ⬆    | `Upload`       |
-| 删除   | 🗑   | `Trash2`       |
-| 时钟   | 🕐   | `Clock`        |
-| 键盘   | ⌨    | `Keyboard`     |
-| 警告   | ⚠    | `AlertCircle`  |
-| 显示器 | 🖥   | `Monitor`      |
-| 布局   | ▦    | `LayoutGrid`   |
-| 更多   | ⋮    | `MoreVertical` |
-| 右箭头 | →    | `ArrowRight`   |
-| 加     | +    | `Plus`         |
-| 减     | −    | `Minus`        |
-
-### Props 参数
-
-| 参数                  | 类型      | 默认值       | 说明         |
-| --------------------- | --------- | ------------ | ------------ |
-| `size`                | `number`  | 24           | 图标尺寸     |
-| `color`               | `string`  | currentColor | 图标颜色     |
-| `stroke-width`        | `number`  | 2            | 线条粗细     |
-| `absoluteStrokeWidth` | `boolean` | false        | 绝对线条粗细 |
-
-### 搜索图标
-
-访问 https://lucide.dev/icons 搜索可用图标。
-
-## Tooltip 文本提示
-
-用于展示超长文本的完整内容。
-
-### 安装
-
-```bash
-pnpm dlx shadcn-vue@latest add tooltip
-```
-
-### 使用方式
-
-```vue
-<TooltipProvider>
-  <Tooltip>
-    <TooltipTrigger as-child>
-      <span class="line-clamp-2">超长的文件名可能会被截断</span>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>超长的文件名可能会被截断</p>
-    </TooltipContent>
-  </Tooltip>
-</TooltipProvider>
-```
-
-## 文本超长处理规范
-
-**规则**: 当文本可能超出容器宽度或显示行数时，必须同时满足以下条件：
-
-1. 使用 Tailwind CSS 的 `truncate`（单行截断）或 `line-clamp-*`（多行截断）限制显示
-2. 外层包裹 `Tooltip` 组件，鼠标悬停时显示完整文本
-
-**示例场景**:
-
-- 文件名列表项（单行截断 + Tooltip）
-- 详情页标题（多行截断 + Tooltip）
-- 任何用户输入的文本内容
-
-**正确示例**:
-
-```vue
-<!-- 单行截断 + Tooltip -->
-<TooltipProvider>
-  <Tooltip>
-    <TooltipTrigger as-child>
-      <span class="truncate">{{ filename }}</span>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>{{ filename }}</p>
-    </TooltipContent>
-  </Tooltip>
-</TooltipProvider>
-
-<!-- 多行截断 + Tooltip -->
-<TooltipProvider>
-  <Tooltip>
-    <TooltipTrigger as-child>
-      <div class="line-clamp-2">{{ title }}</div>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>{{ title }}</p>
-    </TooltipContent>
-  </Tooltip>
-</TooltipProvider>
-```
-
-**错误示例**:
-
-```vue
-<!-- 只有截断，没有 Tooltip -->
-<span class="truncate">{{ filename }}</span>
-
-<!-- 只有 Tooltip，没有截断 -->
-<TooltipProvider>
-  <Tooltip>
-    <TooltipTrigger as-child>
-      <span>{{ filename }}</span>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>{{ filename }}</p>
-    </TooltipContent>
-  </Tooltip>
-</TooltipProvider>
-```
-
-## Sonner 错误提示
-
-用于向用户展示操作结果和错误信息。
-
-### 安装
-
-```bash
-pnpm dlx shadcn-vue@latest add sonner
-```
-
-### 全局配置
-
-在 `App.vue` 中添加 Toaster 组件：
-
-```vue
-<script setup lang="ts">
-import { Toaster } from '@/components/ui'
-</script>
-
-<template>
-  <YourApp />
-  <Toaster rich-colors />
-</template>
-```
-
-> 注意：`rich-colors` 属性会让 toast 根据类型（success/error/warning/info）显示不同的颜色主题。
-
-### 使用方式
-
-```typescript
-import { toast } from 'vue-sonner'
-
-// 成功提示
-toast.success('保存成功', { richColors: true })
-
-// 错误提示
-toast.error('操作失败', { description: '文件不存在', richColors: true })
-
-// 其他类型
-toast.warning('警告', { richColors: true })
-toast.info('提示', { richColors: true })
-```
-
-> 注意：每次调用 `toast` 时都需要传入 `richColors: true` 才能显示颜色。
-
-## 错误处理规范
-
-### 规则
-
-所有 `try-catch` 中的错误处理必须同时满足：
-
-1. **控制台输出**：`console.error()` 打印完整错误信息便于调试
-2. **用户提示**：使用 `toast.error()` 向用户展示错误信息，并添加 `richColors: true`
-
-### 正确示例
-
-```typescript
-try {
-  await someOperation()
-} catch (e) {
-  toast.error('操作失败', { description: String(e) })
-  console.error('操作失败:', e)
-}
-```
-
-### 错误示例
-
-```typescript
-// 只打印控制台，用户不知道发生了什么
-try {
-  await someOperation()
-} catch (e) {
-  console.error('操作失败:', e)
-}
-
-// 只弹 toast，控制台没有记录
-try {
-  await someOperation()
-} catch (e) {
-  toast.error('操作失败', { description: String(e) })
-}
-```
-
-## ScrollableContainer 滚动容器组件
-
-### 组件说明
-
-`ScrollableContainer` 是一个统一管理页面滚动、返回顶部按钮和刷新按钮的容器组件。
-
-### 功能特性
-
-1. **接管内部滚动** - 组件内部的 `<slot />` 内容使用独立的滚动区域
-2. **返回顶部按钮** - 滚动超过 200px 时自动显示，点击平滑滚动到顶部
-3. **刷新按钮** - 固定在右下角，点击刷新整个页面
-
-### 使用规范
-
-**规则**: 所有需要滚动的页面，必须使用 `ScrollableContainer` 包裹内容，禁止在页面根部使用 `overflow: auto`。
-
-### 基本用法
-
-```vue
-<script setup lang="ts">
-import ScrollableContainer from '@/components/ScrollableContainer.vue'
-</script>
-
-<template>
-  <ScrollableContainer>
-    <div class="page-content">
-      <!-- 页面内容 -->
-    </div>
-  </ScrollableContainer>
-</template>
-```
-
-### 样式适配
-
-如果父元素是弹性布局，确保父元素不会限制 `ScrollableContainer` 的高度：
-
-```vue
-<!-- 错误：flex 父元素可能限制高度 -->
-<div class="flex-1 overflow-hidden">
-  <ScrollableContainer>
-    <!-- 内容无法滚动 -->
-  </ScrollableContainer>
-</div>
-
-<!-- 正确：父元素需要限制滚动区域 -->
-<div class="flex-1 overflow-hidden">
-  <ScrollableContainer class="h-full">
-    <!-- ScrollableContainer 会填满父元素 -->
-  </ScrollableContainer>
-</div>
-```
-
-### 组件结构
-
-```
-ScrollableContainer/
-└── index.vue          # 滚动容器组件
-
-浮动按钮组（fixed 定位）:
-├── 返回顶部按钮      # 滚动 > 200px 显示
-└── 刷新页面按钮     # 始终显示
-```
-
-### 技术细节
-
-- 滚动检测使用 `passive` 事件监听优化性能
-- 返回顶部使用 `scrollTo({ top: 0, behavior: 'smooth' })` 实现平滑滚动
-- 刷新使用 `window.location.reload()`
-- 浮动按钮使用 CSS `fixed` 定位，`bottom` 和 `right` 可通过 CSS 变量自定义
+- 不改 Rust 命令参数和返回结构。
+- 不改 MIDI 导入、解析、播放、键盘模拟和模板持久化规则。
+- Store 内只允许替换反馈提示调用，不改状态流。
+- Tab 离开守卫、模板 dirty confirm、导入前切回文件页等交互规则必须保持。

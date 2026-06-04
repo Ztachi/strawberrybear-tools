@@ -5,8 +5,8 @@
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
-import { Button } from '@/components/ui'
+import { feedback as toast } from '@/lib/feedback'
+import { Button } from 'antdv-next'
 import { playNote } from '@/lib/midiPlayer'
 import type { KeyMapping } from '@/types'
 import {
@@ -652,18 +652,13 @@ onUnmounted(() => {
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" @click="toggleMode">
+        <Button size="small" @click="toggleMode">
           {{ mode === 'edit' ? t('template.overviewMode') : t('template.editMode') }}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="!selectedMapping"
-          @click="clearSelectedMapping"
-        >
+        <Button size="small" :disabled="!selectedMapping" @click="clearSelectedMapping">
           {{ t('template.clearMapping') }}
         </Button>
-        <Button size="sm" @click="toggleCapture">
+        <Button type="primary" size="small" @click="toggleCapture">
           {{ isCapturingSelected ? t('template.exitMapping') : t('template.mapSelected') }}
         </Button>
       </div>

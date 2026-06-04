@@ -6,15 +6,11 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { confirm } from '@tauri-apps/plugin-dialog'
-import { toast } from 'vue-sonner'
+import { feedback as toast } from '@/lib/feedback'
 import { Save, X } from 'lucide-vue-next'
-import { Drawer, DrawerHeader, DrawerTitle, DrawerDescription, Button, Dialog, DialogContent, DialogDescription, DialogTitle, Input, Badge } from '@/components/ui'
-import {
-  DrawerContent as VaulDrawerContent,
-  DrawerOverlay as VaulDrawerOverlay,
-  DrawerPortal,
-} from 'vaul-vue'
+import { Button, Drawer, Input, Modal, Tag } from 'antdv-next'
 import { useSettingsStore } from '@/stores/settings'
+import { getContentDrawerRootStyle, getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { KeyTemplate } from '@/types'
 import { normalizeTemplateMappings } from '@/lib/templateKeys'
 import VisualTemplateEditor from './VisualTemplateEditor.vue'
@@ -474,83 +470,98 @@ defineExpose({
 <template>
   <Drawer
     :open="isDrawerOpen"
-    direction="left"
-    :modal="false"
-    handle-only
+    placement="left"
+    size="100%"
+    root-class="content-area-drawer template-editor-drawer"
+    :closable="false"
+    :get-container="getMainWindowPopupContainer"
+    :root-style="getContentDrawerRootStyle()"
     @update:open="handleDrawerOpenChange"
   >
-    <DrawerPortal to="#main-window-portal-root">
-      <VaulDrawerOverlay
-        data-slot="drawer-overlay"
-        class="absolute inset-0 z-40 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-      />
-      <VaulDrawerContent
-        data-slot="drawer-content"
-        class="bg-background absolute inset-0 z-50 flex h-auto w-full max-w-full flex-col"
-      >
-        <template v-if="editingTemplate">
-          <DrawerHeader
-            class="flex flex-row items-start justify-between gap-4 border-b border-primary/10"
-          >
-            <div>
-              <DrawerTitle>{{ drawerTitle }}</DrawerTitle>
-              <DrawerDescription>{{ t('template.drawerDescription') }}</DrawerDescription>
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <Badge v-if="hasEditorChanges()" variant="secondary">
-                {{ t('template.unsaved') }}
-              </Badge>
-              <Button variant="outline" size="sm" @click="handleDrawerOpenChange(false)">
-                <X class="size-4" />
-                {{ t('actions.cancel') }}
-              </Button>
-              <Button size="sm" @click="saveAndCloseEditor">
-                <Save class="size-4" />
-                {{ t('template.saveAndExit') }}
-              </Button>
-            </div>
-          </DrawerHeader>
-
-          <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-            <div class="max-w-xl">
-              <label class="mb-1 block text-xs font-medium text-muted-foreground">
-                {{ t('template.name') }}
-              </label>
-              <Input v-model="editingTemplate.name" class="h-9 bg-white" />
-            </div>
-
-            <VisualTemplateEditor
-              :mappings="editingTemplate.mappings"
-              class="min-h-[520px] flex-1"
-              @update:mappings="editingTemplate.mappings = $event"
-            />
-          </div>
-        </template>
-      </VaulDrawerContent>
-    </DrawerPortal>
-  </Drawer>
-
-  <Dialog :open="leaveConfirm.open">
-    <DialogContent class="max-w-md bg-white">
-      <DialogTitle>{{ t('template.leaveConfirmTitle') }}</DialogTitle>
-      <DialogDescription>
-        {{
-          leaveConfirm.context === 'jump'
-            ? t('template.leaveConfirmJumpDescription')
-            : t('template.leaveConfirmCloseDescription')
-        }}
-      </DialogDescription>
-      <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" size="sm" @click="resolveLeaveDecision('cancel')">
+    <template #title>
+      <div>
+        <h2 class="text-base font-semibold text-foreground">
+          {{ drawerTitle }}
+        </h2>
+        <p class="mt-1 text-xs font-normal text-muted-foreground">
+          {{ t('template.drawerDescription') }}
+        </p>
+      </div>
+    </template>
+    <template #extra>
+      <div class="flex shrink-0 items-center gap-2">
+        <Tag v-if="hasEditorChanges()" color="pink">
+          {{ t('template.unsaved') }}
+        </Tag>
+        <Button size="small" @click="handleDrawerOpenChange(false)">
+          <X class="size-4" />
           {{ t('actions.cancel') }}
         </Button>
-        <Button variant="outline" size="sm" @click="resolveLeaveDecision('discard')">
-          {{ t('template.discardAndExit') }}
-        </Button>
-        <Button size="sm" @click="resolveLeaveDecision('save')">
-          {{ leaveConfirm.context === 'jump' ? t('template.saveAndJump') : t('template.saveAndExit') }}
+        <Button type="primary" size="small" @click="saveAndCloseEditor">
+          <Save class="size-4" />
+          {{ t('template.saveAndExit') }}
         </Button>
       </div>
-    </DialogContent>
-  </Dialog>
+    </template>
+
+    <template v-if="editingTemplate">
+      <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <div class="max-w-xl">
+          <label class="mb-1 block text-xs font-medium text-muted-foreground">
+            {{ t('template.name') }}
+          </label>
+          <Input v-model:value="editingTemplate.name" class="h-9 bg-white" />
+        </div>
+
+        <VisualTemplateEditor
+          :mappings="editingTemplate.mappings"
+          class="min-h-[520px] flex-1"
+          @update:mappings="editingTemplate.mappings = $event"
+        />
+      </div>
+    </template>
+  </Drawer>
+
+  <Modal
+    :open="leaveConfirm.open"
+    :title="t('template.leaveConfirmTitle')"
+    :footer="null"
+    width="420"
+    @cancel="resolveLeaveDecision('cancel')"
+  >
+    <div class="text-sm leading-6 text-muted-foreground">
+      {{
+        leaveConfirm.context === 'jump'
+          ? t('template.leaveConfirmJumpDescription')
+          : t('template.leaveConfirmCloseDescription')
+      }}
+    </div>
+    <div class="mt-4 flex flex-wrap justify-end gap-2">
+      <Button type="text" size="small" @click="resolveLeaveDecision('cancel')">
+        {{ t('actions.cancel') }}
+      </Button>
+      <Button size="small" @click="resolveLeaveDecision('discard')">
+        {{ t('template.discardAndExit') }}
+      </Button>
+      <Button type="primary" size="small" @click="resolveLeaveDecision('save')">
+        {{ leaveConfirm.context === 'jump' ? t('template.saveAndJump') : t('template.saveAndExit') }}
+      </Button>
+    </div>
+  </Modal>
 </template>
+
+<style scoped>
+:deep(.template-editor-drawer .ant-drawer-content) {
+  background: var(--bg-white-95);
+}
+
+:deep(.template-editor-drawer .ant-drawer-header) {
+  border-bottom-color: var(--border-primary-15);
+}
+
+:deep(.template-editor-drawer .ant-drawer-body) {
+  display: flex;
+  min-height: 0;
+  padding: 0;
+}
+</style>

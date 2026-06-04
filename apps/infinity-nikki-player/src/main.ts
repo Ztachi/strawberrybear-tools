@@ -6,6 +6,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { i18n, initI18n } from './i18n'
+import { configureAntdvStaticContext } from './theme/infinityNikkiTheme'
+import 'antdv-next/dist/reset.css'
 import './style.css'
 
 /** 创建 Vue 应用实例 */
@@ -27,6 +29,9 @@ const windowLabel = params.get('windowLabel') || 'main'
 
 /** 将窗口标签注入到 Vue provide 供子组件使用 */
 app.provide('windowLabel', windowLabel)
+
+/** 配置 Antdv Next 静态反馈弹层，保证 notification/message 继承无限暖暖主题 */
+configureAntdvStaticContext()
 
 /**
  * @description: 初始化 i18n

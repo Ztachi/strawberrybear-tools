@@ -5,7 +5,7 @@ import { computed, markRaw, ref, shallowRef } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
-import { toast } from 'vue-sonner'
+import { feedback as toast } from '@/lib/feedback'
 import { i18n } from '@/i18n'
 
 const GITHUB_RELEASES_URL = 'https://github.com/Ztachi/strawberrybear-tools/releases'

@@ -5,7 +5,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
-import { Button } from '@/components/ui'
+import { Button } from 'antdv-next'
 import { FileText, ArrowRight, Keyboard } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -46,7 +46,7 @@ function formatTime(timestamp: number) {
         <!-- 日志数量 -->
         <span class="log-count">{{ t('log.count', { count: playerStore.keyLogs.length }) }}</span>
         <!-- 清空按钮 -->
-        <Button variant="ghost" size="sm" class="clear-btn" @click="playerStore.clearLogs()">
+        <Button type="text" size="small" class="clear-btn" @click="playerStore.clearLogs()">
           {{ t('actions.clear') }}
         </Button>
       </div>

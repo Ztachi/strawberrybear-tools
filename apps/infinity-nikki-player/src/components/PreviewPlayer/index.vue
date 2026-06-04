@@ -6,8 +6,7 @@
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
-import { Switch } from '@/components/ui/switch'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Switch, Tooltip } from 'antdv-next'
 import { HelpCircle } from 'lucide-vue-next'
 import PreviewProgressBar from './PreviewProgressBar.vue'
 import PreviewTransportControls from './PreviewTransportControls.vue'
@@ -42,11 +41,11 @@ function togglePlay() {
 
 /**
  * @description: 处理演奏模式切换
- * @param {boolean} isPiano - 是否切换到钢琴模式
+ * @param {unknown} isPiano - antdv Switch 变更值；只有 true 表示切换到钢琴模式
  * 切换后实时更新过滤器，无需重启播放
  */
-function handleModeSwitch(isPiano: boolean) {
-  settingsStore.setPlayMode(isPiano ? 'piano' : 'auto')
+function handleModeSwitch(isPiano: unknown) {
+  settingsStore.setPlayMode(isPiano === true ? 'piano' : 'auto')
   // 实时更新过滤器，无需重启播放
   if (playerStore.isPreviewPlaying) {
     playerStore.applyPlayModeFilter()
@@ -87,40 +86,33 @@ function stopPlayback() {
     />
 
     <!-- 演奏模式切换（非精简模式显示） -->
-    <TooltipProvider v-if="!compact">
+    <template v-if="!compact">
       <div class="play-mode-row">
         <!-- 钢琴模式开关 -->
         <div class="play-mode-toggle">
           <Switch
-            :model-value="settingsStore.playMode === 'piano'"
-            @update:model-value="handleModeSwitch"
+            :checked="settingsStore.playMode === 'piano'"
+            @update:checked="handleModeSwitch"
           />
           <span class="mode-label">{{ t('player.pianoMode') }}</span>
         </div>
         <!-- 键盘模拟开关 -->
         <div class="keyboard-sim-toggle">
           <Switch
-            :model-value="settingsStore.enableKeyboardSim"
+            :checked="settingsStore.enableKeyboardSim"
             :disabled="settingsStore.playMode !== 'piano'"
-            @update:model-value="(v) => settingsStore.setEnableKeyboardSim(!!v)"
+            @update:checked="(v) => settingsStore.setEnableKeyboardSim(!!v)"
           />
           <span class="mode-label" :class="{ disabled: settingsStore.playMode !== 'piano' }">
             {{ t('player.keyboardSim') }}
           </span>
           <!-- 帮助提示 -->
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <HelpCircle :size="14" class="help-icon" />
-            </TooltipTrigger>
-            <TooltipContent>
-              <p class="tooltip-text">
-                {{ t('player.keyboardSimTip') }}
-              </p>
-            </TooltipContent>
+          <Tooltip :title="t('player.keyboardSimTip')">
+            <HelpCircle :size="14" class="help-icon" />
           </Tooltip>
         </div>
       </div>
-    </TooltipProvider>
+    </template>
   </div>
 </template>
 

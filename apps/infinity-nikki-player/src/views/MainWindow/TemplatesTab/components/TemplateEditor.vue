@@ -6,7 +6,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { confirm, open, save as saveDialog } from '@tauri-apps/plugin-dialog'
-import { toast } from 'vue-sonner'
+import { feedback as toast } from '@/lib/feedback'
 import {
   Copy,
   Download,
@@ -18,20 +18,8 @@ import {
   Search,
   Trash2,
 } from 'lucide-vue-next'
-import {
-  Button,
-  Input,
-  Pagination,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui'
+import { Button, Input, Pagination, Popover, Table } from 'antdv-next'
+import type { TableColumnsType } from 'antdv-next'
 import { useSettingsStore } from '@/stores/settings'
 import type { KeyTemplate } from '@/types'
 import TemplateEditorDrawer from './TemplateEditorDrawer.vue'
@@ -106,6 +94,28 @@ const pagedTemplates = computed(() => {
 const selectedTemplates = computed(() =>
   settingsStore.templates.filter((template) => selectedTemplateIds.value.has(template.id))
 )
+
+/** antdv 表格列定义；渲染内容放在插槽中，避免把业务操作函数塞进 columns。 */
+const templateTableColumns = computed<TableColumnsType<KeyTemplate>>(() => [
+  {
+    key: 'selection',
+    width: 48,
+  },
+  {
+    key: 'name',
+    title: t('template.name'),
+  },
+  {
+    key: 'mappingTotal',
+    title: t('template.mappingTotal'),
+    width: 160,
+  },
+  {
+    key: 'actions',
+    width: 64,
+    align: 'right',
+  },
+])
 
 /** 当前页是否全部被勾选。 */
 const isCurrentPageAllSelected = computed(() => {
@@ -357,6 +367,30 @@ function changePageSize(nextPageSize: number): void {
   persistPageSize(nextPageSize)
 }
 
+/**
+ * @description: 处理 antdv 分页页码或页大小变化
+ * @param {number} nextPage - 新页码
+ * @param {number} nextPageSize - 新页大小
+ * @return {void}
+ */
+function handlePaginationChange(nextPage: number, nextPageSize: number): void {
+  // antdv 在切换页大小时也会触发 change；先处理页大小，避免页码用旧 pageSize 夹取。
+  if (nextPageSize !== pageSize.value) {
+    changePageSize(nextPageSize)
+    return
+  }
+  changePage(nextPage)
+}
+
+/**
+ * @description: 生成模板表格行样式
+ * @param {KeyTemplate} template - 当前行模板
+ * @return {string} 当前模板行高亮类名
+ */
+function getTemplateRowClassName(template: KeyTemplate): string {
+  return settingsStore.currentTemplateId === template.id ? 'template-row-current' : ''
+}
+
 watch(searchKeyword, () => {
   // 搜索条件变化后回到第一页，避免当前页超过过滤后的总页数。
   currentPage.value = 1
@@ -399,7 +433,7 @@ defineExpose({
             class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
-            v-model="searchKeyword"
+            v-model:value="searchKeyword"
             class="h-9 bg-white pl-9"
             :placeholder="t('template.searchPlaceholder')"
           />
@@ -407,27 +441,27 @@ defineExpose({
         <div class="ml-auto flex flex-wrap items-center gap-2">
           <Button
             v-if="selectedTemplateIds.size > 0"
-            variant="destructive"
-            size="sm"
+            danger
+            type="primary"
+            size="small"
             @click="deleteSelectedTemplates"
           >
             <Trash2 class="size-4" />
             {{ t('template.batchDelete') }}
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            size="small"
             :disabled="selectedTemplateIds.size === 0"
             @click="exportSelectedTemplates"
           >
             <FileArchive class="size-4" />
             {{ t('template.batchExport') }}
           </Button>
-          <Button variant="outline" size="sm" @click="importTemplate">
+          <Button size="small" @click="importTemplate">
             <FolderDown class="size-4" />
             {{ t('template.importTemplate') }}
           </Button>
-          <Button size="sm" @click="createBlankTemplate">
+          <Button type="primary" size="small" @click="createBlankTemplate">
             <Plus class="size-4" />
             {{ t('template.blankTemplate') }}
           </Button>
@@ -435,39 +469,43 @@ defineExpose({
       </div>
 
       <div class="min-h-0 flex-1 overflow-auto">
-        <Table>
-          <TableHeader class="sticky top-0 z-[1] bg-white/95">
-            <TableRow>
-              <TableHead class="w-12">
+        <Table
+          :data-source="pagedTemplates"
+          :columns="templateTableColumns"
+          :pagination="false"
+          :locale="{ emptyText: t('template.noTemplates') }"
+          :row-key="(template: KeyTemplate) => template.id"
+          :row-class-name="getTemplateRowClassName"
+          size="small"
+          class="template-table"
+        >
+          <template #headerCell="{ column }">
+            <template v-if="column.key === 'selection'">
+              <div class="flex items-center justify-center">
                 <input
                   type="checkbox"
                   class="size-4 accent-primary"
                   :checked="isCurrentPageAllSelected"
                   @change="toggleCurrentPageSelection"
                 />
-              </TableHead>
-              <TableHead>{{ t('template.name') }}</TableHead>
-              <TableHead class="w-40">
-                {{ t('template.mappingTotal') }}
-              </TableHead>
-              <TableHead class="w-16 text-right" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow
-              v-for="template in pagedTemplates"
-              :key="template.id"
-              :data-state="settingsStore.currentTemplateId === template.id ? 'selected' : undefined"
-            >
-              <TableCell>
+              </div>
+            </template>
+          </template>
+
+          <template #bodyCell="{ column, record: template }">
+            <template v-if="column.key === 'selection'">
+              <div class="flex items-center justify-center">
                 <input
                   type="checkbox"
                   class="size-4 accent-primary"
                   :checked="selectedTemplateIds.has(template.id)"
                   @change="toggleTemplateSelection(template.id)"
                 />
-              </TableCell>
-              <TableCell>
+              </div>
+            </template>
+
+            <template v-else-if="column.key === 'name'">
+              <div class="min-w-0">
                 <button
                   type="button"
                   class="max-w-[520px] truncate text-left font-medium text-foreground hover:text-primary"
@@ -481,18 +519,19 @@ defineExpose({
                 >
                   {{ t('template.currentTemplate') }}
                 </p>
-              </TableCell>
-              <TableCell class="text-muted-foreground">
+              </div>
+            </template>
+
+            <template v-else-if="column.key === 'mappingTotal'">
+              <span class="text-muted-foreground">
                 {{ t('template.mappingCount', { count: template.mappings.length }) }}
-              </TableCell>
-              <TableCell class="text-right">
-                <Popover>
-                  <PopoverTrigger as-child>
-                    <Button variant="ghost" size="icon" class="size-8">
-                      <MoreVertical class="size-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent class="w-44 p-1" align="end">
+              </span>
+            </template>
+
+            <template v-else-if="column.key === 'actions'">
+              <Popover trigger="click" placement="bottomRight">
+                <template #content>
+                  <div class="w-44 p-1">
                     <button class="menu-action" @click="selectTemplate(template)">
                       {{ t('template.useTemplate') }}
                     </button>
@@ -512,26 +551,27 @@ defineExpose({
                       <Trash2 class="size-4" />
                       {{ t('actions.delete') }}
                     </button>
-                  </PopoverContent>
-                </Popover>
-              </TableCell>
-            </TableRow>
-            <TableRow v-if="pagedTemplates.length === 0">
-              <TableCell colspan="4" class="py-16 text-center text-muted-foreground">
-                {{ t('template.noTemplates') }}
-              </TableCell>
-            </TableRow>
-          </TableBody>
+                  </div>
+                </template>
+                <Button type="text" class="size-8">
+                  <MoreVertical class="size-4" />
+                </Button>
+              </Popover>
+            </template>
+          </template>
         </Table>
       </div>
 
       <Pagination
-        :page="currentPage"
+        :current="currentPage"
         :page-size="pageSize"
         :total="filteredTemplates.length"
         :page-size-options="PAGE_SIZE_OPTIONS"
-        @update:page="changePage"
-        @update:page-size="changePageSize"
+        show-size-changer
+        size="small"
+        class="border-t border-primary/10 px-3 py-2"
+        @change="handlePaginationChange"
+        @show-size-change="(_current, nextSize) => changePageSize(nextSize)"
       />
     </section>
 
@@ -542,5 +582,17 @@ defineExpose({
 <style scoped>
 .menu-action {
   @apply flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition hover:bg-primary/10;
+}
+
+.template-table {
+  @apply min-w-full;
+}
+
+.template-table :deep(.ant-table-thead > tr > th) {
+  @apply sticky top-0 z-[1];
+}
+
+.template-table :deep(.template-row-current > td) {
+  background: var(--bg-primary-08);
 }
 </style>

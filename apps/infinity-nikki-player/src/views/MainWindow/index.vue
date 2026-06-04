@@ -10,10 +10,8 @@ import { useSettingsStore } from '@/stores/settings'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
-import { toast } from 'vue-sonner'
-import { Button } from '@/components/ui'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
+import { feedback as toast } from '@/lib/feedback'
+import { Button, TabPane, Tabs, Tooltip } from 'antdv-next'
 import { AlertCircle, HelpCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES } from '@/i18n'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
@@ -534,27 +532,26 @@ async function enterOverlayMode() {
 
           <div class="header-actions" data-tauri-drag-region>
             <!-- 辅助功能权限提示（未授权时显示） -->
-            <TooltipProvider v-if="!playerStore.hasAccessibility">
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    class="access-btn"
-                    @click="openAccessibilitySettings"
-                  >
-                    <AlertCircle :size="14" />
-                    {{ t('permissions.required') }}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" align="end" class="access-tooltip !z-[100]">
-                  {{ t('permissions.reauthorizeTip') }}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip
+              v-if="!playerStore.hasAccessibility"
+              placement="bottomRight"
+              :title="t('permissions.reauthorizeTip')"
+              overlay-class-name="access-tooltip"
+            >
+              <Button
+                danger
+                type="primary"
+                size="small"
+                class="access-btn"
+                @click="openAccessibilitySettings"
+              >
+                <AlertCircle :size="14" />
+                {{ t('permissions.required') }}
+              </Button>
+            </Tooltip>
 
             <!-- 悬浮模式按钮 -->
-            <Button variant="default" size="sm" class="overlay-btn" @click="enterOverlayMode">
+            <Button type="primary" size="small" class="overlay-btn" @click="enterOverlayMode">
               <Monitor :size="16" />
               {{ t('app.overlayMode') }}
             </Button>
@@ -574,8 +571,7 @@ async function enterOverlayMode() {
 
             <!-- 帮助按钮 -->
             <Button
-              variant="ghost"
-              size="icon"
+              type="text"
               class="help-btn"
               :title="t('about.title')"
               :aria-label="t('about.title')"
@@ -592,46 +588,45 @@ async function enterOverlayMode() {
         <div id="main-window-portal-root" class="content-portal-root" />
         <ScrollableContainer>
           <Tabs
-            :model-value="activeTab"
+            :active-key="activeTab"
             class="tabs-container has-[.empty-state]:h-full"
-            @update:model-value="handleTabChange"
+            @change="handleTabChange"
           >
-            <!-- 标签栏 + 操作按钮 -->
-            <div class="tabs-header sticky top-0 z-10">
-              <!-- 标签列表 -->
-              <TabsList class="tabs-list">
-                <TabsTrigger value="files" class="tab-trigger">
-                  <Music :size="16" />
-                  {{ t('tabs.files') }}
-                </TabsTrigger>
-                <TabsTrigger value="templates" class="tab-trigger">
-                  <LayoutGrid :size="16" />
-                  {{ t('tabs.templates') }}
-                </TabsTrigger>
-              </TabsList>
-
+            <template #rightExtra>
               <!-- 文件操作按钮 -->
               <div class="file-actions">
-                <Button variant="outline" size="sm" @click="selectFile">
+                <Button size="small" @click="selectFile">
                   <Upload :size="16" />
                   {{ t('actions.selectFile') }}
                 </Button>
-                <Button variant="outline" size="sm" @click="selectFolder">
+                <Button size="small" @click="selectFolder">
                   <Folder :size="16" />
                   {{ t('actions.selectFolder') }}
                 </Button>
               </div>
-            </div>
+            </template>
 
             <!-- 文件 Tab -->
-            <TabsContent value="files" class="tab-content flex-1">
+            <TabPane key="files" class="tab-content flex-1">
+              <template #tab>
+                <span class="tab-trigger">
+                  <Music :size="16" />
+                  {{ t('tabs.files') }}
+                </span>
+              </template>
               <FilesTab />
-            </TabsContent>
+            </TabPane>
 
             <!-- 模板 Tab -->
-            <TabsContent value="templates" class="tab-content flex-1">
+            <TabPane key="templates" class="tab-content flex-1">
+              <template #tab>
+                <span class="tab-trigger">
+                  <LayoutGrid :size="16" />
+                  {{ t('tabs.templates') }}
+                </span>
+              </template>
               <TemplatesTab ref="templatesTabRef" />
-            </TabsContent>
+            </TabPane>
           </Tabs>
         </ScrollableContainer>
       </main>
@@ -810,8 +805,10 @@ async function enterOverlayMode() {
   @apply absolute inset-0 z-40 pointer-events-none;
 }
 
-.content-portal-root :global([data-slot='drawer-overlay']),
-.content-portal-root :global([data-slot='drawer-content']) {
+.content-portal-root :global(.ant-drawer-root),
+.content-portal-root :global(.ant-drawer-mask),
+.content-portal-root :global(.ant-drawer-wrap),
+.content-portal-root :global(.ant-drawer-content-wrapper) {
   pointer-events: auto;
 }
 
@@ -819,14 +816,17 @@ async function enterOverlayMode() {
   @apply flex flex-col;
 }
 
-.tabs-list {
-  @apply inline-flex h-10 items-center justify-start rounded-2xl p-1;
-  background: var(--bg-white-80);
-  border: 1px solid var(--border-primary-20);
+.tabs-container :deep(.ant-tabs-nav) {
+  @apply sticky top-0 z-10 m-0 px-0 pt-0;
 }
 
-.tabs-header {
-  @apply flex items-center justify-between gap-4;
+.tabs-container :deep(.ant-tabs-nav::before) {
+  border-bottom-color: var(--border-primary-20);
+}
+
+.tabs-container :deep(.ant-tabs-content),
+.tabs-container :deep(.ant-tabs-tabpane) {
+  @apply h-full min-h-0;
 }
 
 .file-actions {
@@ -849,20 +849,20 @@ async function enterOverlayMode() {
 }
 
 .tab-trigger {
-  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium;
+  @apply inline-flex items-center justify-center gap-2 text-sm font-medium;
   color: var(--color-primary);
   transition: all 0.2s;
 }
 
-.tab-trigger[data-state='active'] {
+.tabs-container :deep(.ant-tabs-tab-active .tab-trigger) {
   color: var(--color-white);
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
+  @apply rounded-xl px-3 py-1.5;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   box-shadow: 0 2px 8px var(--bg-primary-15);
 }
 
-.tab-trigger:hover:not([data-state='active']) {
+.tabs-container :deep(.ant-tabs-tab:not(.ant-tabs-tab-active):hover .tab-trigger) {
   color: var(--color-secondary);
-  background: var(--bg-primary-10);
 }
 
 .tab-content {

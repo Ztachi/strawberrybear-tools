@@ -5,15 +5,9 @@
  */
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
-import { Drawer, DrawerHeader, DrawerTitle, DrawerDescription } from '@/components/ui'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Button, Drawer, Popover, Tooltip } from 'antdv-next'
 import { Music, MoreVertical, Trash2, X } from 'lucide-vue-next'
-import {
-  DrawerContent as VaulDrawerContent,
-  DrawerOverlay as VaulDrawerOverlay,
-  DrawerPortal,
-} from 'vaul-vue'
+import { getContentDrawerRootStyle, getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import MidiDetail from './components/MidiDetail/index.vue'
 
 const { t } = useI18n()
@@ -32,6 +26,16 @@ function formatDuration(ms: number) {
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${minutes}:${secs.toString().padStart(2, '0')}`
+}
+
+/**
+ * @description: 处理 MIDI 详情抽屉 open 状态变化
+ * @param {boolean} open - antdv Drawer 目标打开状态
+ * @return {void} 无返回值
+ */
+function handleDetailDrawerOpenChange(open: boolean): void {
+  // 抽屉关闭必须复用 store 的清理逻辑，保证试听、当前 MIDI 和音轨状态同步释放。
+  if (!open) playerStore.closeDetail()
 }
 </script>
 
@@ -57,17 +61,10 @@ function formatDuration(ms: number) {
 
         <!-- 文件信息 -->
         <div class="item-info">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <!-- 文件名（超长时截断） -->
-                <span class="filename">{{ midi.filename }}</span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{{ midi.filename }}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tooltip :title="midi.filename">
+            <!-- 文件名（超长时截断） -->
+            <span class="filename">{{ midi.filename }}</span>
+          </Tooltip>
 
           <!-- 文件元数据 -->
           <span class="meta"
@@ -78,19 +75,17 @@ function formatDuration(ms: number) {
         </div>
 
         <!-- 更多操作菜单 -->
-        <Popover>
-          <PopoverTrigger as-child>
-            <button class="menu-trigger" @click.stop>
-              <MoreVertical :size="16" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent class="w-40 p-1" align="end">
+        <Popover trigger="click" placement="bottomRight">
+          <template #content>
             <!-- 删除按钮 -->
             <button class="menu-action" @click="playerStore.deleteMidi(midi.filename)">
               <Trash2 :size="14" />
               {{ t('actions.delete') }}
             </button>
-          </PopoverContent>
+          </template>
+          <button class="menu-trigger" @click.stop>
+            <MoreVertical :size="16" />
+          </button>
         </Popover>
       </div>
     </div>
@@ -105,43 +100,29 @@ function formatDuration(ms: number) {
     </div>
 
     <!-- MIDI 详情抽屉 -->
-    <Drawer v-model:open="playerStore.showDetail" direction="left" :modal="false" handle-only>
-      <DrawerPortal to="#main-window-portal-root">
-        <VaulDrawerOverlay
-          data-slot="drawer-overlay"
-          class="absolute inset-0 z-40 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-        />
-        <VaulDrawerContent
-          data-slot="drawer-content"
-          class="bg-background absolute inset-0 z-50 flex h-auto w-full max-w-full flex-col"
-        >
-          <DrawerHeader class="flex flex-row items-center justify-between">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <div class="flex-1 min-w-0">
-                    <!-- 抽屉标题 -->
-                    <DrawerTitle class="line-clamp-2">
-                      {{ playerStore.currentMidi?.filename }}
-                    </DrawerTitle>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{{ playerStore.currentMidi?.filename }}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <!-- 隐藏描述文字但保留 aria-describedby -->
-            <DrawerDescription class="sr-only"> MIDI 详情 </DrawerDescription>
-            <!-- 关闭按钮 -->
-            <button variant="ghost" size="icon" class="close-btn" @click="playerStore.closeDetail">
-              <X :size="20" />
-            </button>
-          </DrawerHeader>
-          <!-- MIDI 详情内容 -->
-          <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
-        </VaulDrawerContent>
-      </DrawerPortal>
+    <Drawer
+      :open="playerStore.showDetail"
+      placement="left"
+      size="100%"
+      root-class="content-area-drawer midi-detail-drawer"
+      :closable="false"
+      :get-container="getMainWindowPopupContainer"
+      :root-style="getContentDrawerRootStyle()"
+      @update:open="handleDetailDrawerOpenChange"
+    >
+      <template #title>
+        <Tooltip :title="playerStore.currentMidi?.filename">
+          <span class="line-clamp-2">{{ playerStore.currentMidi?.filename }}</span>
+        </Tooltip>
+      </template>
+      <template #extra>
+        <!-- 关闭按钮 -->
+        <Button type="text" class="close-btn" @click="playerStore.closeDetail">
+          <X :size="20" />
+        </Button>
+      </template>
+      <!-- MIDI 详情内容 -->
+      <MidiDetail v-if="playerStore.currentMidi" class="flex-1" />
     </Drawer>
   </div>
 </template>
@@ -240,5 +221,19 @@ function formatDuration(ms: number) {
 
 .close-btn:hover {
   background: var(--bg-primary-10);
+}
+
+:deep(.midi-detail-drawer .ant-drawer-content) {
+  background: var(--bg-white-95);
+}
+
+:deep(.midi-detail-drawer .ant-drawer-header) {
+  border-bottom-color: var(--border-primary-15);
+}
+
+:deep(.midi-detail-drawer .ant-drawer-body) {
+  display: flex;
+  min-height: 0;
+  padding: 0;
 }
 </style>

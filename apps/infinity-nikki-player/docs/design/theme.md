@@ -1,90 +1,101 @@
 # 主题和样式规范
 
-## 品牌色彩
+## 主题入口
 
-项目主色调为 `#F7C0C1`（淡粉色），源自游戏《无限暖暖》的清新可爱风格。
+Infinity Nikki Player 使用 `src/theme/infinityNikkiTheme.ts` 管理 antdv-next 主题。根组件通过 `ConfigProvider` 注入 `infinityNikkiTheme`，启动时通过 `configureAntdvStaticContext()` 为静态 notification/message/modal 注入同一主题上下文。
 
-## 明亮主题（默认）
+本项目不启用 antdv-next `zeroRuntime`。Tailwind CSS v3 和项目 CSS 变量继续保留。
+
+## 无限暖暖配色
+
+| 用途                 | 色值      | 说明                                 |
+| -------------------- | --------- | ------------------------------------ |
+| Primary              | `#F7C0C1` | 主品牌粉色                           |
+| Primary Hover        | `#F5AAB8` | 悬停态、选中项悬停                   |
+| Primary Active       | `#E98CA2` | 按下态、链接重点                     |
+| Layout Background    | `#FFF7FA` | 应用布局背景                         |
+| Container Background | `#FFFFFF` | 普通容器                             |
+| Elevated Background  | `#FFF9FC` | Modal、Drawer、Popover、Notification |
+| Text                 | `#4A3F3F` | 主文本                               |
+| Secondary Text       | `#6B5A5A` | 次级文本                             |
+| Border               | `#F3CAD0` | 输入框、表格、容器边框               |
+| Success              | `#4ADE80` | 播放状态、成功反馈                   |
+| Warning              | `#F5C542` | 暂停和警告                           |
+| Error                | `#EF5B6B` | 错误反馈                             |
+
+## antdv-next Token
+
+主题 token 应集中写在 `infinityNikkiTheme`：
+
+```ts
+export const infinityNikkiTheme: ThemeConfig = {
+  token: {
+    colorPrimary: '#F7C0C1',
+    colorPrimaryHover: '#F5AAB8',
+    colorPrimaryActive: '#E98CA2',
+    colorBgLayout: '#FFF7FA',
+    colorBgContainer: '#FFFFFF',
+    colorBgElevated: '#FFF9FC',
+    colorText: '#4A3F3F',
+    colorTextSecondary: '#6B5A5A',
+    colorBorder: '#F3CAD0',
+    borderRadius: 12,
+  },
+}
+```
+
+组件级 token 用于修正 antdv-next 默认视觉，例如 Button 阴影、Table hover、Tabs ink bar、Modal/Drawer/Popover elevated 背景。
+
+## 项目 CSS 变量
+
+`src/style.css` 中的变量是项目视觉和 Tailwind 语义色，不再代表某个外部 UI 框架。
 
 ```css
 :root {
-  /* 品牌粉色系 */
   --color-primary: #f7c0c1;
   --color-primary-light: #fddde6;
   --color-secondary: #f5b8c0;
+  --color-foreground: #4a3f3f;
+  --color-muted: #a89a9a;
+  --color-muted-dark: #6b5a5a;
 
-  /* 明亮背景 */
-  --background: 30 20% 97%;
+  --background: 340 100% 98%;
   --foreground: 330 10% 15%;
-
-  /* 主色调 - 柔和粉 */
   --primary: 350 89% 80%;
-  --primary-foreground: 330 10% 15%;
-
-  /* 次要色 */
-  --secondary: 30 15% 94%;
-  --muted: 30 10% 92%;
-
-  /* 圆角 */
-  --radius: 0.875rem;
+  --border: 350 55% 88%;
+  --input: 350 45% 88%;
+  --ring: 350 89% 80%;
 }
 ```
 
-### 色彩系统
+Tailwind 配置继续读取这些 HSL 变量，例如 `border-border`、`text-foreground`、`bg-primary/10`。
 
-| 变量            | 值        | 用途               |
-| --------------- | --------- | ------------------ |
-| `primary`       | `#f7c0c1` | 主题色、按钮、强调 |
-| `primary-light` | `#fddde6` | 悬停状态、次要强调 |
-| `secondary`     | `#f5b8c0` | 次要按钮、标签     |
-| `foreground`    | `#4a3f3f` | 主文本             |
-| `muted`         | `#a89a9a` | 次要文本           |
+## 视觉原则
 
-### 组件色彩
+### 1. 温暖但克制
 
-| 组件       | 背景                     | 边框                     | 文字      |
-| ---------- | ------------------------ | ------------------------ | --------- |
-| 卡片       | `rgba(255,255,255,0.9)`  | `rgba(247,192,193,0.2)`  | `#4a3f3f` |
-| 标签栏     | `rgba(255,255,255,0.8)`  | `rgba(247,192,193,0.2)`  | `#f7c0c1` |
-| 标签(激活) | 渐变粉色                 | -                        | `#4a3f3f` |
-| 输入框     | `rgba(247,192,193,0.08)` | `rgba(247,192,193,0.15)` | `#6b5a5a` |
+主界面以粉色作为品牌信号，但操作界面仍应便于长期使用。大面积区域使用白色、浅粉和半透明背景，交互重点再使用主粉色。
+
+### 2. 桌面工具密度
+
+这是工作型桌面工具，不做营销式首屏。页面应优先展示文件列表、播放器、模板表格和编辑器。标题、按钮和表格密度应适合扫描与重复操作。
+
+### 3. 统一圆角
+
+常规控件圆角以 12px 为主。卡片和复杂面板可以使用 14px 到 16px。不要为普通按钮和表格单元格使用过大的圆角。
+
+### 4. 抽屉边界
+
+主内容区抽屉必须只覆盖 `#main-window-body`，不能覆盖 46px 顶部菜单。相关样式和容器函数由 `src/theme/infinityNikkiTheme.ts` 提供。
+
+## 允许的局部样式
+
+新增 UI 优先使用 Tailwind 原子类。允许 scoped CSS 的场景：
+
+- 覆盖 antdv-next 内部结构，如 `.ant-drawer-body`、`.ant-table-thead`。
+- 保留播放器、键盘预览、Canvas 模板编辑器等复杂局部视觉。
+- 使用项目 CSS 变量表达渐变、透明边框和暖粉阴影。
 
 ## 暗色主题
 
-待实现，将跟随系统自动切换。
-
-## 设计原则
-
-### 1. Modern Minimal
-
-- 大量 whitespace
-- 柔和圆角 `rounded-2xl` (14px)
-- 简洁线条
-
-### 2. 粉色主题
-
-- 主色调 `#F7C0C1` 贯穿全局
-- 渐变背景 `#fdf6f7 → #fef9fa`
-- 悬停状态使用 `hover:bg-pink-50`
-
-### 3. 玻璃态卡片
-
-```css
-.card {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(247, 192, 193, 0.2);
-  box-shadow: 0 2px 12px rgba(247, 192, 193, 0.08);
-}
-```
-
-### 4. 动画
-
-- 悬停 `translateY(-2px)` 轻微上浮
-- 脉冲动画用于播放状态指示
-- `fadeIn` 动画用于 Tab 切换
-
-## 未来计划
-
-- [ ] 暗色主题支持
-- [ ] 跟随系统自动切换
-- [ ] 用户手动选择主题
+暗色主题暂未实现。后续如需支持，应先扩展 `infinityNikkiTheme` 和项目 CSS 变量，再处理 Canvas、播放器和钢琴卷帘的对比度。

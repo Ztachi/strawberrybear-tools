@@ -6,20 +6,20 @@
 
 ## 技术栈
 
-| 分类               | 技术                                        |
-| ------------------ | ------------------------------------------- |
-| **前端框架**       | Vue 3 + TypeScript + Vite ^8.0.5            |
-| **样式方案**       | Tailwind CSS v3 + CSS Variables             |
-| **后端框架**       | Tauri v2 + Rust                             |
-| **状态管理**       | Pinia ^3.0.1                                |
-| **国际化**         | vue-i18n ^10.0.5                            |
-| **UI 组件库**      | Reka UI ^2.9.5 + shadcn-vue 组件            |
-| **音频播放**       | Tone.js + midi-player-js + soundfont-player |
-| **钢琴卷帘**       | @strawberrybear/piano-roll (workspace)      |
-| **Rust MIDI 解析** | midly                                       |
-| **Rust 键盘模拟**  | enigo                                       |
-| **Toast 提示**     | vue-sonner ^2.0.9                           |
-| **窗口抽屉**       | vaul-vue ^0.4.1                             |
+| 分类               | 技术                                            |
+| ------------------ | ----------------------------------------------- |
+| **前端框架**       | Vue 3 + TypeScript + Vite ^8.0.5                |
+| **样式方案**       | Tailwind CSS v3 + CSS Variables                 |
+| **后端框架**       | Tauri v2 + Rust                                 |
+| **状态管理**       | Pinia ^3.0.1                                    |
+| **国际化**         | vue-i18n ^10.0.5                                |
+| **UI 组件库**      | antdv-next 1.3.3                                |
+| **音频播放**       | Tone.js + midi-player-js + soundfont-player     |
+| **钢琴卷帘**       | @strawberrybear/piano-roll (workspace)          |
+| **Rust MIDI 解析** | midly                                           |
+| **Rust 键盘模拟**  | enigo                                           |
+| **反馈提示**       | `src/lib/feedback.ts` + antdv-next notification |
+| **窗口抽屉**       | antdv-next Drawer                               |
 
 ## 安装
 
@@ -132,14 +132,16 @@ pnpm --filter @strawberrybear/infinity-nikki-player tauri build
 
 ## 主题色
 
-| 用途   | 色值                       |
-| ------ | -------------------------- |
-| 主色调 | `#F7C0C1`（淡粉色）        |
-| 辅助色 | `#F5B8C0`                  |
-| 背景色 | 白色半透明 + 背景图片      |
-| 边框色 | `rgba(247, 192, 193, 0.2)` |
+| 用途     | 色值                  |
+| -------- | --------------------- |
+| 主色调   | `#F7C0C1`（淡粉色）   |
+| 悬停态   | `#F5AAB8`             |
+| 按下态   | `#E98CA2`             |
+| 布局背景 | `#FFF7FA`             |
+| 容器背景 | `#FFFFFF` / `#FFF9FC` |
+| 边框色   | `#F3CAD0`             |
 
-主题适配《无限暖暖》的清新可爱风格。
+主题通过 `src/theme/infinityNikkiTheme.ts` 注入 antdv-next `ConfigProvider`，并继续保留 Tailwind v3 与项目 CSS 变量，用于业务组件里的原子类和既有自定义视觉。
 
 ---
 
@@ -190,21 +192,6 @@ infinity-nikki-player/
 ├── src/                          # Vue 前端源码
 │   ├── assets/                    # 静态资源（图片等）
 │   ├── components/                # 公共组件
-│   │   ├── ui/                   # Reka UI / shadcn-vue 基础组件
-│   │   │   ├── button/
-│   │   │   ├── card/
-│   │   │   ├── dialog/
-│   │   │   ├── drawer/
-│   │   │   ├── input/
-│   │   │   ├── popover/
-│   │   │   ├── table/
-│   │   │   ├── pagination/
-│   │   │   ├── select/
-│   │   │   ├── slider/
-│   │   │   ├── sonner/
-│   │   │   ├── switch/
-│   │   │   ├── tabs/
-│   │   │   └── tooltip/
 │   │   ├── KeyboardPreview/      # 键盘预览组件
 │   │   ├── PreviewPlayer/        # 预览播放器组件
 │   │   ├── AboutDialog/          # 关于对话框
@@ -225,9 +212,12 @@ infinity-nikki-player/
 │   │   ├── player.ts            # 播放器状态
 │   │   └── settings.ts           # 设置状态
 │   ├── lib/                      # 业务逻辑库
+│   │   ├── feedback.ts           # antdv-next 反馈封装
 │   │   ├── midiPlayer.ts        # 音频播放器封装
 │   │   ├── keyboardMapper.ts    # 键盘映射器
 │   │   └── settings.ts          # 设置持久化
+│   ├── theme/                    # UI 框架主题配置
+│   │   └── infinityNikkiTheme.ts # antdv-next 无限暖暖主题
 │   ├── i18n/                     # 国际化
 │   │   ├── locales/
 │   │   │   ├── zh-CN.ts
@@ -288,12 +278,12 @@ infinity-nikki-player/
 
 ## 文档索引
 
-| 文档                                   | 说明              |
-| -------------------------------------- | ----------------- |
-| [用户指南](docs/USER_GUIDE.md)         | 安装与使用说明    |
-| [设计文档](docs/design/README.md)      | UI 组件、主题规范 |
-| [UI 组件指南](docs/design/ui-guide.md) | Reka UI 组件使用  |
-| [错误文档](docs/error/README.md)       | 问题追踪          |
+| 文档                                   | 说明                |
+| -------------------------------------- | ------------------- |
+| [用户指南](docs/USER_GUIDE.md)         | 安装与使用说明      |
+| [设计文档](docs/design/README.md)      | UI 组件、主题规范   |
+| [UI 组件指南](docs/design/ui-guide.md) | antdv-next 组件使用 |
+| [错误文档](docs/error/README.md)       | 问题追踪            |
 
 ---
 

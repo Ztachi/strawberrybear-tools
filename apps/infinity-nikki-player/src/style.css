@@ -57,8 +57,8 @@
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
     --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
 
-    /* Tailwind CSS 变量 */
-    --background: 30 20% 97%;
+    /* Tailwind / 无限暖暖项目语义色变量 */
+    --background: 340 100% 98%;
     --foreground: 330 10% 15%;
     --card: 0 0% 100%;
     --card-foreground: 330 10% 15%;
@@ -74,8 +74,8 @@
     --accent-foreground: 330 10% 15%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 30 success10% 88%;
-    --input: 30 10% 88%;
+    --border: 350 55% 88%;
+    --input: 350 45% 88%;
     --ring: 350 89% 80%;
     --radius: 0.875rem;
   }
@@ -177,7 +177,3 @@
 [data-tauri-drag-region] input {
   -webkit-app-region: no-drag;
 }
-/* 
-[data-vaul-drawer] {
-  @apply glass-ios;
-} */

@@ -5,7 +5,7 @@
  */
 import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover } from 'antdv-next'
 import { FileText } from 'lucide-vue-next'
 import type { KeyLogEntry, KeyLogChapter } from '@/lib/keyboardMapper'
 
@@ -68,17 +68,8 @@ watch(
 
 <template>
   <Popover v-model:open="isOpen">
-    <!-- 触发器按钮 -->
-    <PopoverTrigger as-child>
-      <button class="log-btn">
-        <FileText :size="14" />
-        {{ t('player.keyLog') }}
-      </button>
-    </PopoverTrigger>
-
-    <!-- 弹窗内容 -->
-    <PopoverContent class="keylog-content" align="end">
-      <div class="flex flex-col max-h-[400px]">
+    <template #content>
+      <div class="keylog-content flex flex-col max-h-[400px]">
         <!-- 标题栏 -->
         <div class="px-3 py-2 border-b content-header flex items-center justify-between">
           <h4 class="text-sm font-medium text-primary">
@@ -144,7 +135,13 @@ watch(
           </div>
         </div>
       </div>
-    </PopoverContent>
+    </template>
+
+    <!-- 触发器按钮 -->
+    <button class="log-btn">
+      <FileText :size="14" />
+      {{ t('player.keyLog') }}
+    </button>
   </Popover>
 </template>
 

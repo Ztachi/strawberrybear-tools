@@ -5,7 +5,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { toast } from 'vue-sonner'
+import { feedback as toast } from '@/lib/feedback'
 import { Player, type AudioPlayerPort, type MediaItem } from '@strawberrybear/player'
 import type {
   KeyLogEntry,

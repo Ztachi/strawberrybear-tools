@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Button } from '@/components/ui'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Slider } from '@/components/ui/slider'
+import { Button, Popover, Slider } from 'antdv-next'
 import { Pause, Play, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -38,8 +36,7 @@ const isOverlay = computed(() => props.variant === 'overlay')
   <div class="transport-controls" :class="variant">
     <Button
       v-if="!isOverlay"
-      variant="ghost"
-      size="icon"
+      type="text"
       class="control-btn prev"
       :disabled="!hasMedia"
       @click="emit('previous')"
@@ -52,8 +49,7 @@ const isOverlay = computed(() => props.variant === 'overlay')
 
     <Button
       v-if="!isOverlay"
-      variant="default"
-      size="icon"
+      type="primary"
       class="control-btn play"
       :disabled="!hasMedia"
       :aria-pressed="isPlaying || isPaused"
@@ -76,8 +72,7 @@ const isOverlay = computed(() => props.variant === 'overlay')
 
     <Button
       v-if="!isOverlay"
-      variant="ghost"
-      size="icon"
+      type="text"
       class="control-btn next"
       :disabled="!hasMedia"
       @click="emit('next')"
@@ -91,8 +86,7 @@ const isOverlay = computed(() => props.variant === 'overlay')
     <div class="right-controls">
       <Button
         v-if="!isOverlay"
-        variant="ghost"
-        size="icon"
+        type="text"
         class="control-btn stop"
         :disabled="!hasMedia"
         @click="emit('stop')"
@@ -103,32 +97,30 @@ const isOverlay = computed(() => props.variant === 'overlay')
         <Square :size="14" />
       </button>
 
-      <Popover>
-        <PopoverTrigger as-child>
-          <Button v-if="!isOverlay" variant="ghost" size="icon" class="control-btn volume">
-            <VolumeX v-if="muted" :size="18" />
-            <Volume2 v-else :size="18" />
-          </Button>
-          <button v-else class="overlay-btn" :class="{ active: muted }">
-            <VolumeX v-if="muted" :size="16" />
-            <Volume2 v-else :size="16" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent class="w-48 p-3" align="center" side="top">
+      <Popover trigger="click" placement="top">
+        <template #content>
           <div class="volume-popover">
-            <Button variant="ghost" size="icon" class="mute-btn" @click="emit('toggleMute')">
+            <Button type="text" class="mute-btn" @click="emit('toggleMute')">
               <VolumeX v-if="muted" :size="16" />
               <Volume2 v-else :size="16" />
             </Button>
             <Slider
-              :model-value="[muted ? 0 : volume * 100]"
+              :value="muted ? 0 : volume * 100"
               :max="100"
               class="volume-slider"
-              @update:model-value="(v) => v && emit('setVolume', v[0] / 100)"
+              @update:value="(v) => emit('setVolume', Number(v) / 100)"
             />
             <span class="volume-percent">{{ volumePercent }}%</span>
           </div>
-        </PopoverContent>
+        </template>
+        <Button v-if="!isOverlay" type="text" class="control-btn volume">
+          <VolumeX v-if="muted" :size="18" />
+          <Volume2 v-else :size="18" />
+        </Button>
+        <button v-else class="overlay-btn" :class="{ active: muted }">
+          <VolumeX v-if="muted" :size="16" />
+          <Volume2 v-else :size="16" />
+        </button>
       </Popover>
     </div>
   </div>

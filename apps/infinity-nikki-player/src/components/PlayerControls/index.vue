@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
-import { Button } from '@/components/ui'
+import { Button } from 'antdv-next'
 import { Play, Pause, Square, Minus, Plus } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -89,7 +89,7 @@ async function adjustSpeed(delta: number) {
     <div class="controls-bar">
       <!-- 播放/暂停按钮 -->
       <Button
-        :variant="isPlaying ? 'secondary' : 'default'"
+        :type="isPlaying ? 'default' : 'primary'"
         class="play-btn"
         :disabled="!playerStore.currentMidi"
         @click="togglePlay"
@@ -100,7 +100,7 @@ async function adjustSpeed(delta: number) {
       </Button>
 
       <!-- 停止按钮 -->
-      <Button variant="outline" class="stop-btn" :disabled="isIdle" @click="stop">
+      <Button class="stop-btn" :disabled="isIdle" @click="stop">
         <Square :size="18" />
         {{ t('player.stop') }}
       </Button>
