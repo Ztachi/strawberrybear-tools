@@ -6,7 +6,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
-import { Button } from 'antdv-next'
+import { Button, Popover } from 'antdv-next'
+import { HelpCircle } from 'lucide-vue-next'
 import { playNote } from '@/lib/midiPlayer'
 import type { KeyMapping } from '@/types'
 import {
@@ -92,8 +93,6 @@ const BLACK_KEY_WIDTH = 24
 const BLACK_KEY_HEIGHT = 106
 /** 全局预览模式 Canvas 高度 */
 const OVERVIEW_HEIGHT = 132
-/** 音名标签绘制的 y 坐标 */
-const NOTE_LABEL_Y = 18
 
 /** 88 键钢琴覆盖的所有 MIDI 音高 */
 const allPitches = Array.from(
@@ -116,6 +115,7 @@ const mappingSummary = computed(() => {
   const count = props.mappings.length
   return t('template.mappingCount', { count })
 })
+const supportedKeySummary = computed(() => SUPPORTED_MAPPING_KEYS.join(', '))
 
 /**
  * @description: 获取指定音高的映射按键
@@ -341,11 +341,12 @@ function drawKey(ctx: CanvasRenderingContext2D, rect: PianoKeyRect) {
     ctx.fillStyle = '#4a3f3f'
   }
 
-  // 音名在黑白键顶部统一显示，方便用户按 pitch 找琴键。
+  // 黑白键音名上下错开，密集预览时不会糊成一条直线。
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.font = `${mode.value === 'overview' ? 9 : 10}px sans-serif`
-  ctx.fillText(pitchToNoteName(rect.pitch), rect.x + rect.width / 2, NOTE_LABEL_Y)
+  const noteLabelY = rect.black ? (mode.value === 'overview' ? 13 : 16) : mode.value === 'overview' ? 28 : 32
+  ctx.fillText(pitchToNoteName(rect.pitch), rect.x + rect.width / 2, noteLabelY)
 
   if (mappingKey) {
     // 映射 badge 靠近琴键底部；黑键高度更短，需要单独调整 y 坐标。
@@ -603,7 +604,18 @@ function toggleMode() {
   // 模式切换会改变键位尺寸，等待映射状态需要取消，避免目标区域变化后误映射。
   capturingPitch.value = null
   // DOM 尺寸在下一帧才稳定，因此延后重算 Canvas。
-  void nextTick(() => setCanvasSize())
+  void nextTick(() => {
+    setCanvasSize()
+    scrollPitchIntoView(selectedPitch.value)
+  })
+}
+
+function scrollPitchIntoView(pitch: number) {
+  if (!scrollRef.value || mode.value !== 'edit') return
+  const whiteIndex = getWhiteKeyIndex(isBlackKey(pitch) ? pitch - 1 : pitch)
+  if (whiteIndex < 0) return
+  const targetLeft = whiteIndex * WHITE_KEY_WIDTH - scrollRef.value.clientWidth / 2 + WHITE_KEY_WIDTH
+  scrollRef.value.scrollLeft = Math.max(0, targetLeft)
 }
 
 // Canvas 的可视状态完全由映射、选中音高、捕获音高、临时高亮和模式共同决定。
@@ -620,7 +632,10 @@ onMounted(() => {
   }
   window.addEventListener('keydown', handleKeyDown, true)
   window.addEventListener('keyup', handleKeyUp, true)
-  void nextTick(() => setCanvasSize())
+  void nextTick(() => {
+    setCanvasSize()
+    scrollPitchIntoView(60)
+  })
 })
 
 onUnmounted(() => {
@@ -631,47 +646,51 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col gap-3 rounded-xl border border-primary/20 bg-white/70 p-3">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-foreground">{{ selectedNoteName }}</span>
-          <span class="rounded-full bg-primary/15 px-2 py-0.5 text-xs text-muted-foreground">
-            {{ selectedMapping?.key || t('template.unmapped') }}
-          </span>
-          <span
-            v-if="isCapturingSelected"
-            class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-600"
-          >
-            {{ t('template.mappingActive') }}
-          </span>
-        </div>
-        <p class="mt-1 text-xs text-muted-foreground">
-          {{ mode === 'edit' ? t('template.editModeTip') : t('template.overviewModeTip') }}
-        </p>
+  <div class="visual-template-editor">
+    <div class="editor-status-row">
+      <div class="editor-status-main">
+        <span class="selected-note">{{ selectedNoteName }}</span>
+        <span class="selected-mapping">
+          {{ selectedMapping?.key || t('template.unmapped') }}
+        </span>
+        <Popover placement="bottom">
+          <template #content>
+            <div class="key-help-content">
+              <p class="font-medium text-foreground">
+                {{ t('template.supportedKeys') }}
+              </p>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {{ supportedKeySummary }}
+              </p>
+              <p class="mt-3 font-medium text-foreground">
+                {{ t('template.unsupportedKeys') }}
+              </p>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {{ t('template.unsupportedKeysDescription') }}
+              </p>
+            </div>
+          </template>
+          <Button type="text" class="key-help-btn nikki-outline-btn">
+            <template #icon>
+              <HelpCircle class="key-help-icon" />
+            </template>
+          </Button>
+        </Popover>
+        <span class="mapping-summary">{{ mappingSummary }}</span>
       </div>
-
-      <div class="flex flex-wrap items-center gap-2">
-        <Button size="small" @click="toggleMode">
-          {{ mode === 'edit' ? t('template.overviewMode') : t('template.editMode') }}
-        </Button>
-        <Button size="small" :disabled="!selectedMapping" @click="clearSelectedMapping">
-          {{ t('template.clearMapping') }}
-        </Button>
-        <Button type="primary" size="small" @click="toggleCapture">
-          {{ isCapturingSelected ? t('template.exitMapping') : t('template.mapSelected') }}
-        </Button>
+      <div class="editor-status-badges">
+        <span
+          v-if="isCapturingSelected"
+          class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-600"
+        >
+          {{ t('template.mappingActive') }}
+        </span>
       </div>
-    </div>
-
-    <div class="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-      <span>{{ mappingSummary }}</span>
-      <span>{{ t('template.supportedKeys') }}: {{ SUPPORTED_MAPPING_KEYS.join(', ') }}</span>
     </div>
 
     <div
       ref="scrollRef"
-      class="min-h-0 overflow-x-auto rounded-lg border border-primary/15 bg-white"
+      class="min-h-0 overflow-x-auto rounded-lg border border-primary bg-white"
       :class="mode === 'overview' ? 'overflow-hidden' : ''"
     >
       <canvas
@@ -683,10 +702,76 @@ onUnmounted(() => {
         @pointercancel="isDragging = false"
       />
     </div>
+
+    <div class="editor-actions">
+      <Button size="small" class="nikki-outline-btn" @click="toggleMode">
+        {{ mode === 'edit' ? t('template.overviewMode') : t('template.exitOverview') }}
+      </Button>
+      <Button
+        size="small"
+        class="nikki-outline-btn"
+        :disabled="!selectedMapping"
+        @click="clearSelectedMapping"
+      >
+        {{ t('template.clearMapping') }}
+      </Button>
+      <Button type="primary" size="small" class="nikki-primary-btn" @click="toggleCapture">
+        {{ isCapturingSelected ? t('template.exitMapping') : t('template.mapSelected') }}
+      </Button>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.visual-template-editor {
+  @apply flex min-h-0 flex-col gap-3 rounded-xl border border-primary/20 bg-white/70 p-3;
+}
+
+.editor-status-row {
+  @apply flex items-center justify-center;
+}
+
+.editor-status-main {
+  @apply flex flex-wrap items-center justify-center gap-3 text-center;
+}
+
+.selected-note {
+  @apply text-2xl font-semibold text-foreground;
+}
+
+.selected-mapping {
+  @apply rounded-full bg-primary/15 px-3 py-1 text-sm font-medium text-muted-foreground;
+}
+
+.mapping-summary {
+  @apply text-sm font-medium text-muted-foreground;
+}
+
+.editor-status-badges {
+  @apply flex items-center justify-center;
+}
+
+.key-help-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.key-help-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.3;
+}
+
+.key-help-content {
+  max-width: 420px;
+  line-height: 1.55;
+}
+
+.editor-actions {
+  @apply flex flex-wrap items-center justify-center gap-2;
+}
+
 canvas {
   touch-action: none;
 }

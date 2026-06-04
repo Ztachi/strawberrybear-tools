@@ -70,6 +70,26 @@ pub(crate) fn key_to_keycode(key: &str) -> Result<MacKeyCode, String> {
         "F10" => Ok(109),
         "F11" => Ok(103),
         "F12" => Ok(111),
+        "`" => Ok(50),
+        "-" => Ok(27),
+        "=" => Ok(24),
+        "[" => Ok(33),
+        "]" => Ok(30),
+        "\\" => Ok(42),
+        ";" => Ok(41),
+        "'" => Ok(39),
+        "," => Ok(43),
+        "." => Ok(47),
+        "/" => Ok(44),
+        "SPACE" => Ok(49),
+        "TAB" => Ok(48),
+        "ENTER" => Ok(36),
+        "BACKSPACE" => Ok(51),
+        "DELETE" => Ok(117),
+        "ARROWLEFT" => Ok(123),
+        "ARROWUP" => Ok(126),
+        "ARROWRIGHT" => Ok(124),
+        "ARROWDOWN" => Ok(125),
         "" => Err("按键不能为空".to_string()),
         _ => Err(format!("不支持的 macOS 按键: {}", key)),
     }
@@ -144,8 +164,15 @@ mod tests {
     }
 
     #[test]
+    fn maps_extended_keys() {
+        assert_eq!(key_to_keycode("Space").unwrap(), 49);
+        assert_eq!(key_to_keycode("/").unwrap(), 44);
+        assert_eq!(key_to_keycode("ArrowLeft").unwrap(), 123);
+    }
+
+    #[test]
     fn rejects_invalid_keys() {
         assert!(key_to_keycode("").is_err());
-        assert!(key_to_keycode("Space").is_err());
+        assert!(key_to_keycode("Escape").is_err());
     }
 }

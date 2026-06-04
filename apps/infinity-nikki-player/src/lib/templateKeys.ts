@@ -15,12 +15,40 @@ export const LETTER_MAPPING_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 export const NUMBER_MAPPING_KEYS = '0123456789'.split('')
 /** 支持映射的功能键范围，和 Rust 键盘模拟器支持范围保持一致 */
 export const FUNCTION_MAPPING_KEYS = Array.from({ length: 12 }, (_, index) => `F${index + 1}`)
+/** 支持映射的常用标点键，按物理键位保存为键帽字符。 */
+export const PUNCTUATION_MAPPING_KEYS = [
+  '`',
+  '-',
+  '=',
+  '[',
+  ']',
+  '\\',
+  ';',
+  "'",
+  ',',
+  '.',
+  '/',
+] as const
+/** 支持映射的非系统控制键。 */
+export const CONTROL_MAPPING_KEYS = [
+  'SPACE',
+  'TAB',
+  'ENTER',
+  'BACKSPACE',
+  'DELETE',
+  'ARROWUP',
+  'ARROWDOWN',
+  'ARROWLEFT',
+  'ARROWRIGHT',
+] as const
 
 /** 可保存到模板 JSON 的完整按键白名单 */
 export const SUPPORTED_MAPPING_KEYS = [
   ...LETTER_MAPPING_KEYS,
   ...NUMBER_MAPPING_KEYS,
   ...FUNCTION_MAPPING_KEYS,
+  ...PUNCTUATION_MAPPING_KEYS,
+  ...CONTROL_MAPPING_KEYS,
 ] as const
 
 /** 可保存按键白名单 Set，用于编辑器和保存前校验 */
@@ -32,8 +60,6 @@ export const SUPPORTED_MAPPING_KEY_SET = new Set<string>(SUPPORTED_MAPPING_KEYS)
  */
 export const EXCLUDED_CAPTURE_KEYS = new Set([
   'Escape',
-  'Tab',
-  'Enter',
   'Shift',
   'Control',
   'Alt',
@@ -44,17 +70,10 @@ export const EXCLUDED_CAPTURE_KEYS = new Set([
   'ScrollLock',
   'Pause',
   'ContextMenu',
-  'Insert',
   'Home',
   'End',
   'PageUp',
   'PageDown',
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  ' ',
-  'Space',
   'Dead',
   'Process',
   'Compose',
@@ -116,6 +135,29 @@ export function normalizeMappingKeyFromEvent(event: KeyboardEvent): string | nul
   const key = event.key.trim()
   // code 表示物理键位，比 key 更适合识别字母和数字行。
   const code = event.code
+  const codeMapping: Record<string, string> = {
+    Backquote: '`',
+    Minus: '-',
+    Equal: '=',
+    BracketLeft: '[',
+    BracketRight: ']',
+    Backslash: '\\',
+    Semicolon: ';',
+    Quote: "'",
+    Comma: ',',
+    Period: '.',
+    Slash: '/',
+    Space: 'SPACE',
+    Tab: 'TAB',
+    Enter: 'ENTER',
+    NumpadEnter: 'ENTER',
+    Backspace: 'BACKSPACE',
+    Delete: 'DELETE',
+    ArrowUp: 'ARROWUP',
+    ArrowDown: 'ARROWDOWN',
+    ArrowLeft: 'ARROWLEFT',
+    ArrowRight: 'ARROWRIGHT',
+  }
 
   // 字母键优先按物理键位识别，避免非英文键盘布局导致 key 不是 A-Z。
   if (/^Key[A-Z]$/.test(code)) {
@@ -132,6 +174,10 @@ export function normalizeMappingKeyFromEvent(event: KeyboardEvent): string | nul
     return key.toUpperCase()
   }
 
+  if (codeMapping[code]) {
+    return codeMapping[code]
+  }
+
   // 浏览器环境下如果 code 不可用，仍允许单字母 key 回退。
   if (/^[a-zA-Z]$/.test(key)) {
     return key.toUpperCase()
@@ -139,6 +185,10 @@ export function normalizeMappingKeyFromEvent(event: KeyboardEvent): string | nul
 
   // 浏览器环境下如果 code 不可用，仍允许单数字 key 回退。
   if (/^[0-9]$/.test(key)) {
+    return key
+  }
+
+  if ((PUNCTUATION_MAPPING_KEYS as readonly string[]).includes(key)) {
     return key
   }
 

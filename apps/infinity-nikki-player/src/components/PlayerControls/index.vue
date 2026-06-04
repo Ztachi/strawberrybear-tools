@@ -94,14 +94,18 @@ async function adjustSpeed(delta: number) {
         :disabled="!playerStore.currentMidi"
         @click="togglePlay"
       >
-        <Pause v-if="isPlaying" :size="20" />
-        <Play v-else :size="20" />
+        <template #icon>
+          <Pause v-if="isPlaying" class="control-icon play-icon" />
+          <Play v-else class="control-icon play-icon" />
+        </template>
         {{ isPlaying ? t('player.pause') : t('player.play') }}
       </Button>
 
       <!-- 停止按钮 -->
       <Button class="stop-btn" :disabled="isIdle" @click="stop">
-        <Square :size="18" />
+        <template #icon>
+          <Square class="control-icon" />
+        </template>
         {{ t('player.stop') }}
       </Button>
 
@@ -192,6 +196,17 @@ async function adjustSpeed(delta: number) {
 
 .play-btn :deep(svg) {
   color: var(--color-white);
+}
+
+.control-icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.25;
+}
+
+.control-icon.play-icon {
+  width: 23px;
+  height: 23px;
 }
 
 .play-btn:hover:not(:disabled) {

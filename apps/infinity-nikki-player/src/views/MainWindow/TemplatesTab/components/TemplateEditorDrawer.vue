@@ -5,7 +5,6 @@
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { confirm } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
 import { Save, X } from 'lucide-vue-next'
 import { Button, Drawer, Input, Modal, Tag } from 'antdv-next'
@@ -191,10 +190,7 @@ async function createBlankTemplate(): Promise<void> {
   const draft = readNewTemplateDraft()
   if (draft) {
     // 草稿只属于新建模板，用户拒绝加载时会删除旧草稿并重新创建空白模板。
-    const shouldLoadDraft = await confirm(t('template.loadDraftPrompt'), {
-      title: t('template.draftFound'),
-      kind: 'info',
-    })
+    const shouldLoadDraft = await confirmLoadDraft()
     if (shouldLoadDraft) {
       openEditor(draft, 'create')
       return
@@ -212,6 +208,20 @@ async function createBlankTemplate(): Promise<void> {
     },
     'create'
   )
+}
+
+function confirmLoadDraft(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Modal.confirm({
+      title: t('template.draftFound'),
+      content: t('template.loadDraftPrompt'),
+      okText: t('template.loadDraft'),
+      cancelText: t('template.discardDraft'),
+      centered: true,
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    })
+  })
 }
 
 /**
@@ -483,9 +493,6 @@ defineExpose({
         <h2 class="text-base font-semibold text-foreground">
           {{ drawerTitle }}
         </h2>
-        <p class="mt-1 text-xs font-normal text-muted-foreground">
-          {{ t('template.drawerDescription') }}
-        </p>
       </div>
     </template>
     <template #extra>
@@ -493,12 +500,16 @@ defineExpose({
         <Tag v-if="hasEditorChanges()" color="pink">
           {{ t('template.unsaved') }}
         </Tag>
-        <Button size="small" @click="handleDrawerOpenChange(false)">
-          <X class="size-4" />
+        <Button size="small" class="nikki-outline-btn" @click="handleDrawerOpenChange(false)">
+          <template #icon>
+            <X class="size-4" />
+          </template>
           {{ t('actions.cancel') }}
         </Button>
-        <Button type="primary" size="small" @click="saveAndCloseEditor">
-          <Save class="size-4" />
+        <Button type="primary" size="small" class="nikki-primary-btn" @click="saveAndCloseEditor">
+          <template #icon>
+            <Save class="size-4" />
+          </template>
           {{ t('template.saveAndExit') }}
         </Button>
       </div>
@@ -515,7 +526,7 @@ defineExpose({
 
         <VisualTemplateEditor
           :mappings="editingTemplate.mappings"
-          class="min-h-[520px] flex-1"
+          class="shrink-0"
           @update:mappings="editingTemplate.mappings = $event"
         />
       </div>
@@ -537,13 +548,23 @@ defineExpose({
       }}
     </div>
     <div class="mt-4 flex flex-wrap justify-end gap-2">
-      <Button type="text" size="small" @click="resolveLeaveDecision('cancel')">
+      <Button
+        type="text"
+        size="small"
+        class="nikki-outline-btn"
+        @click="resolveLeaveDecision('cancel')"
+      >
         {{ t('actions.cancel') }}
       </Button>
-      <Button size="small" @click="resolveLeaveDecision('discard')">
+      <Button size="small" class="nikki-outline-btn" @click="resolveLeaveDecision('discard')">
         {{ t('template.discardAndExit') }}
       </Button>
-      <Button type="primary" size="small" @click="resolveLeaveDecision('save')">
+      <Button
+        type="primary"
+        size="small"
+        class="nikki-primary-btn"
+        @click="resolveLeaveDecision('save')"
+      >
         {{ leaveConfirm.context === 'jump' ? t('template.saveAndJump') : t('template.saveAndExit') }}
       </Button>
     </div>

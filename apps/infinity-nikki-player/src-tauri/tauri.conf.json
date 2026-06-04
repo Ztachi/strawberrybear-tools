@@ -16,9 +16,9 @@
       {
         "label": "main",
         "title": "无限暖暖自动演奏",
-        "width": 960,
+        "width": 980,
         "height": 640,
-        "minWidth": 900,
+        "minWidth": 980,
         "minHeight": 640,
         "center": true,
         "resizable": true,

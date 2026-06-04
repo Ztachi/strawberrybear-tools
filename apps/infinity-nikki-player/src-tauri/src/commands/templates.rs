@@ -102,7 +102,7 @@ fn normalize_mapping_key(key: &str) -> String {
 ///
 /// # Returns
 ///
-/// true 表示按键属于 A-Z、0-9 或 F1-F12
+/// true 表示按键属于 A-Z、0-9、F1-F12、常用标点或非系统控制键
 fn is_supported_mapping_key(key: &str) -> bool {
     // 先归一化，保证 a/A、f1/F1 按同一个物理按键校验。
     let normalized = normalize_mapping_key(key);
@@ -156,6 +156,26 @@ fn is_supported_mapping_key(key: &str) -> bool {
             | "F10"
             | "F11"
             | "F12"
+            | "`"
+            | "-"
+            | "="
+            | "["
+            | "]"
+            | "\\"
+            | ";"
+            | "'"
+            | ","
+            | "."
+            | "/"
+            | "SPACE"
+            | "TAB"
+            | "ENTER"
+            | "BACKSPACE"
+            | "DELETE"
+            | "ARROWLEFT"
+            | "ARROWUP"
+            | "ARROWRIGHT"
+            | "ARROWDOWN"
     )
 }
 
@@ -1154,6 +1174,14 @@ mod tests {
                 KeyMapping {
                     pitch: 61,
                     key: "F12".to_string(),
+                },
+                KeyMapping {
+                    pitch: 62,
+                    key: "Space".to_string(),
+                },
+                KeyMapping {
+                    pitch: 63,
+                    key: "/".to_string(),
                 },
             ],
         );

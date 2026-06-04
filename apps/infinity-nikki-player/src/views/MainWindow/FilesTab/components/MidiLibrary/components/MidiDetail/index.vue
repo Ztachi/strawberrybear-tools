@@ -14,7 +14,7 @@ import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
 import PianoRoll from '@strawberrybear/piano-roll'
 import { Music, Music2, Monitor } from 'lucide-vue-next'
-import { Select, SelectOption, Tooltip } from 'antdv-next'
+import { Button, Select, Tooltip } from 'antdv-next'
 import type { TrackInfo } from '@/types'
 
 const { t } = useI18n()
@@ -181,6 +181,13 @@ const translatedTracks = computed<TrackInfo[]>(() => {
   })
 })
 
+const templateOptions = computed(() =>
+  settingsStore.templates.map((tmpl) => ({
+    label: getTemplateDisplayName(tmpl.name, tmpl.id),
+    value: tmpl.id,
+  }))
+)
+
 // 选择模板
 function handleTemplateChange(value: unknown) {
   if (typeof value === 'string') {
@@ -229,21 +236,20 @@ async function enterOverlayMode() {
           <div class="template-section">
             <!-- 模板下拉选择器 -->
             <Select
-              :value="settingsStore.currentTemplateId"
+              :value="settingsStore.currentTemplateId ?? undefined"
+              :options="templateOptions"
               class="w-full"
               :placeholder="t('player.noTemplate')"
               @update:value="handleTemplateChange"
-            >
-              <SelectOption v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
-                {{ getTemplateDisplayName(tmpl.name, tmpl.id) }}
-              </SelectOption>
-            </Select>
+            />
 
             <!-- 进入悬浮模式按钮 -->
             <Tooltip :title="t('app.overlayMode')">
-              <button class="overlay-btn" @click="enterOverlayMode">
-                <Monitor :size="18" />
-              </button>
+              <Button type="primary" class="overlay-btn" @click="enterOverlayMode">
+                <template #icon>
+                  <Monitor class="overlay-btn-icon" />
+                </template>
+              </Button>
             </Tooltip>
           </div>
         </div>
@@ -327,10 +333,16 @@ async function enterOverlayMode() {
 }
 
 .overlay-btn {
-  @apply w-10 h-10 flex items-center justify-center rounded-xl;
+  @apply h-10 w-10 rounded-xl;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: white;
-  @apply hover:opacity-90 transition-opacity;
+  border-color: transparent;
+  color: var(--color-white);
+}
+
+.overlay-btn-icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.35;
 }
 
 .keyboard-section {

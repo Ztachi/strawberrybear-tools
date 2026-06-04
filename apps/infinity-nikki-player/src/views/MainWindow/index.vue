@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
-import { Button, TabPane, Tabs, Tooltip } from 'antdv-next'
+import { Button, RadioButton, RadioGroup, Tooltip } from 'antdv-next'
 import { AlertCircle, HelpCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES } from '@/i18n'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
@@ -306,6 +306,10 @@ async function handleTabChange(nextTab: string | number): Promise<void> {
 
   // 守卫通过后再更新 v-model，防止 UI 先切走再被迫切回造成闪烁。
   activeTab.value = normalizedNextTab
+  if (normalizedNextTab === 'templates') {
+    await nextTick()
+    templatesTabRef.value?.refreshTableLayout()
+  }
 }
 
 /**
@@ -545,14 +549,18 @@ async function enterOverlayMode() {
                 class="access-btn"
                 @click="openAccessibilitySettings"
               >
-                <AlertCircle :size="14" />
+                <template #icon>
+                  <AlertCircle class="header-btn-icon access-icon" />
+                </template>
                 {{ t('permissions.required') }}
               </Button>
             </Tooltip>
 
             <!-- 悬浮模式按钮 -->
             <Button type="primary" size="small" class="overlay-btn" @click="enterOverlayMode">
-              <Monitor :size="16" />
+              <template #icon>
+                <Monitor class="header-btn-icon" />
+              </template>
               {{ t('app.overlayMode') }}
             </Button>
 
@@ -572,12 +580,14 @@ async function enterOverlayMode() {
             <!-- 帮助按钮 -->
             <Button
               type="text"
-              class="help-btn"
+              class="help-btn nikki-outline-btn"
               :title="t('about.title')"
               :aria-label="t('about.title')"
               @click="openHelp"
             >
-              <HelpCircle :size="17" />
+              <template #icon>
+                <HelpCircle class="help-icon" />
+              </template>
             </Button>
           </div>
         </div>
@@ -587,47 +597,52 @@ async function enterOverlayMode() {
       <main id="main-window-body" class="content">
         <div id="main-window-portal-root" class="content-portal-root" />
         <ScrollableContainer>
-          <Tabs
-            :active-key="activeTab"
-            class="tabs-container has-[.empty-state]:h-full"
-            @change="handleTabChange"
-          >
-            <template #rightExtra>
-              <!-- 文件操作按钮 -->
+          <div class="main-content-shell has-[.empty-state]:h-full">
+            <div class="section-toolbar">
+              <RadioGroup
+                :value="activeTab"
+                button-style="solid"
+                class="view-switch"
+                @update:value="handleTabChange"
+              >
+                <RadioButton value="files">
+                  <span class="view-switch-label">
+                    <Music class="view-switch-icon" />
+                    {{ t('tabs.files') }}
+                  </span>
+                </RadioButton>
+                <RadioButton value="templates">
+                  <span class="view-switch-label">
+                    <LayoutGrid class="view-switch-icon" />
+                    {{ t('tabs.templates') }}
+                  </span>
+                </RadioButton>
+              </RadioGroup>
+
               <div class="file-actions">
-                <Button size="small" @click="selectFile">
-                  <Upload :size="16" />
+                <Button size="small" class="nikki-outline-btn" @click="selectFile">
+                  <template #icon>
+                    <Upload class="header-btn-icon" />
+                  </template>
                   {{ t('actions.selectFile') }}
                 </Button>
-                <Button size="small" @click="selectFolder">
-                  <Folder :size="16" />
+                <Button size="small" class="nikki-outline-btn" @click="selectFolder">
+                  <template #icon>
+                    <Folder class="header-btn-icon" />
+                  </template>
                   {{ t('actions.selectFolder') }}
                 </Button>
               </div>
-            </template>
+            </div>
 
-            <!-- 文件 Tab -->
-            <TabPane key="files" class="tab-content flex-1">
-              <template #tab>
-                <span class="tab-trigger">
-                  <Music :size="16" />
-                  {{ t('tabs.files') }}
-                </span>
-              </template>
+            <section v-show="activeTab === 'files'" class="tab-content flex-1">
               <FilesTab />
-            </TabPane>
+            </section>
 
-            <!-- 模板 Tab -->
-            <TabPane key="templates" class="tab-content flex-1">
-              <template #tab>
-                <span class="tab-trigger">
-                  <LayoutGrid :size="16" />
-                  {{ t('tabs.templates') }}
-                </span>
-              </template>
+            <section v-show="activeTab === 'templates'" class="tab-content flex-1">
               <TemplatesTab ref="templatesTabRef" />
-            </TabPane>
-          </Tabs>
+            </section>
+          </div>
         </ScrollableContainer>
       </main>
     </div>
@@ -767,6 +782,17 @@ async function enterOverlayMode() {
   animation: pulse 2s ease-in-out infinite;
 }
 
+.header-btn-icon {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.25;
+}
+
+.header-btn-icon.access-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .access-tooltip {
   max-width: 280px;
   line-height: 1.5;
@@ -774,8 +800,15 @@ async function enterOverlayMode() {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .overlay-btn {
@@ -786,15 +819,12 @@ async function enterOverlayMode() {
 
 .help-btn {
   @apply h-8 w-8 rounded-lg;
-  color: var(--color-primary);
-  background: var(--bg-primary-10);
-  border: 1px solid var(--border-primary-20);
 }
 
-.help-btn:hover {
-  color: var(--color-white);
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  border-color: transparent;
+.help-icon {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.35;
 }
 
 .content {
@@ -812,57 +842,53 @@ async function enterOverlayMode() {
   pointer-events: auto;
 }
 
-.tabs-container {
-  @apply flex flex-col;
+.main-content-shell {
+  @apply flex min-h-full flex-col;
 }
 
-.tabs-container :deep(.ant-tabs-nav) {
-  @apply sticky top-0 z-10 m-0 px-0 pt-0;
+.section-toolbar {
+  @apply sticky top-0 z-10 flex items-center justify-between gap-3 py-2;
 }
 
-.tabs-container :deep(.ant-tabs-nav::before) {
-  border-bottom-color: var(--border-primary-20);
+.view-switch :deep(.ant-radio-button-wrapper) {
+  height: 32px;
+  border-color: var(--border-primary-20);
+  color: var(--color-primary-active);
+  background: var(--bg-white-80);
 }
 
-.tabs-container :deep(.ant-tabs-content),
-.tabs-container :deep(.ant-tabs-tabpane) {
-  @apply h-full min-h-0;
+.view-switch :deep(.ant-radio-button-wrapper:first-child) {
+  border-start-start-radius: 10px;
+  border-end-start-radius: 10px;
+}
+
+.view-switch :deep(.ant-radio-button-wrapper:last-child) {
+  border-start-end-radius: 10px;
+  border-end-end-radius: 10px;
+}
+
+.view-switch :deep(.ant-radio-button-wrapper:hover) {
+  color: var(--color-secondary);
+}
+
+.view-switch :deep(.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)) {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: var(--color-white);
+}
+
+.view-switch-label {
+  @apply inline-flex items-center gap-2 text-sm font-medium;
+}
+
+.view-switch-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.25;
 }
 
 .file-actions {
   @apply flex items-center gap-2;
-}
-
-.file-actions :deep(button) {
-  background: var(--bg-white-80) !important;
-  border: 1px solid var(--border-primary) !important;
-  color: var(--color-primary) !important;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.file-actions :deep(button:hover) {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
-  color: white !important;
-  border-color: transparent !important;
-  box-shadow: var(--shadow-pink-sm);
-}
-
-.tab-trigger {
-  @apply inline-flex items-center justify-center gap-2 text-sm font-medium;
-  color: var(--color-primary);
-  transition: all 0.2s;
-}
-
-.tabs-container :deep(.ant-tabs-tab-active .tab-trigger) {
-  color: var(--color-white);
-  @apply rounded-xl px-3 py-1.5;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  box-shadow: 0 2px 8px var(--bg-primary-15);
-}
-
-.tabs-container :deep(.ant-tabs-tab:not(.ant-tabs-tab-active):hover .tab-trigger) {
-  color: var(--color-secondary);
 }
 
 .tab-content {
@@ -875,6 +901,7 @@ async function enterOverlayMode() {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

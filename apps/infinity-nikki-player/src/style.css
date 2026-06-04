@@ -7,6 +7,7 @@
     /* 品牌粉色系 */
     --color-primary: #f7c0c1;
     --color-primary-light: #fddde6;
+    --color-primary-active: #e98ca2;
     --color-secondary: #f5b8c0;
 
     /* 文本颜色 */
@@ -143,6 +144,61 @@
     color: var(--color-success);
   }
 
+  .nikki-outline-btn {
+    background: var(--bg-white-80) !important;
+    border: 1px solid var(--border-primary) !important;
+    color: var(--color-primary-active) !important;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .nikki-outline-btn:hover:not(:disabled),
+  .nikki-outline-btn:focus-visible:not(:disabled) {
+    background: linear-gradient(
+      135deg,
+      var(--color-primary) 0%,
+      var(--color-secondary) 100%
+    ) !important;
+    border-color: transparent !important;
+    color: var(--color-white) !important;
+    box-shadow: var(--shadow-pink-sm);
+  }
+
+  .nikki-outline-btn:hover:not(:disabled) svg,
+  .nikki-outline-btn:focus-visible:not(:disabled) svg {
+    color: var(--color-white);
+  }
+
+  .nikki-primary-btn {
+    background: linear-gradient(
+      135deg,
+      var(--color-primary) 0%,
+      var(--color-secondary) 100%
+    ) !important;
+    border-color: transparent !important;
+    color: var(--color-white) !important;
+    font-weight: 500;
+    box-shadow: var(--shadow-pink-sm);
+    transition: all 0.2s;
+  }
+
+  .nikki-primary-btn:hover:not(:disabled),
+  .nikki-primary-btn:focus-visible:not(:disabled) {
+    background: linear-gradient(135deg, var(--color-primary-active) 0%, #e57f93 100%) !important;
+    border-color: transparent !important;
+    color: var(--color-white) !important;
+    box-shadow: var(--shadow-pink-md);
+  }
+
+  .nikki-primary-btn:hover:not(:disabled) svg,
+  .nikki-primary-btn:focus-visible:not(:disabled) svg {
+    color: var(--color-white);
+  }
+
+  .nikki-danger-btn {
+    font-weight: 500;
+  }
+
   /* iOS 毛玻璃效果 */
   .glass-ios {
     -webkit-backdrop-filter: blur(4px) saturate(287%);
@@ -166,6 +222,36 @@
 
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-pink-300;
+}
+
+.ant-select-dropdown ::-webkit-scrollbar,
+.ant-table-body::-webkit-scrollbar,
+.ant-table-body ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ant-select-dropdown ::-webkit-scrollbar-track,
+.ant-table-body::-webkit-scrollbar-track,
+.ant-table-body ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ant-select-dropdown ::-webkit-scrollbar-thumb,
+.ant-table-body::-webkit-scrollbar-thumb,
+.ant-table-body ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #fbcfe8;
+}
+
+.ant-select-dropdown ::-webkit-scrollbar-thumb:hover,
+.ant-table-body::-webkit-scrollbar-thumb:hover,
+.ant-table-body ::-webkit-scrollbar-thumb:hover {
+  background: #f9a8d4;
+}
+
+.ant-select-dropdown .rc-virtual-list-scrollbar-thumb {
+  background: #fbcfe8 !important;
 }
 
 /* 拖拽区域样式 */

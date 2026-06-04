@@ -35,74 +35,67 @@ const isOverlay = computed(() => props.variant === 'overlay')
 <template>
   <div class="transport-controls" :class="variant">
     <Button
-      v-if="!isOverlay"
       type="text"
-      class="control-btn prev"
+      :class="['transport-btn', 'prev', { overlay: isOverlay }]"
       :disabled="!hasMedia"
       @click="emit('previous')"
     >
-      <SkipBack :size="18" />
+      <template #icon>
+        <SkipBack :class="['transport-icon', { overlay: isOverlay }]" />
+      </template>
     </Button>
-    <button v-else class="overlay-btn" :disabled="!hasMedia" @click="emit('previous')">
-      <SkipBack :size="16" />
-    </button>
 
     <Button
-      v-if="!isOverlay"
-      type="primary"
-      class="control-btn play"
+      :type="isOverlay ? 'text' : 'primary'"
+      :class="['transport-btn', 'play', { overlay: isOverlay }]"
       :disabled="!hasMedia"
       :aria-pressed="isPlaying || isPaused"
       @click="emit('togglePlay')"
     >
-      <Pause v-if="isPlaying" :size="20" />
-      <Play v-else :size="20" />
+      <template #icon>
+        <span v-if="countdown > 0" class="countdown-text">{{ countdown }}</span>
+        <Pause
+          v-else-if="isPlaying"
+          :class="['transport-icon', 'play-icon', { overlay: isOverlay }]"
+        />
+        <Play v-else :class="['transport-icon', 'play-icon', { overlay: isOverlay }]" />
+      </template>
     </Button>
-    <button
-      v-else
-      class="overlay-btn play"
-      :disabled="!hasMedia"
-      :aria-pressed="isPlaying || isPaused"
-      @click="emit('togglePlay')"
-    >
-      <span v-if="countdown > 0" class="countdown-text">{{ countdown }}</span>
-      <Pause v-else-if="isPlaying" :size="18" />
-      <Play v-else :size="18" />
-    </button>
 
     <Button
-      v-if="!isOverlay"
       type="text"
-      class="control-btn next"
+      :class="['transport-btn', 'next', { overlay: isOverlay }]"
       :disabled="!hasMedia"
       @click="emit('next')"
     >
-      <SkipForward :size="18" />
+      <template #icon>
+        <SkipForward :class="['transport-icon', { overlay: isOverlay }]" />
+      </template>
     </Button>
-    <button v-else class="overlay-btn" :disabled="!hasMedia" @click="emit('next')">
-      <SkipForward :size="16" />
-    </button>
 
     <div class="right-controls">
       <Button
-        v-if="!isOverlay"
         type="text"
-        class="control-btn stop"
+        :class="['transport-btn', 'stop', { overlay: isOverlay }]"
         :disabled="!hasMedia"
         @click="emit('stop')"
       >
-        <Square :size="16" fill="currentColor" />
+        <template #icon>
+          <Square
+            :class="['transport-icon', 'stop-icon', { overlay: isOverlay }]"
+            fill="currentColor"
+          />
+        </template>
       </Button>
-      <button v-else class="overlay-btn" :disabled="!hasMedia" @click="emit('stop')">
-        <Square :size="14" />
-      </button>
 
       <Popover trigger="click" placement="top">
         <template #content>
           <div class="volume-popover">
             <Button type="text" class="mute-btn" @click="emit('toggleMute')">
-              <VolumeX v-if="muted" :size="16" />
-              <Volume2 v-else :size="16" />
+              <template #icon>
+                <VolumeX v-if="muted" class="volume-popover-icon" />
+                <Volume2 v-else class="volume-popover-icon" />
+              </template>
             </Button>
             <Slider
               :value="muted ? 0 : volume * 100"
@@ -113,14 +106,15 @@ const isOverlay = computed(() => props.variant === 'overlay')
             <span class="volume-percent">{{ volumePercent }}%</span>
           </div>
         </template>
-        <Button v-if="!isOverlay" type="text" class="control-btn volume">
-          <VolumeX v-if="muted" :size="18" />
-          <Volume2 v-else :size="18" />
+        <Button
+          type="text"
+          :class="['transport-btn', 'volume', { overlay: isOverlay, active: muted }]"
+        >
+          <template #icon>
+            <VolumeX v-if="muted" :class="['transport-icon', { overlay: isOverlay }]" />
+            <Volume2 v-else :class="['transport-icon', { overlay: isOverlay }]" />
+          </template>
         </Button>
-        <button v-else class="overlay-btn" :class="{ active: muted }">
-          <VolumeX v-if="muted" :size="16" />
-          <Volume2 v-else :size="16" />
-        </button>
       </Popover>
     </div>
   </div>
@@ -135,57 +129,99 @@ const isOverlay = computed(() => props.variant === 'overlay')
   @apply gap-1;
 }
 
-.control-btn {
+.transport-btn {
+  @apply inline-flex items-center justify-center;
   color: var(--color-primary);
 }
 
-.control-btn:hover {
+.transport-btn :deep(.ant-btn-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transport-icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.25;
+}
+
+.transport-icon.play-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.transport-icon.stop-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.transport-icon.overlay {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.35;
+}
+
+.transport-icon.overlay.play-icon {
+  width: 21px;
+  height: 21px;
+}
+
+.transport-icon.overlay.stop-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.transport-btn:hover {
   background: var(--bg-primary-10);
 }
 
-.control-btn.play {
+.transport-btn.play {
   @apply w-12 h-12 rounded-full;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   color: var(--color-white);
 }
 
-.control-btn.play :deep(svg) {
+.transport-btn.play :deep(svg) {
   color: var(--color-white);
 }
 
-.control-btn.prev,
-.control-btn.next,
-.control-btn.volume,
-.control-btn.stop {
+.transport-btn.prev,
+.transport-btn.next,
+.transport-btn.volume,
+.transport-btn.stop {
   @apply w-10 h-10 rounded-xl;
 }
 
-.overlay-btn {
-  @apply w-8 h-8 flex items-center justify-center rounded-lg text-white/90 transition-colors;
-  background: transparent;
+.transport-btn.overlay {
+  @apply h-8 w-8 rounded-lg text-white/90 transition-colors;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.92) !important;
 }
 
-.overlay-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
+.transport-btn.overlay:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
 }
 
-.overlay-btn:disabled {
+.transport-btn.overlay:disabled {
   opacity: 0.45;
 }
 
-.overlay-btn.play {
+.transport-btn.overlay.play {
   @apply w-10 h-10 rounded-full text-white;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3) !important;
 }
 
-.overlay-btn.play:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.4);
+.transport-btn.overlay.play:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.4) !important;
 }
 
-.overlay-btn.active {
-  background: rgba(255, 255, 255, 0.4);
-  color: white;
+.transport-btn.overlay.active {
+  background: rgba(255, 255, 255, 0.4) !important;
+  color: white !important;
 }
 
 .countdown-text {
@@ -209,6 +245,12 @@ const isOverlay = computed(() => props.variant === 'overlay')
 .mute-btn {
   @apply w-8 h-8 rounded-lg;
   color: var(--color-primary);
+}
+
+.volume-popover-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.25;
 }
 
 .mute-btn:hover {

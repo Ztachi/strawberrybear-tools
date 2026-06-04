@@ -11,6 +11,13 @@ const templateEditorRef = ref<InstanceType<typeof TemplateEditor> | null>(null)
 
 defineExpose({
   /**
+   * @description: 通知模板页重新计算表格布局
+   * @return {void}
+   */
+  refreshTableLayout(): void {
+    templateEditorRef.value?.refreshTableLayout()
+  },
+  /**
    * @description: 确认模板页是否允许离开
    * @param {'close' | 'jump'} context - 离开场景
    * @return {Promise<boolean>} true 表示允许父级继续切页或导入

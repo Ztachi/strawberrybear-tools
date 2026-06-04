@@ -88,7 +88,7 @@ onUnmounted(() => {
 
 .scroll-content {
   @apply w-full h-full overflow-y-auto overflow-x-hidden;
-  padding: 1.5rem 1.5rem 5rem 1.5rem;
+  padding: 20px 20px 0 20px;
   box-sizing: border-box;
 }
 

@@ -3,9 +3,9 @@
  * @description: TemplateEditor - 模板管理页主体
  * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容，并将重编辑区域委托给 TemplateEditorDrawer
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { confirm, open, save as saveDialog } from '@tauri-apps/plugin-dialog'
+import { open, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
 import {
   Copy,
@@ -18,7 +18,8 @@ import {
   Search,
   Trash2,
 } from 'lucide-vue-next'
-import { Button, Input, Pagination, Popover, Table } from 'antdv-next'
+import { debounce } from 'lodash-es'
+import { Button, Input, Modal, Pagination, Popover, Table, Tooltip } from 'antdv-next'
 import type { TableColumnsType } from 'antdv-next'
 import { useSettingsStore } from '@/stores/settings'
 import type { KeyTemplate } from '@/types'
@@ -33,6 +34,12 @@ const PAGE_SIZE_STORAGE_KEY = 'infinity-nikki-player.template-page-size'
 const DEFAULT_PAGE_SIZE = 10
 /** 可选分页大小，列表本地渲染，不需要请求后端分页。 */
 const PAGE_SIZE_OPTIONS = [10, 20, 50]
+/** 模板名称在表格中最多展示 30 个字符，完整名称通过 Tooltip 查看。 */
+const TEMPLATE_NAME_MAX_LENGTH = 30
+/** 表格 body 最小高度，避免小窗口下压到不可用。 */
+const TABLE_BODY_MIN_HEIGHT = 220
+/** 表格底部与内容区底部保留的呼吸空间。 */
+const TABLE_BOTTOM_GAP = 16
 
 /** 搜索关键字，只按模板名称本地过滤。 */
 const searchKeyword = ref('')
@@ -44,6 +51,11 @@ const pageSize = ref(readPersistedPageSize())
 const selectedTemplateIds = ref<Set<string>>(new Set())
 /** 模板编辑抽屉实例，负责编辑、草稿和未保存离开确认。 */
 const editorDrawerRef = ref<InstanceType<typeof TemplateEditorDrawer> | null>(null)
+const tableAreaRef = ref<HTMLElement | null>(null)
+const paginationAreaRef = ref<HTMLElement | null>(null)
+const tableScrollY = ref(360)
+const shouldUseTableScroll = ref(false)
+let tableResizeObserver: ResizeObserver | null = null
 
 /**
  * @description: 从本地存储读取分页大小
@@ -100,10 +112,12 @@ const templateTableColumns = computed<TableColumnsType<KeyTemplate>>(() => [
   {
     key: 'selection',
     width: 48,
+    fixed: 'left',
   },
   {
     key: 'name',
     title: t('template.name'),
+    ellipsis: true,
   },
   {
     key: 'mappingTotal',
@@ -114,8 +128,47 @@ const templateTableColumns = computed<TableColumnsType<KeyTemplate>>(() => [
     key: 'actions',
     width: 64,
     align: 'right',
+    fixed: 'right',
   },
 ])
+
+const templateTableScroll = computed(() => (shouldUseTableScroll.value ? { y: tableScrollY.value } : undefined))
+
+function updateTableScrollY(): void {
+  const tableArea = tableAreaRef.value
+  if (!tableArea) return
+
+  const contentBottom =
+    document.getElementById('main-window-body')?.getBoundingClientRect().bottom ?? window.innerHeight
+  const tableTop = tableArea.getBoundingClientRect().top
+  const paginationHeight = paginationAreaRef.value?.getBoundingClientRect().height ?? 0
+  const tableHeaderHeight =
+    tableArea.querySelector('.ant-table-thead')?.getBoundingClientRect().height ?? 46
+  const nextScrollY = Math.floor(
+    contentBottom - tableTop - paginationHeight - tableHeaderHeight - TABLE_BOTTOM_GAP
+  )
+  const nextBodyHeight = Math.max(TABLE_BODY_MIN_HEIGHT, nextScrollY)
+  const renderedRows = Array.from(tableArea.querySelectorAll('.ant-table-tbody > tr')).filter(
+    (row) => !row.classList.contains('ant-table-placeholder')
+  )
+  const renderedRowsHeight = renderedRows.reduce(
+    (height, row) => height + row.getBoundingClientRect().height,
+    0
+  )
+  const fallbackRowsHeight = pagedTemplates.value.length * 72
+  const rowsHeight = renderedRowsHeight > 0 ? renderedRowsHeight : fallbackRowsHeight
+
+  tableScrollY.value = nextBodyHeight
+  shouldUseTableScroll.value = rowsHeight > nextBodyHeight
+}
+
+const debouncedUpdateTableScrollY = debounce(updateTableScrollY, 80)
+
+function getTruncatedTemplateName(name: string): string {
+  const chars = Array.from(name)
+  if (chars.length <= TEMPLATE_NAME_MAX_LENGTH) return name
+  return `${chars.slice(0, TEMPLATE_NAME_MAX_LENGTH).join('')}...`
+}
 
 /** 当前页是否全部被勾选。 */
 const isCurrentPageAllSelected = computed(() => {
@@ -185,11 +238,6 @@ function pruneSelection(): void {
  * @param {KeyTemplate} template - 要选择的模板
  * @return {Promise<void>} 无返回值
  */
-async function selectTemplate(template: KeyTemplate): Promise<void> {
-  // 选择模板会持久化 current_template_id，供播放页和悬浮模式复用。
-  await settingsStore.selectTemplate(template.id)
-}
-
 /**
  * @description: 打开空白新建抽屉
  * @return {Promise<void>} 无返回值
@@ -222,10 +270,7 @@ async function editTemplate(template: KeyTemplate): Promise<void> {
  * @return {Promise<void>} 无返回值
  */
 async function deleteTemplate(template: KeyTemplate): Promise<void> {
-  const confirmed = await confirm(t('template.confirmDelete'), {
-    title: t('actions.delete'),
-    kind: 'warning',
-  })
+  const confirmed = await confirmTemplateAction(t('actions.delete'), t('template.confirmDelete'))
   if (!confirmed) return
 
   try {
@@ -248,10 +293,10 @@ async function deleteSelectedTemplates(): Promise<void> {
   const templates = selectedTemplates.value
   if (templates.length === 0) return
 
-  const confirmed = await confirm(t('template.confirmBatchDelete', { count: templates.length }), {
-    title: t('template.batchDelete'),
-    kind: 'warning',
-  })
+  const confirmed = await confirmTemplateAction(
+    t('template.batchDelete'),
+    t('template.confirmBatchDelete', { count: templates.length })
+  )
   if (!confirmed) return
 
   try {
@@ -388,7 +433,22 @@ function handlePaginationChange(nextPage: number, nextPageSize: number): void {
  * @return {string} 当前模板行高亮类名
  */
 function getTemplateRowClassName(template: KeyTemplate): string {
-  return settingsStore.currentTemplateId === template.id ? 'template-row-current' : ''
+  return template.is_builtin ? 'template-row-builtin' : ''
+}
+
+function confirmTemplateAction(title: string, content: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Modal.confirm({
+      title,
+      content,
+      okText: t('actions.delete'),
+      cancelText: t('actions.cancel'),
+      okButtonProps: { danger: true },
+      centered: true,
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    })
+  })
 }
 
 watch(searchKeyword, () => {
@@ -402,14 +462,47 @@ watch(totalPages, () => {
 })
 
 watch(
+  () => [pagedTemplates.value.length, currentPage.value, pageSize.value, searchKeyword.value],
+  () => {
+    void nextTick(() => debouncedUpdateTableScrollY())
+  }
+)
+
+watch(
   () => settingsStore.templates.map((template) => template.id).join(','),
   () => {
     // 模板列表刷新后移除已不存在的勾选项。
     pruneSelection()
+    void nextTick(() => debouncedUpdateTableScrollY())
   }
 )
 
+onMounted(async () => {
+  await nextTick()
+  updateTableScrollY()
+  window.addEventListener('resize', debouncedUpdateTableScrollY)
+  if (tableAreaRef.value || paginationAreaRef.value) {
+    tableResizeObserver = new ResizeObserver(debouncedUpdateTableScrollY)
+    if (tableAreaRef.value) tableResizeObserver.observe(tableAreaRef.value)
+    if (paginationAreaRef.value) tableResizeObserver.observe(paginationAreaRef.value)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', debouncedUpdateTableScrollY)
+  tableResizeObserver?.disconnect()
+  tableResizeObserver = null
+  debouncedUpdateTableScrollY.cancel()
+})
+
 defineExpose({
+  /**
+   * @description: 重新计算表格滚动高度
+   * @return {void}
+   */
+  refreshTableLayout(): void {
+    void nextTick(() => updateTableScrollY())
+  },
   /**
    * @description: 暴露给父组件的离开守卫
    * @param {'close' | 'jump'} context - 离开场景
@@ -423,7 +516,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col">
+  <div class="template-editor-root flex h-full min-h-0 flex-col">
     <section
       class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-primary/15 bg-white/75"
     >
@@ -444,35 +537,51 @@ defineExpose({
             danger
             type="primary"
             size="small"
+            class="nikki-danger-btn"
             @click="deleteSelectedTemplates"
           >
-            <Trash2 class="size-4" />
+            <template #icon>
+              <Trash2 class="size-4" />
+            </template>
             {{ t('template.batchDelete') }}
           </Button>
           <Button
             size="small"
             :disabled="selectedTemplateIds.size === 0"
+            class="nikki-outline-btn"
             @click="exportSelectedTemplates"
           >
-            <FileArchive class="size-4" />
+            <template #icon>
+              <FileArchive class="size-4" />
+            </template>
             {{ t('template.batchExport') }}
           </Button>
-          <Button size="small" @click="importTemplate">
-            <FolderDown class="size-4" />
+          <Button size="small" class="nikki-outline-btn" @click="importTemplate">
+            <template #icon>
+              <FolderDown class="size-4" />
+            </template>
             {{ t('template.importTemplate') }}
           </Button>
-          <Button type="primary" size="small" @click="createBlankTemplate">
-            <Plus class="size-4" />
+          <Button
+            type="primary"
+            size="small"
+            class="nikki-primary-btn"
+            @click="createBlankTemplate"
+          >
+            <template #icon>
+              <Plus class="size-4" />
+            </template>
             {{ t('template.blankTemplate') }}
           </Button>
         </div>
       </div>
 
-      <div class="min-h-0 flex-1 overflow-auto">
+      <div ref="tableAreaRef" class="min-h-0 flex-1 overflow-hidden">
         <Table
           :data-source="pagedTemplates"
           :columns="templateTableColumns"
           :pagination="false"
+          :scroll="templateTableScroll"
           :locale="{ emptyText: t('template.noTemplates') }"
           :row-key="(template: KeyTemplate) => template.id"
           :row-class-name="getTemplateRowClassName"
@@ -506,19 +615,11 @@ defineExpose({
 
             <template v-else-if="column.key === 'name'">
               <div class="min-w-0">
-                <button
-                  type="button"
-                  class="max-w-[520px] truncate text-left font-medium text-foreground hover:text-primary"
-                  @click="selectTemplate(template)"
-                >
-                  {{ template.name }}
-                </button>
-                <p
-                  v-if="settingsStore.currentTemplateId === template.id"
-                  class="mt-1 text-xs text-primary"
-                >
-                  {{ t('template.currentTemplate') }}
-                </p>
+                <Tooltip :title="template.name" placement="topLeft">
+                  <span class="template-name-text">
+                    {{ getTruncatedTemplateName(template.name) }}
+                  </span>
+                </Tooltip>
               </div>
             </template>
 
@@ -532,9 +633,6 @@ defineExpose({
               <Popover trigger="click" placement="bottomRight">
                 <template #content>
                   <div class="w-44 p-1">
-                    <button class="menu-action" @click="selectTemplate(template)">
-                      {{ t('template.useTemplate') }}
-                    </button>
                     <button class="menu-action" @click="editTemplate(template)">
                       <Pencil class="size-4" />
                       {{ t('actions.edit') }}
@@ -553,8 +651,10 @@ defineExpose({
                     </button>
                   </div>
                 </template>
-                <Button type="text" class="size-8">
-                  <MoreVertical class="size-4" />
+                <Button type="text" class="template-action-btn nikki-outline-btn">
+                  <template #icon>
+                    <MoreVertical class="template-action-icon" />
+                  </template>
                 </Button>
               </Popover>
             </template>
@@ -562,17 +662,18 @@ defineExpose({
         </Table>
       </div>
 
-      <Pagination
-        :current="currentPage"
-        :page-size="pageSize"
-        :total="filteredTemplates.length"
-        :page-size-options="PAGE_SIZE_OPTIONS"
-        show-size-changer
-        size="small"
-        class="border-t border-primary/10 px-3 py-2"
-        @change="handlePaginationChange"
-        @show-size-change="(_current, nextSize) => changePageSize(nextSize)"
-      />
+      <div ref="paginationAreaRef" class="border-t border-primary/10 px-3 py-2">
+        <Pagination
+          :current="currentPage"
+          :page-size="pageSize"
+          :total="filteredTemplates.length"
+          :page-size-options="PAGE_SIZE_OPTIONS"
+          show-size-changer
+          size="small"
+          @change="handlePaginationChange"
+          @show-size-change="(_current, nextSize) => changePageSize(nextSize)"
+        />
+      </div>
     </section>
 
     <TemplateEditorDrawer ref="editorDrawerRef" @saved="pruneSelection" />
@@ -588,11 +689,31 @@ defineExpose({
   @apply min-w-full;
 }
 
-.template-table :deep(.ant-table-thead > tr > th) {
-  @apply sticky top-0 z-[1];
+.template-table :deep(.ant-table) {
+  height: 100%;
 }
 
-.template-table :deep(.template-row-current > td) {
-  background: var(--bg-primary-08);
+.template-table :deep(.ant-table-container) {
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+}
+
+.template-table :deep(.template-row-builtin > td) {
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.template-name-text {
+  @apply block w-full max-w-full truncate text-left font-medium text-foreground;
+}
+
+.template-action-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.template-action-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.3;
 }
 </style>

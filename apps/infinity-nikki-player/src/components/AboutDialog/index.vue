@@ -146,10 +146,6 @@ onUnmounted(() => {
 .about-card {
   width: 340px !important;
   max-width: 340px !important;
-  background: var(--bg-white-95);
-  border: 1.5px solid var(--border-primary-30);
-  border-radius: 20px;
-  box-shadow: var(--shadow-pink), 0 2px 24px rgba(247, 192, 193, 0.18);
   padding: 32px 28px 24px;
   display: flex;
   flex-direction: column;
@@ -159,8 +155,6 @@ onUnmounted(() => {
 
 :deep(.about-modal-root .ant-modal-content) {
   padding: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 :deep(.about-modal-root .ant-modal-body) {
@@ -207,7 +201,7 @@ onUnmounted(() => {
 .about-version-badge {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-muted-dark);
+  color: var(--color-foreground);
   background: var(--bg-primary-10);
   border: 1px solid var(--border-primary-20);
   border-radius: 999px;
@@ -263,7 +257,7 @@ onUnmounted(() => {
 
 .about-description {
   font-size: 13.5px !important;
-  color: var(--color-muted-dark) !important;
+  color: var(--color-foreground) !important;
   line-height: 1.65;
   text-align: center;
   margin: 0 0 14px;
@@ -280,7 +274,7 @@ onUnmounted(() => {
   margin-bottom: 18px;
   border-radius: 10px;
   background: var(--bg-primary-10);
-  color: var(--color-muted-dark);
+  color: var(--color-foreground);
   font-size: 12px;
 }
 

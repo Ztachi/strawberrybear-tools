@@ -8,6 +8,7 @@ dist/
 .turbo/
 .next/
 output/
+apps/infinity-nikki-player/src-tauri/gen/
 
 
 # Environment files

@@ -55,7 +55,7 @@ fn vk_to_scan_code(vk: VIRTUAL_KEY) -> u16 {
 ///
 /// # Notes
 ///
-/// 目前支持 A-Z、0-9 和 F1-F12
+/// 目前支持 A-Z、0-9、F1-F12、常用标点和非系统控制键
 fn key_to_vk(key: &str) -> Option<VIRTUAL_KEY> {
     let normalized = key.trim().to_ascii_uppercase();
     match normalized.as_str() {
@@ -107,6 +107,26 @@ fn key_to_vk(key: &str) -> Option<VIRTUAL_KEY> {
         "F10" => Some(VK_F10),
         "F11" => Some(VK_F11),
         "F12" => Some(VK_F12),
+        "`" => Some(VIRTUAL_KEY(0xC0)),
+        "-" => Some(VIRTUAL_KEY(0xBD)),
+        "=" => Some(VIRTUAL_KEY(0xBB)),
+        "[" => Some(VIRTUAL_KEY(0xDB)),
+        "]" => Some(VIRTUAL_KEY(0xDD)),
+        "\\" => Some(VIRTUAL_KEY(0xDC)),
+        ";" => Some(VIRTUAL_KEY(0xBA)),
+        "'" => Some(VIRTUAL_KEY(0xDE)),
+        "," => Some(VIRTUAL_KEY(0xBC)),
+        "." => Some(VIRTUAL_KEY(0xBE)),
+        "/" => Some(VIRTUAL_KEY(0xBF)),
+        "SPACE" => Some(VIRTUAL_KEY(0x20)),
+        "TAB" => Some(VIRTUAL_KEY(0x09)),
+        "ENTER" => Some(VIRTUAL_KEY(0x0D)),
+        "BACKSPACE" => Some(VIRTUAL_KEY(0x08)),
+        "DELETE" => Some(VIRTUAL_KEY(0x2E)),
+        "ARROWLEFT" => Some(VIRTUAL_KEY(0x25)),
+        "ARROWUP" => Some(VIRTUAL_KEY(0x26)),
+        "ARROWRIGHT" => Some(VIRTUAL_KEY(0x27)),
+        "ARROWDOWN" => Some(VIRTUAL_KEY(0x28)),
         _ => None,
     }
 }
@@ -239,8 +259,15 @@ mod tests {
     }
 
     #[test]
+    fn test_key_to_vk_extended_keys() {
+        assert_eq!(key_to_vk("Space"), Some(VIRTUAL_KEY(0x20)));
+        assert_eq!(key_to_vk("/"), Some(VIRTUAL_KEY(0xBF)));
+        assert_eq!(key_to_vk("ArrowLeft"), Some(VIRTUAL_KEY(0x25)));
+    }
+
+    #[test]
     fn test_key_to_vk_rejects_invalid_keys() {
         assert_eq!(key_to_vk(""), None);
-        assert_eq!(key_to_vk("Space"), None);
+        assert_eq!(key_to_vk("Escape"), None);
     }
 }

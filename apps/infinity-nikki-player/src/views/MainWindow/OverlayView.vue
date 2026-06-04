@@ -14,7 +14,7 @@ import {
   setVolume as setMidiPreviewVolume,
 } from '@/lib/midiPlayer'
 import { ChevronDown, ChevronUp, X } from 'lucide-vue-next'
-import { Tooltip } from 'antdv-next'
+import { Select, Tooltip } from 'antdv-next'
 import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
 import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
 
@@ -23,7 +23,7 @@ const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
 const OVERLAY_WIDTH = 360
-const OVERLAY_COLLAPSED_HEIGHT = 136
+const OVERLAY_COLLAPSED_HEIGHT = 156
 const OVERLAY_EXPANDED_HEIGHT = 320
 
 // 键盘映射器实例
@@ -255,7 +255,7 @@ async function startDrag(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (
     target.closest(
-      'button, select, input, textarea, [role="button"], .playlist-item, .overlay-progress, .playback-controls',
+      'button, select, input, textarea, [role="button"], .ant-select, .playlist-item, .overlay-progress, .playback-controls',
     )
   ) {
     return
@@ -332,6 +332,19 @@ function getTemplateDisplayName(name: string, id: string): string {
   return builtinNames && builtinNames !== `template.builtinNames.${id}` ? builtinNames : name
 }
 
+const templateOptions = computed(() =>
+  settingsStore.templates.map((tmpl) => ({
+    label: getTemplateDisplayName(tmpl.name, tmpl.id),
+    value: tmpl.id,
+  }))
+)
+
+function handleTemplateChange(value: unknown) {
+  if (typeof value === 'string') {
+    settingsStore.selectTemplate(value)
+  }
+}
+
 // 当前 MIDI 文件名
 const currentMidiName = computed(
   () => playerStore.currentMidi?.filename || t('overlay.noFile')
@@ -360,15 +373,18 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
       <!-- 操作按钮 -->
       <div class="action-buttons">
         <!-- 模板选择 -->
-        <select
+        <Select
           class="template-select"
-          :value="settingsStore.currentTemplateId"
-          @change="(e) => settingsStore.selectTemplate((e.target as HTMLSelectElement).value)"
-        >
-          <option v-for="tmpl in settingsStore.templates" :key="tmpl.id" :value="tmpl.id">
-            {{ getTemplateDisplayName(tmpl.name, tmpl.id) }}
-          </option>
-        </select>
+          :value="settingsStore.currentTemplateId ?? undefined"
+          :options="templateOptions"
+          :placeholder="t('player.noTemplate')"
+          :list-height="96"
+          :list-item-height="32"
+          popup-class-name="overlay-template-select-popup"
+          @update:value="handleTemplateChange"
+          @mousedown.stop
+          @pointerdown.stop
+        />
 
         <!-- 关闭按钮 -->
         <Tooltip :title="t('overlay.close')">
@@ -447,8 +463,9 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
 <style scoped>
 .overlay-view {
-  @apply flex flex-col overflow-hidden;
+  @apply flex flex-col;
   border-radius: 16px;
+  overflow: visible;
 }
 
 .mini-bar {
@@ -457,6 +474,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   grid-template-columns: repeat(2, 1fr);
   gap: 8px 10px;
   background: linear-gradient(135deg, rgba(247, 192, 193, 0.8) 0%, rgba(245, 184, 192, 0.8) 100%);
+  border-radius: 16px;
   cursor: move;
   user-select: none;
 }
@@ -534,16 +552,31 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 }
 
 .template-select {
-  @apply h-8 px-2 rounded-lg text-sm text-white;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  outline: none;
+  width: 132px;
+}
+
+.template-select :deep(.ant-select-selector) {
+  height: 32px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  box-shadow: none !important;
   cursor: pointer;
 }
 
-.template-select option {
-  color: #4a3f3f;
-  background: white;
+.template-select :deep(.ant-select-selection-item),
+.template-select :deep(.ant-select-selection-placeholder) {
+  color: rgba(255, 255, 255, 0.94) !important;
+  font-size: 13px;
+  line-height: 32px !important;
+}
+
+.template-select :deep(.ant-select-arrow) {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:global(.overlay-template-select-popup .rc-virtual-list-holder) {
+  max-height: 96px !important;
 }
 
 .expand-panel {
@@ -568,14 +601,17 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 }
 
 .playlist-name {
-  @apply text-sm text-gray-700 truncate flex-1 mr-3;
+  @apply text-sm truncate flex-1 mr-3;
+  color: var(--color-foreground);
 }
 
 .playlist-duration {
-  @apply text-xs text-gray-400 font-mono;
+  @apply text-xs font-mono;
+  color: var(--color-muted-dark);
 }
 
 .playlist-empty {
-  @apply px-4 py-8 text-center text-gray-400 text-sm;
+  @apply px-4 py-8 text-center text-sm;
+  color: var(--color-muted-dark);
 }
 </style>

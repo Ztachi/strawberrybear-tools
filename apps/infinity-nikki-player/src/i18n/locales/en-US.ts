@@ -111,12 +111,16 @@ export default {
     mappingActive: 'Waiting for key',
     editMode: 'Edit Mode',
     overviewMode: 'Overview',
+    exitOverview: 'Exit Overview',
     editModeTip: 'Keys keep a fixed width. Drag or scroll horizontally to inspect other ranges.',
     overviewModeTip: 'All 88 keys fit on screen for quick mapping and key highlight checks.',
     mapSelected: 'Map Selected Key',
     exitMapping: 'Exit Mapping',
     clearMapping: 'Clear Mapping',
     supportedKeys: 'Supported keys',
+    unsupportedKeys: 'Unsupported keys',
+    unsupportedKeysDescription:
+      'Esc, Fn, Win/Command, Ctrl, Alt, Shift, CapsLock, media keys, power keys, and other system or modifier keys are not supported.',
     unsupportedKey: 'This key cannot be used for mapping',
     nameRequired: 'Template name is required',
     nameDuplicated: 'Template names must be unique',
@@ -156,6 +160,8 @@ export default {
     leaveConfirmJumpDescription:
       'MIDI import needs to jump to the Files tab first. Choose how to handle current template changes.',
     draftFound: 'Draft Found',
+    loadDraft: 'Load Draft',
+    discardDraft: 'Discard Draft',
     loadDraftPrompt:
       'A draft for a new template was found. Load it? Cancel will discard the draft and create a blank template.',
     emptyEditor: 'Select or create a custom template',

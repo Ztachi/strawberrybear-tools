@@ -72,13 +72,13 @@ watch(
       <div class="keylog-content flex flex-col max-h-[400px]">
         <!-- 标题栏 -->
         <div class="px-3 py-2 border-b content-header flex items-center justify-between">
-          <h4 class="text-sm font-medium text-primary">
+          <h4 class="keylog-title text-sm font-medium">
             {{ t('player.keyLog') }}
           </h4>
           <!-- 清空按钮 -->
           <button
             v-if="keyLog.length > 0"
-            class="text-xs text-muted hover:text-primary px-1.5 py-0.5 rounded transition-colors"
+            class="keylog-clear text-xs px-1.5 py-0.5 rounded transition-colors"
             @click="clearKeyLog"
           >
             {{ t('actions.clear') }}
@@ -88,7 +88,7 @@ watch(
         <!-- 日志内容区域 -->
         <div ref="logContainer" class="overflow-y-auto flex-1">
           <!-- 空状态 -->
-          <div v-if="chaptersLog.length === 0" class="text-center text-sm py-8 text-muted">
+          <div v-if="chaptersLog.length === 0" class="keylog-empty text-center text-sm py-8">
             {{ t('player.noKeyLog') }}
           </div>
 
@@ -98,8 +98,8 @@ watch(
             <div v-for="chapter in chaptersLog" :key="chapter.name" class="mb-3 last:mb-0">
               <!-- 章节标题栏 -->
               <div class="flex items-center justify-between px-2 py-1 bg-primary/5 rounded">
-                <span class="text-xs font-medium text-primary">{{ chapter.name }}</span>
-                <span class="text-xs text-muted">
+                <span class="chapter-title text-xs font-medium">{{ chapter.name }}</span>
+                <span class="chapter-range text-xs">
                   {{ formatTime(chapter.startTime) }} - {{ formatTime(chapter.endTime) }}
                 </span>
               </div>
@@ -112,7 +112,7 @@ watch(
                   class="flex items-center gap-2 text-xs px-2 py-0.5 hover:bg-primary/5 rounded"
                 >
                   <!-- 时间戳 -->
-                  <span class="font-mono text-muted w-16">{{ formatTime(entry.time) }}</span>
+                  <span class="entry-time font-mono w-16">{{ formatTime(entry.time) }}</span>
                   <!-- 动作图标 -->
                   <span
                     class="font-medium w-8"
@@ -121,14 +121,13 @@ watch(
                     {{ entry.action === 'press' ? '↓' : '↑' }}
                   </span>
                   <!-- 按键名称 -->
-                  <span class="font-medium text-primary w-8">{{ entry.key }}</span>
+                  <span class="entry-key font-medium w-8">{{ entry.key }}</span>
                   <!-- 按键代码 -->
-                  <span
-                    class="font-mono w-14"
-                    >{{ entry.code.replace('Key', '').replace('Digit', '') }}</span
-                  >
+                  <span class="entry-code font-mono w-14">
+                    {{ entry.code.replace('Key', '').replace('Digit', '') }}
+                  </span>
                   <!-- 音高映射 -->
-                  <span class="text-muted">{{ entry.originalPitch }}→{{ entry.pitch }}</span>
+                  <span class="entry-pitch">{{ entry.originalPitch }}→{{ entry.pitch }}</span>
                 </div>
               </div>
             </div>
@@ -158,12 +157,38 @@ watch(
 }
 
 .keylog-content {
-  background: var(--bg-white-95);
-  border: 1px solid var(--border-primary-20);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  color: var(--color-foreground);
 }
 
 .content-header {
   border-color: var(--border-primary-15);
+}
+
+.keylog-title,
+.chapter-title,
+.entry-key {
+  color: var(--color-primary-active, #e98ca2);
+}
+
+.keylog-clear {
+  color: var(--color-muted-dark);
+}
+
+.keylog-clear:hover {
+  color: var(--color-primary-active, #e98ca2);
+  background: var(--bg-primary-08);
+}
+
+.keylog-empty,
+.chapter-range,
+.entry-time,
+.entry-code,
+.entry-pitch {
+  color: var(--color-muted-dark);
+}
+
+.entry-time,
+.entry-pitch {
+  opacity: 0.9;
 }
 </style>

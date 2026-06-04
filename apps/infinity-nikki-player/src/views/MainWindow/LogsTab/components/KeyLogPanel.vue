@@ -99,7 +99,7 @@ function formatTime(timestamp: number) {
 
 .header-title {
   @apply flex items-center gap-2 text-sm font-medium;
-  color: var(--color-muted-dark);
+  color: var(--color-foreground);
 }
 
 .header-actions {
@@ -108,7 +108,7 @@ function formatTime(timestamp: number) {
 
 .log-count {
   @apply text-xs font-mono;
-  color: var(--color-muted);
+  color: var(--color-muted-dark);
 }
 
 .clear-btn {
@@ -144,16 +144,16 @@ function formatTime(timestamp: number) {
 
 .time {
   @apply text-xs font-mono;
-  color: var(--color-muted);
+  color: var(--color-muted-dark);
 }
 
 .pitch {
   @apply text-sm font-mono font-medium;
-  color: var(--color-primary);
+  color: var(--color-primary-active);
 }
 
 .arrow {
-  color: var(--color-primary);
+  color: var(--color-primary-active);
 }
 
 .key {
@@ -167,17 +167,17 @@ function formatTime(timestamp: number) {
 
 .action-badge.press {
   background: var(--bg-success-08);
-  color: var(--color-success);
+  color: #148a46;
 }
 
 .action-badge.release {
   background: var(--bg-primary-10);
-  color: var(--color-primary);
+  color: var(--color-primary-active);
 }
 
 .empty-state {
   @apply flex flex-col items-center justify-center gap-3 py-16;
-  color: var(--color-muted);
+  color: var(--color-muted-dark);
 }
 
 .empty-icon {

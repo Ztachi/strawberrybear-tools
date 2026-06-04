@@ -117,8 +117,10 @@ function handleDetailDrawerOpenChange(open: boolean): void {
       </template>
       <template #extra>
         <!-- 关闭按钮 -->
-        <Button type="text" class="close-btn" @click="playerStore.closeDetail">
-          <X :size="20" />
+        <Button type="text" class="close-btn nikki-outline-btn" @click="playerStore.closeDetail">
+          <template #icon>
+            <X class="drawer-close-icon" />
+          </template>
         </Button>
       </template>
       <!-- MIDI 详情内容 -->
@@ -134,6 +136,7 @@ function handleDetailDrawerOpenChange(open: boolean): void {
 
 .library-list {
   @apply space-y-2;
+  padding-bottom: 20px;
 }
 
 .library-item {
@@ -214,13 +217,13 @@ function handleDetailDrawerOpenChange(open: boolean): void {
 }
 
 .close-btn {
-  @apply w-10 h-10 rounded-lg flex items-center justify-center;
-  color: var(--color-primary);
-  transition: all 0.2s;
+  @apply h-10 w-10 rounded-lg;
 }
 
-.close-btn:hover {
-  background: var(--bg-primary-10);
+.drawer-close-icon {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.35;
 }
 
 :deep(.midi-detail-drawer .ant-drawer-content) {
