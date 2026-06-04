@@ -1,135 +1,173 @@
 <script setup lang="ts">
 /**
- * @description: TemplateEditor - 自定义模板管理组件
- * @description 提供模板选择、空白新建、复制内置模板、编辑、删除、导入和导出入口，并将映射编辑委托给 Canvas 钢琴编辑器
+ * @description: TemplateEditor - 模板管理页主体
+ * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容，并将重编辑区域委托给 TemplateEditorDrawer
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { confirm, open, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { toast } from 'vue-sonner'
-import { Copy, Download, FilePlus, FolderDown, Pencil, Plus, Save, Trash2, X } from 'lucide-vue-next'
-import { Badge, Button, Input } from '@/components/ui'
+import {
+  Copy,
+  Download,
+  FileArchive,
+  FolderDown,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-vue-next'
+import {
+  Button,
+  Input,
+  Pagination,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui'
 import { useSettingsStore } from '@/stores/settings'
 import type { KeyTemplate } from '@/types'
-import { normalizeTemplateMappings } from '@/lib/templateKeys'
-import VisualTemplateEditor from './VisualTemplateEditor.vue'
+import TemplateEditorDrawer from './TemplateEditorDrawer.vue'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 
-/** 当前正在编辑的自定义模板；为 null 时显示空状态 */
-const editingTemplate = ref<KeyTemplate | null>(null)
-/** 编辑来源模板 ID；null 表示新建或复制模板，用于判断是否存在未保存改动 */
-const editingSourceId = ref<string | null>(null)
+/** 模板页页大小持久化键，避免刷新后丢失用户常用分页密度。 */
+const PAGE_SIZE_STORAGE_KEY = 'infinity-nikki-player.template-page-size'
+/** 默认分页大小，首次打开或本地缓存非法时使用。 */
+const DEFAULT_PAGE_SIZE = 10
+/** 可选分页大小，列表本地渲染，不需要请求后端分页。 */
+const PAGE_SIZE_OPTIONS = [10, 20, 50]
 
-/** 模板列表展示顺序：内置模板优先，其余按显示名称排序 */
+/** 搜索关键字，只按模板名称本地过滤。 */
+const searchKeyword = ref('')
+/** 当前页码，使用 1-based 方便直接交给分页组件展示。 */
+const currentPage = ref(1)
+/** 每页数量，从 localStorage 读取并做白名单校验。 */
+const pageSize = ref(readPersistedPageSize())
+/** 被勾选模板 ID 集合，跨分页保留选择。 */
+const selectedTemplateIds = ref<Set<string>>(new Set())
+/** 模板编辑抽屉实例，负责编辑、草稿和未保存离开确认。 */
+const editorDrawerRef = ref<InstanceType<typeof TemplateEditorDrawer> | null>(null)
+
+/**
+ * @description: 从本地存储读取分页大小
+ * @return {number} 合法分页大小
+ */
+function readPersistedPageSize(): number {
+  // localStorage 可能为空、被用户手动改坏或来自旧版本，必须先转数字再做白名单。
+  const parsed = Number(window.localStorage.getItem(PAGE_SIZE_STORAGE_KEY))
+  // 只接受预设值，避免异常页大小撑破表格布局或导致分页计算不可控。
+  return PAGE_SIZE_OPTIONS.includes(parsed) ? parsed : DEFAULT_PAGE_SIZE
+}
+
+/**
+ * @description: 持久化分页大小
+ * @param {number} nextPageSize - 新分页大小
+ * @return {void}
+ */
+function persistPageSize(nextPageSize: number): void {
+  // 页大小来自 Pagination，但仍然白名单过滤，保证持久化值一定能被下次读取。
+  if (!PAGE_SIZE_OPTIONS.includes(nextPageSize)) return
+  window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(nextPageSize))
+}
+
+/** 模板列表展示顺序：按用户看到的模板名称排序。 */
 const sortedTemplates = computed(() =>
-  [...settingsStore.templates].sort((a, b) => {
-    // 内置模板优先展示，方便用户先从默认布局复制。
-    if (a.is_builtin !== b.is_builtin) return a.is_builtin ? -1 : 1
-    // 同一分组内按用户看到的显示名排序，而不是按内部 id 排序。
-    return getTemplateDisplayName(a).localeCompare(getTemplateDisplayName(b))
-  })
+  [...settingsStore.templates].sort((a, b) => a.name.localeCompare(b.name))
 )
-/** 当前已选择模板，主要用于复制模板入口和列表选中态 */
-const activeTemplate = computed(
-  () => settingsStore.templates.find((template) => template.id === settingsStore.currentTemplateId) ?? null
+
+/** 搜索后的模板列表，只按名称匹配，不暴露随机内部 ID。 */
+const filteredTemplates = computed(() => {
+  // 关键字统一 trim/lowercase，避免空格和大小写影响搜索结果。
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (!keyword) return sortedTemplates.value
+  return sortedTemplates.value.filter((template) => template.name.toLowerCase().includes(keyword))
+})
+
+/** 总页数，至少为 1，避免空列表时页码越界。 */
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredTemplates.value.length / pageSize.value)))
+
+/** 当前页模板数据。 */
+const pagedTemplates = computed(() => {
+  // currentPage 是 1-based，切片起点需要转换为 0-based。
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredTemplates.value.slice(start, start + pageSize.value)
+})
+
+/** 当前勾选的模板对象。 */
+const selectedTemplates = computed(() =>
+  settingsStore.templates.filter((template) => selectedTemplateIds.value.has(template.id))
 )
-/** 当前编辑内容是否相对源模板发生变化 */
-const isDirty = computed(() => {
-  // 没有打开编辑器时不展示未保存状态。
-  if (!editingTemplate.value) return false
-  // 复制或空白新建没有源模板，天然属于未保存状态。
-  const source = settingsStore.templates.find((template) => template.id === editingSourceId.value)
-  if (!source) return true
-  // 模板对象字段较少，直接序列化比较可以稳定覆盖名称和映射变化。
-  return JSON.stringify(source) !== JSON.stringify(editingTemplate.value)
+
+/** 当前页是否全部被勾选。 */
+const isCurrentPageAllSelected = computed(() => {
+  // 空页不能算全选，否则搜索无结果时复选框会出现误导状态。
+  if (pagedTemplates.value.length === 0) return false
+  return pagedTemplates.value.every((template) => selectedTemplateIds.value.has(template.id))
 })
 
 /**
- * @description: 获取模板显示名称
- * @description 内置模板优先使用国际化名称，自定义模板直接使用用户保存的名称
- * @param {KeyTemplate} template - 模板对象
- * @return {string} 模板展示名称
- */
-function getTemplateDisplayName(template: KeyTemplate): string {
-  // 自定义模板名称由用户定义，不走内置模板翻译表。
-  if (!template.is_builtin) return template.name
-  const key = `template.builtinNames.${template.id}` as any
-  const translated = t(key)
-  // vue-i18n 找不到 key 时会返回 key 本身，因此要排除这种情况。
-  return translated && translated !== key ? translated : template.name
-}
-
-/**
- * @description: 创建自定义模板 ID
- * @return {string} 基于时间戳的自定义模板 ID
- */
-function createTemplateId(): string {
-  return `custom-${Date.now()}`
-}
-
-/**
- * @description: 创建空白模板并进入编辑态
+ * @description: 设置勾选集合
+ * @param {Set<string>} nextSelected - 新勾选集合
  * @return {void}
  */
-function createBlankTemplate() {
-  // 空白模板不是从已有模板编辑，因此没有源 ID。
-  editingSourceId.value = null
-  editingTemplate.value = {
-    id: createTemplateId(),
-    name: t('template.newTemplate'),
-    is_builtin: false,
-    mappings: [],
+function setSelectedTemplateIds(nextSelected: Set<string>): void {
+  // Set 原地修改不会稳定触发 Vue 依赖，必须替换为新 Set。
+  selectedTemplateIds.value = new Set(nextSelected)
+}
+
+/**
+ * @description: 切换单个模板勾选状态
+ * @param {string} templateId - 模板 ID
+ * @return {void}
+ */
+function toggleTemplateSelection(templateId: string): void {
+  const nextSelected = new Set(selectedTemplateIds.value)
+  // 已选中则移除，未选中则加入，保持跨分页选择。
+  if (nextSelected.has(templateId)) {
+    nextSelected.delete(templateId)
+  } else {
+    nextSelected.add(templateId)
   }
+  setSelectedTemplateIds(nextSelected)
 }
 
 /**
- * @description: 复制模板并进入自定义模板编辑态
- * @description 内置模板不可直接编辑，因此内置模板的“编辑”行为也会走复制流程
- * @param {KeyTemplate} template - 被复制的模板
+ * @description: 切换当前页全选状态
  * @return {void}
  */
-function cloneTemplate(template: KeyTemplate) {
-  // 复制模板保存为新 ID，避免修改或覆盖原模板。
-  editingSourceId.value = null
-  editingTemplate.value = {
-    id: createTemplateId(),
-    name: t('template.copyName', { name: getTemplateDisplayName(template) }),
-    is_builtin: false,
-    // 复制时同步清理旧数据，保证进入编辑器的映射已经满足前端规则。
-    mappings: normalizeTemplateMappings(template.mappings),
+function toggleCurrentPageSelection(): void {
+  const nextSelected = new Set(selectedTemplateIds.value)
+  if (isCurrentPageAllSelected.value) {
+    // 当前页全选时再次点击只取消当前页，不影响其他分页已选模板。
+    pagedTemplates.value.forEach((template) => nextSelected.delete(template.id))
+  } else {
+    // 当前页未全选时补齐当前页所有模板。
+    pagedTemplates.value.forEach((template) => nextSelected.add(template.id))
   }
+  setSelectedTemplateIds(nextSelected)
 }
 
 /**
- * @description: 编辑已有自定义模板
- * @description 如果传入内置模板，则自动复制为新的自定义模板，避免覆盖内置映射
- * @param {KeyTemplate} template - 要编辑的模板
+ * @description: 清理不存在模板的勾选状态
  * @return {void}
  */
-function editTemplate(template: KeyTemplate) {
-  if (template.is_builtin) {
-    // 内置模板只读，用户点击编辑时实际创建一份可编辑副本。
-    cloneTemplate(template)
-    return
+function pruneSelection(): void {
+  const existingIds = new Set(settingsStore.templates.map((template) => template.id))
+  const nextSelected = new Set<string>()
+  for (const templateId of selectedTemplateIds.value) {
+    // 删除或导入刷新后，已不存在的 ID 必须移除，避免批量操作传入悬空 ID。
+    if (existingIds.has(templateId)) nextSelected.add(templateId)
   }
-  // 记录源模板 ID，用于比较未保存状态和删除当前编辑模板时关闭编辑器。
-  editingSourceId.value = template.id
-  // 深拷贝后编辑，避免用户未保存时直接修改 Pinia 中的模板列表。
-  editingTemplate.value = JSON.parse(JSON.stringify(template))
-  // 打开编辑器时归一化，防止旧模板 JSON 中的非法映射进入 Canvas。
-  editingTemplate.value!.mappings = normalizeTemplateMappings(editingTemplate.value!.mappings)
-}
-
-/**
- * @description: 取消当前编辑并回到空状态
- * @return {void}
- */
-function cancelEdit() {
-  // 同时清理编辑内容和源 ID，确保下一次新建/复制不会误判 dirty 状态。
-  editingSourceId.value = null
-  editingTemplate.value = null
+  setSelectedTemplateIds(nextSelected)
 }
 
 /**
@@ -137,57 +175,43 @@ function cancelEdit() {
  * @param {KeyTemplate} template - 要选择的模板
  * @return {Promise<void>} 无返回值
  */
-async function selectTemplate(template: KeyTemplate) {
+async function selectTemplate(template: KeyTemplate): Promise<void> {
   // 选择模板会持久化 current_template_id，供播放页和悬浮模式复用。
   await settingsStore.selectTemplate(template.id)
 }
 
 /**
- * @description: 保存当前编辑模板
- * @description 保存前会去除名称首尾空格、强制标记为自定义模板，并归一化映射列表
+ * @description: 打开空白新建抽屉
  * @return {Promise<void>} 无返回值
  */
-async function saveEditingTemplate() {
-  // 防御式判断：空状态点击保存不做任何事。
-  if (!editingTemplate.value) return
-  // 保存前构造新对象，避免在校验失败时修改编辑中的响应式对象。
-  const template = {
-    ...editingTemplate.value,
-    // 名称首尾空格不应持久化。
-    name: editingTemplate.value.name.trim(),
-    // 前端永远只保存自定义模板，内置模板保护由前后端共同保证。
-    is_builtin: false,
-    // 保存前再次归一化，避免 Canvas 外部或导入旧数据留下非法映射。
-    mappings: normalizeTemplateMappings(editingTemplate.value.mappings),
-  }
-
-  if (!template.name) {
-    // 空名称会导致模板列表不可读，直接阻止保存。
-    toast.error(t('template.nameRequired'), { richColors: true })
-    return
-  }
-
-  try {
-    // 保存成功后会刷新模板列表并自动选择该模板。
-    await settingsStore.saveTemplate(template)
-    toast.success(t('template.saved'), { richColors: true })
-    cancelEdit()
-  } catch (error) {
-    // 后端还会做 ID、内置覆盖和按键白名单校验，错误需要透传给用户。
-    toast.error(t('template.saveFailed'), { description: String(error), richColors: true })
-  }
+async function createBlankTemplate(): Promise<void> {
+  await editorDrawerRef.value?.createBlankTemplate()
 }
 
 /**
- * @description: 删除自定义模板
- * @description 内置模板在前端和后端都不可删除；删除当前编辑模板时会同步关闭编辑器
+ * @description: 打开基于模板新增抽屉
+ * @param {KeyTemplate} template - 被复制的模板
+ * @return {Promise<void>} 无返回值
+ */
+async function createFromTemplate(template: KeyTemplate): Promise<void> {
+  await editorDrawerRef.value?.createFromTemplate(template)
+}
+
+/**
+ * @description: 打开编辑抽屉
+ * @param {KeyTemplate} template - 要编辑的模板
+ * @return {Promise<void>} 无返回值
+ */
+async function editTemplate(template: KeyTemplate): Promise<void> {
+  await editorDrawerRef.value?.editTemplate(template)
+}
+
+/**
+ * @description: 删除单个模板
  * @param {KeyTemplate} template - 要删除的模板
  * @return {Promise<void>} 无返回值
  */
-async function deleteTemplate(template: KeyTemplate) {
-  // 内置模板删除入口不会展示，这里再做一次防御。
-  if (template.is_builtin) return
-  // 删除是不可逆文件操作，必须二次确认。
+async function deleteTemplate(template: KeyTemplate): Promise<void> {
   const confirmed = await confirm(t('template.confirmDelete'), {
     title: t('actions.delete'),
     kind: 'warning',
@@ -197,37 +221,63 @@ async function deleteTemplate(template: KeyTemplate) {
   try {
     // 删除后 store 会刷新模板列表，并在删除当前模板时回退到第一个可用模板。
     await settingsStore.deleteTemplate(template.id)
-    if (editingSourceId.value === template.id) {
-      // 如果正在编辑被删除的模板，需要关闭编辑器，避免继续保存已删除 ID。
-      cancelEdit()
-    }
+    // 删除成功后清理勾选，避免批量操作继续引用不存在模板。
+    pruneSelection()
     toast.success(t('template.deleted'), { richColors: true })
   } catch (error) {
-    // 后端可能因为文件权限或模板保护失败，统一用 toast 告知。
+    // 后端可能因为文件权限失败，统一用 toast 告知。
     toast.error(t('template.deleteFailed'), { description: String(error), richColors: true })
   }
 }
 
 /**
- * @description: 从本地 JSON 文件导入模板
- * @description 后端负责解析、校验和冲突 ID 重命名，导入成功后自动选中新模板
+ * @description: 批量删除已选模板
  * @return {Promise<void>} 无返回值
  */
-async function importTemplate() {
-  // 只允许选择单个 JSON 文件，模板合并和冲突处理交给后端。
+async function deleteSelectedTemplates(): Promise<void> {
+  const templates = selectedTemplates.value
+  if (templates.length === 0) return
+
+  const confirmed = await confirm(t('template.confirmBatchDelete', { count: templates.length }), {
+    title: t('template.batchDelete'),
+    kind: 'warning',
+  })
+  if (!confirmed) return
+
+  try {
+    for (const template of templates) {
+      // 逐个调用现有删除命令，复用后端当前模板回退逻辑。
+      await settingsStore.deleteTemplate(template.id)
+    }
+    // 删除完成后统一清空选择，避免跨分页残留。
+    selectedTemplateIds.value = new Set()
+    toast.success(t('template.batchDeleted', { count: templates.length }), { richColors: true })
+  } catch (error) {
+    toast.error(t('template.deleteFailed'), { description: String(error), richColors: true })
+  }
+}
+
+/**
+ * @description: 从本地 JSON 或 ZIP 文件导入模板
+ * @return {Promise<void>} 无返回值
+ */
+async function importTemplate(): Promise<void> {
   const selected = await open({
     multiple: false,
-    filters: [{ name: 'Template JSON', extensions: ['json'] }],
+    filters: [{ name: 'Template', extensions: ['json', 'zip'] }],
   })
   // 用户取消文件选择时 selected 为空；multiple=false 下数组属于防御分支。
   if (!selected || Array.isArray(selected)) return
 
   try {
-    // 后端负责解析、校验、生成不冲突 ID，并返回实际保存的模板。
-    const template = await settingsStore.importTemplate(selected)
-    toast.success(t('template.imported'), { description: template.name, richColors: true })
+    // 后端负责根据扩展名解析 JSON/ZIP、校验、名称唯一和生成不冲突 ID。
+    const templates = await settingsStore.importTemplate(selected)
+    toast.success(t('template.imported'), {
+      description: t('template.importedCount', { count: templates.length }),
+      richColors: true,
+    })
   } catch (error) {
-    // JSON 格式错误、非法按键或文件读取失败都会在这里反馈。
+    // JSON/ZIP 格式错误、重名、非法按键或文件读取失败都会在这里反馈。
     toast.error(t('template.importFailed'), { description: String(error), richColors: true })
   }
 }
@@ -237,8 +287,7 @@ async function importTemplate() {
  * @param {KeyTemplate} template - 要导出的模板
  * @return {Promise<void>} 无返回值
  */
-async function exportTemplate(template: KeyTemplate) {
-  // 默认文件名使用展示名称，用户仍可在系统保存对话框中修改。
+async function exportTemplate(template: KeyTemplate): Promise<void> {
   const target = await saveDialog({
     defaultPath: `${template.name || template.id}.json`,
     filters: [{ name: 'Template JSON', extensions: ['json'] }],
@@ -256,169 +305,242 @@ async function exportTemplate(template: KeyTemplate) {
   }
 }
 
-// 如果当前选择的是自定义模板，首次进入页面时直接打开编辑器，减少二次点击。
+/**
+ * @description: 批量导出已选模板为 ZIP
+ * @return {Promise<void>} 无返回值
+ */
+async function exportSelectedTemplates(): Promise<void> {
+  const templates = selectedTemplates.value
+  if (templates.length === 0) return
+
+  const target = await saveDialog({
+    defaultPath: 'templates.zip',
+    filters: [{ name: 'Template ZIP', extensions: ['zip'] }],
+  })
+  if (!target) return
+
+  try {
+    // 批量导出使用 ID 列表交给后端读取真实模板文件，避免导出前端缓存。
+    await settingsStore.exportTemplatesArchive(
+      templates.map((template) => template.id),
+      target
+    )
+    toast.success(t('template.exported'), {
+      description: t('template.exportedCount', { count: templates.length }),
+      richColors: true,
+    })
+  } catch (error) {
+    toast.error(t('template.exportFailed'), { description: String(error), richColors: true })
+  }
+}
+
+/**
+ * @description: 切换页码
+ * @param {number} nextPage - 新页码
+ * @return {void}
+ */
+function changePage(nextPage: number): void {
+  // 页码由 Pagination 组件保护，这里仍然夹取一次作为业务防线。
+  currentPage.value = Math.min(Math.max(1, nextPage), totalPages.value)
+}
+
+/**
+ * @description: 切换分页大小
+ * @param {number} nextPageSize - 新分页大小
+ * @return {void}
+ */
+function changePageSize(nextPageSize: number): void {
+  // 页大小来自 Pagination，但仍需验证，防止非法值进入分页计算。
+  if (!PAGE_SIZE_OPTIONS.includes(nextPageSize)) return
+  pageSize.value = nextPageSize
+  currentPage.value = 1
+  persistPageSize(nextPageSize)
+}
+
+watch(searchKeyword, () => {
+  // 搜索条件变化后回到第一页，避免当前页超过过滤后的总页数。
+  currentPage.value = 1
+})
+
+watch(totalPages, () => {
+  // 删除、导入或搜索可能让当前页越界，需要自动夹到合法范围。
+  currentPage.value = Math.min(currentPage.value, totalPages.value)
+})
+
 watch(
-  () => activeTemplate.value?.id,
+  () => settingsStore.templates.map((template) => template.id).join(','),
   () => {
-    if (!editingTemplate.value && activeTemplate.value && !activeTemplate.value.is_builtin) {
-      editTemplate(activeTemplate.value)
-    }
-  },
-  { immediate: true }
+    // 模板列表刷新后移除已不存在的勾选项。
+    pruneSelection()
+  }
 )
+
+defineExpose({
+  /**
+   * @description: 暴露给父组件的离开守卫
+   * @param {'close' | 'jump'} context - 离开场景
+   * @return {Promise<boolean>} true 表示允许离开模板页
+   */
+  confirmLeaveIfNeeded(context: 'close' | 'jump' = 'close'): Promise<boolean> {
+    // 未打开编辑抽屉时没有编辑状态，父级可以直接离开。
+    return editorDrawerRef.value?.confirmLeaveIfNeeded(context) ?? Promise.resolve(true)
+  },
+})
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 class="text-lg font-semibold text-foreground">
-          {{ t('template.title') }}
-        </h2>
-        <p class="text-sm text-muted-foreground">
-          {{ t('template.description') }}
-        </p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" @click="importTemplate">
-          <FolderDown class="size-4" />
-          {{ t('template.importTemplate') }}
-        </Button>
-        <Button variant="outline" size="sm" @click="createBlankTemplate">
-          <Plus class="size-4" />
-          {{ t('template.blankTemplate') }}
-        </Button>
-        <Button v-if="activeTemplate" size="sm" @click="cloneTemplate(activeTemplate)">
-          <Copy class="size-4" />
-          {{ t('template.copyTemplate') }}
-        </Button>
-      </div>
-    </div>
-
-    <div class="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-4">
-      <aside class="min-h-0 overflow-y-auto rounded-xl border border-primary/15 bg-white/70 p-3">
-        <div class="mb-3 flex items-center justify-between">
-          <span class="text-sm font-medium text-foreground">{{ t('template.templateList') }}</span>
-          <Badge variant="secondary">
-            {{ sortedTemplates.length }}
-          </Badge>
-        </div>
-        <div class="flex flex-col gap-2">
-          <button
-            v-for="template in sortedTemplates"
-            :key="template.id"
-            type="button"
-            class="rounded-lg border p-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
-            :class="
-              settingsStore.currentTemplateId === template.id
-                ? 'border-primary bg-primary/10'
-                : 'border-primary/10 bg-white/60'
-            "
-            @click="selectTemplate(template)"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-foreground">
-                  {{ getTemplateDisplayName(template) }}
-                </p>
-                <p class="mt-1 text-xs text-muted-foreground">
-                  {{ t('template.mappingCount', { count: template.mappings.length }) }}
-                </p>
-              </div>
-              <Badge variant="secondary">
-                {{ template.is_builtin ? t('template.builtin') : t('template.custom') }}
-              </Badge>
-            </div>
-            <div class="mt-3 flex flex-wrap gap-1.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-7 px-2"
-                @click.stop="cloneTemplate(template)"
-              >
-                <Copy class="size-3.5" />
-              </Button>
-              <Button
-                v-if="!template.is_builtin"
-                variant="ghost"
-                size="sm"
-                class="h-7 px-2"
-                @click.stop="editTemplate(template)"
-              >
-                <Pencil class="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-7 px-2"
-                @click.stop="exportTemplate(template)"
-              >
-                <Download class="size-3.5" />
-              </Button>
-              <Button
-                v-if="!template.is_builtin"
-                variant="ghost"
-                size="sm"
-                class="h-7 px-2 text-destructive hover:text-destructive"
-                @click.stop="deleteTemplate(template)"
-              >
-                <Trash2 class="size-3.5" />
-              </Button>
-            </div>
-          </button>
-        </div>
-      </aside>
-
-      <section
-        class="flex min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-primary/15 bg-white/70 p-4"
-      >
-        <template v-if="editingTemplate">
-          <div class="flex flex-wrap items-end justify-between gap-3">
-            <div class="min-w-[240px] flex-1">
-              <label class="mb-1 block text-xs font-medium text-muted-foreground">
-                {{ t('template.name') }}
-              </label>
-              <Input v-model="editingTemplate.name" class="h-9 bg-white" />
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <Badge v-if="isDirty" variant="secondary">
-                {{ t('template.unsaved') }}
-              </Badge>
-              <Button variant="outline" size="sm" @click="cancelEdit">
-                <X class="size-4" />
-                {{ t('actions.cancel') }}
-              </Button>
-              <Button size="sm" @click="saveEditingTemplate">
-                <Save class="size-4" />
-                {{ t('actions.save') }}
-              </Button>
-            </div>
-          </div>
-
-          <VisualTemplateEditor
-            :mappings="editingTemplate.mappings"
-            class="min-h-0 flex-1"
-            @update:mappings="editingTemplate.mappings = $event"
+  <div class="flex h-full min-h-0 flex-col">
+    <section
+      class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-primary/15 bg-white/75"
+    >
+      <div class="flex flex-wrap items-center gap-2 border-b border-primary/10 p-3">
+        <div class="relative w-[320px] max-w-full">
+          <Search
+            class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           />
-        </template>
-
-        <div
-          v-else
-          class="flex h-full min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-primary/20 bg-primary/5 text-center"
-        >
-          <FilePlus class="mb-3 size-10 text-primary" />
-          <p class="text-sm font-medium text-foreground">
-            {{ t('template.emptyEditor') }}
-          </p>
-          <p class="mt-1 text-xs text-muted-foreground">
-            {{ t('template.emptyEditorTip') }}
-          </p>
-          <Button class="mt-4" size="sm" @click="createBlankTemplate">
+          <Input
+            v-model="searchKeyword"
+            class="h-9 bg-white pl-9"
+            :placeholder="t('template.searchPlaceholder')"
+          />
+        </div>
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <Button
+            v-if="selectedTemplateIds.size > 0"
+            variant="destructive"
+            size="sm"
+            @click="deleteSelectedTemplates"
+          >
+            <Trash2 class="size-4" />
+            {{ t('template.batchDelete') }}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            :disabled="selectedTemplateIds.size === 0"
+            @click="exportSelectedTemplates"
+          >
+            <FileArchive class="size-4" />
+            {{ t('template.batchExport') }}
+          </Button>
+          <Button variant="outline" size="sm" @click="importTemplate">
+            <FolderDown class="size-4" />
+            {{ t('template.importTemplate') }}
+          </Button>
+          <Button size="sm" @click="createBlankTemplate">
             <Plus class="size-4" />
             {{ t('template.blankTemplate') }}
           </Button>
         </div>
-      </section>
-    </div>
+      </div>
+
+      <div class="min-h-0 flex-1 overflow-auto">
+        <Table>
+          <TableHeader class="sticky top-0 z-[1] bg-white/95">
+            <TableRow>
+              <TableHead class="w-12">
+                <input
+                  type="checkbox"
+                  class="size-4 accent-primary"
+                  :checked="isCurrentPageAllSelected"
+                  @change="toggleCurrentPageSelection"
+                />
+              </TableHead>
+              <TableHead>{{ t('template.name') }}</TableHead>
+              <TableHead class="w-40">
+                {{ t('template.mappingTotal') }}
+              </TableHead>
+              <TableHead class="w-16 text-right" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow
+              v-for="template in pagedTemplates"
+              :key="template.id"
+              :data-state="settingsStore.currentTemplateId === template.id ? 'selected' : undefined"
+            >
+              <TableCell>
+                <input
+                  type="checkbox"
+                  class="size-4 accent-primary"
+                  :checked="selectedTemplateIds.has(template.id)"
+                  @change="toggleTemplateSelection(template.id)"
+                />
+              </TableCell>
+              <TableCell>
+                <button
+                  type="button"
+                  class="max-w-[520px] truncate text-left font-medium text-foreground hover:text-primary"
+                  @click="selectTemplate(template)"
+                >
+                  {{ template.name }}
+                </button>
+                <p
+                  v-if="settingsStore.currentTemplateId === template.id"
+                  class="mt-1 text-xs text-primary"
+                >
+                  {{ t('template.currentTemplate') }}
+                </p>
+              </TableCell>
+              <TableCell class="text-muted-foreground">
+                {{ t('template.mappingCount', { count: template.mappings.length }) }}
+              </TableCell>
+              <TableCell class="text-right">
+                <Popover>
+                  <PopoverTrigger as-child>
+                    <Button variant="ghost" size="icon" class="size-8">
+                      <MoreVertical class="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent class="w-44 p-1" align="end">
+                    <button class="menu-action" @click="selectTemplate(template)">
+                      {{ t('template.useTemplate') }}
+                    </button>
+                    <button class="menu-action" @click="editTemplate(template)">
+                      <Pencil class="size-4" />
+                      {{ t('actions.edit') }}
+                    </button>
+                    <button class="menu-action" @click="createFromTemplate(template)">
+                      <Copy class="size-4" />
+                      {{ t('template.createFromTemplateShort') }}
+                    </button>
+                    <button class="menu-action" @click="exportTemplate(template)">
+                      <Download class="size-4" />
+                      {{ t('template.exportTemplate') }}
+                    </button>
+                    <button class="menu-action text-destructive" @click="deleteTemplate(template)">
+                      <Trash2 class="size-4" />
+                      {{ t('actions.delete') }}
+                    </button>
+                  </PopoverContent>
+                </Popover>
+              </TableCell>
+            </TableRow>
+            <TableRow v-if="pagedTemplates.length === 0">
+              <TableCell colspan="4" class="py-16 text-center text-muted-foreground">
+                {{ t('template.noTemplates') }}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+
+      <Pagination
+        :page="currentPage"
+        :page-size="pageSize"
+        :total="filteredTemplates.length"
+        :page-size-options="PAGE_SIZE_OPTIONS"
+        @update:page="changePage"
+        @update:page-size="changePageSize"
+      />
+    </section>
+
+    <TemplateEditorDrawer ref="editorDrawerRef" @saved="pruneSelection" />
   </div>
 </template>
+
+<style scoped>
+.menu-action {
+  @apply flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition hover:bg-primary/10;
+}
+</style>

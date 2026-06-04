@@ -303,6 +303,16 @@ import AdvancedTab from './components/AdvancedTab.vue'
 2. 组件内部需要进一步拆分
 3. 组件与其他组件有明显的上下级关系
 
+### 拆分边界：避免机械拆分
+
+组件拆分应降低复杂度，而不是把同一个页面流程拆成多个彼此通信的小碎片：
+
+- 页面主体内容（例如列表、搜索栏、批量操作栏、分页状态）应保留在页面或页面主组件中，方便读者从一个文件理解主流程。
+- 只有重编辑区域、复杂抽屉、独立业务面板、可复用业务模块，才适合拆成页面子组件。
+- 只服务某个重编辑区域的确认弹窗，应与该编辑组件放在一起，避免父子之间传递过多临时状态。
+- 行级轻量操作（例如表格行的更多菜单）可以直接写在当前表格行内；除非被多处复用，否则不要额外拆组件。
+- 新增拆分前应确认它减少了状态耦合、重复模板或文件长度压力；如果只是把 20 行模板移到另一个文件，通常不应拆分。
+
 ### 全局公共组件判定
 
 满足以下条件时，应该放在 `components/` 目录：
@@ -351,6 +361,17 @@ src/components/ui/
 │   ├── PopoverContent.vue
 │   ├── PopoverAnchor.vue
 │   └── index.ts
+├── table/           # 表格组件
+│   ├── Table.vue
+│   ├── TableHeader.vue
+│   ├── TableBody.vue
+│   ├── TableRow.vue
+│   ├── TableHead.vue
+│   ├── TableCell.vue
+│   └── index.ts
+├── pagination/      # 分页组件
+│   ├── Pagination.vue
+│   └── index.ts
 ├── drawer/          # 抽屉组件
 │   ├── Drawer.vue
 │   ├── DrawerTrigger.vue
@@ -387,6 +408,13 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  Pagination,
   Drawer,
   DrawerContent,
   Tooltip,
@@ -511,6 +539,57 @@ Popover 需要使用 `PopoverTrigger` 和 `PopoverContent` 子组件：
 - 使用 `as-child` 让 Trigger 包裹的按钮保留其原始行为
 - `PopoverContent` 的 `w-40` 设置宽度，`p-1` 设置内边距
 - `align="end"` 让弹出框右对齐
+- 表格行操作优先使用 `MoreVertical` 图标按钮 + Popover 菜单，不要把所有操作按钮横向展开成宽列
+
+## Table 表格
+
+列表型数据应使用 `components/ui/table` 封装组件，不要在业务页面裸写 `<table>`：
+
+```vue
+<template>
+  <div class="min-h-0 flex-1 overflow-auto">
+    <Table>
+      <TableHeader class="sticky top-0 bg-white/95">
+        <TableRow>
+          <TableHead>名称</TableHead>
+          <TableHead class="w-40">数量</TableHead>
+          <TableHead class="w-16 text-right"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableCell>示例</TableCell>
+          <TableCell>12</TableCell>
+          <TableCell class="text-right">...</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  </div>
+</template>
+```
+
+**布局规则**：
+
+- 表格外层容器使用 `min-h-0 flex-1 overflow-auto`，让滚动条出现在表格区域内。
+- 页面外层使用 `flex min-h-0 flex-col`，避免表格把页面整体撑高。
+- 内部 ID、随机 ID、数据库键等不可作为默认展示列；只展示用户关心的名称、状态和业务指标。
+
+## Pagination 分页
+
+分页应使用 `components/ui/pagination`，由分页组件统一展示总数、当前页和页大小：
+
+```vue
+<Pagination
+  :page="currentPage"
+  :page-size="pageSize"
+  :total="filteredRows.length"
+  :page-size-options="[10, 20, 50]"
+  @update:page="currentPage = $event"
+  @update:page-size="pageSize = $event"
+/>
+```
+
+分页组件已经展示总数，不要在工具栏重复展示“已选/共几个”等统计文字，除非该统计是当前任务的核心反馈。
 
 ## Drawer 抽屉
 
@@ -539,6 +618,14 @@ Popover 需要使用 `PopoverTrigger` 和 `PopoverContent` 子组件：
 const isOpen = ref(false)
 </script>
 ```
+
+### 详情式 Drawer
+
+主窗口内的详情/编辑抽屉应对齐 MIDI 详情行为：
+
+- 使用 `DrawerPortal to="#main-window-portal-root"` 挂载到主内容 portal。
+- 使用 `:modal="false"` 和全内容区域覆盖，避免普通弹窗与主页面滚动状态冲突。
+- 复杂编辑抽屉内部维护自身 dirty guard 和离开确认；父页面只调用其暴露的 `confirmLeaveIfNeeded`。
 
 ## cn 工具函数
 

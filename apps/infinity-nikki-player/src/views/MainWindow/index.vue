@@ -28,6 +28,9 @@ const settingsStore = useSettingsStore()
 /** 当前激活的标签页 @return {string} */
 const activeTab = ref('files')
 
+/** 模板 Tab 实例，用于在切页和导入前检查抽屉未保存编辑。 */
+const templatesTabRef = ref<InstanceType<typeof TemplatesTab> | null>(null)
+
 /** 是否显示拖拽覆盖层 @return {boolean} */
 const isDragOverlayVisible = ref(false)
 
@@ -222,6 +225,10 @@ function formatInvalidDropDescription(paths: string[]) {
  * @param {string[]} paths - 文件路径列表
  */
 async function handleImportPaths(paths: string[]) {
+  // 导入会打开 MIDI 详情；如果仍停留在模板页，用户会误以为无响应，因此导入前必须先切回文件页。
+  const canImport = await ensureFilesTabForImport()
+  if (!canImport) return
+
   const result = await playerStore.importPaths(paths)
 
   if (result.invalidPaths.length > 0) {
@@ -244,6 +251,12 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
   // 只有恰好 1 个 MIDI 文件时才自动进入详情
   const shouldAutoSelect = (options.autoSelect ?? true) && midiFiles.length === 1
 
+  if (midiFiles.length > 0) {
+    // 拖拽导入同样会触发详情打开，必须先通过模板编辑离开守卫并切回文件页。
+    const canImport = await ensureFilesTabForImport()
+    if (!canImport) return
+  }
+
   // 导入 MIDI 文件
   for (const file of midiFiles) {
     const bytes = await readFileAsUint8Array(file)
@@ -257,6 +270,44 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
       richColors: true,
     })
   }
+}
+
+/**
+ * @description: 确保导入 MIDI 前切换到文件 Tab
+ * @description 如果模板抽屉存在未保存改动，会先弹出保存/丢弃/取消确认
+ * @return {Promise<boolean>} true 表示允许继续导入
+ */
+async function ensureFilesTabForImport(): Promise<boolean> {
+  // 已经在文件页时不需要询问模板页，避免无关编辑状态影响文件页重复导入。
+  if (activeTab.value === 'files') return true
+
+  // 从模板页离开前询问子组件；保存失败或用户取消时中止导入。
+  const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('jump')
+  if (canLeave === false) return false
+
+  // 守卫通过后先切到文件页，后续 import/selectMidi 打开的详情才能直接显示给用户。
+  activeTab.value = 'files'
+  return true
+}
+
+/**
+ * @description: 处理主标签页切换
+ * @param {string | number} nextTab - 目标标签页值
+ * @return {Promise<void>} 无返回值
+ */
+async function handleTabChange(nextTab: string | number): Promise<void> {
+  const normalizedNextTab = String(nextTab)
+  // 点击当前 Tab 不需要走离开守卫。
+  if (normalizedNextTab === activeTab.value) return
+
+  if (activeTab.value === 'templates') {
+    // 从模板页离开时统一检查抽屉 dirty 状态，避免用户通过 Tab 切换绕过确认。
+    const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('close')
+    if (canLeave === false) return
+  }
+
+  // 守卫通过后再更新 v-model，防止 UI 先切走再被迫切回造成闪烁。
+  activeTab.value = normalizedNextTab
 }
 
 /**
@@ -540,7 +591,11 @@ async function enterOverlayMode() {
       <main id="main-window-body" class="content">
         <div id="main-window-portal-root" class="content-portal-root" />
         <ScrollableContainer>
-          <Tabs v-model="activeTab" class="tabs-container has-[.empty-state]:h-full">
+          <Tabs
+            :model-value="activeTab"
+            class="tabs-container has-[.empty-state]:h-full"
+            @update:model-value="handleTabChange"
+          >
             <!-- 标签栏 + 操作按钮 -->
             <div class="tabs-header sticky top-0 z-10">
               <!-- 标签列表 -->
@@ -575,7 +630,7 @@ async function enterOverlayMode() {
 
             <!-- 模板 Tab -->
             <TabsContent value="templates" class="tab-content flex-1">
-              <TemplatesTab />
+              <TemplatesTab ref="templatesTabRef" />
             </TabsContent>
           </Tabs>
         </ScrollableContainer>

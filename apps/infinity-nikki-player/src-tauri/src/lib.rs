@@ -335,6 +335,7 @@ pub fn run() {
             commands::templates::delete_template,
             commands::templates::import_template,
             commands::templates::export_template,
+            commands::templates::export_templates_archive,
             commands::templates::rename_template,
             commands::settings::load_settings,
             commands::settings::save_settings,

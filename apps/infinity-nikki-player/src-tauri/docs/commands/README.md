@@ -40,11 +40,14 @@
 
 ### 模板命令
 
-| 命令              | 参数                    | 返回值             | 功能         |
-| ----------------- | ----------------------- | ------------------ | ------------ |
-| `get_templates`   | -                       | `Vec<KeyTemplate>` | 获取模板列表 |
-| `save_template`   | `template: KeyTemplate` | `()`               | 保存模板     |
-| `delete_template` | `id: String`            | `()`               | 删除模板     |
+| 命令                       | 参数                                             | 返回值             | 功能                  |
+| -------------------------- | ------------------------------------------------ | ------------------ | --------------------- |
+| `get_templates`            | -                                                | `Vec<KeyTemplate>` | 获取模板列表          |
+| `save_template`            | `template: KeyTemplate`                          | `()`               | 保存模板              |
+| `delete_template`          | `id: String`                                     | `()`               | 删除模板              |
+| `import_template`          | `source_path: String`                            | `Vec<KeyTemplate>` | 导入 JSON/ZIP 模板    |
+| `export_template`          | `template_id: String, target_path: String`       | `()`               | 导出单个 JSON 模板    |
+| `export_templates_archive` | `template_ids: Vec<String>, target_path: String` | `()`               | 批量导出模板 ZIP 文件 |
 
 ### 窗口命令
 

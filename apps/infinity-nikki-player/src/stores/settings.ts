@@ -204,16 +204,21 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   /**
-   * @description: 导入模板 JSON 文件
-   * @param {string} sourcePath - 模板 JSON 路径
-   * @return Promise 导入后的模板
+   * @description: 导入模板 JSON 或 ZIP 文件
+   * @param {string} sourcePath - 模板文件路径
+   * @return {Promise<KeyTemplate[]>} 导入后的模板列表
    */
-  async function importTemplate(sourcePath: string): Promise<KeyTemplate> {
-    const template = await invoke<KeyTemplate>('import_template', { sourcePath })
+  async function importTemplate(sourcePath: string): Promise<KeyTemplate[]> {
+    // 后端会根据扩展名解析 JSON 或 ZIP，并为每个模板生成不冲突的自定义 ID。
+    const templates = await invoke<KeyTemplate[]>('import_template', { sourcePath })
     await refreshTemplates()
-    currentTemplateId.value = template.id
-    await persistSettings()
-    return template
+    // 批量导入后选中最后一个模板，符合“刚导入的内容可立即使用”的反馈预期。
+    const lastTemplate = templates[templates.length - 1]
+    if (lastTemplate) {
+      currentTemplateId.value = lastTemplate.id
+      await persistSettings()
+    }
+    return templates
   }
 
   /**
@@ -224,6 +229,17 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   async function exportTemplate(templateId: string, targetPath: string) {
     await invoke('export_template', { templateId, targetPath })
+  }
+
+  /**
+   * @description: 批量导出模板 ZIP 文件
+   * @param {string[]} templateIds - 模板 ID 列表
+   * @param {string} targetPath - 导出 ZIP 路径
+   * @return Promise
+   */
+  async function exportTemplatesArchive(templateIds: string[], targetPath: string) {
+    // 批量导出只传 ID，后端读取模板目录真实文件，避免导出前端缓存中的旧数据。
+    await invoke('export_templates_archive', { templateIds, targetPath })
   }
 
   /**
@@ -274,6 +290,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveTemplate,
     importTemplate,
     exportTemplate,
+    exportTemplatesArchive,
     deleteTemplate,
     renameTemplate,
     setPlayMode,
