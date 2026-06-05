@@ -144,8 +144,8 @@ onUnmounted(() => {
 
 <style scoped>
 .about-card {
-  width: 340px !important;
-  max-width: 340px !important;
+  width: 340px;
+  max-width: 340px;
   padding: 32px 28px 24px;
   display: flex;
   flex-direction: column;
@@ -190,9 +190,9 @@ onUnmounted(() => {
 }
 
 .about-app-name {
-  font-size: 18px !important;
-  font-weight: 700 !important;
-  color: var(--color-foreground) !important;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-foreground);
   margin: 0;
   letter-spacing: 0.01em;
   text-align: center;
@@ -256,8 +256,8 @@ onUnmounted(() => {
 }
 
 .about-description {
-  font-size: 13.5px !important;
-  color: var(--color-foreground) !important;
+  font-size: 13.5px;
+  color: var(--color-foreground);
   line-height: 1.65;
   text-align: center;
   margin: 0 0 14px;

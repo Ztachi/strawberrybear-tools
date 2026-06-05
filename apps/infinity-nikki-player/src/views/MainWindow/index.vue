@@ -306,10 +306,6 @@ async function handleTabChange(nextTab: string | number): Promise<void> {
 
   // 守卫通过后再更新 v-model，防止 UI 先切走再被迫切回造成闪烁。
   activeTab.value = normalizedNextTab
-  if (normalizedNextTab === 'templates') {
-    await nextTick()
-    templatesTabRef.value?.refreshTableLayout()
-  }
 }
 
 /**
@@ -580,7 +576,9 @@ async function enterOverlayMode() {
             <!-- 帮助按钮 -->
             <Button
               type="text"
-              class="help-btn nikki-outline-btn"
+              color="primary"
+              variant="outlined"
+              class="help-btn"
               :title="t('about.title')"
               :aria-label="t('about.title')"
               @click="openHelp"
@@ -620,13 +618,13 @@ async function enterOverlayMode() {
               </RadioGroup>
 
               <div class="file-actions">
-                <Button size="small" class="nikki-outline-btn" @click="selectFile">
+                <Button size="small" color="primary" variant="outlined" @click="selectFile">
                   <template #icon>
                     <Upload class="header-btn-icon" />
                   </template>
                   {{ t('actions.selectFile') }}
                 </Button>
-                <Button size="small" class="nikki-outline-btn" @click="selectFolder">
+                <Button size="small" color="primary" variant="outlined" @click="selectFolder">
                   <template #icon>
                     <Folder class="header-btn-icon" />
                   </template>

@@ -7,7 +7,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
 import { Save, X } from 'lucide-vue-next'
-import { Button, Drawer, Input, Modal, Tag } from 'antdv-next'
+import { Button, Drawer, Input, Modal, Tag, TypographyText } from 'antdv-next'
 import { useSettingsStore } from '@/stores/settings'
 import { getContentDrawerRootStyle, getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { KeyTemplate } from '@/types'
@@ -500,13 +500,18 @@ defineExpose({
         <Tag v-if="hasEditorChanges()" color="pink">
           {{ t('template.unsaved') }}
         </Tag>
-        <Button size="small" class="nikki-outline-btn" @click="handleDrawerOpenChange(false)">
+        <Button
+          size="small"
+          color="primary"
+          variant="outlined"
+          @click="handleDrawerOpenChange(false)"
+        >
           <template #icon>
             <X class="size-4" />
           </template>
           {{ t('actions.cancel') }}
         </Button>
-        <Button type="primary" size="small" class="nikki-primary-btn" @click="saveAndCloseEditor">
+        <Button type="primary" size="small" @click="saveAndCloseEditor">
           <template #icon>
             <Save class="size-4" />
           </template>
@@ -518,9 +523,9 @@ defineExpose({
     <template v-if="editingTemplate">
       <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         <div class="max-w-xl">
-          <label class="mb-1 block text-xs font-medium text-muted-foreground">
+          <TypographyText class="mb-1 block text-xs font-medium text-muted-foreground">
             {{ t('template.name') }}
-          </label>
+          </TypographyText>
           <Input v-model:value="editingTemplate.name" class="h-9 bg-white" />
         </div>
 
@@ -551,20 +556,21 @@ defineExpose({
       <Button
         type="text"
         size="small"
-        class="nikki-outline-btn"
+        color="primary"
+        variant="outlined"
         @click="resolveLeaveDecision('cancel')"
       >
         {{ t('actions.cancel') }}
       </Button>
-      <Button size="small" class="nikki-outline-btn" @click="resolveLeaveDecision('discard')">
+      <Button
+        size="small"
+        color="primary"
+        variant="outlined"
+        @click="resolveLeaveDecision('discard')"
+      >
         {{ t('template.discardAndExit') }}
       </Button>
-      <Button
-        type="primary"
-        size="small"
-        class="nikki-primary-btn"
-        @click="resolveLeaveDecision('save')"
-      >
+      <Button type="primary" size="small" @click="resolveLeaveDecision('save')">
         {{ leaveConfirm.context === 'jump' ? t('template.saveAndJump') : t('template.saveAndExit') }}
       </Button>
     </div>

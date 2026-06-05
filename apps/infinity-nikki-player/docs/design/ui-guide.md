@@ -53,6 +53,23 @@ import { Button, Drawer, Input, Modal, Select, SelectOption } from 'antdv-next'
 
 不要为新 UI 建立一套新的 class 系统。既有 custom class 可以保留，除非它直接依赖已移除的 UI 框架行为。
 
+## CSS 布局优先
+
+布局高度、滚动区域和响应式尺寸优先交给 CSS 处理。能用 `flex`、`min-h-0`、`overflow`、
+`calc()` 或组件支持的 CSS 尺寸值表达时，不要新增 `ResizeObserver`、窗口 resize 监听、
+`getBoundingClientRect()` 测量或 debounce 状态同步。
+
+模板管理表格是基准案例：`TemplateEditor.vue` 的表格 body 高度直接使用
+`scroll.y: 'calc(100vh - 280px)'`，删除 `debouncedUpdateTableScrollY` 及相关监听后，布局仍由
+CSS 随窗口变化自动计算。
+
+## 框架主题优先
+
+禁止用 `!important` 强制覆盖 antdv-next 组件样式。主题色、边框、阴影、圆角、hover/active
+状态优先写入 `ConfigProvider` 的 `theme.token` 或 `theme.components`；组件局部差异优先使用
+框架 props、`classes`、`styles` 和语义 DOM class。只有非框架组件或纯业务容器样式才写普通
+CSS class，且不得压制框架主题机制。
+
 ## 主题和 App 上下文
 
 `src/App.vue` 必须用 `ConfigProvider` 和 `App` 包裹主界面：

@@ -55,20 +55,20 @@ async function handleClick() {
 <style scoped>
 .app-update-button {
   position: relative;
-  width: auto !important;
+  width: auto;
   min-width: 72px;
-  padding: 0 14px !important;
+  padding: 0 14px;
   gap: 6px;
-  background: #ef4444 !important;
-  border-color: #dc2626 !important;
-  color: #ffffff !important;
+  background: #ef4444;
+  border-color: #dc2626;
+  color: #ffffff;
   box-shadow: 0 8px 18px rgba(239, 68, 68, 0.28);
 }
 
 .app-update-button:hover:not(:disabled) {
-  background: #dc2626 !important;
-  border-color: #b91c1c !important;
-  color: #ffffff !important;
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #ffffff;
   box-shadow: 0 10px 22px rgba(220, 38, 38, 0.34);
   transform: translateY(-1px);
 }

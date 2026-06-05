@@ -117,7 +117,13 @@ function handleDetailDrawerOpenChange(open: boolean): void {
       </template>
       <template #extra>
         <!-- 关闭按钮 -->
-        <Button type="text" class="close-btn nikki-outline-btn" @click="playerStore.closeDetail">
+        <Button
+          type="text"
+          color="primary"
+          variant="outlined"
+          class="close-btn"
+          @click="playerStore.closeDetail"
+        >
           <template #icon>
             <X class="drawer-close-icon" />
           </template>

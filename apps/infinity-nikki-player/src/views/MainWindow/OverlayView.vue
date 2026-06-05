@@ -556,19 +556,19 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 }
 
 .template-select :deep(.ant-select-selector) {
-  height: 32px !important;
-  border: 0 !important;
-  border-radius: 8px !important;
-  background: rgba(255, 255, 255, 0.22) !important;
-  box-shadow: none !important;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: none;
   cursor: pointer;
 }
 
 .template-select :deep(.ant-select-selection-item),
 .template-select :deep(.ant-select-selection-placeholder) {
-  color: rgba(255, 255, 255, 0.94) !important;
+  color: rgba(255, 255, 255, 0.94);
   font-size: 13px;
-  line-height: 32px !important;
+  line-height: 32px;
 }
 
 .template-select :deep(.ant-select-arrow) {
@@ -576,7 +576,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 }
 
 :global(.overlay-template-select-popup .rc-virtual-list-holder) {
-  max-height: 96px !important;
+  max-height: 96px;
 }
 
 .expand-panel {

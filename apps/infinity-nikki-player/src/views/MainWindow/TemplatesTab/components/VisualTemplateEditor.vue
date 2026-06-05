@@ -670,7 +670,7 @@ onUnmounted(() => {
               </p>
             </div>
           </template>
-          <Button type="text" class="key-help-btn nikki-outline-btn">
+          <Button type="text" color="primary" variant="outlined" class="key-help-btn">
             <template #icon>
               <HelpCircle class="key-help-icon" />
             </template>
@@ -704,18 +704,19 @@ onUnmounted(() => {
     </div>
 
     <div class="editor-actions">
-      <Button size="small" class="nikki-outline-btn" @click="toggleMode">
+      <Button size="small" color="primary" variant="outlined" @click="toggleMode">
         {{ mode === 'edit' ? t('template.overviewMode') : t('template.exitOverview') }}
       </Button>
       <Button
         size="small"
-        class="nikki-outline-btn"
+        color="primary"
+        variant="outlined"
         :disabled="!selectedMapping"
         @click="clearSelectedMapping"
       >
         {{ t('template.clearMapping') }}
       </Button>
-      <Button type="primary" size="small" class="nikki-primary-btn" @click="toggleCapture">
+      <Button type="primary" size="small" @click="toggleCapture">
         {{ isCapturingSelected ? t('template.exitMapping') : t('template.mapSelected') }}
       </Button>
     </div>

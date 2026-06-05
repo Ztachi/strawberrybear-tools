@@ -189,8 +189,8 @@ async function adjustSpeed(delta: number) {
 
 .play-btn {
   @apply flex-1 gap-2 h-12 text-base font-semibold;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%) !important;
-  color: var(--color-white) !important;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: var(--color-white);
   box-shadow: 0 4px 16px var(--bg-primary-15);
 }
 

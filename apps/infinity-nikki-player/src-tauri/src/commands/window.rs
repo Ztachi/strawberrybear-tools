@@ -6,7 +6,7 @@ use crate::window_state::{self, WindowStateSnapshot};
 use tauri::{AppHandle, LogicalSize, Manager};
 
 const OVERLAY_WIDTH: f64 = 360.0;
-const OVERLAY_COLLAPSED_HEIGHT: f64 = 136.0;
+const OVERLAY_COLLAPSED_HEIGHT: f64 = 156.0;
 const OVERLAY_EXPANDED_HEIGHT: f64 = 320.0;
 /// 主窗口尺寸下限（退出悬浮后恢复）
 const MAIN_MIN_WIDTH: f64 = 980.0;
@@ -39,7 +39,7 @@ static SAVED_WINDOW_STATE: std::sync::Mutex<Option<WindowStateSnapshot>> =
 /// - 隐藏窗口装饰（标题栏）
 /// - 隐藏菜单栏
 /// - 设置窗口置顶
-/// - 设置窗口尺寸为 360x136
+/// - 设置窗口尺寸为 360x156
 /// - 窗口居中显示
 ///
 /// # Arguments
@@ -57,7 +57,7 @@ static SAVED_WINDOW_STATE: std::sync::Mutex<Option<WindowStateSnapshot>> =
 /// - always_on_top: true（置顶）
 /// - resizable: false（不可调整大小）
 /// - minimizable: false（不可最小化）
-/// - size: 360x136
+/// - size: 360x156
 /// - shadow: false（无阴影）
 #[tauri::command]
 pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
@@ -90,7 +90,7 @@ pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
         window
             .set_minimizable(false)
             .map_err(|e| format!("设置不可最小化失败: {}", e))?;
-        // 限制悬浮窗尺寸：收起高度 136，展开播放列表高度 320。
+        // 限制悬浮窗尺寸：收起高度 156，展开播放列表高度 320。
         window
             .set_min_size(Some(LogicalSize {
                 width: OVERLAY_WIDTH,

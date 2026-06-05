@@ -139,6 +139,7 @@ export default {
     searchPlaceholder: '搜索模板名称',
     selectedCount: '已选 {count} 个',
     totalCount: '共 {count} 个',
+    paginationTotal: '第 {start}-{end} 个，共 {total} 个',
     type: '类型',
     mappingTotal: '映射数',
     templateId: '模板 ID',

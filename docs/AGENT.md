@@ -20,6 +20,17 @@ src/
 4. 错误处理必须包含具体错误信息
 5. **每次写完代码必须先运行 `pnpm type-check && pnpm lint`，确保类型检查和 lint 都没问题后才能提交交付**
 
+## CSS 优先原则
+
+能用 CSS 表达的布局、尺寸、滚动和响应式约束，不要用 JS 测量 DOM 后再回写状态。优先使用
+`flex`、`grid`、`min-height`、`max-height`、`calc()`、`clamp()`、CSS 变量和原生
+`overflow`，只有在业务状态或组件 API 无法表达真实布局关系时才引入
+`ResizeObserver`、`getBoundingClientRect()`、`debounce` 等 JS 布局计算。
+
+典型案例：`apps/infinity-nikki-player/src/views/MainWindow/TemplatesTab/components/TemplateEditor.vue`
+的模板表格滚动高度可以直接通过 antdv-next `Table` 的 `scroll.y: 'calc(...)'` 交给 CSS
+计算，不需要维护 `debouncedUpdateTableScrollY`、窗口 resize 监听和表格行高测量链路。
+
 ## ESLint + Prettier 代码规范
 
 本项目使用 ESLint + Prettier 保证代码风格统一，支持提交时自动格式化。

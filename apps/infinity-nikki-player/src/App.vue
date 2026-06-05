@@ -9,7 +9,7 @@ import AboutDialog from '@/components/AboutDialog/index.vue'
 import { feedback as toast } from '@/lib/feedback'
 import { usePlayerStore } from './stores/player'
 import { useAppUpdater } from '@/composables/useAppUpdater'
-import { infinityNikkiTheme } from '@/theme/infinityNikkiTheme'
+import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 
 /** 播放器 Store 实例 */
 const playerStore = usePlayerStore()
@@ -72,7 +72,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <ConfigProvider :theme="infinityNikkiTheme">
+  <ConfigProvider v-bind="infinityNikkiConfigProviderProps">
     <AntApp>
       <!-- Loading 过渡动画 -->
       <Transition name="loading">

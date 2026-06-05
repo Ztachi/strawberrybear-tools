@@ -195,15 +195,15 @@ const isOverlay = computed(() => props.variant === 'overlay')
 
 .transport-btn.overlay {
   @apply h-8 w-8 rounded-lg text-white/90 transition-colors;
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  color: rgba(255, 255, 255, 0.92) !important;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .transport-btn.overlay:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2) !important;
-  color: white !important;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 .transport-btn.overlay:disabled {
@@ -212,16 +212,16 @@ const isOverlay = computed(() => props.variant === 'overlay')
 
 .transport-btn.overlay.play {
   @apply w-10 h-10 rounded-full text-white;
-  background: rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .transport-btn.overlay.play:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.4) !important;
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .transport-btn.overlay.active {
-  background: rgba(255, 255, 255, 0.4) !important;
-  color: white !important;
+  background: rgba(255, 255, 255, 0.4);
+  color: white;
 }
 
 .countdown-text {

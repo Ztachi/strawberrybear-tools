@@ -5,10 +5,14 @@
 @layer base {
   :root {
     /* 品牌粉色系 */
-    --color-primary: #f7c0c1;
-    --color-primary-light: #fddde6;
-    --color-primary-active: #e98ca2;
-    --color-secondary: #f5b8c0;
+    --color-primary: #f7b7be;
+    --color-primary-light: #fff1f4;
+    --color-primary-hover: #ee8fa1;
+    --color-primary-active: #e36f86;
+    --color-primary-disabled-bg: #fff1f4;
+    --color-primary-disabled-border: #f8d4da;
+    --color-primary-disabled-text: #f0b8c2;
+    --color-secondary: #f3a1ae;
 
     /* 文本颜色 */
     --color-foreground: #4a3f3f;
@@ -26,17 +30,17 @@
     --bg-white-20: rgba(255, 255, 255, 0.2);
 
     /* 粉色透明背景 */
-    --bg-primary-15: rgba(247, 192, 193, 0.15);
-    --bg-primary-10: rgba(247, 192, 193, 0.1);
-    --bg-primary-08: rgba(247, 192, 193, 0.08);
-    --bg-primary-04: rgba(247, 192, 193, 0.04);
+    --bg-primary-15: rgba(247, 183, 190, 0.15);
+    --bg-primary-10: rgba(247, 183, 190, 0.1);
+    --bg-primary-08: rgba(247, 183, 190, 0.08);
+    --bg-primary-04: rgba(247, 183, 190, 0.04);
 
     /* 粉色边框 */
-    --border-primary: rgba(247, 192, 193, 1);
-    --border-primary-30: rgba(247, 192, 193, 0.3);
-    --border-primary-20: rgba(247, 192, 193, 0.2);
-    --border-primary-15: rgba(247, 192, 193, 0.15);
-    --border-primary-10: rgba(247, 192, 193, 0.1);
+    --border-primary: rgba(247, 183, 190, 1);
+    --border-primary-30: rgba(247, 183, 190, 0.3);
+    --border-primary-20: rgba(247, 183, 190, 0.2);
+    --border-primary-15: rgba(247, 183, 190, 0.15);
+    --border-primary-10: rgba(247, 183, 190, 0.1);
 
     /* 状态颜色 */
     --color-success: #4ade80;
@@ -50,9 +54,9 @@
     --bg-warning-20: rgba(250, 204, 21, 0.2);
 
     /* 粉色阴影 */
-    --shadow-pink: 0 8px 32px rgba(247, 192, 193, 0.15);
-    --shadow-pink-sm: 0 2px 8px rgba(247, 192, 193, 0.08);
-    --shadow-pink-card: 0 2px 12px rgba(247, 192, 193, 0.08);
+    --shadow-pink: 0 8px 32px rgba(238, 143, 161, 0.16);
+    --shadow-pink-sm: 0 2px 8px rgba(238, 143, 161, 0.1);
+    --shadow-pink-card: 0 2px 12px rgba(238, 143, 161, 0.1);
 
     /* 通用阴影 */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -144,59 +148,32 @@
     color: var(--color-success);
   }
 
-  .nikki-outline-btn {
-    background: var(--bg-white-80) !important;
-    border: 1px solid var(--border-primary) !important;
-    color: var(--color-primary-active) !important;
-    font-weight: 500;
-    transition: all 0.2s;
+  .nikki-theme-button.ant-btn-primary:not([disabled]):not(.ant-btn-dangerous) {
+    position: relative;
+    overflow: hidden;
+    border-color: transparent;
   }
 
-  .nikki-outline-btn:hover:not(:disabled),
-  .nikki-outline-btn:focus-visible:not(:disabled) {
-    background: linear-gradient(
-      135deg,
-      var(--color-primary) 0%,
-      var(--color-secondary) 100%
-    ) !important;
-    border-color: transparent !important;
-    color: var(--color-white) !important;
-    box-shadow: var(--shadow-pink-sm);
+  .nikki-theme-button.ant-btn-primary:not([disabled]):not(.ant-btn-dangerous) > span {
+    position: relative;
+    z-index: 1;
   }
 
-  .nikki-outline-btn:hover:not(:disabled) svg,
-  .nikki-outline-btn:focus-visible:not(:disabled) svg {
-    color: var(--color-white);
+  .nikki-theme-button.ant-btn-primary:not([disabled]):not(.ant-btn-dangerous)::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+    opacity: 1;
+    transition: opacity 0.2s ease;
   }
 
-  .nikki-primary-btn {
-    background: linear-gradient(
-      135deg,
-      var(--color-primary) 0%,
-      var(--color-secondary) 100%
-    ) !important;
-    border-color: transparent !important;
-    color: var(--color-white) !important;
-    font-weight: 500;
-    box-shadow: var(--shadow-pink-sm);
-    transition: all 0.2s;
-  }
-
-  .nikki-primary-btn:hover:not(:disabled),
-  .nikki-primary-btn:focus-visible:not(:disabled) {
-    background: linear-gradient(135deg, var(--color-primary-active) 0%, #e57f93 100%) !important;
-    border-color: transparent !important;
-    color: var(--color-white) !important;
-    box-shadow: var(--shadow-pink-md);
-  }
-
-  .nikki-primary-btn:hover:not(:disabled) svg,
-  .nikki-primary-btn:focus-visible:not(:disabled) svg {
-    color: var(--color-white);
-  }
-
-  .nikki-danger-btn {
-    font-weight: 500;
+  .nikki-theme-button.ant-btn-primary:not([disabled]):not(.ant-btn-dangerous):hover::before,
+  .nikki-theme-button.ant-btn-primary:not([disabled]):not(
+      .ant-btn-dangerous
+    ):focus-visible::before {
+    opacity: 0;
   }
 
   /* iOS 毛玻璃效果 */
@@ -251,7 +228,7 @@
 }
 
 .ant-select-dropdown .rc-virtual-list-scrollbar-thumb {
-  background: #fbcfe8 !important;
+  background: #fbcfe8;
 }
 
 /* 拖拽区域样式 */

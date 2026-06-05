@@ -5,14 +5,20 @@
 import type { CSSProperties, VNodeChild } from 'vue'
 import { h } from 'vue'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
-import type { ThemeConfig } from 'antdv-next'
+import type { ConfigProviderProps, ThemeConfig } from 'antdv-next'
 
 /** 主品牌粉色，源自无限暖暖当前项目视觉基准。 */
-export const NIKKI_PRIMARY_COLOR = '#F7C0C1'
-/** 主品牌粉色悬停态，用于按钮、选中项和可交互边框。 */
-export const NIKKI_PRIMARY_HOVER_COLOR = '#F5AAB8'
-/** 主品牌粉色按下态，确保浅色界面里仍有明确反馈。 */
-export const NIKKI_PRIMARY_ACTIVE_COLOR = '#E98CA2'
+export const NIKKI_PRIMARY_COLOR = '#F7B7BE'
+/** 主品牌粉色悬停态，必须比常态更深，确保 hover 是增强反馈。 */
+export const NIKKI_PRIMARY_HOVER_COLOR = '#EE8FA1'
+/** 主品牌粉色按下态，比 hover 再深一级，形成明确按压层级。 */
+export const NIKKI_PRIMARY_ACTIVE_COLOR = '#E36F86'
+/** 主品牌粉色禁用背景，只降低饱和和对比，不回退到灰色系。 */
+export const NIKKI_PRIMARY_DISABLED_BG = '#FFF1F4'
+/** 主品牌粉色禁用描边，用于 disabled 按钮和输入控件边框。 */
+export const NIKKI_PRIMARY_DISABLED_BORDER = '#F8D4DA'
+/** 主品牌粉色禁用文字，保持主题感但降低可交互暗示。 */
+export const NIKKI_PRIMARY_DISABLED_TEXT = '#F0B8C2'
 /** 顶部菜单高度，抽屉挂载到内容区时不能越过这条布局边界。 */
 export const MAIN_WINDOW_HEADER_HEIGHT = 46
 
@@ -25,6 +31,13 @@ export const infinityNikkiTheme: ThemeConfig = {
     colorPrimary: NIKKI_PRIMARY_COLOR,
     colorPrimaryHover: NIKKI_PRIMARY_HOVER_COLOR,
     colorPrimaryActive: NIKKI_PRIMARY_ACTIVE_COLOR,
+    colorPrimaryBg: '#FFF5F7',
+    colorPrimaryBgHover: '#FFE8EE',
+    colorPrimaryBorder: '#F5AAB8',
+    colorPrimaryBorderHover: NIKKI_PRIMARY_HOVER_COLOR,
+    colorPrimaryTextHover: NIKKI_PRIMARY_HOVER_COLOR,
+    colorPrimaryText: NIKKI_PRIMARY_ACTIVE_COLOR,
+    colorPrimaryTextActive: '#D95A75',
     colorInfo: NIKKI_PRIMARY_COLOR,
     colorSuccess: '#4ADE80',
     colorWarning: '#F5C542',
@@ -36,9 +49,12 @@ export const infinityNikkiTheme: ThemeConfig = {
     colorBgBase: '#FFF7FA',
     colorBgLayout: '#FFF7FA',
     colorBgContainer: '#FFFFFF',
+    colorBgContainerDisabled: NIKKI_PRIMARY_DISABLED_BG,
     colorBgElevated: '#FFF9FC',
     colorBorder: '#F3CAD0',
+    colorBorderDisabled: NIKKI_PRIMARY_DISABLED_BORDER,
     colorBorderSecondary: '#F8DCE2',
+    colorTextDisabled: NIKKI_PRIMARY_DISABLED_TEXT,
     colorFillQuaternary: 'rgba(247, 192, 193, 0.08)',
     colorFillTertiary: 'rgba(247, 192, 193, 0.12)',
     colorFillSecondary: 'rgba(247, 192, 193, 0.16)',
@@ -54,8 +70,33 @@ export const infinityNikkiTheme: ThemeConfig = {
   },
   components: {
     Button: {
+      colorPrimary: NIKKI_PRIMARY_COLOR,
+      colorPrimaryHover: NIKKI_PRIMARY_HOVER_COLOR,
+      colorPrimaryActive: NIKKI_PRIMARY_ACTIVE_COLOR,
+      colorPrimaryBg: '#FFF5F7',
+      colorPrimaryBgHover: '#FFE8EE',
+      colorPrimaryBorder: '#F5AAB8',
+      colorPrimaryBorderHover: NIKKI_PRIMARY_HOVER_COLOR,
+      colorBgContainerDisabled: NIKKI_PRIMARY_DISABLED_BG,
+      colorBorderDisabled: NIKKI_PRIMARY_DISABLED_BORDER,
+      colorTextDisabled: NIKKI_PRIMARY_DISABLED_TEXT,
       borderRadius: 12,
-      primaryShadow: '0 4px 16px rgba(247, 192, 193, 0.28)',
+      fontWeight: 500,
+      defaultBg: 'rgba(255, 255, 255, 0.8)',
+      defaultBorderColor: NIKKI_PRIMARY_COLOR,
+      defaultColor: NIKKI_PRIMARY_ACTIVE_COLOR,
+      defaultHoverBg: '#FFF0F3',
+      defaultHoverBorderColor: NIKKI_PRIMARY_HOVER_COLOR,
+      defaultHoverColor: NIKKI_PRIMARY_HOVER_COLOR,
+      defaultActiveBg: '#FFE4EA',
+      defaultActiveBorderColor: NIKKI_PRIMARY_ACTIVE_COLOR,
+      defaultActiveColor: NIKKI_PRIMARY_ACTIVE_COLOR,
+      defaultBgDisabled: NIKKI_PRIMARY_DISABLED_BG,
+      dashedBgDisabled: NIKKI_PRIMARY_DISABLED_BG,
+      primaryColor: '#FFFFFF',
+      primaryShadow: '0 4px 16px rgba(238, 143, 161, 0.28)',
+      defaultShadow: 'none',
+      dangerShadow: '0 4px 16px rgba(239, 91, 107, 0.22)',
       algorithm: true,
     },
     Drawer: {
@@ -91,6 +132,25 @@ export const infinityNikkiTheme: ThemeConfig = {
 }
 
 /**
+ * @description: Antdv Next Button 语义样式入口
+ * @description 通过 ConfigProvider.button.classes 挂载，遵循官方 semantic DOM 扩展方式。
+ */
+export const infinityNikkiButtonConfig: ConfigProviderProps['button'] = {
+  classes: {
+    root: 'nikki-theme-button',
+  },
+}
+
+/**
+ * @description: Antdv Next 根配置
+ * @description 统一提供给根 ConfigProvider 和静态反馈 holder，避免主题上下文分叉。
+ */
+export const infinityNikkiConfigProviderProps: ConfigProviderProps = {
+  theme: infinityNikkiTheme,
+  button: infinityNikkiButtonConfig,
+}
+
+/**
  * @description: 获取主内容弹层容器
  * @description Drawer/Popover/Tooltip 默认挂到 body 会覆盖顶部菜单，这里统一优先挂到内容区。
  * @return {HTMLElement} 主窗口内容弹层容器，找不到时回退到 body
@@ -119,14 +179,8 @@ export function getContentDrawerRootStyle(): CSSProperties {
 export function configureAntdvStaticContext(): void {
   ConfigProvider.config({
     holderRender: (children: VNodeChild) =>
-      h(
-        ConfigProvider,
-        {
-          theme: infinityNikkiTheme,
-        },
-        {
-          default: () => h(AntApp, null, () => children),
-        }
-      ),
+      h(ConfigProvider, infinityNikkiConfigProviderProps, {
+        default: () => h(AntApp, null, () => children),
+      }),
   })
 }

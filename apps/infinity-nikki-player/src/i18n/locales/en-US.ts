@@ -139,6 +139,7 @@ export default {
     searchPlaceholder: 'Search template name',
     selectedCount: '{count} selected',
     totalCount: '{count} total',
+    paginationTotal: '{start}-{end} of {total} templates',
     type: 'Type',
     mappingTotal: 'Mappings',
     templateId: 'Template ID',
