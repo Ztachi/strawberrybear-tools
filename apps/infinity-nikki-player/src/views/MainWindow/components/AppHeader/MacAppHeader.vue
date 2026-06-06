@@ -4,6 +4,7 @@
  * @description 保留左侧系统交通灯预留区，并复用公共 Header 操作区
  */
 import HeaderActions from './HeaderActions.vue'
+import AppUpdateButton from '@/components/AppUpdateButton.vue'
 
 /**
  * @description: macOS Header 属性
@@ -43,6 +44,8 @@ const emit = defineEmits<{
         >
           {{ title }}
         </h1>
+        <!-- 更新入口跟随标题区展示，避免挤占右侧窗口操作按钮区域。 -->
+        <AppUpdateButton />
       </div>
 
       <HeaderActions

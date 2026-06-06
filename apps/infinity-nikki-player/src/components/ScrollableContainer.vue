@@ -5,7 +5,6 @@
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RotateCw, ArrowUp } from 'lucide-vue-next'
-import AppUpdateButton from '@/components/AppUpdateButton.vue'
 
 /** 滚动容器 DOM 引用 */
 const containerRef = ref<HTMLElement | null>(null)
@@ -60,9 +59,6 @@ onUnmounted(() => {
 
     <!-- 右下角浮动按钮组 -->
     <div class="fab-group">
-      <!-- 更新按钮（静默检测到新版本时显示） -->
-      <AppUpdateButton />
-
       <!-- 返回顶部按钮（滚动超过阈值时显示） -->
       <button
         v-show="showBackToTop"

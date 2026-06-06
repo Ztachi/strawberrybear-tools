@@ -5,6 +5,7 @@
  */
 import HeaderActions from './HeaderActions.vue'
 import WindowsWindowControls from './WindowsWindowControls.vue'
+import AppUpdateButton from '@/components/AppUpdateButton.vue'
 
 /**
  * @description: Windows Header 属性
@@ -44,6 +45,8 @@ const emit = defineEmits<{
         >
           {{ title }}
         </h1>
+        <!-- 更新入口跟随标题区展示，避免挤占右侧窗口控制按钮区域。 -->
+        <AppUpdateButton />
       </div>
 
       <div class="flex h-full shrink-0 items-center gap-3" data-tauri-drag-region>
