@@ -8,6 +8,7 @@ pub mod player;
 pub mod settings;
 pub mod templates;
 pub mod window;
+pub mod window_controls;
 
 use std::process::Command;
 

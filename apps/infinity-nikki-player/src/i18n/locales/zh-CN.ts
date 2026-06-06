@@ -6,6 +6,12 @@ export default {
     title: '无限暖暖自动演奏',
     overlayMode: '进入悬浮模式',
   },
+  windowControls: {
+    minimize: '最小化',
+    maximize: '最大化',
+    restore: '还原',
+    close: '关闭',
+  },
   tabs: {
     files: '文件',
     templates: '模板',

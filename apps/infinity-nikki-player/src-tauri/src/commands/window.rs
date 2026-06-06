@@ -2,6 +2,7 @@
 //!
 //! 提供进入/退出悬浮模式、窗口状态保存与恢复等功能
 
+use super::window_controls;
 use crate::window_state::{self, WindowStateSnapshot};
 use tauri::{AppHandle, LogicalSize, Manager};
 
@@ -12,6 +13,7 @@ const OVERLAY_EXPANDED_HEIGHT: f64 = 320.0;
 const MAIN_MIN_WIDTH: f64 = 980.0;
 const MAIN_MIN_HEIGHT: f64 = 640.0;
 /// 退出悬浮后等待 set_decorations 异步 styleMask 落地的时间
+#[cfg(target_os = "macos")]
 const DECORATION_SETTLE_MS: u64 = 80;
 /// 还原窗口几何后、再进入全屏前的稳定时间
 const FULLSCREEN_RESTORE_SETTLE_MS: u64 = 60;
@@ -26,8 +28,43 @@ pub fn apply_immersive_titlebar(window: &tauri::WebviewWindow) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn apply_immersive_titlebar(_window: &tauri::WebviewWindow) {}
+#[cfg(target_os = "macos")]
+async fn restore_main_window_chrome(window: &tauri::WebviewWindow) -> Result<(), String> {
+    window
+        .show_menu()
+        .map_err(|e| format!("显示菜单栏失败: {}", e))?;
+    window
+        .set_decorations(true)
+        .map_err(|e| format!("恢复窗口样式失败: {}", e))?;
+
+    // macOS 上 set_decorations(true) 异步修改 styleMask，需等待落地后再补回沉浸式标题栏。
+    tokio::time::sleep(std::time::Duration::from_millis(DECORATION_SETTLE_MS)).await;
+    apply_immersive_titlebar(window);
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+async fn restore_main_window_chrome(window: &tauri::WebviewWindow) -> Result<(), String> {
+    window
+        .hide_menu()
+        .map_err(|e| format!("隐藏菜单栏失败: {}", e))?;
+    window
+        .set_decorations(false)
+        .map_err(|e| format!("恢复 Windows 自定义标题栏失败: {}", e))?;
+    window_controls::apply_windows_custom_titlebar(window);
+    Ok(())
+}
+
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+async fn restore_main_window_chrome(window: &tauri::WebviewWindow) -> Result<(), String> {
+    window
+        .show_menu()
+        .map_err(|e| format!("显示菜单栏失败: {}", e))?;
+    window
+        .set_decorations(true)
+        .map_err(|e| format!("恢复窗口样式失败: {}", e))?;
+    Ok(())
+}
 
 /// 保存进入悬浮窗前的窗口状态快照（含全屏标记），退出时据此精确还原
 static SAVED_WINDOW_STATE: std::sync::Mutex<Option<WindowStateSnapshot>> =
@@ -67,6 +104,7 @@ pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
         let was_fullscreen = window_state::leave_fullscreen(&window).await?;
         // 2) 快照进入前的窗口化几何与全屏标记，退出时据此精确还原
         let snapshot = window_state::snapshot(&window, was_fullscreen);
+        window_state::persist_snapshot(&app, &snapshot)?;
         *SAVED_WINDOW_STATE.lock().unwrap() = Some(snapshot);
 
         // 3) 变形为悬浮窗
@@ -146,7 +184,15 @@ pub async fn enter_overlay_mode(app: AppHandle) -> Result<(), String> {
 pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         // 取出进入前的状态快照（lock 立即 clone 释放，避免跨 await 持锁）
-        let saved = SAVED_WINDOW_STATE.lock().unwrap().clone();
+        let saved = SAVED_WINDOW_STATE.lock().unwrap().clone().or_else(|| {
+            match window_state::load_persisted_snapshot(&app) {
+                Ok(snapshot) => snapshot,
+                Err(e) => {
+                    log::warn!("读取持久化悬浮窗口状态失败: {}", e);
+                    None
+                }
+            }
+        });
 
         if let Some(snapshot) = saved {
             // 1) 恢复主窗口属性
@@ -169,27 +215,18 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
                 .set_max_size(None::<LogicalSize<f64>>)
                 .map_err(|e| format!("恢复最大尺寸失败: {}", e))?;
             window.set_shadow(true).ok();
-            window
-                .show_menu()
-                .map_err(|e| format!("显示菜单栏失败: {}", e))?;
-            window
-                .set_decorations(true)
-                .map_err(|e| format!("恢复窗口样式失败: {}", e))?;
+            restore_main_window_chrome(&window).await?;
 
             // 2) 复用窗口状态机制：还原窗口化几何（尺寸 + 位置）
             window_state::restore_geometry(&window, &snapshot)?;
 
-            // 3) 等 set_decorations 的异步 styleMask 落地后，再补回沉浸式标题栏。
-            //    macOS 上 set_decorations(true) 异步修改 styleMask 且不含 FullSizeContentView，
-            //    若同步补回会被随后的异步 mask 覆盖，导致菜单条错位、webview 失焦致 hover 失效。
-            tokio::time::sleep(std::time::Duration::from_millis(DECORATION_SETTLE_MS)).await;
-            apply_immersive_titlebar(&window);
-
-            // 4) 按需恢复全屏：在窗口化几何就绪后再进入，确保日后手动退出全屏回到正确尺寸。
+            // 3) 按需恢复全屏：在窗口化几何就绪后再进入，确保日后手动退出全屏回到正确尺寸。
             //    非全屏场景则重新聚焦，保证退出悬浮后 hover 立即可用。
             if snapshot.fullscreen {
-                tokio::time::sleep(std::time::Duration::from_millis(FULLSCREEN_RESTORE_SETTLE_MS))
-                    .await;
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    FULLSCREEN_RESTORE_SETTLE_MS,
+                ))
+                .await;
                 window_state::restore_fullscreen(&window, &snapshot)?;
             } else if let Err(e) = window.set_focus() {
                 log::warn!("退出悬浮模式后聚焦失败: {}", e);
@@ -198,8 +235,19 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
 
         // 清除保存的状态
         *SAVED_WINDOW_STATE.lock().unwrap() = None;
+        if let Err(e) = window_state::clear_persisted_snapshot(&app) {
+            log::warn!("清理持久化悬浮窗口状态失败: {}", e);
+        }
 
         log::info!("Exited overlay mode");
     }
     Ok(())
+}
+
+/// @description: 查询是否存在待恢复的悬浮窗口状态。
+/// @param {AppHandle} app - Tauri 应用句柄
+/// @return {boolean} 是否仍处于悬浮窗口生命周期中
+#[tauri::command]
+pub fn has_saved_overlay_window_state(app: AppHandle) -> bool {
+    SAVED_WINDOW_STATE.lock().unwrap().is_some() || window_state::has_persisted_snapshot(&app)
 }

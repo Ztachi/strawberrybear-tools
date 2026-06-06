@@ -81,7 +81,11 @@ pub fn extract_melody(events: &[NoteEvent], ticks_per_beat: u16, tempo: u64) -> 
 /// # Notes
 ///
 /// 与 extract_melody 不同，这里保留所有音轨的音符
-pub fn extract_all_notes(events: &[NoteEvent], ticks_per_beat: u16, tempo: u64) -> Vec<MelodyEvent> {
+pub fn extract_all_notes(
+    events: &[NoteEvent],
+    ticks_per_beat: u16,
+    tempo: u64,
+) -> Vec<MelodyEvent> {
     let mut notes = Vec::new();
 
     for event in events {

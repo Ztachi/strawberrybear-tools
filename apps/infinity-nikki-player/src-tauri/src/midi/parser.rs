@@ -3,7 +3,7 @@
 //! 提供 MIDI 文件解析和音符名称转换功能
 
 use crate::types::{MidiInfo, NoteEvent};
-use midly::{MidiMessage, MetaMessage, Smf, TrackEventKind};
+use midly::{MetaMessage, MidiMessage, Smf, TrackEventKind};
 use std::path::Path;
 
 /// 解析 MIDI 文件
@@ -151,7 +151,9 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
 ///
 /// 音符名称字符串（如 "C4"、"F#5"）
 pub fn pitch_to_name(pitch: u8) -> String {
-    const NOTES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const NOTES: [&str; 12] = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
     let octave = (pitch / 12) as i32 - 1;
     let note = NOTES[(pitch % 12) as usize];
     format!("{}{}", note, octave)

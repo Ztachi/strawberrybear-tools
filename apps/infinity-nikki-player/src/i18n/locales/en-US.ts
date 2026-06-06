@@ -6,6 +6,12 @@ export default {
     title: 'Infinity Nikki Auto Player',
     overlayMode: 'Enter Overlay Mode',
   },
+  windowControls: {
+    minimize: 'Minimize',
+    maximize: 'Maximize',
+    restore: 'Restore',
+    close: 'Close',
+  },
   tabs: {
     files: 'Files',
     templates: 'Templates',

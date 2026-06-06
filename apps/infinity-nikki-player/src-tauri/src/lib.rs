@@ -3,15 +3,15 @@
 //! 负责初始化 Tauri 应用、窗口配置、菜单设置和插件管理
 
 mod commands;
-mod midi;
 mod keyboard;
+mod midi;
 mod types;
 mod window_state;
 
 use commands::player::PlayerControl;
-use types::AppState;
 use std::env;
-use tauri::{Manager, Emitter};
+use tauri::{Emitter, Manager};
+use types::AppState;
 
 /// 检测是否以管理员权限运行（仅 Windows）
 ///
@@ -119,7 +119,11 @@ fn seed_bundled_midi(app: &tauri::App) {
         }
 
         // 只处理 MIDI 文件
-        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
         if ext != "mid" && ext != "midi" {
             continue;
         }
@@ -197,30 +201,26 @@ pub fn run() {
                             app,
                             app_name,
                             true,
-                            &[
-                                &tauri::menu::MenuItem::with_id(
-                                    app,
-                                    "quit",
-                                    &format!("退出 {app_name}"),
-                                    true,
-                                    None::<&str>,
-                                )?,
-                            ],
+                            &[&tauri::menu::MenuItem::with_id(
+                                app,
+                                "quit",
+                                &format!("退出 {app_name}"),
+                                true,
+                                None::<&str>,
+                            )?],
                         )?,
                         // 帮助菜单
                         &tauri::menu::Submenu::with_items(
                             app,
                             "帮助",
                             true,
-                            &[
-                                &tauri::menu::MenuItem::with_id(
-                                    app,
-                                    "help_about",
-                                    &format!("关于 {app_name}"),
-                                    true,
-                                    None::<&str>,
-                                )?,
-                            ],
+                            &[&tauri::menu::MenuItem::with_id(
+                                app,
+                                "help_about",
+                                &format!("关于 {app_name}"),
+                                true,
+                                None::<&str>,
+                            )?],
                         )?,
                     ],
                 )?
@@ -233,29 +233,25 @@ pub fn run() {
                             app,
                             "InfinityNikkiPlayer",
                             true,
-                            &[
-                                &tauri::menu::MenuItem::with_id(
-                                    app,
-                                    "quit",
-                                    "Quit InfinityNikkiPlayer",
-                                    true,
-                                    None::<&str>,
-                                )?,
-                            ],
+                            &[&tauri::menu::MenuItem::with_id(
+                                app,
+                                "quit",
+                                "Quit InfinityNikkiPlayer",
+                                true,
+                                None::<&str>,
+                            )?],
                         )?,
                         &tauri::menu::Submenu::with_items(
                             app,
                             "Help",
                             true,
-                            &[
-                                &tauri::menu::MenuItem::with_id(
-                                    app,
-                                    "help_about",
-                                    "About InfinityNikkiPlayer",
-                                    true,
-                                    None::<&str>,
-                                )?,
-                            ],
+                            &[&tauri::menu::MenuItem::with_id(
+                                app,
+                                "help_about",
+                                "About InfinityNikkiPlayer",
+                                true,
+                                None::<&str>,
+                            )?],
                         )?,
                     ],
                 )?
@@ -275,6 +271,17 @@ pub fn run() {
                 // 的 titleBarStyle/hiddenTitle 在窗口创建时声明式应用，无需运行时再设置。
                 if let Err(e) = window.set_title(window_title) {
                     log::error!("Failed to set window title: {}", e);
+                }
+
+                #[cfg(target_os = "windows")]
+                {
+                    if let Err(e) = window.hide_menu() {
+                        log::warn!("隐藏 Windows 原生菜单栏失败: {}", e);
+                    }
+                    if let Err(e) = window.set_decorations(false) {
+                        log::warn!("启用 Windows 自定义标题栏失败: {}", e);
+                    }
+                    commands::window_controls::apply_windows_custom_titlebar(&window);
                 }
             }
 
@@ -330,6 +337,9 @@ pub fn run() {
             commands::keyboard::simulate_key_up,
             commands::window::enter_overlay_mode,
             commands::window::exit_overlay_mode,
+            commands::window::has_saved_overlay_window_state,
+            commands::window_controls::hide_windows_snap_overlay,
+            commands::window_controls::show_windows_snap_overlay,
             commands::templates::get_templates,
             commands::templates::save_template,
             commands::templates::delete_template,

@@ -11,15 +11,16 @@ import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
-import { Button, RadioButton, RadioGroup, Tooltip } from 'antdv-next'
-import { AlertCircle, HelpCircle, Monitor, Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
-import { SUPPORTED_LOCALES } from '@/i18n'
+import { Button, RadioButton, RadioGroup } from 'antdv-next'
+import { Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import FilesTab from './FilesTab/index.vue'
 import TemplatesTab from './TemplatesTab/index.vue'
 import OverlayView from './OverlayView.vue'
+import AppHeader from './components/AppHeader/index.vue'
+import { isSupportedLocale } from '@/i18n'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
@@ -376,9 +377,14 @@ function bindDomDragEvents() {
 
 /**
  * @description: 切换语言
- * @param {'zh-CN' | 'en-US'} targetLocale - 目标语言
+ * @param {string} targetLocale - Header 语言切换按钮发出的目标语言
  */
-function switchLocale(targetLocale: 'zh-CN' | 'en-US') {
+function switchLocale(targetLocale: string) {
+  if (!isSupportedLocale(targetLocale)) {
+    console.warn('忽略不支持的语言切换请求:', targetLocale)
+    return
+  }
+
   settingsStore.setLocale(targetLocale)
 }
 
@@ -407,6 +413,8 @@ onMounted(async () => {
   await playerStore.checkAccessibility()
   // 加载设置
   await settingsStore.loadSettings()
+  // 如果用户在悬浮窗口中刷新页面，前端状态会重建；这里从 Rust 侧持久化快照恢复悬浮 UI。
+  settingsStore.isOverlayMode = await invoke<boolean>('has_saved_overlay_window_state')
   // 加载 MIDI 库
   await playerStore.loadMidiLibrary()
   // 绑定拖拽事件
@@ -513,83 +521,14 @@ async function enterOverlayMode() {
 
     <!-- 正常模式内容：用 v-show 保留 DOM 和滚动状态，避免退出悬浮后页面重新创建 -->
     <div v-show="!settingsStore.isOverlayMode" class="normal-mode-shell">
-      <!-- 全局菜单条：data-tauri-drag-region 由 Tauri 原生处理拖拽/双击缩放，
-           需逐个标注到非交互的叶子元素上（drag.js 只校验事件 target 自身的属性，不向上查找祖先） -->
-      <header class="header" data-tauri-drag-region>
-        <div class="header-content" data-tauri-drag-region>
-          <!-- Logo 和标题 -->
-          <div class="logo-section" data-tauri-drag-region>
-            <img
-              src="@/assets/images/logo.png"
-              alt="logo"
-              class="logo-icon"
-              data-tauri-drag-region
-            />
-            <h1 class="title" data-tauri-drag-region>
-              {{ t('app.title') }}
-            </h1>
-          </div>
-
-          <div class="header-actions" data-tauri-drag-region>
-            <!-- 辅助功能权限提示（未授权时显示） -->
-            <Tooltip
-              v-if="!playerStore.hasAccessibility"
-              placement="bottomRight"
-              :title="t('permissions.reauthorizeTip')"
-              overlay-class-name="access-tooltip"
-            >
-              <Button
-                danger
-                type="primary"
-                size="small"
-                class="access-btn"
-                @click="openAccessibilitySettings"
-              >
-                <template #icon>
-                  <AlertCircle class="header-btn-icon access-icon" />
-                </template>
-                {{ t('permissions.required') }}
-              </Button>
-            </Tooltip>
-
-            <!-- 悬浮模式按钮 -->
-            <Button type="primary" size="small" class="overlay-btn" @click="enterOverlayMode">
-              <template #icon>
-                <Monitor class="header-btn-icon" />
-              </template>
-              {{ t('app.overlayMode') }}
-            </Button>
-
-            <!-- 语言切换 -->
-            <div class="locale-switch">
-              <button
-                v-for="loc in SUPPORTED_LOCALES"
-                :key="loc.value"
-                class="locale-btn"
-                :class="{ active: locale === loc.value }"
-                @click="switchLocale(loc.value)"
-              >
-                {{ loc.label }}
-              </button>
-            </div>
-
-            <!-- 帮助按钮 -->
-            <Button
-              type="text"
-              color="primary"
-              variant="outlined"
-              class="help-btn"
-              :title="t('about.title')"
-              :aria-label="t('about.title')"
-              @click="openHelp"
-            >
-              <template #icon>
-                <HelpCircle class="help-icon" />
-              </template>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        :title="t('app.title')"
+        :has-accessibility="playerStore.hasAccessibility"
+        @open-accessibility-settings="openAccessibilitySettings"
+        @enter-overlay-mode="enterOverlayMode"
+        @switch-locale="switchLocale"
+        @open-help="openHelp"
+      />
 
       <!-- 主内容区 -->
       <main id="main-window-body" class="content">
@@ -717,112 +656,10 @@ async function enterOverlayMode() {
   color: var(--color-primary);
 }
 
-/* 全局菜单条 */
-.header {
-  @apply relative z-30 shrink-0;
-  z-index: 30;
-  height: var(--global-menu-height);
-  /* background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.4) 100%),
-    linear-gradient(90deg, rgba(247, 192, 193, 0.18) 0%, rgba(255, 255, 255, 0.08) 48%, rgba(245, 184, 192, 0.14) 100%);
-  backdrop-filter: blur(30px);
-  box-shadow: 0 8px 28px rgba(201, 67, 127, 0.05); */
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.header-content {
-  @apply flex h-full items-center justify-between px-4;
-  padding-left: 90px;
-}
-
-.logo-section {
-  @apply flex items-center gap-2.5 min-w-0;
-}
-
-.logo-icon {
-  @apply w-7 h-7 rounded-lg flex items-center justify-center;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-  color: white;
-}
-
-.title {
-  @apply text-sm font-semibold truncate;
-  color: var(--color-foreground);
-}
-
-.header-actions {
-  @apply flex items-center gap-2;
-}
-
-.locale-switch {
-  @apply flex h-8 items-center gap-0.5 rounded-lg p-0.5;
-  background: var(--bg-primary-10);
-  border: 1px solid var(--border-primary-20);
-}
-
-.locale-btn {
-  @apply h-7 px-2 text-xs font-medium rounded-md transition-all;
-  color: var(--color-muted);
-}
-
-.locale-btn:hover {
-  color: var(--color-foreground);
-}
-
-.locale-btn.active {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: white;
-}
-
-.access-btn {
-  @apply h-8 gap-1.5 px-3 text-xs;
-  animation: pulse 2s ease-in-out infinite;
-}
-
 .header-btn-icon {
   width: 17px;
   height: 17px;
   stroke-width: 2.25;
-}
-
-.header-btn-icon.access-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.access-tooltip {
-  max-width: 280px;
-  line-height: 1.5;
-  white-space: normal;
-}
-
-@keyframes pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.overlay-btn {
-  @apply h-8 gap-1.5 px-3 text-xs font-medium;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
-}
-
-.help-btn {
-  @apply h-8 w-8 rounded-lg;
-}
-
-.help-icon {
-  width: 22px;
-  height: 22px;
-  stroke-width: 2.35;
 }
 
 .content {

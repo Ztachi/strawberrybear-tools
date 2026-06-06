@@ -12,20 +12,15 @@ import type { KeyLogEntry } from '@/lib/keyboardMapper'
 import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
+import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import PianoRoll from '@strawberrybear/piano-roll'
 import { Music, Music2, Monitor } from 'lucide-vue-next'
-import { Button, Select, Tooltip } from 'antdv-next'
+import { Button, Tooltip } from 'antdv-next'
 import type { TrackInfo } from '@/types'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
-
-// 获取模板显示名称（内置模板使用国际化，自定义模板使用原始名称）
-function getTemplateDisplayName(name: string, id: string): string {
-  const builtinNames = t(`template.builtinNames.${id}` as any)
-  return builtinNames && builtinNames !== `template.builtinNames.${id}` ? builtinNames : name
-}
 
 // 键盘映射器实例（用于管理按键日志和键盘模拟）
 const keyboardMapper = ref<KeyboardMapper | null>(null) as any
@@ -181,20 +176,6 @@ const translatedTracks = computed<TrackInfo[]>(() => {
   })
 })
 
-const templateOptions = computed(() =>
-  settingsStore.templates.map((tmpl) => ({
-    label: getTemplateDisplayName(tmpl.name, tmpl.id),
-    value: tmpl.id,
-  }))
-)
-
-// 选择模板
-function handleTemplateChange(value: unknown) {
-  if (typeof value === 'string') {
-    settingsStore.selectTemplate(value)
-  }
-}
-
 // 进入悬浮模式 - 将窗口转换为悬浮模式，启用透明背景和置顶
 async function enterOverlayMode() {
   try {
@@ -235,13 +216,7 @@ async function enterOverlayMode() {
           <!-- 模板选择区 -->
           <div class="template-section">
             <!-- 模板下拉选择器 -->
-            <Select
-              :value="settingsStore.currentTemplateId ?? undefined"
-              :options="templateOptions"
-              class="w-full"
-              :placeholder="t('player.noTemplate')"
-              @update:value="handleTemplateChange"
-            />
+            <KeyTemplateSelect class="flex-1 w-1" />
 
             <!-- 进入悬浮模式按钮 -->
             <Tooltip :title="t('app.overlayMode')">

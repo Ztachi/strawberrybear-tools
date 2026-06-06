@@ -14,7 +14,8 @@ import {
   setVolume as setMidiPreviewVolume,
 } from '@/lib/midiPlayer'
 import { ChevronDown, ChevronUp, X } from 'lucide-vue-next'
-import { Select, Tooltip } from 'antdv-next'
+import { Tooltip } from 'antdv-next'
+import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
 import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
 
@@ -326,25 +327,6 @@ function formatDuration(ms: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-// 获取模板显示名称
-function getTemplateDisplayName(name: string, id: string): string {
-  const builtinNames = t(`template.builtinNames.${id}` as any)
-  return builtinNames && builtinNames !== `template.builtinNames.${id}` ? builtinNames : name
-}
-
-const templateOptions = computed(() =>
-  settingsStore.templates.map((tmpl) => ({
-    label: getTemplateDisplayName(tmpl.name, tmpl.id),
-    value: tmpl.id,
-  }))
-)
-
-function handleTemplateChange(value: unknown) {
-  if (typeof value === 'string') {
-    settingsStore.selectTemplate(value)
-  }
-}
-
 // 当前 MIDI 文件名
 const currentMidiName = computed(
   () => playerStore.currentMidi?.filename || t('overlay.noFile')
@@ -373,15 +355,12 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
       <!-- 操作按钮 -->
       <div class="action-buttons">
         <!-- 模板选择 -->
-        <Select
+        <KeyTemplateSelect
           class="template-select"
-          :value="settingsStore.currentTemplateId ?? undefined"
-          :options="templateOptions"
-          :placeholder="t('player.noTemplate')"
+          width="120px"
           :list-height="96"
           :list-item-height="32"
           popup-class-name="overlay-template-select-popup"
-          @update:value="handleTemplateChange"
           @mousedown.stop
           @pointerdown.stop
         />
@@ -463,7 +442,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
 <style scoped>
 .overlay-view {
-  @apply flex flex-col;
+  @apply h-[320px] flex flex-col;
   border-radius: 16px;
   overflow: visible;
 }
@@ -551,45 +530,21 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   @apply flex justify-end items-center gap-1;
 }
 
-.template-select {
-  width: 132px;
-}
-
-.template-select :deep(.ant-select-selector) {
-  height: 32px;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.22);
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.template-select :deep(.ant-select-selection-item),
-.template-select :deep(.ant-select-selection-placeholder) {
-  color: rgba(255, 255, 255, 0.94);
-  font-size: 13px;
-  line-height: 32px;
-}
-
-.template-select :deep(.ant-select-arrow) {
-  color: rgba(255, 255, 255, 0.9);
-}
-
 :global(.overlay-template-select-popup .rc-virtual-list-holder) {
   max-height: 96px;
 }
 
 .expand-panel {
-  @apply flex-1 overflow-hidden;
+  @apply flex-1 overflow-hidden rounded-sm;
   background: rgba(255, 255, 255, 0.92);
 }
 
 .playlist {
-  @apply h-full overflow-y-auto py-2;
+  @apply h-full overflow-y-auto p-2 rounded-sm;
 }
 
 .playlist-item {
-  @apply flex items-center justify-between px-4 py-2 cursor-pointer;
+  @apply flex items-center justify-between px-4 py-2 cursor-pointer rounded-sm;
 }
 
 .playlist-item:hover {

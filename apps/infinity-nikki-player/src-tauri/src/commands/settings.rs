@@ -64,8 +64,7 @@ fn get_settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
     // 确保目录存在
     if !data_dir.exists() {
-        fs::create_dir_all(&data_dir)
-            .map_err(|e| format!("创建目录失败: {}", e))?;
+        fs::create_dir_all(&data_dir).map_err(|e| format!("创建目录失败: {}", e))?;
     }
     Ok(data_dir.join("settings.json"))
 }

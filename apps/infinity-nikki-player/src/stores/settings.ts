@@ -7,7 +7,7 @@ import { ref } from 'vue'
 import { saveSettings, loadSettings as loadSettingsApi } from '@/lib/settings'
 import { invoke } from '@tauri-apps/api/core'
 import type { KeyTemplate } from '@/types'
-import i18n from '@/i18n'
+import i18n, { DEFAULT_LOCALE, getPreferredLocale, isSupportedLocale } from '@/i18n'
 import type { LocaleType } from '@/i18n'
 
 /**
@@ -20,7 +20,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // ============================================
 
   /** 当前语言 */
-  const locale = ref<LocaleType>('en-US')
+  const locale = ref<LocaleType>(DEFAULT_LOCALE)
 
   /** 当前模板 ID */
   const currentTemplateId = ref<string | null>(null)
@@ -63,13 +63,12 @@ export const useSettingsStore = defineStore('settings', () => {
       const settings = await loadSettingsApi()
 
       // 设置语言
-      if (settings.locale && (settings.locale === 'zh-CN' || settings.locale === 'en-US')) {
+      if (settings.locale && isSupportedLocale(settings.locale)) {
         locale.value = settings.locale
         i18n.global.locale.value = settings.locale
       } else {
-        // 首次运行，使用系统语言（从后端获取）
-        const systemLocale = await invoke<string>('get_system_locale')
-        const loc: LocaleType = systemLocale.startsWith('zh') ? 'zh-CN' : 'en-US'
+        // 首次运行时只使用已注册的系统语言包；未命中统一回退英文。
+        const loc = await getPreferredLocale()
         locale.value = loc
         i18n.global.locale.value = loc
       }
@@ -98,9 +97,8 @@ export const useSettingsStore = defineStore('settings', () => {
       }
     } catch (e) {
       console.error('加载设置失败:', e)
-      // 失败时使用系统语言
-      const systemLocale = await invoke<string>('get_system_locale')
-      const loc: LocaleType = systemLocale.startsWith('zh') ? 'zh-CN' : 'en-US'
+      // 失败时仍按统一语言解析策略初始化，避免把中英判断散落在 store 中。
+      const loc = await getPreferredLocale()
       locale.value = loc
       i18n.global.locale.value = loc
 

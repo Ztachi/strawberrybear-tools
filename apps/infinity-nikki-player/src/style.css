@@ -218,17 +218,29 @@
 .ant-table-body::-webkit-scrollbar-thumb,
 .ant-table-body ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #fbcfe8;
+  background: var(--color-primary);
 }
 
 .ant-select-dropdown ::-webkit-scrollbar-thumb:hover,
 .ant-table-body::-webkit-scrollbar-thumb:hover,
 .ant-table-body ::-webkit-scrollbar-thumb:hover {
-  background: #f9a8d4;
+  background: var(--color-primary-hover);
 }
 
-.ant-select-dropdown .rc-virtual-list-scrollbar-thumb {
-  background: #fbcfe8;
+.ant-select-dropdown {
+  --vc-virtual-list-scrollbar-bg: var(--color-primary);
+  --rc-virtual-list-scrollbar-bg: var(--color-primary);
+}
+
+.ant-select-dropdown .rc-virtual-list-scrollbar-thumb,
+.ant-select-dropdown .vc-virtual-list-scrollbar-thumb {
+  border-radius: 999px;
+}
+
+.ant-select-dropdown .rc-virtual-list-scrollbar-thumb:hover,
+.ant-select-dropdown .vc-virtual-list-scrollbar-thumb:hover {
+  --vc-virtual-list-scrollbar-bg: var(--color-primary-hover);
+  --rc-virtual-list-scrollbar-bg: var(--color-primary-hover);
 }
 
 /* 拖拽区域样式 */

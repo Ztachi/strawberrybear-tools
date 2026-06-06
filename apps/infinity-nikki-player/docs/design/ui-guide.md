@@ -32,6 +32,13 @@ import { Button, Drawer, Input, Modal, Select, SelectOption } from 'antdv-next'
 </template>
 ```
 
+## 公共组件边界
+
+底层公共组件应封装稳定的业务意图，而不是把同一套状态拼装逻辑散落到页面里。跨页面复用的
+控件如果天然绑定同一个 Pinia 状态，例如当前键位映射模板选择，应在公共组件内部读取和更新
+store；调用方只传布局、尺寸、弹层 class 等展示参数。页面组件负责组合业务区域，避免重复
+生成 options、重复处理 store selection 或复制 i18n 显示名逻辑。
+
 常见 v-model 规则：
 
 | 组件     | 写法                                  |
@@ -69,6 +76,12 @@ CSS 随窗口变化自动计算。
 状态优先写入 `ConfigProvider` 的 `theme.token` 或 `theme.components`；组件局部差异优先使用
 框架 props、`classes`、`styles` 和语义 DOM class。只有非框架组件或纯业务容器样式才写普通
 CSS class，且不得压制框架主题机制。
+
+新增样式不得硬编码已有设计系统可表达的视觉值；必须优先复用项目 CSS 变量、主题 token
+或 `src/theme/infinityNikkiTheme.ts` 中的主题常量。覆盖 antdv-next 或 `@v-c/*` 内部结构前，
+必须先检查框架提供的配置入口，包括组件 token、组件 props、语义 class/style 扩展和内部 CSS
+变量。只有确认没有可配置入口时，才允许使用窄范围全局选择器覆盖，并在选择器上限定到具体
+弹层或组件容器。
 
 ## 主题和 App 上下文
 

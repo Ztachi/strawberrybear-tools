@@ -542,7 +542,11 @@ fn import_templates_from_json_file(
         .and_then(|name| name.to_str())
         .unwrap_or("template.json");
     // 单 JSON 导入仍返回 Vec，前端可用同一套批量导入反馈。
-    Ok(vec![import_template_from_json_content(app, &content, source_label)?])
+    Ok(vec![import_template_from_json_content(
+        app,
+        &content,
+        source_label,
+    )?])
 }
 
 /// @description: 从 ZIP 文件批量导入模板

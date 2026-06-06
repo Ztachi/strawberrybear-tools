@@ -2,7 +2,10 @@
 //!
 //! 提供 MIDI 文件的导入、解析、库管理等功能
 
-use crate::midi::{extract_melody as extract_melody_internal, extract_all_notes as extract_all_notes_internal, parse_midi_file as parse_midi_internal};
+use crate::midi::{
+    extract_all_notes as extract_all_notes_internal, extract_melody as extract_melody_internal,
+    parse_midi_file as parse_midi_internal,
+};
 use crate::types::{MelodyEvent, MidiInfo, NoteEvent};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -72,8 +75,7 @@ fn get_midi_library_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
     // 如果目录不存在，创建它
     if !midi_dir.exists() {
-        fs::create_dir_all(&midi_dir)
-            .map_err(|e| format!("创建目录失败: {}", e))?;
+        fs::create_dir_all(&midi_dir).map_err(|e| format!("创建目录失败: {}", e))?;
     }
     Ok(midi_dir)
 }
@@ -257,8 +259,7 @@ pub fn import_midi(app: tauri::AppHandle, source_path: String) -> Result<MidiInf
     }
 
     // 复制文件到库目录
-    fs::copy(&source_path, &dest_path)
-        .map_err(|e| format!("复制文件失败: {}", e))?;
+    fs::copy(&source_path, &dest_path).map_err(|e| format!("复制文件失败: {}", e))?;
 
     // 解析文件获取信息
     let (info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
@@ -390,15 +391,13 @@ pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Resu
 
     // 删除 MIDI 文件
     if file_path.exists() {
-        fs::remove_file(&file_path)
-            .map_err(|e| format!("删除文件失败: {}", e))?;
+        fs::remove_file(&file_path).map_err(|e| format!("删除文件失败: {}", e))?;
     }
 
     // 删除对应的配置文件
     let config_path = library_dir.join(format!("{}.midi-config", filename));
     if config_path.exists() {
-        fs::remove_file(&config_path)
-            .map_err(|e| format!("删除配置文件失败: {}", e))?;
+        fs::remove_file(&config_path).map_err(|e| format!("删除配置文件失败: {}", e))?;
     }
 
     Ok(())
@@ -427,10 +426,10 @@ pub fn load_midi_config(app: tauri::AppHandle, filename: String) -> Result<MidiC
 
     if config_path.exists() {
         // 读取并解析配置文件
-        let content = fs::read_to_string(&config_path)
-            .map_err(|e| format!("读取配置失败: {}", e))?;
-        let config: MidiConfig = serde_json::from_str(&content)
-            .map_err(|e| format!("解析配置失败: {}", e))?;
+        let content =
+            fs::read_to_string(&config_path).map_err(|e| format!("读取配置失败: {}", e))?;
+        let config: MidiConfig =
+            serde_json::from_str(&content).map_err(|e| format!("解析配置失败: {}", e))?;
         Ok(config)
     } else {
         // 没有配置文件，返回默认值
@@ -490,12 +489,11 @@ pub fn save_midi_config(
     };
 
     // 序列化为 JSON
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("序列化配置失败: {}", e))?;
+    let content =
+        serde_json::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {}", e))?;
 
     // 写入文件
-    fs::write(&config_path, content)
-        .map_err(|e| format!("保存配置失败: {}", e))?;
+    fs::write(&config_path, content).map_err(|e| format!("保存配置失败: {}", e))?;
 
     Ok(())
 }
