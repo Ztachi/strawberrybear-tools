@@ -243,11 +243,17 @@ export default {
     learnMore: 'Learn More',
     officialSite: 'Official Site',
     contact: 'Contact',
-    qq: 'QQ: 414135950',
-    qqLabel: 'QQ',
-    qqAccount: '414135950',
-    discord: 'Discord: ztachi.',
-    discordLabel: 'Discord',
-    discordAccount: 'ztachi.',
+    contacts: [
+      {
+        type: 'qq',
+        label: 'QQ',
+        account: '414135950',
+      },
+      {
+        type: 'discord',
+        label: 'Discord',
+        account: 'ztachi.',
+      },
+    ],
   },
 }

@@ -9,7 +9,6 @@ import { KeyboardMapper } from '@/lib/keyboardMapper'
 import { playNote } from '@/lib/midiPlayer'
 import { keyToCode } from '@/components/KeyboardPreview/constants'
 import type { KeyLogEntry } from '@/lib/keyboardMapper'
-import ScrollableContainer from '@/components/ScrollableContainer.vue'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
@@ -202,70 +201,70 @@ async function enterOverlayMode() {
 </script>
 
 <template>
-  <ScrollableContainer>
-    <div class="midi-detail">
-      <!-- 顶部区域：左侧播放器 + 右侧键盘预览 -->
-      <div class="detail-header">
-        <!-- 左侧：播放器 + 模板选择 -->
-        <div class="left-section">
-          <!-- 预览播放器 -->
-          <div class="preview-section">
-            <PreviewPlayer />
-          </div>
-
-          <!-- 模板选择区 -->
-          <div class="template-section">
-            <!-- 模板下拉选择器 -->
-            <KeyTemplateSelect class="flex-1 w-1" />
-
-            <!-- 进入悬浮模式按钮 -->
-            <Tooltip :title="t('app.overlayMode')">
-              <Button type="primary" class="overlay-btn" @click="enterOverlayMode">
-                <template #icon>
-                  <Monitor class="overlay-btn-icon" />
-                </template>
-              </Button>
-            </Tooltip>
-          </div>
+  <div class="midi-detail">
+    <!-- 顶部区域：左侧播放器 + 右侧键盘预览 -->
+    <div class="detail-header">
+      <!-- 左侧：播放器 + 模板选择 -->
+      <div class="left-section">
+        <!-- 预览播放器 -->
+        <div class="preview-section">
+          <PreviewPlayer />
         </div>
 
-        <!-- 右侧：键盘预览 -->
-        <div class="keyboard-section">
-          <KeyboardPreview
-            :active-keys="activeKeys"
-            :key-log="keyLog"
-            :get-key-log-by-chapters="getKeyLogByChapters"
-            :clear-key-log="handleClearKeyLog"
-            :key-code-to-pitch="keyCodeToPitch"
-            @key-click="handleKeyClick"
-          />
+        <!-- 模板选择区 -->
+        <div class="template-section">
+          <!-- 模板下拉选择器 -->
+          <KeyTemplateSelect class="flex-1 w-1" />
+
+          <!-- 进入悬浮模式按钮 -->
+          <Tooltip :title="t('app.overlayMode')">
+            <Button type="primary" class="overlay-btn" @click="enterOverlayMode">
+              <template #icon>
+                <Monitor class="overlay-btn-icon" />
+              </template>
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
-      <!-- 音轨列表区域 -->
-      <div class="tracks-section">
-        <div class="section-header">
-          <div class="section-title-group">
-            <h3 class="section-title">
-              {{ t('midi.trackList') }}
-            </h3>
-            <div class="section-stats">
-              <!-- 音轨数统计 -->
-              <span class="stat">
-                <Music :size="14" class="text-success" />
-                <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
-                <span class="stat-label">{{ t('midi.tracks') }}</span>
-              </span>
-              <!-- 旋律音符数统计 -->
-              <span class="stat">
-                <Music2 :size="14" class="text-success" />
-                <span class="stat-value">{{ playerStore.melody.length }}</span>
-                <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
-              </span>
-            </div>
+      <!-- 右侧：键盘预览 -->
+      <div class="keyboard-section">
+        <KeyboardPreview
+          :active-keys="activeKeys"
+          :key-log="keyLog"
+          :get-key-log-by-chapters="getKeyLogByChapters"
+          :clear-key-log="handleClearKeyLog"
+          :key-code-to-pitch="keyCodeToPitch"
+          @key-click="handleKeyClick"
+        />
+      </div>
+    </div>
+
+    <!-- 音轨列表区域 -->
+    <div class="tracks-section">
+      <div class="section-header">
+        <div class="section-title-group">
+          <h3 class="section-title">
+            {{ t('midi.trackList') }}
+          </h3>
+          <div class="section-stats">
+            <!-- 音轨数统计 -->
+            <span class="stat">
+              <Music :size="14" class="text-success" />
+              <span class="stat-value">{{ playerStore.currentMidi?.track_count }}</span>
+              <span class="stat-label">{{ t('midi.tracks') }}</span>
+            </span>
+            <!-- 旋律音符数统计 -->
+            <span class="stat">
+              <Music2 :size="14" class="text-success" />
+              <span class="stat-value">{{ playerStore.melody.length }}</span>
+              <span class="stat-label">{{ t('midi.melodyNotes') }}</span>
+            </span>
           </div>
         </div>
+      </div>
 
+      <div class="tracks-scroll">
         <!-- 钢琴卷帘组件 -->
         <PianoRoll
           :key="playerStore.currentMidi?.filename || 'empty'"
@@ -281,16 +280,16 @@ async function enterOverlayMode() {
         />
       </div>
     </div>
-  </ScrollableContainer>
+  </div>
 </template>
 
 <style scoped>
 .midi-detail {
-  @apply flex flex-col gap-6;
+  @apply flex h-full min-h-0 w-full flex-col gap-6 overflow-hidden px-5;
 }
 
 .detail-header {
-  @apply flex gap-4;
+  @apply flex shrink-0 gap-4;
 }
 
 .left-section {
@@ -325,11 +324,16 @@ async function enterOverlayMode() {
 }
 
 .tracks-section {
-  @apply flex flex-col gap-3;
+  @apply flex min-h-0 flex-1 flex-col gap-3;
 }
 
 .section-header {
-  @apply flex items-center;
+  @apply flex shrink-0 items-center;
+}
+
+.tracks-scroll {
+  @apply min-h-0 flex-1 overflow-x-hidden overflow-y-scroll;
+  scrollbar-gutter: stable;
 }
 
 .section-title-group {

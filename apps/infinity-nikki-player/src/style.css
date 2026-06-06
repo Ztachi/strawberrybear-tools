@@ -183,47 +183,70 @@
   }
 }
 
-/* 自定义滚动条 */
-::-webkit-scrollbar {
+/* 应用级滚动条统一使用主题变量，覆盖页面、表格和弹层里的原生滚动容器。 */
+* {
+  scrollbar-color: var(--color-primary) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
-  @apply bg-transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  @apply bg-pink-200 rounded-full;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-pink-300;
-}
-
-.ant-select-dropdown ::-webkit-scrollbar,
-.ant-table-body::-webkit-scrollbar,
-.ant-table-body ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.ant-select-dropdown ::-webkit-scrollbar-track,
-.ant-table-body::-webkit-scrollbar-track,
-.ant-table-body ::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.ant-select-dropdown ::-webkit-scrollbar-thumb,
-.ant-table-body::-webkit-scrollbar-thumb,
-.ant-table-body ::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: var(--color-primary);
 }
 
-.ant-select-dropdown ::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-hover);
+}
+
+.ant-table-body,
+.ant-table-content,
+.ant-table-container,
+.ant-table-sticky-scroll,
+.ant-select-dropdown {
+  scrollbar-color: var(--color-primary) transparent;
+  scrollbar-width: thin;
+}
+
+.ant-table-body::-webkit-scrollbar,
+.ant-table-content::-webkit-scrollbar,
+.ant-table-container::-webkit-scrollbar,
+.ant-table-sticky-scroll::-webkit-scrollbar,
+.ant-select-dropdown ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ant-table-body::-webkit-scrollbar-track,
+.ant-table-content::-webkit-scrollbar-track,
+.ant-table-container::-webkit-scrollbar-track,
+.ant-table-sticky-scroll::-webkit-scrollbar-track,
+.ant-select-dropdown ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ant-table-body::-webkit-scrollbar-thumb,
+.ant-table-content::-webkit-scrollbar-thumb,
+.ant-table-container::-webkit-scrollbar-thumb,
+.ant-table-sticky-scroll::-webkit-scrollbar-thumb,
+.ant-select-dropdown ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
 .ant-table-body::-webkit-scrollbar-thumb:hover,
-.ant-table-body ::-webkit-scrollbar-thumb:hover {
+.ant-table-content::-webkit-scrollbar-thumb:hover,
+.ant-table-container::-webkit-scrollbar-thumb:hover,
+.ant-table-sticky-scroll::-webkit-scrollbar-thumb:hover,
+.ant-select-dropdown ::-webkit-scrollbar-thumb:hover {
   background: var(--color-primary-hover);
 }
 

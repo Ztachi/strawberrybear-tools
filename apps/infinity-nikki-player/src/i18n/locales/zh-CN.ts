@@ -240,11 +240,17 @@ export default {
     learnMore: '了解更多',
     officialSite: '官方网站',
     contact: '联系方式',
-    qq: 'QQ：414135950',
-    qqLabel: 'QQ',
-    qqAccount: '414135950',
-    discord: 'Discord：ztachi.',
-    discordLabel: 'Discord',
-    discordAccount: 'ztachi.',
+    contacts: [
+      {
+        type: 'qq',
+        label: 'QQ',
+        account: '414135950',
+      },
+      {
+        type: 'discord',
+        label: 'Discord',
+        account: 'ztachi.',
+      },
+    ],
   },
 }

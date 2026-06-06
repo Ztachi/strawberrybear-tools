@@ -127,4 +127,35 @@ onUnmounted(() => {
 .progress-slider {
   @apply w-full cursor-pointer;
 }
+
+.progress-slider :deep(.ant-slider-rail),
+.progress-slider :deep(.ant-slider-track) {
+  height: 4px;
+  border-radius: 999px;
+}
+
+.progress-slider :deep(.ant-slider-rail) {
+  background: var(--border-primary-20);
+}
+
+.progress-slider :deep(.ant-slider-track) {
+  background: var(--color-primary);
+}
+
+.progress-slider :deep(.ant-slider-handle::after) {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.overlay .progress-slider :deep(.ant-slider-rail) {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.overlay .progress-slider :deep(.ant-slider-track) {
+  background: var(--color-white);
+}
+
+.overlay .progress-slider :deep(.ant-slider-handle::after) {
+  background: var(--color-white);
+  box-shadow: 0 0 0 2px var(--color-white);
+}
 </style>

@@ -2,7 +2,7 @@
  * @Author: ztachi(legendryztachi@gmail.com)
  * @Date: 2026-04-17 10:55:52
  * @LastEditors: ztachi(legendryztachi@gmail.com)
- * @LastEditTime: 2026-04-17 10:55:59
+ * @LastEditTime: 2026-06-06 22:06:45
  * @FilePath: \strawberrybear-tools\apps\infinity-nikki-player\src\components\AboutDialog\index.vue
  * @Description: 关于对话框组件
 -->
@@ -11,7 +11,7 @@
  * @description: 关于对话框组件
  * @description 监听 Tauri 菜单的 show_about 事件显示，包含应用图标、版本号和描述信息
  */
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -21,8 +21,24 @@ import { useAppUpdater } from '@/composables/useAppUpdater'
 import appLogo from '@/assets/images/logo.png'
 import { Modal, TypographyParagraph } from 'antdv-next'
 
-const { t } = useI18n()
+const { t, tm } = useI18n()
 const updater = useAppUpdater()
+
+/**
+ * @description: 关于页联系方式配置项
+ * @description 文案来自 i18n 数组，组件只按 type 选择图标，避免每新增一种联系方式都改模板结构
+ */
+interface AboutContact {
+  type: string
+  label: string
+  account: string
+}
+
+/** 联系方式类型到图标组件的注册表；新增品牌图标时只扩展这里，不新增重复 DOM。 */
+const contactIconMap: Record<string, Component> = {
+  qq: QqOutlined,
+  discord: DiscordFilled,
+}
 
 /** 对话框打开状态 @return {boolean} */
 const isOpen = ref(false)
@@ -51,6 +67,24 @@ const updaterButtonIcon = computed(() => {
   }
   if (updater.hasUpdate.value) return Download
   return RefreshCw
+})
+
+/** 当前语言下的联系方式列表，直接由 i18n 的 about.contacts 数组驱动。 */
+const contacts = computed<AboutContact[]>(() => {
+  const rawContacts = tm('about.contacts')
+  if (!Array.isArray(rawContacts)) return []
+
+  return rawContacts.filter(
+    (contact): contact is AboutContact =>
+      typeof contact === 'object' &&
+      contact !== null &&
+      'type' in contact &&
+      'label' in contact &&
+      'account' in contact &&
+      typeof contact.type === 'string' &&
+      typeof contact.label === 'string' &&
+      typeof contact.account === 'string'
+  )
 })
 
 /**
@@ -132,28 +166,21 @@ onUnmounted(() => {
       <div class="about-contact">
         <span class="about-contact-title">{{ t('about.contact') }}</span>
         <div class="about-contact-list">
-          <div class="about-contact-row">
+          <div v-for="contact in contacts" :key="contact.type" class="about-contact-row">
             <span class="about-contact-platform">
-              <QqOutlined class="about-contact-icon" />
-              {{ t('about.qqLabel') }}
+              <component
+                :is="contactIconMap[contact.type]"
+                v-if="contactIconMap[contact.type]"
+                class="about-contact-icon"
+              />
+              {{ contact.label }}
             </span>
             <TypographyParagraph
               class="about-contact-account"
-              :copyable="{ text: t('about.qqAccount') }"
+              :copyable="{ text: contact.account }"
+              underline
             >
-              {{ t('about.qqAccount') }}
-            </TypographyParagraph>
-          </div>
-          <div class="about-contact-row">
-            <span class="about-contact-platform">
-              <DiscordFilled class="about-contact-icon" />
-              {{ t('about.discordLabel') }}
-            </span>
-            <TypographyParagraph
-              class="about-contact-account"
-              :copyable="{ text: t('about.discordAccount') }"
-            >
-              {{ t('about.discordAccount') }}
+              {{ contact.account }}
             </TypographyParagraph>
           </div>
         </div>
@@ -335,15 +362,11 @@ onUnmounted(() => {
   color: var(--color-primary);
 }
 
-.about-contact-account {
-  margin: 0;
+:deep(.about-contact-account.ant-typography) {
+  margin-bottom: 0;
   min-width: 0;
   color: var(--color-foreground);
   font-weight: 600;
-}
-
-:deep(.about-contact-account.ant-typography) {
-  margin-bottom: 0;
 }
 
 :deep(.about-contact-account .ant-typography-copy) {

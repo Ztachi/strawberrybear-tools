@@ -49,6 +49,11 @@ import { Button, Drawer, Input, Modal, Select, SelectOption } from 'antdv-next'
 store；调用方只传布局、尺寸、弹层 class 等展示参数。页面组件负责组合业务区域，避免重复
 生成 options、重复处理 store selection 或复制 i18n 显示名逻辑。
 
+可增长集合必须用结构化数组驱动渲染，例如联系方式、外链、社交账号、设置入口和菜单项。
+语言包中每一项应保存 `type`、`label`、`account` / `url` 等字段，组件用 `v-for` 渲染；
+不要为每个渠道新增 `qqLabel`、`qqAccount`、`discordLabel` 这类平铺 key，也不要在模板里复制
+多段只有文案和图标不同的 DOM。图标差异通过 `type -> icon` 注册表解决。
+
 常见 v-model 规则：
 
 | 组件     | 写法                                  |
@@ -92,6 +97,11 @@ CSS class，且不得压制框架主题机制。
 必须先检查框架提供的配置入口，包括组件 token、组件 props、语义 class/style 扩展和内部 CSS
 变量。只有确认没有可配置入口时，才允许使用窄范围全局选择器覆盖，并在选择器上限定到具体
 弹层或组件容器。
+
+应用级滚动条统一在 `src/style.css` 中定义，颜色、hover 状态和透明轨道都必须读取项目 CSS
+变量或主题 token。页面、表格、弹层和虚拟列表不得在组件内零散硬编码滚动条颜色；如果框架内部
+使用原生滚动容器，优先通过全局伪元素和 antdv-next 语义 class 覆盖；如果是内联样式或虚拟
+滚动条，必须先检查组件配置和内部 CSS 变量，确认无法配置后再做限定范围覆盖。
 
 ## 主题和 App 上下文
 

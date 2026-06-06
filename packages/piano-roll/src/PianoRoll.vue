@@ -3,17 +3,8 @@
  * @description: 钢琴卷帘组件
  * 左侧 DOM 音轨标签，右侧 Canvas 音符卷轴
  */
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { nextTick, ref, onMounted, onUnmounted, watch } from 'vue'
 import { drawPianoRoll, type NoteEvent, type TrackInfo } from './index'
-
-/** 防抖函数 */
-function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): T {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  return ((...args: Parameters<T>) => {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => fn(...args), ms)
-  }) as T
-}
 
 const props = defineProps<{
   notes: NoteEvent[]
@@ -33,9 +24,14 @@ const emit = defineEmits<{
 const rollContainerRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let destroyFn: (() => void) | null = null
+let resizeObserver: ResizeObserver | null = null
+let renderFrame = 0
+let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 // 88键 x (NOTE_HEIGHT 2px + GAP 1px) = 264px
 const TRACK_HEIGHT = 88 * 3
+/** 容器 resize 高频触发时的防抖间隔，避免拖拽窗口期间反复重绘完整 Canvas。 */
+const RESIZE_RENDER_DEBOUNCE_MS = 120
 
 /** 根据 eventTrackValue 检查音轨是否被禁用 */
 function isTrackDisabledByMidiPlayerValue(eventTrackValue: number): boolean {
@@ -46,6 +42,7 @@ function isTrackDisabledByMidiPlayerValue(eventTrackValue: number): boolean {
 
 function render() {
   if (!canvasRef.value || !rollContainerRef.value) return
+  if (rollContainerRef.value.clientWidth <= 0) return
   destroyFn?.()
   destroyFn = drawPianoRoll(canvasRef.value, {
     container: rollContainerRef.value,
@@ -59,25 +56,59 @@ function render() {
   })
 }
 
-// 窗口缩放时重绘（防抖）
-const handleResize = debounce(() => {
-  render()
-}, 200)
+/** 播放时间这类连续更新只节流到动画帧，保证指针流畅但不会一帧内重复重绘。 */
+function scheduleFrameRender() {
+  if (renderFrame) cancelAnimationFrame(renderFrame)
+  renderFrame = requestAnimationFrame(() => {
+    renderFrame = 0
+    render()
+  })
+}
+
+/** 尺寸变化使用真实防抖，等拖拽窗口或抽屉布局稳定后再重算 canvas 宽度。 */
+function scheduleDebouncedRender() {
+  if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer)
+  resizeDebounceTimer = setTimeout(() => {
+    resizeDebounceTimer = null
+    scheduleFrameRender()
+  }, RESIZE_RENDER_DEBOUNCE_MS)
+}
 
 onMounted(() => {
-  render()
-  window.addEventListener('resize', handleResize)
+  void nextTick(() => {
+    render()
+    if (rollContainerRef.value) {
+      resizeObserver = new ResizeObserver(() => scheduleDebouncedRender())
+      resizeObserver.observe(rollContainerRef.value)
+    }
+  })
+  window.addEventListener('resize', scheduleDebouncedRender)
 })
 
 onUnmounted(() => {
+  if (renderFrame) cancelAnimationFrame(renderFrame)
+  if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer)
+  resizeObserver?.disconnect()
   destroyFn?.()
-  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('resize', scheduleDebouncedRender)
 })
 
 watch(
-  () => [props.notes, props.tracks, props.currentTime, props.disabledTracksVersion],
-  () => render(),
+  () => [
+    props.notes,
+    props.tracks,
+    props.duration,
+    props.ticksPerBeat,
+    props.tempo,
+    props.disabledTracksVersion,
+  ],
+  () => scheduleDebouncedRender(),
   { deep: true }
+)
+
+watch(
+  () => props.currentTime,
+  () => scheduleFrameRender()
 )
 
 function handleToggle(trackIndex: number) {
@@ -95,11 +126,11 @@ function handleToggle(trackIndex: number) {
         class="track-label"
         :style="{ height: `${TRACK_HEIGHT}px` }"
       >
-<div
-        class="switch"
-        :class="{ active: !isTrackDisabledByMidiPlayerValue(track.eventTrackValue) }"
-        @click="handleToggle(track.index)"
-      >
+        <div
+          class="switch"
+          :class="{ active: !isTrackDisabledByMidiPlayerValue(track.eventTrackValue) }"
+          @click="handleToggle(track.index)"
+        >
           <span class="switch-knob" />
         </div>
         <span class="track-name">{{ track.name }}</span>
@@ -107,8 +138,14 @@ function handleToggle(trackIndex: number) {
     </div>
 
     <!-- 右侧：Canvas 卷轴（可横向滚动） -->
-    <div ref="rollContainerRef" class="roll-scroll">
-      <canvas ref="canvasRef" class="roll-canvas" />
+    <div
+      ref="rollContainerRef"
+      class="roll-scroll"
+    >
+      <canvas
+        ref="canvasRef"
+        class="roll-canvas"
+      />
     </div>
   </div>
 </template>
@@ -156,7 +193,7 @@ function handleToggle(trackIndex: number) {
 }
 
 .roll-scroll {
-  @apply flex-1 overflow-x-auto;
+  @apply min-w-0 flex-1 overflow-hidden;
 }
 
 .roll-canvas {

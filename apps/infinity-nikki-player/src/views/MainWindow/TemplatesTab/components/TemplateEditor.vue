@@ -4,6 +4,7 @@
  * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容，并将重编辑区域委托给 TemplateEditorDrawer
  */
 import { computed, ref, watch } from 'vue'
+import type { HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { open, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
@@ -160,6 +161,17 @@ function toggleTemplateSelection(templateId: string): void {
     nextSelected.add(templateId)
   }
   setSelectedTemplateIds(nextSelected)
+}
+
+/**
+ * @description: 生成模板表格行事件
+ * @param {KeyTemplate} template - 当前行模板
+ * @return {HTMLAttributes} antdv-next Table 行属性
+ */
+function getTemplateRowProps(template: KeyTemplate): HTMLAttributes {
+  return {
+    onClick: () => toggleTemplateSelection(template.id),
+  }
 }
 
 /**
@@ -381,7 +393,10 @@ const getTemplatePaginationTotal: PaginationProps['showTotal'] = (total, range) 
  * @return {string} 当前模板行高亮类名
  */
 function getTemplateRowClassName(template: KeyTemplate): string {
-  return template.is_builtin ? 'template-row-builtin' : ''
+  const classNames = ['template-table-row']
+  if (template.is_builtin) classNames.push('template-row-builtin')
+  if (selectedTemplateIds.value.has(template.id)) classNames.push('template-row-selected')
+  return classNames.join(' ')
 }
 
 function confirmTemplateAction(title: string, content: string): Promise<boolean> {
@@ -496,6 +511,7 @@ defineExpose({
           :locale="{ emptyText: t('template.noTemplates') }"
           :row-key="(template: KeyTemplate) => template.id"
           :row-class-name="getTemplateRowClassName"
+          :on-row="getTemplateRowProps"
           size="small"
           class="template-table"
         >
@@ -512,7 +528,7 @@ defineExpose({
 
           <template #bodyCell="{ column, record: template }">
             <template v-if="column.key === 'selection'">
-              <div class="flex items-center justify-center">
+              <div class="flex items-center justify-center" @click.stop>
                 <Checkbox
                   :checked="selectedTemplateIds.has(template.id)"
                   @change="toggleTemplateSelection(template.id)"
@@ -523,13 +539,9 @@ defineExpose({
             <template v-else-if="column.key === 'name'">
               <div class="min-w-0">
                 <Tooltip :title="template.name" placement="topLeft">
-                  <button
-                    type="button"
-                    class="template-name-text"
-                    @click="toggleTemplateSelection(template.id)"
-                  >
+                  <span class="template-name-text">
                     {{ getTruncatedTemplateName(template.name) }}
-                  </button>
+                  </span>
                 </Tooltip>
               </div>
             </template>
@@ -541,46 +553,57 @@ defineExpose({
             </template>
 
             <template v-else-if="column.key === 'actions'">
-              <Popover trigger="click" placement="bottomRight">
-                <template #content>
-                  <div class="flex flex-col">
-                    <Button type="text" class="justify-start" @click="editTemplate(template)">
-                      <template #icon>
-                        <Pencil class="size-4" />
-                      </template>
-                      {{ t('actions.edit') }}
-                    </Button>
-                    <Button type="text" class="justify-start" @click="createFromTemplate(template)">
-                      <template #icon>
-                        <Copy class="size-4" />
-                      </template>
-                      {{ t('template.createFromTemplateShort') }}
-                    </Button>
-                    <Button type="text" class="justify-start" @click="exportTemplate(template)">
-                      <template #icon>
-                        <Download class="size-4" />
-                      </template>
-                      {{ t('template.exportTemplate') }}
-                    </Button>
-                    <Button
-                      type="text"
-                      danger
-                      class="justify-start"
-                      @click="deleteTemplate(template)"
-                    >
-                      <template #icon>
-                        <Trash2 class="size-4" />
-                      </template>
-                      {{ t('actions.delete') }}
-                    </Button>
-                  </div>
-                </template>
-                <Button type="text" color="primary" variant="outlined" class="template-action-btn">
-                  <template #icon>
-                    <MoreVertical class="template-action-icon" />
+              <div @click.stop>
+                <Popover trigger="click" placement="bottomRight">
+                  <template #content>
+                    <div class="flex flex-col">
+                      <Button type="text" class="justify-start" @click="editTemplate(template)">
+                        <template #icon>
+                          <Pencil class="size-4" />
+                        </template>
+                        {{ t('actions.edit') }}
+                      </Button>
+                      <Button
+                        type="text"
+                        class="justify-start"
+                        @click="createFromTemplate(template)"
+                      >
+                        <template #icon>
+                          <Copy class="size-4" />
+                        </template>
+                        {{ t('template.createFromTemplateShort') }}
+                      </Button>
+                      <Button type="text" class="justify-start" @click="exportTemplate(template)">
+                        <template #icon>
+                          <Download class="size-4" />
+                        </template>
+                        {{ t('template.exportTemplate') }}
+                      </Button>
+                      <Button
+                        type="text"
+                        danger
+                        class="justify-start"
+                        @click="deleteTemplate(template)"
+                      >
+                        <template #icon>
+                          <Trash2 class="size-4" />
+                        </template>
+                        {{ t('actions.delete') }}
+                      </Button>
+                    </div>
                   </template>
-                </Button>
-              </Popover>
+                  <Button
+                    type="text"
+                    color="primary"
+                    variant="outlined"
+                    class="template-action-btn"
+                  >
+                    <template #icon>
+                      <MoreVertical class="template-action-icon" />
+                    </template>
+                  </Button>
+                </Popover>
+              </div>
             </template>
           </template>
         </Table>
@@ -619,12 +642,36 @@ defineExpose({
   border-start-end-radius: 0;
 }
 
+.template-table :deep(.template-table-row) {
+  cursor: pointer;
+}
+
+.template-table :deep(.template-table-row > td) {
+  transition: background-color 0.2s ease;
+}
+
 .template-table :deep(.template-row-builtin > td) {
   background: rgba(255, 255, 255, 0.42);
 }
 
+.template-table :deep(.template-row-selected > td) {
+  background: var(--bg-primary-15);
+}
+
+.template-table :deep(.template-table-row:hover > td) {
+  background: var(--bg-primary-10);
+}
+
+.template-table :deep(.template-row-selected:hover > td) {
+  background: var(--bg-primary-15);
+}
+
+.template-table :deep(.template-table-row:hover) .template-name-text {
+  color: var(--color-primary);
+}
+
 .template-name-text {
-  @apply block w-full max-w-full truncate rounded border-0 bg-transparent px-0 text-left font-medium text-foreground transition hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/50;
+  @apply block w-full max-w-full truncate font-medium text-foreground transition;
 }
 
 .template-action-btn {

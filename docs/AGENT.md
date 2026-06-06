@@ -31,6 +31,12 @@ src/
 集合，应由统一数据源或领域类型提供；UI 组件只消费数据源并按通用类型传递事件，避免新增选项时
 需要逐层修改组件类型。
 
+联系方式、外链、社交账号、菜单项、设置项、功能入口等可增长集合，必须用数组或对象列表表达，
+每一项包含 `type`、`label`、`value/account/url` 等结构化字段，再由组件 `v-for` / map 渲染。
+禁止把集合项拆成 `qqLabel`、`qqAccount`、`discordLabel`、`discordAccount` 这类平铺字段，
+也禁止在模板里为每一项复制一段几乎相同的 DOM。需要图标时使用 `type -> icon` 注册表或统一
+配置表，不要把具体项写进模板结构。
+
 ## UI 框架与图标规范
 
 使用 antdv-next 的项目必须优先使用 antdv-next 及其生态组件。图标选择以项目既有设计系统为准：
@@ -77,6 +83,11 @@ profile 中设置 `$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'`�
 典型案例：`apps/infinity-nikki-player/src/views/MainWindow/TemplatesTab/components/TemplateEditor.vue`
 的模板表格滚动高度可以直接通过 antdv-next `Table` 的 `scroll.y: 'calc(...)'` 交给 CSS
 计算，不需要维护 `debouncedUpdateTableScrollY`、窗口 resize 监听和表格行高测量链路。
+
+应用级滚动条属于主题基础设施，应集中写在全局样式入口，并通过 CSS 变量或主题 token 表达
+颜色、hover 和轨道状态。不要在单个组件里硬编码滚动条颜色；覆盖 UI 框架内部滚动容器前，
+先检查组件配置、语义 class 和内部 CSS 变量，只有没有配置入口时才使用限定范围的全局选择器。
+原生滚动条可以用全局伪元素统一覆盖，虚拟滚动条或内联样式必须优先使用框架暴露的变量或配置。
 
 ## ESLint + Prettier 代码规范
 

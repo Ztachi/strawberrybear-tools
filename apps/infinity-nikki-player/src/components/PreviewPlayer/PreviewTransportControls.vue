@@ -88,7 +88,7 @@ const isOverlay = computed(() => props.variant === 'overlay')
         </template>
       </Button>
 
-      <Popover trigger="click" placement="top">
+      <Popover trigger="click" placement="top" overlay-class-name="volume-popover-overlay">
         <template #content>
           <div class="volume-popover">
             <Button type="text" class="mute-btn" @click="emit('toggleMute')">
@@ -240,10 +240,12 @@ const isOverlay = computed(() => props.variant === 'overlay')
 
 .volume-popover {
   @apply flex items-center gap-2;
+  width: 176px;
+  min-height: 34px;
 }
 
 .mute-btn {
-  @apply w-8 h-8 rounded-lg;
+  @apply h-7 w-7 shrink-0 rounded-lg;
   color: var(--color-primary);
 }
 
@@ -258,11 +260,35 @@ const isOverlay = computed(() => props.variant === 'overlay')
 }
 
 .volume-slider {
-  @apply flex-1 cursor-pointer;
+  @apply min-w-0 flex-1 cursor-pointer;
+  width: 88px;
+  margin: 0;
+}
+
+.volume-slider :deep(.ant-slider-rail),
+.volume-slider :deep(.ant-slider-track) {
+  height: 4px;
+}
+
+.volume-slider :deep(.ant-slider-rail) {
+  background: var(--border-primary-20);
+}
+
+.volume-slider :deep(.ant-slider-track) {
+  background: var(--color-primary);
+}
+
+.volume-slider :deep(.ant-slider-handle::after) {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+:global(.volume-popover-overlay .ant-popover-inner) {
+  padding: 8px 10px;
+  border-radius: 14px;
 }
 
 .volume-percent {
-  @apply text-xs w-8 text-right font-mono;
+  @apply w-9 shrink-0 text-right text-xs font-mono;
   color: var(--color-muted);
 }
 </style>

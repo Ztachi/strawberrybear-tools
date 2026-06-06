@@ -126,8 +126,8 @@ function drawPlayhead(
   trackCount: number,
   trackHeight: number
 ) {
-  const ratio = duration > 0 ? currentTime / duration : 0
-  const x = ratio * (width - 20) // 留出 20px 给播放指针
+  const ratio = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0
+  const x = ratio * Math.max(0, width - 1)
   const totalHeight = trackCount * trackHeight
 
   c.strokeStyle = '#EF4444'
@@ -174,11 +174,11 @@ export function drawPianoRoll(
     const maxTick = getMaxTick(options.notes)
     const maxSeconds = tickToSeconds(maxTick, tempo, ticksPerBeat)
 
-    // 获取容器宽度，如果没有则用默认值
-    const containerWidth = options.container.clientWidth || 600
-    // 计算像素密度，使音符刚好填满宽度
-    const pixelsPerSecond = maxSeconds > 0 ? (containerWidth - 20) / maxSeconds : 10
-    const width = Math.max(containerWidth, maxSeconds * pixelsPerSecond + 20)
+    // 使用实际内容宽度渲染，避免抽屉滚动条出现后 canvas 比容器多出 1px。
+    const containerWidth = Math.max(1, options.container.clientWidth)
+    // 音符和播放指针都映射到完整宽度，歌曲结束时指针应抵达最右侧。
+    const pixelsPerSecond = maxSeconds > 0 ? containerWidth / maxSeconds : 10
+    const width = containerWidth
     const height = options.tracks.length * trackHeight
 
     const dpr = window.devicePixelRatio || 1
