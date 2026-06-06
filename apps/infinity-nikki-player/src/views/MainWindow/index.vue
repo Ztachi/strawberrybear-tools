@@ -590,6 +590,7 @@ async function enterOverlayMode() {
 .main-window {
   @apply h-screen flex flex-col text-foreground overflow-hidden relative;
   --global-menu-height: 46px;
+  border-radius: var(--radius);
   background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--bg-white-95) 50%, var(--color-primary-light) 100%);
 }
 
@@ -605,7 +606,8 @@ async function enterOverlayMode() {
 }
 
 .main-window.overlay-mode {
-  @apply overflow-visible;
+  @apply overflow-hidden;
+  border-radius: 16px;
   background: transparent;
 }
 

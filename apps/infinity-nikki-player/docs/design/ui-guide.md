@@ -108,7 +108,7 @@ CSS class，且不得压制框架主题机制。
 `src/App.vue` 必须用 `ConfigProvider` 和 `App` 包裹主界面：
 
 ```vue
-<ConfigProvider :theme="infinityNikkiTheme">
+<ConfigProvider :theme="infinityNikkiTheme" :locale="currentAntdvLocale">
   <AntApp>
     <MainWindow />
     <AboutDialog />
@@ -116,7 +116,9 @@ CSS class，且不得压制框架主题机制。
 </ConfigProvider>
 ```
 
-静态 notification/message/modal 不会自动继承根 `ConfigProvider`，启动时由 `configureAntdvStaticContext()` 配置 holder。不要在业务模块直接调用 antdv-next 静态通知 API，统一使用 `feedback`。
+应用语言切换必须同步 antdv-next 框架语言。新增语言包时，在 `src/i18n/index.ts` 的统一语言注册表里同时登记业务 messages 和对应的 `antdv-next/locale/*`，根 `ConfigProvider` 通过当前 `vue-i18n` 语言传入 `locale`。不要只更新业务语言包，否则 Select 空态、Pagination、Modal 等框架内置文案会回退英文。
+
+静态 notification/message/modal 不会自动继承根 `ConfigProvider`，启动时由 `configureAntdvStaticContext()` 配置 holder，并在 holder 渲染时读取当前 antdv-next locale。不要在业务模块直接调用 antdv-next 静态通知 API，统一使用 `feedback`。
 
 ```ts
 import { feedback } from '@/lib/feedback'

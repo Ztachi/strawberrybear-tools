@@ -4,21 +4,29 @@
  */
 import { createI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
+import enUSAntdvLocale from 'antdv-next/locale/en_US'
+import zhCNAntdvLocale from 'antdv-next/locale/zh_CN'
+import type { ConfigProviderProps } from 'antdv-next'
 import zhCN from './locales/zh-CN'
 import enUS from './locales/en-US'
 
 /** 英文是全局兜底语言，新增语言包时不应改变该回退策略。 */
 export const DEFAULT_LOCALE = 'en-US'
 
+/** antdv-next 框架语言包类型，必须与根 ConfigProvider 的 locale 属性保持一致。 */
+type AntdvLocale = NonNullable<ConfigProviderProps['locale']>
+
 /** 已注册语言包表；语言类型、切换列表和 i18n messages 均从这里派生。 */
 const LANGUAGE_PACKS = {
   'zh-CN': {
     label: '中文',
     messages: zhCN,
+    antdvLocale: zhCNAntdvLocale,
   },
   'en-US': {
-    label: 'EN',
+    label: 'English',
     messages: enUS,
+    antdvLocale: enUSAntdvLocale,
   },
 } as const
 
@@ -56,6 +64,18 @@ function normalizeLocale(locale: string): string | null {
  */
 export function isSupportedLocale(locale: string): locale is LocaleType {
   return Object.prototype.hasOwnProperty.call(LANGUAGE_PACKS, locale)
+}
+
+/**
+ * @description: 获取与应用语言同步的 antdv-next 语言包
+ * @param {string} locale - 当前应用语言标识
+ * @return {AntdvLocale} antdv-next ConfigProvider 使用的语言包
+ */
+export function getAntdvLocale(locale: string): AntdvLocale {
+  // 框架内置文案必须跟随应用语言；未知语言统一使用英文兜底。
+  return isSupportedLocale(locale)
+    ? LANGUAGE_PACKS[locale].antdvLocale
+    : LANGUAGE_PACKS[DEFAULT_LOCALE].antdvLocale
 }
 
 /**

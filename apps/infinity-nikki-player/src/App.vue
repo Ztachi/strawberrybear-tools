@@ -2,21 +2,27 @@
 /**
  * @description: 应用根组件 - 负责初始化全局状态、错误处理和加载状态管理
  */
-import { onMounted, getCurrentInstance, ref } from 'vue'
+import { computed, onMounted, getCurrentInstance, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import MainWindow from './views/MainWindow/index.vue'
 import AboutDialog from '@/components/AboutDialog/index.vue'
 import { feedback as toast } from '@/lib/feedback'
 import { usePlayerStore } from './stores/player'
 import { useAppUpdater } from '@/composables/useAppUpdater'
+import { getAntdvLocale } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 
 /** 播放器 Store 实例 */
 const playerStore = usePlayerStore()
 const appUpdater = useAppUpdater()
+/** 当前应用语言来自 vue-i18n，根 ConfigProvider 需要跟随它同步框架内置文案。 */
+const { locale } = useI18n()
 
 /** 是否显示加载中状态 */
 const isLoading = ref(true)
+/** antdv-next 组件内置文案语言包，例如 Select 空态、Pagination 和 Modal 按钮文案。 */
+const currentAntdvLocale = computed(() => getAntdvLocale(locale.value))
 
 /**
  * @description: 显示错误 Toast 提示
@@ -72,7 +78,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <ConfigProvider v-bind="infinityNikkiConfigProviderProps">
+  <ConfigProvider v-bind="infinityNikkiConfigProviderProps" :locale="currentAntdvLocale">
     <AntApp>
       <!-- Loading 过渡动画 -->
       <Transition name="loading">

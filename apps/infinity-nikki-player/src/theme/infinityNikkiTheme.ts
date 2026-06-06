@@ -6,6 +6,7 @@ import type { CSSProperties, VNodeChild } from 'vue'
 import { h } from 'vue'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import type { ConfigProviderProps, ThemeConfig } from 'antdv-next'
+import { getAntdvLocale, i18n } from '@/i18n'
 
 /** 主品牌粉色，源自无限暖暖当前项目视觉基准。 */
 export const NIKKI_PRIMARY_COLOR = '#F7B7BE'
@@ -179,8 +180,20 @@ export function getContentDrawerRootStyle(): CSSProperties {
 export function configureAntdvStaticContext(): void {
   ConfigProvider.config({
     holderRender: (children: VNodeChild) =>
-      h(ConfigProvider, infinityNikkiConfigProviderProps, {
+      h(ConfigProvider, getCurrentInfinityNikkiConfigProviderProps(), {
         default: () => h(AntApp, null, () => children),
       }),
   })
+}
+
+/**
+ * @description: 获取当前语言下的 Antdv Next 根配置
+ * @description 静态反馈 holder 不在 Vue 模板响应式上下文内，渲染时需主动读取当前 i18n 语言。
+ * @return {ConfigProviderProps} 包含主题和当前框架语言包的根配置
+ */
+function getCurrentInfinityNikkiConfigProviderProps(): ConfigProviderProps {
+  return {
+    ...infinityNikkiConfigProviderProps,
+    locale: getAntdvLocale(i18n.global.locale.value),
+  }
 }

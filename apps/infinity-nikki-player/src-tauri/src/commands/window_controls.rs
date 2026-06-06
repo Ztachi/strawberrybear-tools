@@ -8,6 +8,9 @@ mod platform {
     use windows::core::BOOL;
     use windows::Win32::{
         Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Graphics::Gdi::{
+            GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        },
         UI::{
             HiDpi::GetDpiForWindow,
             Input::KeyboardAndMouse::{
@@ -16,10 +19,11 @@ mod platform {
             },
             Shell::{DefSubclassProc, SetWindowSubclass},
             WindowsAndMessaging::{
-                EnumChildWindows, GetAncestor, GetWindowLongPtrW, GetWindowRect, SetWindowLongPtrW,
-                SetWindowPos, GA_ROOT, GWL_STYLE, HTMAXBUTTON, SWP_FRAMECHANGED, SWP_NOMOVE,
-                SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, WM_NCCALCSIZE, WM_NCHITTEST,
-                WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
+                EnumChildWindows, GetAncestor, GetWindowLongPtrW, GetWindowRect, IsZoomed,
+                SetWindowLongPtrW, SetWindowPos, GA_ROOT, GWL_STYLE, HTMAXBUTTON,
+                NCCALCSIZE_PARAMS, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+                SWP_NOZORDER, WM_NCCALCSIZE, WM_NCHITTEST, WS_CAPTION, WS_MAXIMIZEBOX,
+                WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
             },
         },
     };
@@ -34,7 +38,7 @@ mod platform {
     /// @description: 为 Windows 主窗口应用自定义标题栏原生能力
     ///
     /// 自绘最大化按钮要触发 Windows 11 Snap Layout，除了 HTMAXBUTTON 命中测试外，
-    /// 窗口还必须保留可最大化的系统 style 位。WM_NCCALCSIZE 用于移除原生标题栏占位。
+    /// 窗口还必须保留可最大化的系统 style 位。WM_NCCALCSIZE 用于移除系统边框占位。
     pub fn apply_windows_custom_titlebar(window: &WebviewWindow) {
         let hwnd = match window.hwnd() {
             Ok(hwnd) => hwnd,
@@ -56,6 +60,9 @@ mod platform {
 
     /// @description: 补回 Windows Snap Layout 依赖的窗口样式位
     /// @param {HWND} hwnd - 顶层窗口句柄
+    ///
+    /// 保留标准顶层窗口 style 可以让系统截图、任务栏和 Snap Layout 继续把它识别为普通窗口。
+    /// 原生标题栏占位通过 WM_NCCALCSIZE 移除，不在悬浮模式里手动清这些 style。
     fn preserve_snap_layout_window_styles(hwnd: HWND) {
         let current_style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) } as u32;
         let next_style = current_style
@@ -106,6 +113,7 @@ mod platform {
         _ref_data: usize,
     ) -> LRESULT {
         if msg == WM_NCCALCSIZE && wparam.0 != 0 {
+            adjust_maximized_client_rect(hwnd, lparam);
             return LRESULT(0);
         }
 
@@ -114,6 +122,31 @@ mod platform {
         }
 
         unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) }
+    }
+
+    /// @description: 最大化时修正自绘标题栏客户区矩形
+    /// @param {HWND} hwnd - 收到 WM_NCCALCSIZE 的窗口句柄
+    /// @param {LPARAM} lparam - 指向 NCCALCSIZE_PARAMS 的消息参数
+    ///
+    /// 保留 WS_THICKFRAME 后，Windows 最大化窗口的外框会超出屏幕工作区一个系统边框厚度。
+    /// 如果 WM_NCCALCSIZE 直接返回 0，WebView 客户区也会被放到这个外框矩形里，顶部内容会被裁掉。
+    /// 将客户区改回显示器工作区，可保持自绘 Header 顶部间距不被最大化状态吞掉。
+    fn adjust_maximized_client_rect(hwnd: HWND, lparam: LPARAM) {
+        let root_hwnd = unsafe { GetAncestor(hwnd, GA_ROOT) };
+        if !unsafe { IsZoomed(root_hwnd).as_bool() } {
+            return;
+        }
+
+        let monitor = unsafe { MonitorFromWindow(root_hwnd, MONITOR_DEFAULTTONEAREST) };
+        let mut monitor_info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+
+        if unsafe { GetMonitorInfoW(monitor, &mut monitor_info) }.as_bool() {
+            let params = unsafe { &mut *(lparam.0 as *mut NCCALCSIZE_PARAMS) };
+            params.rgrc[0] = monitor_info.rcWork;
+        }
     }
 
     /// @description: 判断鼠标是否位于自绘最大化按钮矩形

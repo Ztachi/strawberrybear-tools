@@ -442,12 +442,12 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
 <style scoped>
 .overlay-view {
-  @apply h-[320px] flex flex-col;
+  @apply relative h-screen overflow-hidden;
   border-radius: 16px;
-  overflow: visible;
 }
 
 .mini-bar {
+  min-height: 156px;
   padding: 10px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -535,7 +535,8 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 }
 
 .expand-panel {
-  @apply flex-1 overflow-hidden rounded-sm;
+  @apply absolute bottom-0 left-0 right-0 overflow-hidden rounded-sm;
+  top: 156px;
   background: rgba(255, 255, 255, 0.92);
 }
 
