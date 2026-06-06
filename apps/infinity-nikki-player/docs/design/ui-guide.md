@@ -6,7 +6,7 @@
 - **样式方案**: Tailwind CSS v3 + 项目 CSS 变量
 - **主题入口**: `src/theme/infinityNikkiTheme.ts`
 - **反馈入口**: `src/lib/feedback.ts`
-- **图标库**: `lucide-vue-next`
+- **图标库**: `lucide-vue-next`（优先） + `@antdv-next/icons`
 
 官方参考：
 
@@ -31,6 +31,16 @@ import { Button, Drawer, Input, Modal, Select, SelectOption } from 'antdv-next'
   </Select>
 </template>
 ```
+
+## 图标使用
+
+通用操作图标优先使用 `lucide-vue-next`，保持播放器、模板编辑器等工具界面的线性图标风格。
+品牌图标、实心状态图标或 lucide 缺失的语义图标，使用 antdv-next 配套的
+`@antdv-next/icons`。不要手写 SVG 或用文本伪装图标；新增图标前先查询现有两个图标库。
+
+只需要提示文案的图标入口应使用 `Tooltip` 或 `Popover`，不要依赖原生 `title` 属性。帮助、
+说明类入口不应为了显示图标而包一层有边框的按钮；除非交互设计明确需要按钮外观，否则使用
+语义化 `button` 承载图标和无障碍标签。
 
 ## 公共组件边界
 

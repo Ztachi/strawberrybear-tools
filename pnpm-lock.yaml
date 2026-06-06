@@ -92,6 +92,9 @@ importers:
 
   apps/infinity-nikki-player:
     dependencies:
+      '@antdv-next/icons':
+        specifier: ^1.0.8
+        version: 1.0.8(vue@3.5.32(typescript@5.7.3))
       '@strawberrybear/piano-roll':
         specifier: workspace:*
         version: link:../../packages/piano-roll

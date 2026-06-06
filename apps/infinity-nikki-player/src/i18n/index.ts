@@ -60,10 +60,10 @@ export function isSupportedLocale(locale: string): locale is LocaleType {
 
 /**
  * @description: 从候选语言中选择已注册语言包，未命中时统一回退英文。
- * @param {string[]} localeCandidates - 按优先级排列的系统或浏览器语言候选值
+ * @param {readonly string[]} localeCandidates - 按优先级排列的系统或浏览器语言候选值
  * @return {LocaleType} 应用最终使用的语言
  */
-function resolveSupportedLocale(localeCandidates: string[]): LocaleType {
+function resolveSupportedLocale(localeCandidates: readonly string[]): LocaleType {
   for (const locale of localeCandidates) {
     const normalizedLocale = normalizeLocale(locale)
     if (normalizedLocale && isSupportedLocale(normalizedLocale)) {

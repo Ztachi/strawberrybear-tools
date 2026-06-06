@@ -15,6 +15,7 @@
     "nikki": "bash scripts/build-and-launch.sh"
   },
   "dependencies": {
+    "@antdv-next/icons": "^1.0.8",
     "@strawberrybear/piano-roll": "workspace:*",
     "@strawberrybear/player": "workspace:*",
     "@tauri-apps/api": "^2.2.0",

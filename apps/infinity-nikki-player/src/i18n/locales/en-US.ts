@@ -244,5 +244,10 @@ export default {
     officialSite: 'Official Site',
     contact: 'Contact',
     qq: 'QQ: 414135950',
+    qqLabel: 'QQ',
+    qqAccount: '414135950',
+    discord: 'Discord: ztachi.',
+    discordLabel: 'Discord',
+    discordAccount: 'ztachi.',
   },
 }

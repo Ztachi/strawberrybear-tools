@@ -15,10 +15,11 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { DiscordFilled, QqOutlined } from '@antdv-next/icons'
 import { Download, ExternalLink, Loader2, RefreshCw } from 'lucide-vue-next'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import appLogo from '@/assets/images/logo.png'
-import { Modal } from 'antdv-next'
+import { Modal, TypographyParagraph } from 'antdv-next'
 
 const { t } = useI18n()
 const updater = useAppUpdater()
@@ -129,8 +130,33 @@ onUnmounted(() => {
       </p>
 
       <div class="about-contact">
-        <span class="about-contact-label">{{ t('about.contact') }}</span>
-        <span class="about-contact-value">{{ t('about.qq') }}</span>
+        <span class="about-contact-title">{{ t('about.contact') }}</span>
+        <div class="about-contact-list">
+          <div class="about-contact-row">
+            <span class="about-contact-platform">
+              <QqOutlined class="about-contact-icon" />
+              {{ t('about.qqLabel') }}
+            </span>
+            <TypographyParagraph
+              class="about-contact-account"
+              :copyable="{ text: t('about.qqAccount') }"
+            >
+              {{ t('about.qqAccount') }}
+            </TypographyParagraph>
+          </div>
+          <div class="about-contact-row">
+            <span class="about-contact-platform">
+              <DiscordFilled class="about-contact-icon" />
+              {{ t('about.discordLabel') }}
+            </span>
+            <TypographyParagraph
+              class="about-contact-account"
+              :copyable="{ text: t('about.discordAccount') }"
+            >
+              {{ t('about.discordAccount') }}
+            </TypographyParagraph>
+          </div>
+        </div>
       </div>
 
       <!-- 外部链接按钮 -->
@@ -267,10 +293,9 @@ onUnmounted(() => {
 .about-contact {
   width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
   margin-bottom: 18px;
   border-radius: 10px;
   background: var(--bg-primary-10);
@@ -278,13 +303,51 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-.about-contact-label {
+.about-contact-title {
   font-weight: 600;
   color: var(--color-foreground);
+  text-align: center;
 }
 
-.about-contact-value {
+.about-contact-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.about-contact-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.about-contact-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
+}
+
+.about-contact-icon {
+  font-size: 17px;
+  color: var(--color-primary);
+}
+
+.about-contact-account {
+  margin: 0;
+  min-width: 0;
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+:deep(.about-contact-account.ant-typography) {
+  margin-bottom: 0;
+}
+
+:deep(.about-contact-account .ant-typography-copy) {
+  color: var(--color-primary);
 }
 
 .about-link-btn {

@@ -241,5 +241,10 @@ export default {
     officialSite: '官方网站',
     contact: '联系方式',
     qq: 'QQ：414135950',
+    qqLabel: 'QQ',
+    qqAccount: '414135950',
+    discord: 'Discord：ztachi.',
+    discordLabel: 'Discord',
+    discordAccount: 'ztachi.',
   },
 }

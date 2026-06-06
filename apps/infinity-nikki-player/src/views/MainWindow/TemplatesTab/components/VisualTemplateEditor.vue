@@ -6,8 +6,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
+import { QuestionCircleFilled } from '@antdv-next/icons'
 import { Button, Popover } from 'antdv-next'
-import { HelpCircle } from 'lucide-vue-next'
 import { playNote } from '@/lib/midiPlayer'
 import type { KeyMapping } from '@/types'
 import {
@@ -670,11 +670,9 @@ onUnmounted(() => {
               </p>
             </div>
           </template>
-          <Button type="text" color="primary" variant="outlined" class="key-help-btn">
-            <template #icon>
-              <HelpCircle class="key-help-icon" />
-            </template>
-          </Button>
+          <button class="key-help-btn" :aria-label="t('template.supportedKeys')">
+            <QuestionCircleFilled class="key-help-icon" />
+          </button>
         </Popover>
         <span class="mapping-summary">{{ mappingSummary }}</span>
       </div>
@@ -753,15 +751,16 @@ onUnmounted(() => {
 }
 
 .key-help-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
+  @apply flex h-7 w-7 items-center justify-center rounded-full transition-colors;
+  color: var(--color-primary);
+}
+
+.key-help-btn:hover {
+  background: var(--bg-primary-10);
 }
 
 .key-help-icon {
-  width: 18px;
-  height: 18px;
-  stroke-width: 2.3;
+  font-size: 20px;
 }
 
 .key-help-content {

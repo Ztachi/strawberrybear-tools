@@ -4,7 +4,8 @@
  * @description 封装权限提示、悬浮模式入口、语言切换和帮助按钮，供 macOS 与 Windows Header 复用
  */
 import { Button, Tooltip } from 'antdv-next'
-import { AlertCircle, HelpCircle, Monitor } from 'lucide-vue-next'
+import { QuestionCircleFilled } from '@antdv-next/icons'
+import { AlertCircle, Monitor } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { SUPPORTED_LOCALES } from '@/i18n'
 
@@ -68,19 +69,11 @@ const { t, locale } = useI18n()
       </button>
     </div>
 
-    <Button
-      type="text"
-      color="primary"
-      variant="outlined"
-      class="help-btn"
-      :title="t('about.title')"
-      :aria-label="t('about.title')"
-      @click="emit('openHelp')"
-    >
-      <template #icon>
-        <HelpCircle class="help-icon" />
-      </template>
-    </Button>
+    <Tooltip placement="bottomRight" :title="t('about.title')">
+      <button class="help-btn" :aria-label="t('about.title')" @click="emit('openHelp')">
+        <QuestionCircleFilled class="help-icon" />
+      </button>
+    </Tooltip>
   </div>
 </template>
 
@@ -145,12 +138,15 @@ const { t, locale } = useI18n()
 }
 
 .help-btn {
-  @apply h-8 w-8 rounded-lg;
+  @apply flex h-8 w-8 items-center justify-center rounded-full transition-colors;
+  color: var(--color-primary);
+}
+
+.help-btn:hover {
+  background: var(--bg-primary-10);
 }
 
 .help-icon {
-  width: 22px;
-  height: 22px;
-  stroke-width: 2.35;
+  font-size: 25px;
 }
 </style>
