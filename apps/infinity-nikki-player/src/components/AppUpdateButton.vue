@@ -52,12 +52,6 @@ async function handleClick() {
       :size="18"
     />
     <span class="update-label">{{ buttonText }}</span>
-    <span
-      v-if="updater.progress.value !== null && updater.isDownloading.value"
-      class="progress-badge"
-    >
-      {{ updater.progress.value }}
-    </span>
   </button>
 </template>
 
@@ -90,25 +84,6 @@ async function handleClick() {
 
 .spinning {
   animation: spin 0.8s linear infinite;
-}
-
-.progress-badge {
-  position: absolute;
-  right: -6px;
-  top: -6px;
-  min-width: 20px;
-  height: 18px;
-  border-radius: 999px;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-primary);
-  color: var(--color-white);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: var(--shadow-pink-sm);
 }
 
 .busy {
