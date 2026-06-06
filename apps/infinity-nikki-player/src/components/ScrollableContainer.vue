@@ -94,9 +94,9 @@ onUnmounted(() => {
 
 /* 浮动按钮组 - 固定在右下角 */
 .fab-group {
-  @apply fixed flex flex-col gap-2;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  @apply fixed flex flex-col gap-2 items-end;
+  bottom: .5rem;
+  right: .5rem;
   z-index: 50;
 }
 
