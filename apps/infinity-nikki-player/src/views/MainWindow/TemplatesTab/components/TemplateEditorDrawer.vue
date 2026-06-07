@@ -3,7 +3,7 @@
  * @description: TemplateEditorDrawer - 模板编辑抽屉
  * @description 对齐 MIDI 详情抽屉交互，负责模板名称、Canvas 映射、草稿和未保存离开确认
  */
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
 import { Save, X } from 'lucide-vue-next'
@@ -17,9 +17,13 @@ import VisualTemplateEditor from './VisualTemplateEditor.vue'
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 
-/** 新建模板草稿持久化键；草稿仅服务未保存的新模板。 */
-const NEW_TEMPLATE_DRAFT_KEY = 'infinity-nikki-player.new-template-draft'
-/** 新建模板草稿自动保存间隔，单位毫秒。 */
+/** 新建/基于此新增模板共用草稿持久化键。 */
+const CREATE_TEMPLATE_DRAFT_KEY = 'infinity-nikki-player.template-draft.create'
+/** 旧版新建模板草稿持久化键，用于兼容升级前残留草稿。 */
+const LEGACY_NEW_TEMPLATE_DRAFT_KEY = 'infinity-nikki-player.new-template-draft'
+/** 编辑模板草稿持久化键前缀；完整 key 使用打开编辑时的模板名称。 */
+const EDIT_TEMPLATE_DRAFT_KEY_PREFIX = 'infinity-nikki-player.template-draft.edit.'
+/** 模板草稿自动保存间隔，单位毫秒。 */
 const DRAFT_AUTOSAVE_INTERVAL_MS = 15_000
 /** 模板名称最多展示和保存 30 个字符。 */
 const TEMPLATE_NAME_MAX_LENGTH = 30
@@ -36,6 +40,11 @@ type EditorMode = 'create' | 'edit' | 'duplicate'
  * @description: 离开抽屉或页面时用户选择的动作
  */
 type LeaveDecision = 'save' | 'discard' | 'cancel'
+
+/**
+ * @description: 发现草稿时用户选择的动作
+ */
+type DraftDecision = 'load' | 'discard' | 'cancel'
 
 /**
  * @description: 离开确认结果回调
@@ -78,7 +87,9 @@ const editorMode = ref<EditorMode>('create')
 const editingTemplate = ref<KeyTemplate | null>(null)
 /** 抽屉打开时的稳定序列化快照，用于判断是否真的改动。 */
 const initialEditorSnapshot = ref('')
-/** 草稿自动保存计时器句柄；只在新建模板时启用。 */
+/** 当前编辑会话使用的草稿持久化键。 */
+const activeDraftKey = ref('')
+/** 草稿自动保存计时器句柄。 */
 let draftTimer: ReturnType<typeof window.setInterval> | null = null
 /** promise 化三选离开确认状态。 */
 const leaveConfirm = ref<LeaveConfirmState>({
@@ -137,6 +148,32 @@ function serializeTemplate(template: KeyTemplate | null): string {
 }
 
 /**
+ * @description: 编辑模式草稿 key 中的模板名称片段
+ * @param {string} name - 模板名称
+ * @return {string} 可安全拼接到 localStorage key 的名称
+ */
+function encodeDraftName(name: string): string {
+  return encodeURIComponent(name.trim())
+}
+
+/**
+ * @description: 读取编辑模板对应的草稿 key
+ * @param {string} templateName - 打开编辑时的模板名称
+ * @return {string} localStorage 草稿 key
+ */
+function getEditTemplateDraftKey(templateName: string): string {
+  return `${EDIT_TEMPLATE_DRAFT_KEY_PREFIX}${encodeDraftName(templateName)}`
+}
+
+/**
+ * @description: 当前模式是否属于新建模板生命周期
+ * @return {boolean} true 表示 create 或 duplicate
+ */
+function isCreateLikeMode(): boolean {
+  return editorMode.value === 'create' || editorMode.value === 'duplicate'
+}
+
+/**
  * @description: 判断模板名称是否与其他模板重复
  * @param {KeyTemplate} template - 待保存模板
  * @return {boolean} true 表示存在重复名称
@@ -182,18 +219,91 @@ function hasEditorChanges(): boolean {
  * @param {EditorMode} mode - 编辑模式
  * @return {void}
  */
-function openEditor(template: KeyTemplate, mode: EditorMode): void {
+function openEditor(
+  template: KeyTemplate,
+  mode: EditorMode,
+  options: { draftKey?: string; baselineTemplate?: KeyTemplate } = {}
+): void {
   // 模式先写入，后续保存逻辑和草稿逻辑都依赖这个状态判断。
   editorMode.value = mode
+  activeDraftKey.value =
+    options.draftKey ??
+    (mode === 'edit' ? getEditTemplateDraftKey(template.name) : CREATE_TEMPLATE_DRAFT_KEY)
   // 编辑对象永远是副本，避免用户未保存时改变列表显示。
   editingTemplate.value = cloneEditableTemplate(template)
   // 默认模板也可编辑，但保存后统一视为普通用户模板。
   editingTemplate.value.is_builtin = false
   // 初始快照在抽屉打开前写入，用于关闭和 Tab 切换时判断 dirty。
-  initialEditorSnapshot.value = serializeTemplate(editingTemplate.value)
+  initialEditorSnapshot.value = serializeTemplate(options.baselineTemplate ?? editingTemplate.value)
   // 打开抽屉后才启动草稿计时，避免关闭状态写入空草稿。
   isDrawerOpen.value = true
   restartDraftAutosave()
+}
+
+/**
+ * @description: 按草稿 key 读取模板草稿
+ * @param {string} draftKey - localStorage 草稿 key
+ * @return {KeyTemplate | null} 草稿模板或 null
+ */
+function readTemplateDraft(draftKey: string): KeyTemplate | null {
+  const rawDraft = window.localStorage.getItem(draftKey)
+  if (!rawDraft) return null
+  try {
+    const draft = JSON.parse(rawDraft) as KeyTemplate
+    return {
+      ...draft,
+      is_builtin: false,
+      mappings: normalizeTemplateMappings(draft.mappings ?? []),
+    }
+  } catch {
+    clearTemplateDraft(draftKey)
+    return null
+  }
+}
+
+/**
+ * @description: 读取新建/基于新增模板草稿，兼容旧版草稿 key
+ * @return {KeyTemplate | null} 草稿模板或 null
+ */
+function readCreateTemplateDraft(): KeyTemplate | null {
+  const draft = readTemplateDraft(CREATE_TEMPLATE_DRAFT_KEY)
+  if (draft) return draft
+
+  const legacyDraft = readTemplateDraft(LEGACY_NEW_TEMPLATE_DRAFT_KEY)
+  if (legacyDraft) {
+    window.localStorage.setItem(CREATE_TEMPLATE_DRAFT_KEY, serializeTemplate(legacyDraft))
+    clearTemplateDraft(LEGACY_NEW_TEMPLATE_DRAFT_KEY)
+    return legacyDraft
+  }
+
+  return null
+}
+
+/**
+ * @description: 删除指定模板草稿
+ * @param {string} draftKey - localStorage 草稿 key
+ * @return {void}
+ */
+function clearTemplateDraft(draftKey: string): void {
+  window.localStorage.removeItem(draftKey)
+}
+
+/**
+ * @description: 删除新建/基于新增模板草稿
+ * @return {void}
+ */
+function clearCreateTemplateDraft(): void {
+  clearTemplateDraft(CREATE_TEMPLATE_DRAFT_KEY)
+  clearTemplateDraft(LEGACY_NEW_TEMPLATE_DRAFT_KEY)
+}
+
+/**
+ * @description: 写入当前编辑会话对应草稿
+ * @return {void}
+ */
+function writeCurrentTemplateDraft(): void {
+  if (!activeDraftKey.value || !editingTemplate.value || !hasEditorChanges()) return
+  window.localStorage.setItem(activeDraftKey.value, serializeTemplate(editingTemplate.value))
 }
 
 /**
@@ -204,16 +314,16 @@ async function createBlankTemplate(): Promise<void> {
   // 先检查未保存编辑器，避免用户通过“新增”覆盖当前抽屉状态。
   if (!(await confirmLeaveIfNeeded('close'))) return
 
-  const draft = readNewTemplateDraft()
+  const draft = readCreateTemplateDraft()
   if (draft) {
-    // 草稿只属于新建模板，用户拒绝加载时会删除旧草稿并重新创建空白模板。
-    const shouldLoadDraft = await confirmLoadDraft()
-    if (shouldLoadDraft) {
-      openEditor(draft, 'create')
+    const draftDecision = await confirmLoadDraft()
+    if (draftDecision === 'cancel') return
+    if (draftDecision === 'load') {
+      openEditor(draft, 'create', { draftKey: CREATE_TEMPLATE_DRAFT_KEY })
       return
     }
-    // 用户选择不加载时清理草稿，避免下次新增继续弹出同一份旧数据。
-    clearNewTemplateDraft()
+    // 只有用户明确点击丢弃草稿时才清理，Esc/蒙层关闭会保留草稿并中止进入编辑器。
+    clearCreateTemplateDraft()
   }
 
   openEditor(
@@ -223,20 +333,68 @@ async function createBlankTemplate(): Promise<void> {
       is_builtin: false,
       mappings: [],
     },
-    'create'
+    'create',
+    { draftKey: CREATE_TEMPLATE_DRAFT_KEY }
   )
 }
 
-function confirmLoadDraft(): Promise<boolean> {
+function confirmLoadDraft(): Promise<DraftDecision> {
   return new Promise((resolve) => {
-    Modal.confirm({
+    const modal = Modal.confirm({
       title: t('template.draftFound'),
       content: t('template.loadDraftPrompt'),
       okText: t('template.loadDraft'),
-      cancelText: t('template.discardDraft'),
+      cancelText: t('actions.cancel'),
       centered: true,
-      onOk: () => resolve(true),
-      onCancel: () => resolve(false),
+      footer: () => [
+        h(
+          Button,
+          {
+            key: 'cancel',
+            size: 'small',
+            color: 'primary',
+            variant: 'outlined',
+            onClick: () => {
+              modal.destroy()
+              resolve('cancel')
+            },
+          },
+          () => t('actions.cancel')
+        ),
+        h(
+          Button,
+          {
+            key: 'discard',
+            size: 'small',
+            color: 'primary',
+            variant: 'outlined',
+            onClick: () => {
+              modal.destroy()
+              resolve('discard')
+            },
+          },
+          () => t('template.discardDraft')
+        ),
+        h(
+          Button,
+          {
+            key: 'load',
+            type: 'primary',
+            size: 'small',
+            onClick: () => {
+              modal.destroy()
+              resolve('load')
+            },
+          },
+          () => t('template.loadDraft')
+        ),
+      ],
+      onOk: () => {
+        resolve('load')
+      },
+      onCancel: () => {
+        resolve('cancel')
+      },
     })
   })
 }
@@ -249,6 +407,18 @@ function confirmLoadDraft(): Promise<boolean> {
 async function createFromTemplate(template: KeyTemplate): Promise<void> {
   // 切换编辑目标前必须先处理当前未保存内容，保证同一时间只有一个抽屉编辑上下文。
   if (!(await confirmLeaveIfNeeded('close'))) return
+
+  const draft = readCreateTemplateDraft()
+  if (draft) {
+    const draftDecision = await confirmLoadDraft()
+    if (draftDecision === 'cancel') return
+    if (draftDecision === 'load') {
+      openEditor(draft, 'duplicate', { draftKey: CREATE_TEMPLATE_DRAFT_KEY })
+      return
+    }
+    clearCreateTemplateDraft()
+  }
+
   openEditor(
     {
       id: createTemplateId(),
@@ -256,7 +426,8 @@ async function createFromTemplate(template: KeyTemplate): Promise<void> {
       is_builtin: false,
       mappings: normalizeTemplateMappings(template.mappings),
     },
-    'duplicate'
+    'duplicate',
+    { draftKey: CREATE_TEMPLATE_DRAFT_KEY }
   )
 }
 
@@ -268,7 +439,18 @@ async function createFromTemplate(template: KeyTemplate): Promise<void> {
 async function editTemplate(template: KeyTemplate): Promise<void> {
   // 打开另一条模板前先处理当前抽屉未保存内容。
   if (!(await confirmLeaveIfNeeded('close'))) return
-  openEditor(template, 'edit')
+  const draftKey = getEditTemplateDraftKey(template.name)
+  const draft = readTemplateDraft(draftKey)
+  if (draft) {
+    const draftDecision = await confirmLoadDraft()
+    if (draftDecision === 'cancel') return
+    if (draftDecision === 'load') {
+      openEditor(draft, 'edit', { draftKey, baselineTemplate: template })
+      return
+    }
+    clearTemplateDraft(draftKey)
+  }
+  openEditor(template, 'edit', { draftKey })
 }
 
 /**
@@ -278,6 +460,7 @@ async function editTemplate(template: KeyTemplate): Promise<void> {
 async function saveEditingTemplate(): Promise<boolean> {
   // 防御式判断：空状态点击保存不做任何事，并告诉调用方没有完成保存。
   if (!editingTemplate.value) return false
+  const previousDraftKey = activeDraftKey.value
   const rawTemplateName = editingTemplate.value.name
   const template: KeyTemplate = {
     ...editingTemplate.value,
@@ -309,8 +492,11 @@ async function saveEditingTemplate(): Promise<boolean> {
     // 保存成功后会刷新模板列表并自动选择该模板。
     await settingsStore.saveTemplate(template)
     toast.success(t('template.saved'), { richColors: true })
-    // 新建模板保存后草稿已经生效为正式模板，必须删除草稿。
-    if (editorMode.value === 'create') clearNewTemplateDraft()
+    if (previousDraftKey) clearTemplateDraft(previousDraftKey)
+    if (isCreateLikeMode()) clearCreateTemplateDraft()
+    // 新建和基于新增保存后正式进入编辑态，后续草稿按模板名称隔离。
+    editorMode.value = 'edit'
+    activeDraftKey.value = getEditTemplateDraftKey(template.name)
     // 保存后的当前内容就是新基线，避免保存并继续编辑时仍显示 dirty。
     editingTemplate.value = cloneEditableTemplate(template)
     initialEditorSnapshot.value = serializeTemplate(editingTemplate.value)
@@ -334,6 +520,14 @@ async function saveAndCloseEditor(): Promise<void> {
 }
 
 /**
+ * @description: 保存当前编辑模板但保持抽屉打开
+ * @return {Promise<void>} 无返回值
+ */
+async function saveAndKeepEditing(): Promise<void> {
+  await saveEditingTemplate()
+}
+
+/**
  * @description: 不弹确认直接关闭抽屉并清理编辑状态
  * @return {void}
  */
@@ -343,6 +537,7 @@ function closeEditorWithoutPrompt(): void {
   // 清理编辑对象和快照，下一次打开会重新建立独立上下文。
   editingTemplate.value = null
   initialEditorSnapshot.value = ''
+  activeDraftKey.value = ''
   isDrawerOpen.value = false
 }
 
@@ -404,6 +599,9 @@ async function confirmLeaveIfNeeded(context: 'close' | 'jump' = 'close'): Promis
     return true
   }
 
+  // 离开类动作先落一份草稿，再询问用户要保存、丢弃还是取消。
+  writeCurrentTemplateDraft()
+
   const decision = await requestLeaveDecision(context)
   if (decision === 'cancel') {
     // 取消表示完全中止外部动作，例如不切页、不导入 MIDI。
@@ -419,47 +617,6 @@ async function confirmLeaveIfNeeded(context: 'close' | 'jump' = 'close'): Promis
   const saved = await saveEditingTemplate()
   if (saved) closeEditorWithoutPrompt()
   return saved
-}
-
-/**
- * @description: 读取新建模板草稿
- * @return {KeyTemplate | null} 草稿模板或 null
- */
-function readNewTemplateDraft(): KeyTemplate | null {
-  const rawDraft = window.localStorage.getItem(NEW_TEMPLATE_DRAFT_KEY)
-  if (!rawDraft) return null
-  try {
-    const draft = JSON.parse(rawDraft) as KeyTemplate
-    // 草稿读出后也要按前端规则归一化，避免旧草稿带入非法重复映射。
-    return {
-      ...draft,
-      is_builtin: false,
-      mappings: normalizeTemplateMappings(draft.mappings ?? []),
-    }
-  } catch {
-    // 解析失败说明本地缓存损坏，清理后按无草稿处理。
-    clearNewTemplateDraft()
-    return null
-  }
-}
-
-/**
- * @description: 写入新建模板草稿
- * @return {void}
- */
-function writeNewTemplateDraft(): void {
-  // 只有新建模板需要草稿；复制和编辑已有模板不自动写草稿。
-  if (editorMode.value !== 'create' || !editingTemplate.value || !hasEditorChanges()) return
-  // 写入前使用稳定序列化，保证草稿内容和脏检查字段一致。
-  window.localStorage.setItem(NEW_TEMPLATE_DRAFT_KEY, serializeTemplate(editingTemplate.value))
-}
-
-/**
- * @description: 删除新建模板草稿
- * @return {void}
- */
-function clearNewTemplateDraft(): void {
-  window.localStorage.removeItem(NEW_TEMPLATE_DRAFT_KEY)
 }
 
 /**
@@ -480,16 +637,42 @@ function stopDraftAutosave(): void {
 function restartDraftAutosave(): void {
   // 每次打开或切换模式都先清理旧计时器，保证最多只有一个草稿任务。
   stopDraftAutosave()
-  if (editorMode.value !== 'create') return
-  // 新建模板每 15 秒保存一次，避免频繁写 localStorage 影响交互。
-  draftTimer = window.setInterval(writeNewTemplateDraft, DRAFT_AUTOSAVE_INTERVAL_MS)
+  if (!activeDraftKey.value) return
+  // 模板每 15 秒保存一次草稿，避免频繁写 localStorage 影响交互。
+  draftTimer = window.setInterval(writeCurrentTemplateDraft, DRAFT_AUTOSAVE_INTERVAL_MS)
 }
+
+/**
+ * @description: 判断是否为保存快捷键
+ * @param {KeyboardEvent} event - 键盘事件
+ * @return {boolean} true 表示 Ctrl/Cmd+S
+ */
+function isSaveShortcut(event: KeyboardEvent): boolean {
+  return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's'
+}
+
+/**
+ * @description: 处理模板编辑抽屉保存快捷键
+ * @param {KeyboardEvent} event - 键盘事件
+ * @return {void}
+ */
+function handleSaveShortcut(event: KeyboardEvent): void {
+  if (!isDrawerOpen.value || !editingTemplate.value || !isSaveShortcut(event)) return
+  event.preventDefault()
+  event.stopPropagation()
+  void saveAndKeepEditing()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleSaveShortcut)
+})
 
 onBeforeUnmount(() => {
   // 组件销毁时停止草稿定时器，避免后台继续写入。
   stopDraftAutosave()
   // 如果确认框还在等待，按取消处理，避免父级 await 永久挂起。
   resolveLeaveDecision('cancel')
+  window.removeEventListener('keydown', handleSaveShortcut)
 })
 
 defineExpose({
@@ -533,6 +716,12 @@ defineExpose({
             <X class="size-4" />
           </template>
           {{ t('actions.cancel') }}
+        </Button>
+        <Button size="small" color="primary" variant="outlined" @click="saveAndKeepEditing">
+          <template #icon>
+            <Save class="size-4" />
+          </template>
+          {{ t('template.save') }}
         </Button>
         <Button type="primary" size="small" @click="saveAndCloseEditor">
           <template #icon>

@@ -138,7 +138,6 @@ function createMockUpdate(): Update {
       await wait(MOCK_STEP_DELAY_MS)
       onEvent?.({
         event: 'Finished',
-        data: {},
       })
       // 保留一小段安装等待，让 UI 能展示 installing 状态。
       await wait(MOCK_INSTALL_DELAY_MS)

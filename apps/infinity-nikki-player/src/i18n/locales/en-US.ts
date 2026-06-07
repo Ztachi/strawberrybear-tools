@@ -163,6 +163,7 @@ export default {
     nextPage: 'Next',
     pageInfo: 'Page {page} / {total}',
     drawerDescription: 'Edit the template name and piano key mappings.',
+    save: 'Save',
     saveAndExit: 'Save and Exit',
     discardAndExit: 'Exit Without Saving',
     saveAndJump: 'Save and Jump',
@@ -175,7 +176,7 @@ export default {
     loadDraft: 'Load Draft',
     discardDraft: 'Discard Draft',
     loadDraftPrompt:
-      'A draft for a new template was found. Load it? Cancel will discard the draft and create a blank template.',
+      'An unsaved template draft was found. Load it? Cancel keeps the draft and returns.',
     emptyEditor: 'Select or create a custom template',
     emptyEditorTip: 'Built-in templates can be copied before editing so defaults are preserved.',
     builtinNames: {

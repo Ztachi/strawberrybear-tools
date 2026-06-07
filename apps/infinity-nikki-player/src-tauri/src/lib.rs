@@ -273,6 +273,16 @@ pub fn run() {
                     log::error!("Failed to set window title: {}", e);
                 }
 
+                #[cfg(target_os = "macos")]
+                {
+                    if let Err(e) = window.show() {
+                        log::warn!("显示 macOS 主窗口失败: {}", e);
+                    }
+                    if let Err(e) = window.set_focus() {
+                        log::warn!("聚焦 macOS 主窗口失败: {}", e);
+                    }
+                }
+
                 #[cfg(target_os = "windows")]
                 {
                     if let Err(e) = window.hide_menu() {

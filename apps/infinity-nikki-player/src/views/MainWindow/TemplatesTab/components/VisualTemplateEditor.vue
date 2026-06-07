@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
 import { QuestionCircleFilled } from '@antdv-next/icons'
 import { Button, Popover } from 'antdv-next'
-import { playNote } from '@/lib/midiPlayer'
+import { playNote, stopNote } from '@/lib/midiPlayer'
 import type { KeyMapping } from '@/types'
 import {
   isBlackKey,
@@ -82,6 +82,8 @@ const dragStartX = ref(0)
 /** 拖拽开始时滚动容器的 scrollLeft */
 const dragStartScrollLeft = ref(0)
 let resizeObserver: ResizeObserver | null = null
+/** 键盘长按预览持续时长，keyup 会提前停止。 */
+const KEYBOARD_HOLD_PREVIEW_DURATION_SECONDS = 60 * 60
 
 /** 编辑模式白键固定宽度，保证局部编辑时琴键可点选 */
 const WHITE_KEY_WIDTH = 38
@@ -526,12 +528,24 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
 }
 
 /**
+ * @description: 判断是否为系统常规保存快捷键
+ * @param {KeyboardEvent} event - 键盘事件
+ * @return {boolean} true 表示 Ctrl/Cmd+S
+ */
+function isSaveShortcut(event: KeyboardEvent): boolean {
+  return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's'
+}
+
+/**
  * @description: 处理全局键盘按下
  * @description 映射模式下写入映射；非映射模式下仅用于已有映射的预览高亮和发音
  * @param {KeyboardEvent} event - 键盘按下事件
  * @return {void}
  */
 function handleKeyDown(event: KeyboardEvent) {
+  // 保存快捷键由模板抽屉统一处理，映射模式下也不能拦截或写入映射。
+  if (isSaveShortcut(event)) return
+
   // 非映射模式下，用户在输入框里打字不应触发钢琴发音或映射预览。
   if (!isMappingMode.value && isEditableEventTarget(event.target)) return
 
@@ -571,12 +585,13 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 
   if (normalized && pressedMappedPitch !== undefined) {
+    if (event.repeat || pressedMappedKeys.value.has(normalized)) return
     // 使用新 Set 触发 Vue 响应式更新，驱动 Canvas 反向高亮。
     const next = new Set(pressedMappedKeys.value)
     next.add(normalized)
     pressedMappedKeys.value = next
     selectedPitch.value = pressedMappedPitch
-    void previewPitch(pressedMappedPitch)
+    void playNote(pressedMappedPitch, 88, KEYBOARD_HOLD_PREVIEW_DURATION_SECONDS)
   }
 }
 
@@ -586,9 +601,18 @@ function handleKeyDown(event: KeyboardEvent) {
  * @return {void}
  */
 function handleKeyUp(event: KeyboardEvent) {
+  if (isSaveShortcut(event)) return
+
   // 释放时同样归一化，和 keydown 中保存到 Set 的键名保持一致。
   const normalized = normalizeMappingKeyFromEvent(event)
   if (!normalized) return
+  const wasPressed = pressedMappedKeys.value.has(normalized)
+  const releasedMapping = wasPressed
+    ? props.mappings.find((mapping) => mapping.key === normalized)
+    : undefined
+  if (releasedMapping) {
+    stopNote(releasedMapping.pitch)
+  }
   // 使用新 Set 移除按键，触发 Canvas 去除高亮。
   const next = new Set(pressedMappedKeys.value)
   next.delete(normalized)
@@ -642,6 +666,10 @@ onUnmounted(() => {
   resizeObserver?.disconnect()
   window.removeEventListener('keydown', handleKeyDown, true)
   window.removeEventListener('keyup', handleKeyUp, true)
+  for (const key of pressedMappedKeys.value) {
+    const mapping = props.mappings.find((item) => item.key === key)
+    if (mapping) stopNote(mapping.pitch)
+  }
 })
 </script>
 
@@ -662,8 +690,9 @@ onUnmounted(() => {
           {{ t('template.clearMapping') }}
         </Button>
         <Button
-          :type="isMappingMode ? 'default' : 'primary'"
-          size="small"
+          type="primary"
+          class="mapping-mode-button"
+          :class="{ active: isMappingMode }"
           @click="toggleMappingMode"
         >
           {{ isMappingMode ? t('template.exitMapping') : t('template.mapSelected') }}
@@ -782,6 +811,43 @@ onUnmounted(() => {
   @apply flex flex-wrap items-center justify-start gap-2;
 }
 
+.mapping-mode-button {
+  min-width: 132px;
+  height: 34px;
+  padding-inline: 18px;
+  border-radius: 999px;
+  border-color: color-mix(in srgb, var(--color-primary) 76%, transparent);
+  background: var(--color-primary);
+  color: var(--color-white);
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+
+.mapping-mode-button:hover,
+.mapping-mode-button:focus-visible {
+  border-color: color-mix(in srgb, var(--color-primary) 86%, black);
+  background: color-mix(in srgb, var(--color-primary) 88%, black);
+  color: var(--color-white);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--color-primary) 34%, transparent);
+}
+
+.mapping-mode-button.active {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-white);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-danger) 16%, transparent),
+    0 10px 24px color-mix(in srgb, var(--color-danger) 34%, transparent);
+}
+
+.mapping-mode-button.active:hover,
+.mapping-mode-button.active:focus-visible {
+  border-color: color-mix(in srgb, var(--color-danger) 86%, black);
+  background: color-mix(in srgb, var(--color-danger) 88%, black);
+  color: var(--color-white);
+}
+
 @media (max-width: 960px) {
   .editor-status-row {
     grid-template-columns: 1fr;
@@ -795,5 +861,8 @@ onUnmounted(() => {
 
 canvas {
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 </style>

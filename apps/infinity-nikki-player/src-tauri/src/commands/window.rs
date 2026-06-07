@@ -2,6 +2,7 @@
 //!
 //! 提供进入/退出悬浮模式、窗口状态保存与恢复等功能
 
+#[cfg(target_os = "windows")]
 use super::window_controls;
 use crate::window_state::{self, WindowStateSnapshot};
 use tauri::{AppHandle, LogicalSize, Manager};

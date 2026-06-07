@@ -281,10 +281,6 @@ pub fn hide_windows_snap_overlay() -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-/// @description: 非 Windows 平台无需应用 Windows 自定义标题栏适配
-pub fn apply_windows_custom_titlebar(_window: &tauri::WebviewWindow) {}
-
-#[cfg(not(target_os = "windows"))]
 /// @description: 非 Windows 平台无需显示 Windows Snap Layout 浮层
 #[tauri::command]
 pub fn show_windows_snap_overlay() -> Result<(), String> {
