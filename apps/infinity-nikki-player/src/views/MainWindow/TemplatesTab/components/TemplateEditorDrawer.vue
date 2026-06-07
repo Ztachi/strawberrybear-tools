@@ -21,9 +21,11 @@ const settingsStore = useSettingsStore()
 const NEW_TEMPLATE_DRAFT_KEY = 'infinity-nikki-player.new-template-draft'
 /** 新建模板草稿自动保存间隔，单位毫秒。 */
 const DRAFT_AUTOSAVE_INTERVAL_MS = 15_000
+/** 模板名称最多展示和保存 30 个字符。 */
+const TEMPLATE_NAME_MAX_LENGTH = 30
 /** 模板名称需要能直接作为 Windows/macOS 文件名主体。 */
 const TEMPLATE_FILE_NAME_PATTERN =
-  /^(?!(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$)(?!.*[<>:"/\\|?*])(?!.*[ .]$).{1,255}$/i
+  /^(?!(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$)(?!.*[<>:"/\\|?*])(?!.*[ .]$).{1,30}$/i
 
 /**
  * @description: 抽屉编辑模式
@@ -547,7 +549,13 @@ defineExpose({
           <TypographyText class="mb-1 block text-xs font-medium text-muted-foreground">
             {{ t('template.name') }}
           </TypographyText>
-          <Input v-model:value="editingTemplate.name" class="h-9 bg-white" />
+          <Input
+            v-model:value="editingTemplate.name"
+            class="h-9 bg-white"
+            allow-clear
+            show-count
+            :maxlength="TEMPLATE_NAME_MAX_LENGTH"
+          />
         </div>
 
         <VisualTemplateEditor

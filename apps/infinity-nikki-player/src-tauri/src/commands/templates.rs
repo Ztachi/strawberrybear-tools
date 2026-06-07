@@ -17,6 +17,8 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 const BUILTIN_TEMPLATE_IDS: &[&str] = &["piano", "game-4rows", "21keys", "14keys"];
 /// 默认模板已种子初始化的标记文件名
 const DEFAULT_TEMPLATES_SEEDED_MARKER: &str = ".defaults_seeded";
+/// 模板名称最大字符数，和前端输入框计数上限保持一致。
+const TEMPLATE_NAME_MAX_CHARS: usize = 30;
 
 struct TemplateFileEntry {
     template: KeyTemplate,
@@ -103,7 +105,7 @@ fn is_safe_template_id(template_id: &str) -> bool {
 /// true 表示模板名称可直接作为跨平台文件名主体使用
 fn is_valid_template_file_name(template_name: &str) -> bool {
     let name = template_name;
-    if name.is_empty() || name.chars().count() > 255 {
+    if name.is_empty() || name.chars().count() > TEMPLATE_NAME_MAX_CHARS {
         return false;
     }
 
