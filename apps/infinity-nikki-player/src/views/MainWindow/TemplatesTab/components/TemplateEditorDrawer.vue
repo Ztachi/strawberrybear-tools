@@ -21,6 +21,9 @@ const settingsStore = useSettingsStore()
 const NEW_TEMPLATE_DRAFT_KEY = 'infinity-nikki-player.new-template-draft'
 /** 新建模板草稿自动保存间隔，单位毫秒。 */
 const DRAFT_AUTOSAVE_INTERVAL_MS = 15_000
+/** 模板名称需要能直接作为 Windows/macOS 文件名主体。 */
+const TEMPLATE_FILE_NAME_PATTERN =
+  /^(?!(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$)(?!.*[<>:"/\\|?*])(?!.*[ .]$).{1,255}$/i
 
 /**
  * @description: 抽屉编辑模式
@@ -149,6 +152,18 @@ function hasDuplicateTemplateName(template: KeyTemplate): boolean {
 }
 
 /**
+ * @description: 判断模板名称是否可作为跨平台文件名
+ * @param {string} name - 模板名称
+ * @return {boolean} true 表示符合 Windows/macOS 文件名规范
+ */
+function isValidTemplateFileName(name: string): boolean {
+  return (
+    TEMPLATE_FILE_NAME_PATTERN.test(name) &&
+    !Array.from(name).some((char) => char.charCodeAt(0) < 32)
+  )
+}
+
+/**
  * @description: 当前编辑器是否有真实未保存改动
  * @return {boolean} true 表示需要离开确认
  */
@@ -261,6 +276,7 @@ async function editTemplate(template: KeyTemplate): Promise<void> {
 async function saveEditingTemplate(): Promise<boolean> {
   // 防御式判断：空状态点击保存不做任何事，并告诉调用方没有完成保存。
   if (!editingTemplate.value) return false
+  const rawTemplateName = editingTemplate.value.name
   const template: KeyTemplate = {
     ...editingTemplate.value,
     // 名称首尾空格不应持久化。
@@ -274,6 +290,11 @@ async function saveEditingTemplate(): Promise<boolean> {
   if (!template.name) {
     // 空名称会导致模板列表不可读，直接阻止保存。
     toast.error(t('template.nameRequired'), { richColors: true })
+    return false
+  }
+  if (!isValidTemplateFileName(rawTemplateName)) {
+    // 模板名称会用于导出文件名，保存前先按跨平台文件名规范拦截。
+    toast.error(t('template.nameInvalid'), { richColors: true })
     return false
   }
   if (hasDuplicateTemplateName(template)) {

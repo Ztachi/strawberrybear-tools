@@ -129,6 +129,8 @@ export default {
       'Esc, Fn, Win/Command, Ctrl, Alt, Shift, CapsLock, media keys, power keys, and other system or modifier keys are not supported.',
     unsupportedKey: 'This key cannot be used for mapping',
     nameRequired: 'Template name is required',
+    nameInvalid:
+      'Template names must be valid Windows and macOS file names. Do not use <>:"/\\|?*, control characters, trailing spaces or dots, or reserved system names.',
     nameDuplicated: 'Template names must be unique',
     saved: 'Template saved',
     saveFailed: 'Failed to save template',

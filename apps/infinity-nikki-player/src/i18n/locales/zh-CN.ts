@@ -129,6 +129,8 @@ export default {
       '不支持 Esc、Fn、Win/Command、Ctrl、Alt、Shift、CapsLock、媒体键、电源键等系统或修饰按键。',
     unsupportedKey: '这个按键不能用于映射',
     nameRequired: '模板名称不能为空',
+    nameInvalid:
+      '模板名称必须符合 Windows 和 macOS 文件名规范，不能包含 <>:"/\\|?* 或控制字符，不能以空格或点结尾，也不能使用系统保留名称',
     nameDuplicated: '模板名称不能重复',
     saved: '模板已保存',
     saveFailed: '保存模板失败',

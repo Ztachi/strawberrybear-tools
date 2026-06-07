@@ -18,6 +18,11 @@ const BUILTIN_TEMPLATE_IDS: &[&str] = &["piano", "game-4rows", "21keys", "14keys
 /// 默认模板已种子初始化的标记文件名
 const DEFAULT_TEMPLATES_SEEDED_MARKER: &str = ".defaults_seeded";
 
+struct TemplateFileEntry {
+    template: KeyTemplate,
+    modified_millis: u128,
+}
+
 /// 获取模板目录路径
 ///
 /// # Arguments
@@ -63,6 +68,12 @@ fn is_builtin_template_id(template_id: &str) -> bool {
     BUILTIN_TEMPLATE_IDS.contains(&template_id)
 }
 
+fn builtin_template_order(template_id: &str) -> Option<usize> {
+    BUILTIN_TEMPLATE_IDS
+        .iter()
+        .position(|builtin_id| *builtin_id == template_id)
+}
+
 /// @description: 判断模板 ID 是否可安全用于文件名
 ///
 /// # Arguments
@@ -79,6 +90,85 @@ fn is_safe_template_id(template_id: &str) -> bool {
             .chars()
             // 只允许文件名安全字符，避免路径穿越或跨平台非法文件名。
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// @description: 判断模板名称是否符合 Windows/macOS 文件名规范
+///
+/// # Arguments
+///
+/// * `template_name` - 待检查模板名称
+///
+/// # Returns
+///
+/// true 表示模板名称可直接作为跨平台文件名主体使用
+fn is_valid_template_file_name(template_name: &str) -> bool {
+    let name = template_name;
+    if name.is_empty() || name.chars().count() > 255 {
+        return false;
+    }
+
+    // Windows 不允许这些字符，macOS/POSIX 不允许路径分隔符；统一拒绝控制字符。
+    if name.chars().any(|c| {
+        c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
+    }) {
+        return false;
+    }
+
+    // Windows 不允许文件名以空格或点结尾。
+    if name.ends_with(' ') || name.ends_with('.') {
+        return false;
+    }
+
+    // Windows 设备保留名即使带扩展名也不可作为文件名主体。
+    let upper_name = name.split('.').next().unwrap_or(name).to_ascii_uppercase();
+    !matches!(
+        upper_name.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    )
+}
+
+fn validate_template_name(template_name: &str) -> Result<(), String> {
+    if template_name.trim().is_empty() {
+        return Err("模板名称不能为空".to_string());
+    }
+
+    if !is_valid_template_file_name(template_name) {
+        return Err(template_name_validation_message());
+    }
+
+    Ok(())
+}
+
+fn template_name_validation_message() -> String {
+    "模板名称必须符合 Windows 和 macOS 文件名规范，不能包含 <>:\"/\\|?* 或控制字符，不能以空格或点结尾，也不能使用 CON、PRN、AUX、NUL、COM1-COM9、LPT1-LPT9 等保留名称".to_string()
+}
+
+fn template_export_entry_name(template: &KeyTemplate) -> Result<String, String> {
+    if !is_valid_template_file_name(&template.name) {
+        return Err(template_name_validation_message());
+    }
+    Ok(format!("{}.json", template.name.trim()))
 }
 
 /// @description: 归一化模板按键名
@@ -198,10 +288,8 @@ fn validate_template(template: &KeyTemplate) -> Result<(), String> {
         return Err("模板 ID 只能包含英文字母、数字、横线和下划线".to_string());
     }
 
-    // 空名称会让模板列表不可读，也不利于导出文件命名。
-    if template.name.trim().is_empty() {
-        return Err("模板名称不能为空".to_string());
-    }
+    // 模板名称会参与导出文件命名，必须符合跨平台文件名规范。
+    validate_template_name(&template.name)?;
 
     // pitches 用于拒绝一个音高对应多个按键。
     let mut pitches = std::collections::HashSet::new();
@@ -239,6 +327,15 @@ fn validate_template(template: &KeyTemplate) -> Result<(), String> {
 ///
 /// 成功解析出的模板列表
 fn read_templates_from_dir(app: &tauri::AppHandle) -> Result<Vec<KeyTemplate>, String> {
+    Ok(read_template_file_entries_from_dir(app)?
+        .into_iter()
+        .map(|entry| entry.template)
+        .collect())
+}
+
+fn read_template_file_entries_from_dir(
+    app: &tauri::AppHandle,
+) -> Result<Vec<TemplateFileEntry>, String> {
     let templates_dir = get_templates_dir(app)?;
     let mut templates = Vec::new();
 
@@ -252,13 +349,57 @@ fn read_templates_from_dir(app: &tauri::AppHandle) -> Result<Vec<KeyTemplate>, S
             }
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(template) = serde_json::from_str::<KeyTemplate>(&content) {
-                    templates.push(template);
+                    let modified_millis = entry
+                        .metadata()
+                        .ok()
+                        .and_then(|metadata| metadata.modified().ok())
+                        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+                        .map(|duration| duration.as_millis())
+                        .unwrap_or(0);
+                    templates.push(TemplateFileEntry {
+                        template,
+                        modified_millis,
+                    });
                 }
             }
         }
     }
 
     Ok(templates)
+}
+
+fn custom_template_sort_key(template: &KeyTemplate, modified_millis: u128) -> u128 {
+    template
+        .id
+        .strip_prefix("custom-")
+        .and_then(|suffix| suffix.split('-').next())
+        .and_then(|timestamp| timestamp.parse::<u128>().ok())
+        .unwrap_or(modified_millis)
+}
+
+fn sort_template_file_entries(entries: &mut [TemplateFileEntry]) {
+    entries.sort_by(|a, b| {
+        let a_builtin_order = a
+            .template
+            .is_builtin
+            .then(|| builtin_template_order(&a.template.id))
+            .flatten();
+        let b_builtin_order = b
+            .template
+            .is_builtin
+            .then(|| builtin_template_order(&b.template.id))
+            .flatten();
+
+        match (a_builtin_order, b_builtin_order) {
+            (None, None) => custom_template_sort_key(&b.template, b.modified_millis)
+                .cmp(&custom_template_sort_key(&a.template, a.modified_millis))
+                .then_with(|| b.modified_millis.cmp(&a.modified_millis))
+                .then_with(|| b.template.id.cmp(&a.template.id)),
+            (Some(a_order), Some(b_order)) => a_order.cmp(&b_order),
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (Some(_), None) => std::cmp::Ordering::Greater,
+        }
+    });
 }
 
 /// @description: 校验模板名称是否与现有模板重复
@@ -437,6 +578,8 @@ fn save_imported_template(
     app: &tauri::AppHandle,
     mut template: KeyTemplate,
 ) -> Result<KeyTemplate, String> {
+    // 导入名称必须先按原始内容校验，避免尾随空格/点被 trim 后绕过文件名规则。
+    validate_template_name(&template.name)?;
     // 导入文件即使声明 is_builtin，也只能作为普通用户模板保存。
     template = normalize_custom_template(template);
     // 导入 ID 不能覆盖内置模板或现有自定义模板。
@@ -490,35 +633,6 @@ fn parse_template_from_json_content(
 ) -> Result<KeyTemplate, String> {
     // 先按共享 KeyTemplate 结构解析，结构不匹配时立即失败。
     serde_json::from_str(content).map_err(|e| format!("解析模板失败({}): {}", source_label, e))
-}
-
-/// @description: 校验导入批次中的模板名称不会冲突
-///
-/// # Arguments
-///
-/// * `app` - Tauri 应用句柄
-/// * `templates` - 待导入模板列表
-///
-/// # Returns
-///
-/// 没有重名返回 Ok(())；否则返回用户可读错误
-fn validate_import_batch_template_names(
-    app: &tauri::AppHandle,
-    templates: &[KeyTemplate],
-) -> Result<(), String> {
-    let mut names = std::collections::HashSet::new();
-    for template in templates {
-        // 导入前先按保存规则归一化，确保 trim 后名称参与冲突判断。
-        let normalized = normalize_custom_template(template.clone());
-        validate_template(&normalized)?;
-        // 批次内部重名也必须拒绝，避免 ZIP 导入时出现两个不可区分的模板。
-        if !names.insert(normalized.name.clone()) {
-            return Err(format!("模板名称已存在: {}", normalized.name));
-        }
-        // 与现有模板重名时拒绝整个批次，避免 ZIP 导入产生部分成功。
-        validate_unique_template_name(app, &normalized)?;
-    }
-    Ok(())
 }
 
 /// @description: 从单个 JSON 文件导入模板
@@ -582,24 +696,27 @@ fn import_templates_from_zip_file(
 
         let mut content = String::new();
         // JSON 模板必须是 UTF-8 文本；读取失败说明 entry 不是有效模板。
-        entry
-            .read_to_string(&mut content)
-            .map_err(|e| format!("读取 ZIP 模板 {} 失败: {}", entry_name, e))?;
-        let template = parse_template_from_json_content(&content, &entry_name)?;
-        imported_templates.push(template);
+        if entry.read_to_string(&mut content).is_err() {
+            log::warn!("Skipped unreadable ZIP template entry: {}", entry_name);
+            continue;
+        }
+        match parse_template_from_json_content(&content, &entry_name) {
+            Ok(template) => imported_templates.push(template),
+            Err(error) => log::warn!(
+                "Skipped invalid ZIP template entry {}: {}",
+                entry_name,
+                error
+            ),
+        }
     }
 
-    // 没有任何可导入 JSON 时返回错误，避免用户以为 ZIP 已经生效。
-    if imported_templates.is_empty() {
-        return Err("ZIP 中没有可导入的模板 JSON".to_string());
-    }
-
-    // 保存前统一校验名称，避免 ZIP 导入到一半才发现后续模板重名。
-    validate_import_batch_template_names(app, &imported_templates)?;
     let mut saved_templates = Vec::new();
     for template in imported_templates {
-        // 批次预校验通过后再逐个保存，保证重名不会造成部分导入。
-        saved_templates.push(save_imported_template(app, template)?);
+        // ZIP 批量导入按条目容错：重名、非法名称或非法映射只跳过当前模板。
+        match save_imported_template(app, template) {
+            Ok(saved_template) => saved_templates.push(saved_template),
+            Err(error) => log::warn!("Skipped invalid ZIP template during import: {}", error),
+        }
     }
 
     Ok(saved_templates)
@@ -869,7 +986,7 @@ fn create_default_template(template_id: &str) -> Result<KeyTemplate, String> {
 ///
 /// # Returns
 ///
-/// 按 ID 排序的模板列表
+/// 按业务展示顺序排列的模板列表
 ///
 /// # Notes
 ///
@@ -878,12 +995,12 @@ fn create_default_template(template_id: &str) -> Result<KeyTemplate, String> {
 pub fn get_templates(app: tauri::AppHandle) -> Result<Vec<KeyTemplate>, String> {
     // 默认模板只在首次初始化时写入，后续不会补回用户删除的模板。
     seed_default_templates_once(&app)?;
-    let mut templates = read_templates_from_dir(&app)?;
+    let mut entries = read_template_file_entries_from_dir(&app)?;
 
-    // 按 ID 排序
-    templates.sort_by(|a, b| a.id.cmp(&b.id));
+    // 自定义模板按新到旧展示，默认模板固定保持 BUILTIN_TEMPLATE_IDS 的声明顺序。
+    sort_template_file_entries(&mut entries);
 
-    Ok(templates)
+    Ok(entries.into_iter().map(|entry| entry.template).collect())
 }
 
 /// 保存模板到文件
@@ -902,6 +1019,8 @@ pub fn get_templates(app: tauri::AppHandle) -> Result<Vec<KeyTemplate>, String> 
 /// 文件命名为 `{template.id}.json`
 #[tauri::command]
 pub fn save_template(app: tauri::AppHandle, template: KeyTemplate) -> Result<(), String> {
+    // 保存前先按原始名称校验，避免尾随空格/点被 normalize 静默吞掉。
+    validate_template_name(&template.name)?;
     let template = normalize_custom_template(template);
     validate_template(&template)?;
     validate_unique_template_name(&app, &template)?;
@@ -1057,8 +1176,8 @@ pub fn export_templates_archive(
             fs::read_to_string(&source_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
         let template: KeyTemplate =
             serde_json::from_str(&content).map_err(|e| format!("解析模板失败: {}", e))?;
-        // ZIP entry 使用安全模板 ID 命名，避免用户模板名称中的特殊字符进入压缩包路径。
-        let entry_name = format!("{}.json", template.id);
+        // ZIP entry 使用模板名称命名；名称保存时已按跨平台文件名规范校验。
+        let entry_name = template_export_entry_name(&template)?;
         // 导出前重新格式化 JSON，保证 ZIP 内文件可读且稳定。
         let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
         zip.start_file(entry_name, options)
@@ -1099,9 +1218,7 @@ pub fn rename_template(
     template_id: String,
     new_name: String,
 ) -> Result<KeyTemplate, String> {
-    if new_name.trim().is_empty() {
-        return Err("模板名称不能为空".to_string());
-    }
+    validate_template_name(&new_name)?;
 
     // template_file_path 会校验 ID，避免读取模板目录外文件。
     let file_path = template_file_path(&app, &template_id)?;
@@ -1152,12 +1269,99 @@ mod tests {
         }
     }
 
+    fn custom_template_with_name(name: &str) -> KeyTemplate {
+        KeyTemplate {
+            id: "custom-name-test".to_string(),
+            name: name.to_string(),
+            is_builtin: false,
+            mappings: vec![],
+        }
+    }
+
+    fn builtin_template(id: &str) -> KeyTemplate {
+        KeyTemplate {
+            id: id.to_string(),
+            name: id.to_string(),
+            is_builtin: true,
+            mappings: vec![],
+        }
+    }
+
+    fn template_entry(template: KeyTemplate, modified_millis: u128) -> TemplateFileEntry {
+        TemplateFileEntry {
+            template,
+            modified_millis,
+        }
+    }
+
+    #[test]
+    fn sorts_custom_templates_newest_first_then_builtins_in_declared_order() {
+        let mut entries = vec![
+            template_entry(builtin_template("piano"), 10),
+            template_entry(custom_template("custom-2000", vec![]), 20),
+            template_entry(builtin_template("game-4rows"), 10),
+            template_entry(custom_template("custom-3000", vec![]), 30),
+            template_entry(builtin_template("21keys"), 10),
+            template_entry(custom_template("custom-1000", vec![]), 40),
+            template_entry(builtin_template("14keys"), 10),
+        ];
+
+        sort_template_file_entries(&mut entries);
+
+        let ids: Vec<&str> = entries
+            .iter()
+            .map(|entry| entry.template.id.as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            vec![
+                "custom-3000",
+                "custom-2000",
+                "custom-1000",
+                "piano",
+                "game-4rows",
+                "21keys",
+                "14keys"
+            ]
+        );
+    }
+
     #[test]
     fn validates_safe_template_id() {
         assert!(is_safe_template_id("custom-123_name"));
         assert!(!is_safe_template_id("../piano"));
         assert!(!is_safe_template_id("custom/name"));
         assert!(!is_safe_template_id(""));
+    }
+
+    #[test]
+    fn validates_template_name_as_cross_platform_file_name() {
+        assert!(is_valid_template_file_name("钢琴映射"));
+        assert!(is_valid_template_file_name("FreePiano Copy"));
+        assert!(!is_valid_template_file_name("bad/name"));
+        assert!(!is_valid_template_file_name("bad:name"));
+        assert!(!is_valid_template_file_name("bad."));
+        assert!(!is_valid_template_file_name("bad "));
+        assert!(!is_valid_template_file_name("CON"));
+        assert!(!is_valid_template_file_name("CON.txt"));
+        assert!(!is_valid_template_file_name("LPT1"));
+        assert!(!is_valid_template_file_name(""));
+    }
+
+    #[test]
+    fn rejects_invalid_template_name_on_save_validation() {
+        assert!(validate_template(&custom_template_with_name("模板名称")).is_ok());
+        assert!(validate_template(&custom_template_with_name("模板/名称")).is_err());
+        assert!(validate_template(&custom_template_with_name("COM1")).is_err());
+    }
+
+    #[test]
+    fn exports_archive_entries_with_template_name() {
+        let template = custom_template_with_name("模板名称");
+        assert_eq!(
+            template_export_entry_name(&template).unwrap(),
+            "模板名称.json"
+        );
     }
 
     #[test]

@@ -71,17 +71,12 @@ function persistPageSize(nextPageSize: number): void {
   window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(nextPageSize))
 }
 
-/** 模板列表展示顺序：按用户看到的模板名称排序。 */
-const sortedTemplates = computed(() =>
-  [...settingsStore.templates].sort((a, b) => a.name.localeCompare(b.name))
-)
-
 /** 搜索后的模板列表，只按名称匹配，不暴露随机内部 ID。 */
 const filteredTemplates = computed(() => {
   // 关键字统一 trim/lowercase，避免空格和大小写影响搜索结果。
   const keyword = searchKeyword.value.trim().toLowerCase()
-  if (!keyword) return sortedTemplates.value
-  return sortedTemplates.value.filter((template) => template.name.toLowerCase().includes(keyword))
+  if (!keyword) return settingsStore.templates
+  return settingsStore.templates.filter((template) => template.name.toLowerCase().includes(keyword))
 })
 
 /** 总页数，至少为 1，避免空列表时页码越界。 */
