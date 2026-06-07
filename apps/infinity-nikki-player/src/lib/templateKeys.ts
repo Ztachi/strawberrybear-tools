@@ -54,6 +54,35 @@ export const SUPPORTED_MAPPING_KEYS = [
 /** 可保存按键白名单 Set，用于编辑器和保存前校验 */
 export const SUPPORTED_MAPPING_KEY_SET = new Set<string>(SUPPORTED_MAPPING_KEYS)
 
+/** 模板按键名到 KeyboardEvent.code / 预览 code 的映射。 */
+const MAPPING_KEY_TO_CODE: Record<string, string> = {
+  '`': 'Backquote',
+  '-': 'Minus',
+  '=': 'Equal',
+  '[': 'BracketLeft',
+  ']': 'BracketRight',
+  '\\': 'Backslash',
+  ';': 'Semicolon',
+  "'": 'Quote',
+  ',': 'Comma',
+  '.': 'Period',
+  '/': 'Slash',
+  SPACE: 'Space',
+  TAB: 'Tab',
+  ENTER: 'Enter',
+  BACKSPACE: 'Backspace',
+  DELETE: 'Delete',
+  ARROWUP: 'ArrowUp',
+  ARROWDOWN: 'ArrowDown',
+  ARROWLEFT: 'ArrowLeft',
+  ARROWRIGHT: 'ArrowRight',
+}
+
+/** KeyboardEvent.code / 预览 code 到模板按键名的反向映射。 */
+const CODE_TO_MAPPING_KEY = Object.fromEntries(
+  Object.entries(MAPPING_KEY_TO_CODE).map(([key, code]) => [code, key])
+) as Record<string, string>
+
 /**
  * @description: 键盘捕获时明确排除的 KeyboardEvent.key / KeyboardEvent.code
  * @description 这些键通常是控制键、修饰键、导航键、系统键或 IME 状态键，不应写入游戏演奏模板
@@ -194,6 +223,31 @@ export function normalizeMappingKeyFromEvent(event: KeyboardEvent): string | nul
 
   // 其他按键交给捕获排除或非法按键提示处理。
   return null
+}
+
+/**
+ * @description: 将模板保存的按键名转换为键盘预览和日志使用的 code
+ * @param {string} key - 模板按键名，如 Q、1、F1、SPACE、-
+ * @return {string} KeyboardEvent.code 风格的按键 code
+ */
+export function mappingKeyToCode(key: string): string {
+  const normalizedKey = key.trim().toUpperCase()
+  if (/^[A-Z]$/.test(normalizedKey)) return `Key${normalizedKey}`
+  if (/^[0-9]$/.test(normalizedKey)) return `Digit${normalizedKey}`
+  if (/^F([1-9]|1[0-2])$/.test(normalizedKey)) return normalizedKey
+  return MAPPING_KEY_TO_CODE[normalizedKey] ?? key
+}
+
+/**
+ * @description: 将键盘预览和日志使用的 code 转换回模板按键名
+ * @param {string} code - KeyboardEvent.code 风格的按键 code
+ * @return {string} 模板按键名
+ */
+export function codeToMappingKey(code: string): string {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3)
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5)
+  if (/^F([1-9]|1[0-2])$/.test(code)) return code
+  return CODE_TO_MAPPING_KEY[code] ?? code
 }
 
 /**

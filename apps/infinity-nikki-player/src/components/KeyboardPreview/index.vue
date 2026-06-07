@@ -3,6 +3,7 @@
  * @description: 键盘预览组件
  * @description 显示虚拟键盘布局，实时显示激活的按键状态，支持按键日志查看
  */
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { KEYBOARD_LAYOUT } from './constants'
 import KeyLogPopover from './components/KeyLogPopover.vue'
 import type { KeyLogEntry, KeyLogChapter } from '@/lib/keyboardMapper'
@@ -16,12 +17,22 @@ import type { KeyLogEntry, KeyLogChapter } from '@/lib/keyboardMapper'
  * @param {Map<string, number>} [keyCodeToPitch] - 按键代码到音符号的映射（可选）
  */
 const props = defineProps<{
-  activeKeys: Set<string>
-  keyLog: KeyLogEntry[]
-  getKeyLogByChapters: () => KeyLogChapter[]
-  clearKeyLog: () => void
+  activeKeys?: Set<string>
+  keyLog?: KeyLogEntry[]
+  getKeyLogByChapters?: () => KeyLogChapter[]
+  clearKeyLog?: () => void
   keyCodeToPitch?: Map<string, number>
 }>()
+
+const activeKeySet = computed(() => props.activeKeys ?? new Set<string>())
+const showKeyLog = computed(
+  () => Boolean(props.keyLog && props.getKeyLogByChapters && props.clearKeyLog)
+)
+const scaleShellRef = ref<HTMLDivElement | null>(null)
+const keyboardAreaRef = ref<HTMLDivElement | null>(null)
+const keyboardScale = ref(1)
+const scaledKeyboardHeight = ref(0)
+let resizeObserver: ResizeObserver | null = null
 
 /**
  * @description: 组件事件
@@ -52,51 +63,112 @@ function pitchToNoteName(pitch: number): string {
  * @param {string} code - 按键代码
  */
 function handleKeyClick(code: string) {
+  if (!props.keyCodeToPitch?.has(code)) return
   emit('keyClick', code)
 }
+
+function getKeyLabel(key: string): string {
+  const labels: Record<string, string> = {
+    SPACE: 'Space',
+    TAB: 'Tab',
+    ENTER: 'Enter',
+    BACKSPACE: 'Backspace',
+    DELETE: 'Del',
+    ARROWUP: '↑',
+    ARROWDOWN: '↓',
+    ARROWLEFT: '←',
+    ARROWRIGHT: '→',
+  }
+  return labels[key] ?? key
+}
+
+function updateKeyboardScale() {
+  const shell = scaleShellRef.value
+  const area = keyboardAreaRef.value
+  if (!shell || !area) return
+
+  const availableWidth = shell.clientWidth
+  const contentWidth = area.scrollWidth
+  const contentHeight = area.scrollHeight
+  const nextScale = contentWidth > 0 ? Math.min(1, availableWidth / contentWidth) : 1
+  keyboardScale.value = Number.isFinite(nextScale) ? nextScale : 1
+  scaledKeyboardHeight.value = Math.ceil(contentHeight * keyboardScale.value)
+}
+
+onMounted(() => {
+  resizeObserver = new ResizeObserver(() => updateKeyboardScale())
+  if (scaleShellRef.value) resizeObserver.observe(scaleShellRef.value)
+  if (keyboardAreaRef.value) resizeObserver.observe(keyboardAreaRef.value)
+  void nextTick(updateKeyboardScale)
+})
+
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+})
+
+watch(
+  () => [props.keyCodeToPitch, props.activeKeys, showKeyLog.value],
+  () => void nextTick(updateKeyboardScale)
+)
 </script>
 
 <template>
   <div class="keyboard-preview">
     <!-- 顶部操作区 -->
-    <div class="toolbar">
+    <div v-if="showKeyLog" class="toolbar">
       <!-- 按键日志弹窗 -->
       <KeyLogPopover
-        :active-keys="props.activeKeys"
-        :key-log="props.keyLog"
-        :get-key-log-by-chapters="props.getKeyLogByChapters"
-        :clear-key-log="props.clearKeyLog"
+        :active-keys="activeKeySet"
+        :key-log="props.keyLog!"
+        :get-key-log-by-chapters="props.getKeyLogByChapters!"
+        :clear-key-log="props.clearKeyLog!"
       />
     </div>
 
     <!-- 键盘区域 -->
-    <div class="keyboard-area">
-      <!-- 遍历每一行键盘布局 -->
+    <div
+      ref="scaleShellRef"
+      class="keyboard-scale-shell"
+      :style="{ height: `${scaledKeyboardHeight}px` }"
+    >
       <div
-        v-for="(row, rowIndex) in KEYBOARD_LAYOUT"
-        :key="rowIndex"
-        class="keyboard-row"
-        :class="{ 'function-row': rowIndex === 0 }"
+        ref="keyboardAreaRef"
+        class="keyboard-area"
+        :style="{ transform: `translateX(-50%) scale(${keyboardScale})` }"
       >
-        <!-- 遍历每个按键 -->
+        <!-- 遍历每一行键盘布局 -->
         <div
-          v-for="key in row"
-          :key="key.code"
-          class="key"
-          :class="{
-            active: props.activeKeys.has(key.code), // 是否激活
-            function: key.type === 'function', // 是否为功能键
-            clickable: props.keyCodeToPitch?.has(key.code), // 是否可点击（有映射）
-          }"
-          :title="props.keyCodeToPitch?.has(key.code) ? pitchToNoteName(props.keyCodeToPitch!.get(key.code)!) : ''"
-          @click="handleKeyClick(key.code)"
+          v-for="(row, rowIndex) in KEYBOARD_LAYOUT"
+          :key="rowIndex"
+          class="keyboard-row"
+          :class="{ 'function-row': rowIndex === 0 }"
         >
-          <!-- 按键标签 -->
-          <span class="key-label">{{ key.key }}</span>
-          <!-- 音高标签（如果有映射） -->
-          <span v-if="props.keyCodeToPitch?.has(key.code)" class="pitch-label">
-            {{ pitchToNoteName(props.keyCodeToPitch!.get(key.code)!) }}
-          </span>
+          <!-- 遍历每个按键 -->
+          <div
+            v-for="key in row"
+            :key="key.code"
+            class="key"
+            :class="{
+              active: activeKeySet.has(key.code), // 是否激活
+              function: key.type === 'function', // 是否为功能键
+              control: key.type === 'control',
+              clickable: props.keyCodeToPitch?.has(key.code), // 是否可点击（有映射）
+              [`width-${key.width}`]: key.width,
+            }"
+            :title="
+              props.keyCodeToPitch?.has(key.code)
+                ? pitchToNoteName(props.keyCodeToPitch!.get(key.code)!)
+                : ''
+            "
+            @click="handleKeyClick(key.code)"
+          >
+            <!-- 按键标签 -->
+            <span class="key-label">{{ getKeyLabel(key.key) }}</span>
+            <!-- 音高标签（如果有映射） -->
+            <span v-if="props.keyCodeToPitch?.has(key.code)" class="pitch-label">
+              {{ pitchToNoteName(props.keyCodeToPitch!.get(key.code)!) }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -105,21 +177,29 @@ function handleKeyClick(code: string) {
 
 <style scoped>
 .keyboard-preview {
-  @apply flex flex-col gap-2 p-3 rounded-xl;
+  @apply flex min-w-0 flex-col gap-2 overflow-hidden p-3 rounded-lg;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
+  width: 100%;
 }
 
 .toolbar {
   @apply flex items-center justify-end;
 }
 
+.keyboard-scale-shell {
+  @apply relative min-w-0 overflow-hidden;
+  width: 100%;
+}
+
 .keyboard-area {
-  @apply flex flex-col gap-1;
+  @apply absolute left-1/2 top-0 flex flex-col gap-1;
+  transform-origin: top center;
+  width: max-content;
 }
 
 .keyboard-row {
-  @apply flex gap-1;
+  @apply flex items-center justify-center gap-1;
 }
 
 .keyboard-row.function-row {
@@ -127,17 +207,37 @@ function handleKeyClick(code: string) {
 }
 
 .key {
-  @apply flex flex-col items-center justify-center rounded-lg font-medium transition-all;
+  @apply flex shrink-0 flex-col items-center justify-center rounded-md font-medium transition-all;
   background: var(--bg-white-80);
   border: 1px solid var(--border-primary-20);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  min-width: 32px;
+  width: 34px;
   height: 36px;
 }
 
 .key.function {
-  min-width: 36px;
+  width: 40px;
   height: 28px;
+}
+
+.key.control {
+  background: var(--bg-white-95);
+}
+
+.key.width-md {
+  width: 46px;
+}
+
+.key.width-lg {
+  width: 56px;
+}
+
+.key.width-xl {
+  width: 76px;
+}
+
+.key.width-space {
+  width: 220px;
 }
 
 .key.clickable {
@@ -151,6 +251,10 @@ function handleKeyClick(code: string) {
 .key-label {
   @apply text-xs;
   color: var(--color-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pitch-label {

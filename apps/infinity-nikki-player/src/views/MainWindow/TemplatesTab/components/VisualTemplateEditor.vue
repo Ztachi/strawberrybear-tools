@@ -8,6 +8,8 @@ import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
 import { QuestionCircleFilled } from '@antdv-next/icons'
 import { Button, Popover } from 'antdv-next'
+import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
+import { mappingKeyToCode } from '@/components/KeyboardPreview/constants'
 import { playNote, stopNote } from '@/lib/midiPlayer'
 import type { KeyMapping } from '@/types'
 import {
@@ -116,6 +118,23 @@ const mappingSummary = computed(() => {
   return t('template.mappingCount', { count })
 })
 const supportedKeySummary = computed(() => SUPPORTED_MAPPING_KEYS.join(', '))
+const keyboardKeyCodeToPitch = computed(() => {
+  const map = new Map<string, number>()
+  for (const mapping of props.mappings) {
+    map.set(mappingKeyToCode(mapping.key), mapping.pitch)
+  }
+  return map
+})
+const previewActiveKeys = computed(() => {
+  const active = new Set<string>()
+  if (selectedMapping.value) {
+    active.add(mappingKeyToCode(selectedMapping.value.key))
+  }
+  for (const key of pressedMappedKeys.value) {
+    active.add(mappingKeyToCode(key))
+  }
+  return active
+})
 
 /**
  * @description: 获取指定音高的映射按键
@@ -495,6 +514,20 @@ function handlePointerUp(event: PointerEvent) {
 }
 
 /**
+ * @description: 处理虚拟键盘点击
+ * @description 点击已映射虚拟键会选中对应钢琴音高并试听
+ * @param {string} code - 虚拟键盘按键 code
+ * @return {void}
+ */
+function handleKeyboardKeyClick(code: string) {
+  const pitch = keyboardKeyCodeToPitch.value.get(code)
+  if (pitch === undefined) return
+  selectedPitch.value = pitch
+  void previewPitch(pitch)
+  void nextTick(() => scrollPitchIntoView(pitch))
+}
+
+/**
  * @description: 切换全局映射模式
  * @return {void}
  */
@@ -756,6 +789,13 @@ onUnmounted(() => {
         @pointercancel="isDragging = false"
       />
     </div>
+
+    <KeyboardPreview
+      :active-keys="previewActiveKeys"
+      :key-code-to-pitch="keyboardKeyCodeToPitch"
+      class="template-keyboard-preview"
+      @key-click="handleKeyboardKeyClick"
+    />
   </div>
 </template>
 

@@ -7,7 +7,7 @@ import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
 import { playNote } from '@/lib/midiPlayer'
-import { keyToCode } from '@/components/KeyboardPreview/constants'
+import { mappingKeyToCode } from '@/components/KeyboardPreview/constants'
 import type { KeyLogEntry } from '@/lib/keyboardMapper'
 import PreviewPlayer from '@/components/PreviewPlayer/index.vue'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
@@ -148,7 +148,7 @@ const keyCodeToPitch = computed<Map<string, number>>(() => {
   if (template) {
     for (const mapping of template.mappings) {
       // 将模板的按键名称（如 "Q"）转换为键盘 code（如 "KeyQ"）
-      const code = keyToCode(mapping.key)
+      const code = mappingKeyToCode(mapping.key)
       map.set(code, mapping.pitch)
     }
   }
@@ -320,7 +320,7 @@ async function enterOverlayMode() {
 }
 
 .keyboard-section {
-  @apply flex items-center justify-center flex-1;
+  @apply flex min-w-0 flex-1 items-center justify-center;
 }
 
 .tracks-section {

@@ -4,6 +4,7 @@
  */
 
 import type { KeyTemplate, KeyMapping } from '@/types'
+import { mappingKeyToCode } from '@/lib/templateKeys'
 
 /**
  * C 大调白键相对于 C 的半音偏移量
@@ -284,8 +285,7 @@ export class KeyboardMapper {
 
     if (count === 1) {
       // 首次按下该键 → 发送 press
-      const upperKey = key.toUpperCase()
-      const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
+      const code = mappingKeyToCode(key)
       const entry: KeyLogEntry = {
         time: currentTimeMs,
         key: this.pitchToNoteName(mappedPitch),
@@ -317,8 +317,7 @@ export class KeyboardMapper {
 
     if (newCount === 0 && count > 0) {
       // 最后一个占用该键的音符释放 → 发送 release
-      const upperKey = key.toUpperCase()
-      const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
+      const code = mappingKeyToCode(key)
       const entry: KeyLogEntry = {
         time: currentTimeMs,
         key: this.pitchToNoteName(mappedPitch),
@@ -343,8 +342,7 @@ export class KeyboardMapper {
       if (count > 0) {
         const mapping = this.template?.mappings.find((m) => m.key === key)
         if (mapping) {
-          const upperKey = key.toUpperCase()
-          const code = /^[0-9]$/.test(key) ? `Digit${upperKey}` : `Key${upperKey}`
+          const code = mappingKeyToCode(key)
           const entry: KeyLogEntry = {
             time: currentTimeMs,
             key: this.pitchToNoteName(mapping.pitch),
@@ -388,8 +386,7 @@ export class KeyboardMapper {
       // 查找该 pitch 对应的模板映射
       for (const mapping of this.template?.mappings ?? []) {
         if (mapping.pitch === note.pitch) {
-          const upperKey = mapping.key.toUpperCase()
-          const code = /^[0-9]$/.test(mapping.key) ? `Digit${upperKey}` : `Key${upperKey}`
+          const code = mappingKeyToCode(mapping.key)
           active.add(code)
           // 注意：recordKeyLog 需要原始 pitch，但这里没有原始 pitch
           // 因为 midiPlayer 已经完成了映射，所以用 note.pitch 作为 originalPitch
@@ -699,11 +696,10 @@ export class KeyboardMapper {
     if (this.template) {
       const mapping = this.findBestMapping(finalPitch)
       if (mapping) {
-        const upperKey = mapping.key.toUpperCase()
-        // 数字键使用 Digit 前缀，字母键使用 Key 前缀
-        const code = /^[0-9]$/.test(mapping.key) ? `Digit${upperKey}` : `Key${upperKey}`
+        const normalizedKey = mapping.key.trim().toUpperCase()
+        const code = mappingKeyToCode(normalizedKey)
         const result: MappingResult = {
-          key: upperKey,
+          key: normalizedKey,
           code,
           pitch: mapping.pitch,
           originalPitch,
