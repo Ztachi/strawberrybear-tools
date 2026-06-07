@@ -167,7 +167,7 @@ export class TemplatePianoEditor {
     this.canvas.style.display = 'block'
     this.canvas.style.cursor = 'pointer'
     this.canvas.style.touchAction = 'none'
-    this.canvas.style.webkitTouchCallout = 'none'
+    this.canvas.style.setProperty('-webkit-touch-callout', 'none')
     this.canvas.style.webkitUserSelect = 'none'
     this.canvas.style.userSelect = 'none'
     this.container.appendChild(this.canvas)
