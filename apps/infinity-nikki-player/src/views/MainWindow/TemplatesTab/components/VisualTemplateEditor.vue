@@ -1,46 +1,19 @@
 <script setup lang="ts">
 /**
  * @description: VisualTemplateEditor - Canvas 钢琴模板编辑器
- * @description 使用 Canvas 绘制 88 键钢琴，支持固定键宽编辑、全局预览、点按发音、键盘捕获映射和映射高亮
+ * @description 将 Canvas 绘制和按键编辑委托给 TemplatePianoEditor，组件只负责界面状态、提示和 v-model 同步。
  */
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
 import { QuestionCircleFilled } from '@antdv-next/icons'
-import { Button, Popover } from 'antdv-next'
+import { Eraser, Maximize2, Minimize2, Redo2, Undo2 } from 'lucide-vue-next'
+import { Button, Modal, Tooltip } from 'antdv-next'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
-import { mappingKeyToCode } from '@/components/KeyboardPreview/constants'
 import { playNote, stopNote } from '@/lib/midiPlayer'
+import { TemplatePianoEditor, type TemplatePianoEditorState } from '@/lib/templatePianoEditor'
 import type { KeyMapping } from '@/types'
-import {
-  isBlackKey,
-  isExcludedCaptureKey,
-  normalizeMappingKeyFromEvent,
-  pitchToNoteName,
-  setMappingForPitch,
-  SUPPORTED_MAPPING_KEYS,
-  TEMPLATE_MAX_PITCH,
-  TEMPLATE_MIN_PITCH,
-} from '@/lib/templateKeys'
-
-/**
- * @description: Canvas 琴键矩形
- * @description 保存每个 MIDI 音高在当前 Canvas 模式下的命中区域和黑白键信息
- */
-interface PianoKeyRect {
-  /** MIDI 音高 */
-  pitch: number
-  /** Canvas 逻辑坐标 x */
-  x: number
-  /** Canvas 逻辑坐标 y */
-  y: number
-  /** 琴键宽度 */
-  width: number
-  /** 琴键高度 */
-  height: number
-  /** 是否为黑键 */
-  black: boolean
-}
+import { normalizeTemplateMappings, pitchToNoteName, SUPPORTED_MAPPING_KEYS } from '@/lib/templateKeys'
 
 /**
  * @description: 组件属性
@@ -59,650 +32,187 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-/** Canvas 元素引用 */
-const canvasRef = ref<HTMLCanvasElement | null>(null)
-/** 横向滚动容器引用 */
-const scrollRef = ref<HTMLDivElement | null>(null)
-/** 编辑器模式：edit 为固定键宽编辑，overview 为 88 键缩放预览 */
-const mode = ref<'edit' | 'overview'>('edit')
-/** 当前选中的 MIDI 音高 */
-const selectedPitch = ref(60)
-/** 是否开启全局映射模式；开启后点琴键再按物理键即可写入映射 */
-const isMappingMode = ref(false)
-/** 点击琴键发音时的短暂高亮集合 */
-const activePitches = ref(new Set<number>())
-/** 物理键盘按下后命中已有映射的按键集合，用于全局预览高亮 */
-const pressedMappedKeys = ref(new Set<string>())
-/** Canvas CSS 逻辑宽度，不含设备像素比 */
-const canvasWidth = ref(0)
-/** 当前绘制模式下所有琴键的 Canvas 命中区域 */
-const keyRects = ref<PianoKeyRect[]>([])
-/** 是否正在拖拽横向滚动 */
-const isDragging = ref(false)
-/** 拖拽开始时的屏幕 x 坐标 */
-const dragStartX = ref(0)
-/** 拖拽开始时滚动容器的 scrollLeft */
-const dragStartScrollLeft = ref(0)
-let resizeObserver: ResizeObserver | null = null
-/** 键盘长按预览持续时长，keyup 会提前停止。 */
-const KEYBOARD_HOLD_PREVIEW_DURATION_SECONDS = 60 * 60
+/** Canvas 编辑器横向滚动容器引用，TemplatePianoEditor 会在其中创建 canvas。 */
+const pianoContainerRef = ref<HTMLDivElement | null>(null)
+/** 帮助文档弹窗是否打开。 */
+const isHelpDialogOpen = ref(false)
+/** TemplatePianoEditor 实例，组件卸载时必须销毁事件监听和 Canvas。 */
+let pianoEditor: TemplatePianoEditor | null = null
+/** 最近一次由 TemplatePianoEditor 主动 emit 的映射签名，用于区分内部同步和外部换模板。 */
+let lastEditorEmittedMappingsSignature = ''
 
-/** 编辑模式白键固定宽度，保证局部编辑时琴键可点选 */
-const WHITE_KEY_WIDTH = 38
-/** 编辑模式白键固定高度 */
-const WHITE_KEY_HEIGHT = 238
-/** 编辑模式黑键固定宽度 */
-const BLACK_KEY_WIDTH = 24
-/** 编辑模式黑键固定高度 */
-const BLACK_KEY_HEIGHT = 146
-/** 全局预览模式 Canvas 高度 */
-const OVERVIEW_HEIGHT = 168
-
-/** 88 键钢琴覆盖的所有 MIDI 音高 */
-const allPitches = Array.from(
-  { length: TEMPLATE_MAX_PITCH - TEMPLATE_MIN_PITCH + 1 },
-  (_, index) => TEMPLATE_MIN_PITCH + index
-)
-/** 白键音高列表，用于计算横向布局宽度和黑键相对位置 */
-const whitePitches = allPitches.filter((pitch) => !isBlackKey(pitch))
-
-/** 当前选中音高对应的映射 */
-const selectedMapping = computed(() =>
-  props.mappings.find((mapping) => mapping.pitch === selectedPitch.value)
-)
-/** 当前选中音高的音名 */
-const selectedNoteName = computed(() => pitchToNoteName(selectedPitch.value))
-/** 当前模板映射数量文案 */
-const mappingSummary = computed(() => {
-  const count = props.mappings.length
-  return t('template.mappingCount', { count })
+/** 编辑器状态默认值，保证 Canvas 初始化前界面仍可稳定渲染。 */
+const editorState = ref<TemplatePianoEditorState>({
+  mode: 'edit',
+  selectedPitch: 60,
+  selectedMapping: null,
+  isMappingMode: false,
+  canUndo: false,
+  canRedo: false,
+  previewActiveKeys: new Set<string>(),
+  keyboardKeyCodeToPitch: new Map<string, number>(),
 })
+
+/** 当前选中音高的音名。 */
+const selectedNoteName = computed(() => pitchToNoteName(editorState.value.selectedPitch))
+/** 当前模板映射数量文案。 */
+const mappingSummary = computed(() => t('template.mappingCount', { count: props.mappings.length }))
+/** 帮助弹层展示的支持按键列表。 */
 const supportedKeySummary = computed(() => SUPPORTED_MAPPING_KEYS.join(', '))
-const keyboardKeyCodeToPitch = computed(() => {
-  const map = new Map<string, number>()
-  for (const mapping of props.mappings) {
-    map.set(mappingKeyToCode(mapping.key), mapping.pitch)
-  }
-  return map
-})
-const previewActiveKeys = computed(() => {
-  const active = new Set<string>()
-  if (selectedMapping.value) {
-    active.add(mappingKeyToCode(selectedMapping.value.key))
-  }
-  for (const key of pressedMappedKeys.value) {
-    active.add(mappingKeyToCode(key))
-  }
-  return active
-})
+
+const helpSections = computed(() => [
+  {
+    title: t('template.helpBasicTitle'),
+    items: [
+      t('template.helpSelectPianoKey'),
+      t('template.helpPreviewMode'),
+      t('template.helpKeyboardPreview'),
+    ],
+  },
+  {
+    title: t('template.helpMappingTitle'),
+    items: [
+      t('template.helpEnableMapping'),
+      t('template.helpWriteMapping'),
+      t('template.helpClearMapping'),
+      t('template.helpMappingConflict'),
+    ],
+  },
+  {
+    title: t('template.helpHistoryTitle'),
+    items: [
+      t('template.helpUndoRedoButtons'),
+      t('template.helpUndoRedoShortcuts'),
+      t('template.helpHistoryScope'),
+    ],
+  },
+  {
+    title: t('template.helpAttentionTitle'),
+    items: [
+      t('template.helpSaveReminder'),
+      t('template.helpUnsupportedKeys'),
+      t('template.helpSystemKeySilent'),
+    ],
+  },
+])
 
 /**
- * @description: 获取指定音高的映射按键
- * @param {number} pitch - MIDI 音高
- * @return {string | null} 映射按键；未映射时返回 null
+ * @description: 生成映射内容签名
+ * @description Vue 父子同步可能不会保留数组引用，因此用规范化内容判断是否是编辑器自己的回传。
+ * @param {KeyMapping[]} mappings - 待生成签名的映射列表
+ * @return {string} 稳定映射签名
  */
-function getMappingKey(pitch: number): string | null {
-  return props.mappings.find((mapping) => mapping.pitch === pitch)?.key ?? null
+function createMappingsSignature(mappings: KeyMapping[]): string {
+  // 归一化会排序、去重和清理非法项，避免同一映射内容因顺序或旧数据差异导致误判。
+  return JSON.stringify(normalizeTemplateMappings(mappings))
 }
 
 /**
- * @description: 获取 Canvas 逻辑宽度
- * @description 编辑模式按白键固定宽度展开，预览模式按容器宽度压缩到一屏
- * @return {number} Canvas CSS 逻辑宽度
- */
-function getContentWidth(): number {
-  if (mode.value === 'overview') {
-    // 全局预览需要填满当前容器；720 是窄窗口兜底宽度，避免键位压得不可读。
-    return Math.max(scrollRef.value?.clientWidth ?? 0, 720)
-  }
-  // 编辑模式保持固定白键宽度，让用户能精确点击单个琴键。
-  return whitePitches.length * WHITE_KEY_WIDTH
-}
-
-/**
- * @description: 获取 Canvas 逻辑高度
- * @return {number} 当前模式下的 Canvas CSS 逻辑高度
- */
-function getCanvasHeight(): number {
-  // 预览模式降低高度，让 88 键一屏查看；编辑模式保留足够点击面积。
-  return mode.value === 'overview' ? OVERVIEW_HEIGHT : WHITE_KEY_HEIGHT
-}
-
-/**
- * @description: 根据容器和设备像素比设置 Canvas 尺寸
+ * @description: 接收编辑器状态并替换响应式快照
+ * @param {TemplatePianoEditorState} state - 编辑器最新状态
  * @return {void}
  */
-function setCanvasSize() {
-  // Canvas 尚未挂载时不能访问上下文，直接等待下一轮 resize/mount。
-  const canvas = canvasRef.value
-  if (!canvas) return
-
-  // CSS 逻辑尺寸用于布局和命中计算。
-  const width = getContentWidth()
-  const height = getCanvasHeight()
-  // 真实像素尺寸乘设备像素比，避免 Retina 屏 Canvas 模糊。
-  const ratio = window.devicePixelRatio || 1
-  canvasWidth.value = width
-  canvas.style.width = `${width}px`
-  canvas.style.height = `${height}px`
-  canvas.width = Math.floor(width * ratio)
-  canvas.height = Math.floor(height * ratio)
-  // 尺寸变化后必须重绘，否则 Canvas 会被浏览器清空。
-  drawCanvas()
-}
-
-/**
- * @description: 获取白键在白键列表中的索引
- * @param {number} pitch - MIDI 音高
- * @return {number} 白键索引；非白键时返回 -1
- */
-function getWhiteKeyIndex(pitch: number): number {
-  return whitePitches.indexOf(pitch)
-}
-
-/**
- * @description: 获取某个音高前方白键数量
- * @description 黑键水平位置基于其前方白键边界计算
- * @param {number} pitch - MIDI 音高
- * @return {number} 该音高之前的白键数量
- */
-function getWhiteKeyIndexBefore(pitch: number): number {
-  return whitePitches.filter((whitePitch) => whitePitch < pitch).length
-}
-
-/**
- * @description: 构建当前 Canvas 模式下所有琴键矩形
- * @description 先生成白键再生成黑键，方便绘制和命中时按黑键优先处理
- * @param {number} width - Canvas 逻辑宽度
- * @param {number} height - Canvas 逻辑高度
- * @return {PianoKeyRect[]} 琴键矩形列表
- */
-function buildRects(width: number, height: number): PianoKeyRect[] {
-  // 当前模式下的白键宽度：编辑模式固定，预览模式按容器均分。
-  const whiteWidth = width / whitePitches.length
-  // 预览模式黑键随白键缩放，同时设置最小宽度保证可见。
-  const blackWidth = mode.value === 'overview' ? Math.max(8, whiteWidth * 0.62) : BLACK_KEY_WIDTH
-  // 黑键高度按白键高度缩放，编辑模式使用固定高度保证观感稳定。
-  const blackHeight = mode.value === 'overview' ? height * 0.62 : BLACK_KEY_HEIGHT
-  // rects 既用于绘制也用于鼠标命中检测，因此必须保存完整几何信息。
-  const rects: PianoKeyRect[] = []
-
-  for (const pitch of whitePitches) {
-    // 白键从左到右连续排列，x 坐标由白键索引决定。
-    rects.push({
-      pitch,
-      x: getWhiteKeyIndex(pitch) * whiteWidth,
-      y: 0,
-      width: whiteWidth,
-      height,
-      black: false,
-    })
-  }
-
-  for (const pitch of allPitches.filter(isBlackKey)) {
-    // 黑键位于其前方白键边界附近，因此用“前方白键数量”定位。
-    const whiteIndexBefore = getWhiteKeyIndexBefore(pitch)
-    rects.push({
-      pitch,
-      // 减去半个黑键宽度，让黑键中心对齐两个白键之间的缝。
-      x: whiteIndexBefore * whiteWidth - blackWidth / 2,
-      y: 0,
-      width: blackWidth,
-      height: blackHeight,
-      black: true,
-    })
-  }
-
-  return rects
-}
-
-/**
- * @description: 绘制圆角填充矩形
- * @param {CanvasRenderingContext2D} ctx - Canvas 2D 上下文
- * @param {number} x - 左上角 x 坐标
- * @param {number} y - 左上角 y 坐标
- * @param {number} width - 宽度
- * @param {number} height - 高度
- * @param {number} radius - 圆角半径
- * @return {void}
- */
-function fillRoundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number
-) {
-  // 每次绘制圆角矩形都从新路径开始，避免承接上一个 key 的路径。
-  ctx.beginPath()
-  ctx.roundRect(x, y, width, height, radius)
-  ctx.fill()
-}
-
-/**
- * @description: 重绘完整钢琴 Canvas
- * @description 每次映射、选中状态、捕获状态或模式变化时全量重绘，避免 DOM 琴键数量过多
- * @return {void}
- */
-function drawCanvas() {
-  // Canvas 未挂载或上下文不可用时直接跳过，避免初始化阶段报错。
-  const canvas = canvasRef.value
-  if (!canvas) return
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  // 重新设置 transform，避免多次 resize 后设备像素比被重复叠乘。
-  const ratio = window.devicePixelRatio || 1
-  const width = canvasWidth.value
-  const height = getCanvasHeight()
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-  // 全量清理上一帧内容，避免映射 badge 或高亮残留。
-  ctx.clearRect(0, 0, width, height)
-  // 先铺底色，保证透明背景下黑白键对比稳定。
-  ctx.fillStyle = '#fff7f8'
-  ctx.fillRect(0, 0, width, height)
-
-  // 每次绘制前重算矩形，保证滚动/缩放/容器变化后命中区域同步。
-  const rects = buildRects(width, height)
-  keyRects.value = rects
-
-  // 白键先绘制、黑键后绘制，保持真实钢琴的覆盖关系。
-  for (const rect of rects.filter((item) => !item.black)) {
-    drawKey(ctx, rect)
-  }
-  for (const rect of rects.filter((item) => item.black)) {
-    drawKey(ctx, rect)
+function handleEditorStateChange(state: TemplatePianoEditorState): void {
+  // Set/Map 使用新实例，避免外部组件拿到编辑器内部集合后被后续原地修改影响。
+  editorState.value = {
+    ...state,
+    previewActiveKeys: new Set(state.previewActiveKeys),
+    keyboardKeyCodeToPitch: new Map(state.keyboardKeyCodeToPitch),
   }
 }
 
 /**
- * @description: 绘制单个琴键
- * @description 根据选中、捕获、点击发音和物理键盘按下状态决定高亮样式
- * @param {CanvasRenderingContext2D} ctx - Canvas 2D 上下文
- * @param {PianoKeyRect} rect - 琴键矩形信息
+ * @description: 接收编辑器映射变更并同步给父组件
+ * @param {KeyMapping[]} mappings - 新映射列表
  * @return {void}
  */
-function drawKey(ctx: CanvasRenderingContext2D, rect: PianoKeyRect) {
-  // 映射按键用于绘制 badge，也用于判断物理键按下时是否需要高亮。
-  const mappingKey = getMappingKey(rect.pitch)
-  // selected 表示用户当前正在查看/操作的琴键。
-  const selected = selectedPitch.value === rect.pitch
-  // mappingTarget 表示映射模式下当前琴键会接收下一次物理按键输入。
-  const mappingTarget = isMappingMode.value && selected
-  // active 表示用户刚点击琴键发音，需要短暂视觉反馈。
-  const active = activePitches.value.has(rect.pitch)
-  // mappedPressed 表示用户按下了已映射的物理键，需要反向高亮对应琴键。
-  const mappedPressed = mappingKey ? pressedMappedKeys.value.has(mappingKey) : false
-  // 任意一种交互状态都应该让琴键进入高亮态。
-  const isHighlighted = selected || mappingTarget || active || mappedPressed
-
-  // 保存上下文状态，避免字体、颜色和线宽影响后续琴键。
-  ctx.save()
-  if (rect.black) {
-    // 黑键用深色底；交互高亮时使用品牌粉色。
-    ctx.fillStyle = isHighlighted ? '#f7a5b0' : '#3d3030'
-    fillRoundRect(ctx, rect.x, rect.y, rect.width, rect.height, 5)
-    // 映射目标使用更醒目的边框，帮助用户确认下一次按键会写入哪颗琴键。
-    ctx.strokeStyle = mappingTarget ? '#f43f5e' : '#5a4646'
-    ctx.lineWidth = mappingTarget ? 3 : 1
-    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1)
-    ctx.fillStyle = '#ffffff'
-  } else {
-    // 白键保持浅色底；交互高亮时用浅粉底色。
-    ctx.fillStyle = isHighlighted ? '#ffe2e8' : '#ffffff'
-    ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
-    // 映射目标同样加强边框，和黑键保持一致语义。
-    ctx.strokeStyle = mappingTarget ? '#f43f5e' : '#f4c4cb'
-    ctx.lineWidth = mappingTarget ? 3 : 1
-    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1)
-    ctx.fillStyle = '#4a3f3f'
-  }
-
-  // 黑白键音名上下错开，密集预览时不会糊成一条直线。
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  const noteFontSize = mode.value === 'overview' ? 7 : 11
-  ctx.font = `${noteFontSize}px sans-serif`
-  const noteLabelY = rect.black
-    ? mode.value === 'overview'
-      ? 11
-      : 18
-    : mode.value === 'overview'
-      ? 22
-      : 34
-  ctx.fillText(pitchToNoteName(rect.pitch), rect.x + rect.width / 2, noteLabelY)
-
-  if (mappingKey) {
-    // 映射 badge 靠近琴键底部；黑键高度更短，需要单独调整 y 坐标。
-    const badgeY = rect.black ? rect.height - 18 : rect.height - 24
-    // badge 宽度随 F10/F12 这类较长文本扩展，但不能超过琴键宽度。
-    const badgeWidth =
-      mode.value === 'overview'
-        ? Math.min(rect.width - 2, Math.max(12, mappingKey.length * 5 + 4))
-        : Math.min(rect.width - 6, Math.max(18, mappingKey.length * 8 + 8))
-    ctx.fillStyle = rect.black ? 'rgba(255,255,255,0.92)' : '#f7c0c1'
-    fillRoundRect(
-      ctx,
-      rect.x + (rect.width - badgeWidth) / 2,
-      badgeY - (mode.value === 'overview' ? 7 : 9),
-      badgeWidth,
-      mode.value === 'overview' ? 14 : 18,
-      9
-    )
-    ctx.fillStyle = '#4a3f3f'
-    ctx.font = `${mode.value === 'overview' ? 7 : 11}px sans-serif`
-    ctx.fillText(mappingKey, rect.x + rect.width / 2, badgeY)
-  }
-
-  if (mappingTarget) {
-    // 映射目标底部画一条状态条，避免只靠边框在密集琴键中不明显。
-    ctx.fillStyle = '#f43f5e'
-    fillRoundRect(ctx, rect.x + 4, rect.height - 8, rect.width - 8, 4, 2)
-  }
-
-  // 恢复 Canvas 上下文，确保下一颗琴键从干净状态绘制。
-  ctx.restore()
+function handleMappingsChange(mappings: KeyMapping[]): void {
+  // 记录内容签名让 props watcher 识别这是本组件刚发出的变更，不重置撤销历史。
+  lastEditorEmittedMappingsSignature = createMappingsSignature(mappings)
+  emit('update:mappings', mappings)
 }
 
 /**
- * @description: 根据指针事件获取命中的音高
- * @description 黑键覆盖在白键上方，因此命中判断必须先查黑键，再查白键
- * @param {PointerEvent} event - 指针事件
- * @return {number | null} 命中的 MIDI 音高；未命中返回 null
- */
-function getPointerPitch(event: PointerEvent): number | null {
-  // Canvas 尚未挂载时没有可计算的命中区域。
-  const canvas = canvasRef.value
-  if (!canvas) return null
-  // client 坐标转换为 Canvas CSS 逻辑坐标；绘制和命中都使用同一坐标系。
-  const bounds = canvas.getBoundingClientRect()
-  const x = event.clientX - bounds.left
-  const y = event.clientY - bounds.top
-  // 黑键覆盖在白键上方，必须优先命中黑键，否则黑键区域会被白键抢走。
-  const blackHit = keyRects.value
-    .filter((rect) => rect.black)
-    .find((rect) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height)
-  if (blackHit) return blackHit.pitch
-  // 黑键未命中时再查白键。
-  const whiteHit = keyRects.value
-    .filter((rect) => !rect.black)
-    .find((rect) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height)
-  return whiteHit?.pitch ?? null
-}
-
-/**
- * @description: 短暂高亮指定音高
- * @param {number} pitch - MIDI 音高
+ * @description: 切换全局预览和编辑模式
  * @return {void}
  */
-function flashPitch(pitch: number) {
-  // 使用新 Set 触发 Vue 响应式更新。
-  const next = new Set(activePitches.value)
-  next.add(pitch)
-  activePitches.value = next
-  window.setTimeout(() => {
-    // 延迟清理也使用新 Set，避免原地修改导致视图不更新。
-    const current = new Set(activePitches.value)
-    current.delete(pitch)
-    activePitches.value = current
-  }, 220)
+function toggleMode(): void {
+  pianoEditor?.toggleMode()
 }
 
 /**
- * @description: 播放指定音高并同步 Canvas 高亮
- * @param {number} pitch - MIDI 音高
- * @return {Promise<void>} 无返回值
- */
-async function previewPitch(pitch: number) {
-  // 先高亮再发音，即使音频初始化稍慢也能马上给用户反馈。
-  flashPitch(pitch)
-  await playNote(pitch, 88, 0.55)
-}
-
-/**
- * @description: 记录拖拽开始状态
- * @param {PointerEvent} event - 指针按下事件
+ * @description: 切换映射编辑状态
  * @return {void}
  */
-function handlePointerDown(event: PointerEvent) {
-  // 未挂载 Canvas 时忽略指针事件。
-  if (!canvasRef.value) return
-  // 记录拖拽起点，用于 pointermove 中换算横向滚动距离。
-  isDragging.value = true
-  dragStartX.value = event.clientX
-  dragStartScrollLeft.value = scrollRef.value?.scrollLeft ?? 0
-  // 捕获指针，避免拖动过程中鼠标离开 Canvas 导致 pointerup 丢失。
-  canvasRef.value.setPointerCapture(event.pointerId)
-}
-
-/**
- * @description: 处理编辑模式下的横向拖拽滚动
- * @param {PointerEvent} event - 指针移动事件
- * @return {void}
- */
-function handlePointerMove(event: PointerEvent) {
-  // 只有编辑模式需要横向拖拽；预览模式已经缩放到一屏。
-  if (!isDragging.value || !scrollRef.value || mode.value === 'overview') return
-  // 鼠标向右拖时内容向左回滚，因此 scrollLeft 使用反向距离。
-  const distance = event.clientX - dragStartX.value
-  // 小于 3px 的移动视为点击抖动，避免误触发滚动。
-  if (Math.abs(distance) > 3) {
-    scrollRef.value.scrollLeft = dragStartScrollLeft.value - distance
-  }
-}
-
-/**
- * @description: 处理琴键点击或拖拽结束
- * @description 非拖拽点击会选中并播放琴键；映射模式下选中琴键会成为下一次按键输入目标
- * @param {PointerEvent} event - 指针释放事件
- * @return {void}
- */
-function handlePointerUp(event: PointerEvent) {
-  // 释放时先尝试解析当前指针命中的琴键。
-  const pitch = getPointerPitch(event)
-  // scrollLeft 实际变化超过阈值时视为拖拽，不触发琴键点击。
-  const wasDrag =
-    mode.value === 'edit' && Math.abs((scrollRef.value?.scrollLeft ?? 0) - dragStartScrollLeft.value) > 4
-  isDragging.value = false
-
-  if (!wasDrag && pitch !== null) {
-    selectedPitch.value = pitch
-    void previewPitch(pitch)
-  }
-}
-
-/**
- * @description: 处理虚拟键盘点击
- * @description 点击已映射虚拟键会选中对应钢琴音高并试听
- * @param {string} code - 虚拟键盘按键 code
- * @return {void}
- */
-function handleKeyboardKeyClick(code: string) {
-  const pitch = keyboardKeyCodeToPitch.value.get(code)
-  if (pitch === undefined) return
-  selectedPitch.value = pitch
-  void previewPitch(pitch)
-  void nextTick(() => scrollPitchIntoView(pitch))
-}
-
-/**
- * @description: 切换全局映射模式
- * @return {void}
- */
-function toggleMappingMode() {
-  isMappingMode.value = !isMappingMode.value
+function toggleMappingMode(): void {
+  pianoEditor?.setMappingMode()
 }
 
 /**
  * @description: 清除当前选中琴键映射
  * @return {void}
  */
-function clearSelectedMapping() {
-  // 清除逻辑交给统一工具函数，确保清除后仍会顺手归一化旧数据。
-  emit('update:mappings', setMappingForPitch(props.mappings, selectedPitch.value, null))
+function clearSelectedMapping(): void {
+  pianoEditor?.clearSelectedMapping()
 }
 
 /**
- * @description: 判断键盘事件目标是否为可编辑元素
- * @description 非捕获状态下忽略输入框内的按键，避免用户编辑模板名称时触发钢琴预览
- * @param {EventTarget | null} target - 事件目标
- * @return {boolean} true 表示目标是可编辑元素
- */
-function isEditableEventTarget(target: EventTarget | null): boolean {
-  // 非 HTMLElement 没有 input/contentEditable 语义，直接视为不可编辑目标。
-  if (!(target instanceof HTMLElement)) return false
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target.isContentEditable
-  )
-}
-
-/**
- * @description: 判断是否为系统常规保存快捷键
- * @param {KeyboardEvent} event - 键盘事件
- * @return {boolean} true 表示 Ctrl/Cmd+S
- */
-function isSaveShortcut(event: KeyboardEvent): boolean {
-  return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's'
-}
-
-/**
- * @description: 处理全局键盘按下
- * @description 映射模式下写入映射；非映射模式下仅用于已有映射的预览高亮和发音
- * @param {KeyboardEvent} event - 键盘按下事件
+ * @description: 撤销最近一次映射变更
  * @return {void}
  */
-function handleKeyDown(event: KeyboardEvent) {
-  // 保存快捷键由模板抽屉统一处理，映射模式下也不能拦截或写入映射。
-  if (isSaveShortcut(event)) return
-
-  // 非映射模式下，用户在输入框里打字不应触发钢琴发音或映射预览。
-  if (!isMappingMode.value && isEditableEventTarget(event.target)) return
-
-  // 先归一化按键，后续捕获和预览共用同一个键名。
-  const normalized = normalizeMappingKeyFromEvent(event)
-  // 非捕获状态下，如果物理键已有映射，就找到对应琴键用于预览高亮。
-  const pressedMappedPitch = normalized
-    ? props.mappings.find((mapping) => mapping.key === normalized)?.pitch
-    : undefined
-
-  if (isMappingMode.value) {
-    // 映射期间阻止按键继续冒泡，避免触发页面快捷键或输入到其他控件。
-    event.preventDefault()
-    event.stopPropagation()
-
-    // Escape 快速清除当前琴键映射，符合连续编辑时的键盘操作直觉。
-    if (event.key === 'Escape') {
-      clearSelectedMapping()
-      return
-    }
-
-    // Backspace/Delete 在映射模式下也作为清除当前琴键映射的快捷键。
-    if (event.key === 'Backspace' || event.key === 'Delete') {
-      clearSelectedMapping()
-      return
-    }
-
-    if (!normalized || isExcludedCaptureKey(event)) {
-      // 无法归一化或明确排除的键不进入模板，防止保存后运行时无法模拟。
-      toast.warning(t('template.unsupportedKey'), { description: event.key, richColors: true })
-      return
-    }
-
-    // 映射模式持续开启，方便用户连续点琴键并按物理键完成多组映射。
-    emit('update:mappings', setMappingForPitch(props.mappings, selectedPitch.value, normalized))
-    return
-  }
-
-  if (normalized && pressedMappedPitch !== undefined) {
-    if (event.repeat || pressedMappedKeys.value.has(normalized)) return
-    // 使用新 Set 触发 Vue 响应式更新，驱动 Canvas 反向高亮。
-    const next = new Set(pressedMappedKeys.value)
-    next.add(normalized)
-    pressedMappedKeys.value = next
-    selectedPitch.value = pressedMappedPitch
-    void playNote(pressedMappedPitch, 88, KEYBOARD_HOLD_PREVIEW_DURATION_SECONDS)
-  }
+function undoMapping(): void {
+  pianoEditor?.undo()
 }
 
 /**
- * @description: 处理全局键盘释放
- * @param {KeyboardEvent} event - 键盘释放事件
+ * @description: 恢复最近一次撤销的映射变更
  * @return {void}
  */
-function handleKeyUp(event: KeyboardEvent) {
-  if (isSaveShortcut(event)) return
-
-  // 释放时同样归一化，和 keydown 中保存到 Set 的键名保持一致。
-  const normalized = normalizeMappingKeyFromEvent(event)
-  if (!normalized) return
-  const wasPressed = pressedMappedKeys.value.has(normalized)
-  const releasedMapping = wasPressed
-    ? props.mappings.find((mapping) => mapping.key === normalized)
-    : undefined
-  if (releasedMapping) {
-    stopNote(releasedMapping.pitch)
-  }
-  // 使用新 Set 移除按键，触发 Canvas 去除高亮。
-  const next = new Set(pressedMappedKeys.value)
-  next.delete(normalized)
-  pressedMappedKeys.value = next
+function redoMapping(): void {
+  pianoEditor?.redo()
 }
 
 /**
- * @description: 切换编辑模式和全局预览模式
- * @description 切换模式后在下一帧重新计算 Canvas 尺寸
+ * @description: 处理虚拟键盘点击
+ * @param {string} code - 虚拟键盘按键 code
  * @return {void}
  */
-function toggleMode() {
-  // edit/overview 互斥切换，保持操作语义明确。
-  mode.value = mode.value === 'edit' ? 'overview' : 'edit'
-  // DOM 尺寸在下一帧才稳定，因此延后重算 Canvas。
-  void nextTick(() => {
-    setCanvasSize()
-    scrollPitchIntoView(selectedPitch.value)
-  })
+function handleKeyboardKeyClick(code: string): void {
+  pianoEditor?.handleKeyboardKeyClick(code)
 }
 
-function scrollPitchIntoView(pitch: number) {
-  if (!scrollRef.value || mode.value !== 'edit') return
-  const whiteIndex = getWhiteKeyIndex(isBlackKey(pitch) ? pitch - 1 : pitch)
-  if (whiteIndex < 0) return
-  const targetLeft = whiteIndex * WHITE_KEY_WIDTH - scrollRef.value.clientWidth / 2 + WHITE_KEY_WIDTH
-  scrollRef.value.scrollLeft = Math.max(0, targetLeft)
-}
-
-// Canvas 的可视状态完全由映射、选中音高、映射模式、临时高亮和模式共同决定。
 watch(
-  () => [props.mappings, selectedPitch.value, isMappingMode.value, activePitches.value, pressedMappedKeys.value, mode.value],
-  () => drawCanvas(),
+  () => props.mappings,
+  (nextMappings) => {
+    if (!pianoEditor) return
+    // 父组件接收内部 emit 后会把映射作为 props 传回，此时不能清空撤销栈。
+    const nextSignature = createMappingsSignature(nextMappings)
+    const isEditorEcho =
+      !!lastEditorEmittedMappingsSignature && nextSignature === lastEditorEmittedMappingsSignature
+    pianoEditor.setMappings(nextMappings, { resetHistory: !isEditorEcho })
+    if (isEditorEcho) lastEditorEmittedMappingsSignature = ''
+  },
   { deep: true }
 )
 
 onMounted(() => {
-  resizeObserver = new ResizeObserver(() => setCanvasSize())
-  if (scrollRef.value) {
-    resizeObserver.observe(scrollRef.value)
-  }
-  window.addEventListener('keydown', handleKeyDown, true)
-  window.addEventListener('keyup', handleKeyUp, true)
-  void nextTick(() => {
-    setCanvasSize()
-    scrollPitchIntoView(60)
+  if (!pianoContainerRef.value) return
+  pianoEditor = new TemplatePianoEditor({
+    container: pianoContainerRef.value,
+    mappings: props.mappings,
+    playNote,
+    stopNote,
+    onMappingsChange: handleMappingsChange,
+    onStateChange: handleEditorStateChange,
+    onUnsupportedKey: (key) => {
+      toast.warning(t('template.unsupportedKey'), { description: key, richColors: true })
+    },
   })
 })
 
 onUnmounted(() => {
-  resizeObserver?.disconnect()
-  window.removeEventListener('keydown', handleKeyDown, true)
-  window.removeEventListener('keyup', handleKeyUp, true)
-  for (const key of pressedMappedKeys.value) {
-    const mapping = props.mappings.find((item) => item.key === key)
-    if (mapping) stopNote(mapping.pitch)
-  }
+  pianoEditor?.destroy()
+  pianoEditor = null
 })
 </script>
 
@@ -710,103 +220,143 @@ onUnmounted(() => {
   <div class="visual-template-editor">
     <div class="editor-status-row">
       <div class="editor-actions">
-        <Button size="small" color="primary" variant="outlined" @click="toggleMode">
-          {{ mode === 'edit' ? t('template.overviewMode') : t('template.exitOverview') }}
-        </Button>
-        <Button
-          size="small"
-          color="primary"
-          variant="outlined"
-          :disabled="!selectedMapping"
-          @click="clearSelectedMapping"
+        <Tooltip
+          :title="editorState.mode === 'edit' ? t('template.overviewMode') : t('template.exitOverview')"
         >
-          {{ t('template.clearMapping') }}
-        </Button>
-        <Button
-          type="primary"
-          class="mapping-mode-button"
-          :class="{ active: isMappingMode }"
-          @click="toggleMappingMode"
-        >
-          {{ isMappingMode ? t('template.exitMapping') : t('template.mapSelected') }}
-        </Button>
+          <Button
+            class="editor-icon-button"
+            size="small"
+            color="primary"
+            variant="outlined"
+            :aria-label="editorState.mode === 'edit' ? t('template.overviewMode') : t('template.exitOverview')"
+            @click="toggleMode"
+          >
+            <template #icon>
+              <Maximize2 v-if="editorState.mode === 'edit'" class="size-4" />
+              <Minimize2 v-else class="size-4" />
+            </template>
+          </Button>
+        </Tooltip>
+        <Tooltip :title="t('template.clearMapping')">
+          <Button
+            class="editor-icon-button"
+            size="small"
+            color="primary"
+            variant="outlined"
+            :disabled="!editorState.isMappingMode || !editorState.selectedMapping"
+            :aria-label="t('template.clearMapping')"
+            @click="clearSelectedMapping"
+          >
+            <template #icon>
+              <Eraser class="size-4" />
+            </template>
+          </Button>
+        </Tooltip>
+        <Tooltip :title="t('template.undoMapping')">
+          <Button
+            class="editor-icon-button"
+            size="small"
+            color="primary"
+            variant="outlined"
+            :disabled="!editorState.canUndo"
+            :aria-label="t('template.undoMapping')"
+            @click="undoMapping"
+          >
+            <template #icon>
+              <Undo2 class="size-4" />
+            </template>
+          </Button>
+        </Tooltip>
+        <Tooltip :title="t('template.redoMapping')">
+          <Button
+            class="editor-icon-button"
+            size="small"
+            color="primary"
+            variant="outlined"
+            :disabled="!editorState.canRedo"
+            :aria-label="t('template.redoMapping')"
+            @click="redoMapping"
+          >
+            <template #icon>
+              <Redo2 class="size-4" />
+            </template>
+          </Button>
+        </Tooltip>
       </div>
       <div class="editor-status-main">
         <span class="selected-note">{{ selectedNoteName }}</span>
         <span class="selected-mapping">
-          {{ selectedMapping?.key || t('template.unmapped') }}
+          {{ editorState.selectedMapping?.key || t('template.unmapped') }}
         </span>
-        <span
-          v-if="isMappingMode"
-          class="rounded-full bg-rose-100 px-3 py-1 text-sm font-medium text-rose-600"
-        >
-          {{ t('template.mappingActive') }}
-        </span>
-      </div>
-      <div class="editor-status-meta">
-        <Popover placement="bottom">
-          <template #content>
-            <div class="key-help-content">
-              <p class="font-medium text-foreground">
-                {{ t('template.mappingHelpTitle') }}
-              </p>
-              <p class="mt-1 text-xs text-muted-foreground">
-                {{ t('template.mappingHelpDescription') }}
-              </p>
-              <p class="font-medium text-foreground">
-                {{ t('template.supportedKeys') }}
-              </p>
-              <p class="mt-1 text-xs text-muted-foreground">
-                {{ supportedKeySummary }}
-              </p>
-              <p class="mt-3 font-medium text-foreground">
-                {{ t('template.unsupportedKeys') }}
-              </p>
-              <p class="mt-1 text-xs text-muted-foreground">
-                {{ t('template.unsupportedKeysDescription') }}
-              </p>
-            </div>
-          </template>
-          <button class="key-help-btn" :aria-label="t('template.supportedKeys')">
-            <QuestionCircleFilled class="key-help-icon" />
-          </button>
-        </Popover>
         <span class="mapping-summary">{{ mappingSummary }}</span>
       </div>
+      <div class="editor-status-meta">
+        <Button
+          type="primary"
+          class="mapping-mode-button"
+          :class="{ active: editorState.isMappingMode }"
+          @click="toggleMappingMode"
+        >
+          {{ editorState.isMappingMode ? t('template.exitMapping') : t('template.mapSelected') }}
+        </Button>
+      </div>
     </div>
+
+    <button
+      class="key-help-btn"
+      :aria-label="t('template.editorHelp')"
+      @click="isHelpDialogOpen = true"
+    >
+      <QuestionCircleFilled class="key-help-icon" />
+    </button>
 
     <div
-      ref="scrollRef"
-      class="min-h-0 overflow-x-auto rounded-lg border border-primary bg-white"
-      :class="mode === 'overview' ? 'overflow-hidden' : ''"
-    >
-      <canvas
-        ref="canvasRef"
-        class="block cursor-pointer select-none"
-        @pointerdown="handlePointerDown"
-        @pointermove="handlePointerMove"
-        @pointerup="handlePointerUp"
-        @pointercancel="isDragging = false"
-      />
-    </div>
+      ref="pianoContainerRef"
+      class="piano-canvas-container min-h-0 overflow-x-auto rounded-lg border border-primary bg-white"
+      :class="editorState.mode === 'overview' ? 'overflow-hidden' : ''"
+    />
 
     <KeyboardPreview
-      :active-keys="previewActiveKeys"
-      :key-code-to-pitch="keyboardKeyCodeToPitch"
+      :active-keys="editorState.previewActiveKeys"
+      :key-code-to-pitch="editorState.keyboardKeyCodeToPitch"
       class="template-keyboard-preview"
       @key-click="handleKeyboardKeyClick"
     />
+
+    <Modal
+      v-model:open="isHelpDialogOpen"
+      :title="t('template.editorHelp')"
+      :footer="null"
+      width="640"
+      class="template-help-modal"
+      centered
+    >
+      <div class="template-help-dialog">
+        <section v-for="section in helpSections" :key="section.title" class="template-help-section">
+          <h3>{{ section.title }}</h3>
+          <ul>
+            <li v-for="item in section.items" :key="item">
+              {{ item }}
+            </li>
+          </ul>
+        </section>
+        <section class="template-help-section">
+          <h3>{{ t('template.supportedKeys') }}</h3>
+          <p>{{ supportedKeySummary }}</p>
+        </section>
+      </div>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
 .visual-template-editor {
-  @apply flex min-h-0 flex-col gap-4 rounded-xl border border-primary/20 bg-white/70 p-4;
+  @apply relative flex min-h-0 flex-col gap-4 rounded-xl border border-primary/20 bg-white/70 p-4;
 }
 
 .editor-status-row {
   @apply grid items-center gap-3;
-  grid-template-columns: minmax(260px, 1fr) minmax(260px, auto) minmax(180px, 1fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, auto) minmax(220px, 1fr);
 }
 
 .editor-status-main {
@@ -822,16 +372,24 @@ onUnmounted(() => {
 }
 
 .mapping-summary {
-  @apply text-sm font-medium text-muted-foreground;
+  @apply rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary;
 }
 
 .editor-status-meta {
-  @apply flex items-center justify-end gap-3;
+  @apply flex items-center justify-end;
+}
+
+.editor-icon-button {
+  @apply flex h-7 w-7 items-center justify-center p-0;
 }
 
 .key-help-btn {
-  @apply flex h-7 w-7 items-center justify-center rounded-full transition-colors;
+  @apply absolute flex h-7 w-7 items-center justify-center rounded-full transition-colors;
+  top: -40px;
+  right: 0;
   color: var(--color-primary);
+  background: var(--bg-white-95);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
 .key-help-btn:hover {
@@ -840,11 +398,6 @@ onUnmounted(() => {
 
 .key-help-icon {
   font-size: 20px;
-}
-
-.key-help-content {
-  max-width: 420px;
-  line-height: 1.55;
 }
 
 .editor-actions {
@@ -888,6 +441,33 @@ onUnmounted(() => {
   color: var(--color-white);
 }
 
+.piano-canvas-container {
+  touch-action: none;
+}
+
+:deep(.template-piano-editor-canvas) {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.template-help-dialog {
+  @apply space-y-5 overflow-y-auto pr-2 text-sm leading-6 text-muted-foreground;
+  max-height: min(58vh, 520px);
+}
+
+.template-help-section h3 {
+  @apply mb-2 text-sm font-semibold text-foreground;
+}
+
+.template-help-section ul {
+  @apply list-disc space-y-1 pl-5;
+}
+
+:deep(.template-help-modal .ant-modal-body) {
+  padding-top: 12px;
+}
+
 @media (max-width: 960px) {
   .editor-status-row {
     grid-template-columns: 1fr;
@@ -897,12 +477,5 @@ onUnmounted(() => {
   .editor-status-meta {
     @apply justify-center;
   }
-}
-
-canvas {
-  touch-action: none;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 </style>

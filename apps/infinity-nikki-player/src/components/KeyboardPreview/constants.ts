@@ -84,14 +84,14 @@ const KEYBOARD_ROWS: Array<Array<Omit<KeyDefinition, 'code'>>> = [
     { key: ',', type: 'normal' },
     { key: '.', type: 'normal' },
     { key: '/', type: 'normal' },
+    { key: 'ARROWUP', type: 'control', width: 'md' },
   ],
   [
-    { key: 'SPACE', type: 'control', width: 'space' },
     { key: 'DELETE', type: 'control', width: 'xl' },
-    { key: 'ARROWLEFT', type: 'control', width: 'xl' },
-    { key: 'ARROWDOWN', type: 'control', width: 'xl' },
-    { key: 'ARROWUP', type: 'control', width: 'xl' },
-    { key: 'ARROWRIGHT', type: 'control', width: 'xl' },
+    { key: 'SPACE', type: 'control', width: 'space' },
+    { key: 'ARROWLEFT', type: 'control', width: 'md' },
+    { key: 'ARROWDOWN', type: 'control', width: 'md' },
+    { key: 'ARROWRIGHT', type: 'control', width: 'md' },
   ],
 ]
 

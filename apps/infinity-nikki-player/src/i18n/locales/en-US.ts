@@ -114,18 +114,50 @@ export default {
     mappingCount: '{count} mappings',
     copyName: '{name} Copy',
     unmapped: 'Unmapped',
-    mappingActive: 'Mapping mode',
+    mappingActive: 'Editing',
     editMode: 'Edit Mode',
     overviewMode: 'Overview',
     exitOverview: 'Exit Overview',
     editModeTip: 'Keys keep a fixed width. Drag or scroll horizontally to inspect other ranges.',
     overviewModeTip: 'All 88 keys fit on screen for quick mapping and key highlight checks.',
-    mapSelected: 'Enable Mapping Mode',
-    exitMapping: 'Disable Mapping Mode',
+    mapSelected: 'Start Editing',
+    exitMapping: 'Stop Editing',
     clearMapping: 'Clear Mapping',
-    mappingHelpTitle: 'Mapping mode',
+    undoMapping: 'Undo',
+    redoMapping: 'Redo',
+    editorHelp: 'Template Editor Help',
+    mappingHelpTitle: 'Editing state',
     mappingHelpDescription:
       'Enable it, click any piano key, then press a keyboard key to write the mapping. Esc, Backspace, or Delete clears the selected piano key mapping.',
+    helpBasicTitle: 'Basics',
+    helpSelectPianoKey:
+      'Click a piano key to select and preview that pitch. Scroll or drag horizontally to inspect other ranges.',
+    helpPreviewMode:
+      'Use the expand icon for an all-key overview. All 88 keys fit on screen; use the collapse icon to return to fixed-width editing.',
+    helpKeyboardPreview:
+      'The keyboard preview highlights the physical key mapped to the selected pitch. Clicking a mapped key also jumps back to its piano key.',
+    helpMappingTitle: 'Editing mappings',
+    helpEnableMapping:
+      'Click Start Editing on the right, select a piano key, then press a physical key to write the mapping.',
+    helpWriteMapping: 'Editing stays enabled so you can assign several pitches in sequence.',
+    helpClearMapping:
+      'Only after editing starts, use the eraser icon, Escape, Backspace, or Delete to clear the selected pitch mapping.',
+    helpMappingConflict:
+      'One physical key can map to only one pitch. A new mapping automatically removes the previous pitch that used that key.',
+    helpHistoryTitle: 'Undo and redo',
+    helpUndoRedoButtons:
+      'Undo and redo only track mapping changes. They do not restore selected pitch or preview mode.',
+    helpUndoRedoShortcuts:
+      'Use Ctrl/Command+Z to undo, and Ctrl/Command+Shift+Z or Ctrl/Command+Y to redo.',
+    helpHistoryScope:
+      'Opening, switching templates, or loading a draft starts a new history baseline, so history never crosses templates.',
+    helpAttentionTitle: 'Notes',
+    helpSaveReminder:
+      'Undo and redo modify only the current editing draft. Click Save to write changes into the template file.',
+    helpUnsupportedKeys:
+      'Fn, Win/Command, Ctrl, Alt, Shift, CapsLock, media keys, power keys, and other system or modifier keys cannot be saved as mappings.',
+    helpSystemKeySilent:
+      'Modifier keys used in system shortcuts are ignored silently, so pressing Command+S does not show an unsupported-key warning.',
     supportedKeys: 'Supported keys',
     unsupportedKeys: 'Unsupported keys',
     unsupportedKeysDescription:

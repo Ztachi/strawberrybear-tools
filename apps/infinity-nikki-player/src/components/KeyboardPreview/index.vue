@@ -82,6 +82,24 @@ function getKeyLabel(key: string): string {
   return labels[key] ?? key
 }
 
+function getRowClass(rowIndex: number) {
+  return {
+    'function-row': rowIndex === 0,
+    'space-row': rowIndex === KEYBOARD_LAYOUT.length - 1,
+  }
+}
+
+function getKeyClass(key: string) {
+  const classes: Record<string, string> = {
+    SPACE: 'key-space',
+    DELETE: 'key-delete',
+    ARROWLEFT: 'key-arrow-left',
+    ARROWDOWN: 'key-arrow-down',
+    ARROWRIGHT: 'key-arrow-right',
+  }
+  return classes[key] ?? ''
+}
+
 function updateKeyboardScale() {
   const shell = scaleShellRef.value
   const area = keyboardAreaRef.value
@@ -141,7 +159,7 @@ watch(
           v-for="(row, rowIndex) in KEYBOARD_LAYOUT"
           :key="rowIndex"
           class="keyboard-row"
-          :class="{ 'function-row': rowIndex === 0 }"
+          :class="getRowClass(rowIndex)"
         >
           <!-- 遍历每个按键 -->
           <div
@@ -154,6 +172,7 @@ watch(
               control: key.type === 'control',
               clickable: props.keyCodeToPitch?.has(key.code), // 是否可点击（有映射）
               [`width-${key.width}`]: key.width,
+              [getKeyClass(key.key)]: getKeyClass(key.key),
             }"
             :title="
               props.keyCodeToPitch?.has(key.code)
@@ -177,7 +196,7 @@ watch(
 
 <style scoped>
 .keyboard-preview {
-  @apply flex min-w-0 flex-col gap-2 overflow-hidden p-3 rounded-lg;
+  @apply flex min-w-0 flex-col gap-2 overflow-hidden p-2 rounded-lg;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
   width: 100%;
@@ -193,17 +212,31 @@ watch(
 }
 
 .keyboard-area {
-  @apply absolute left-1/2 top-0 flex flex-col gap-1;
+  @apply absolute left-1/2 top-0 flex flex-col;
+  gap: 3px;
   transform-origin: top center;
   width: max-content;
 }
 
 .keyboard-row {
-  @apply flex items-center justify-center gap-1;
+  @apply flex items-center justify-center;
+  gap: 3px;
 }
 
 .keyboard-row.function-row {
-  @apply mb-1;
+  margin-bottom: 4px;
+}
+
+.keyboard-row.space-row {
+  margin-top: 3px;
+  justify-content: end;
+}
+
+.keyboard-row.space-row .key-arrow-left {
+  margin-left: 25px;
+}
+.keyboard-row.space-row .key-arrow-right {
+  margin-right: 20px;
 }
 
 .key {
@@ -211,12 +244,12 @@ watch(
   background: var(--bg-white-80);
   border: 1px solid var(--border-primary-20);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  width: 34px;
-  height: 36px;
+  width: 32px;
+  height: 34px;
 }
 
 .key.function {
-  width: 40px;
+  width: 38px;
   height: 28px;
 }
 
@@ -225,19 +258,19 @@ watch(
 }
 
 .key.width-md {
-  width: 46px;
+  width: 42px;
 }
 
 .key.width-lg {
-  width: 56px;
+  width: 52px;
 }
 
 .key.width-xl {
-  width: 76px;
+  width: 68px;
 }
 
 .key.width-space {
-  width: 220px;
+  width: 190px;
 }
 
 .key.clickable {
