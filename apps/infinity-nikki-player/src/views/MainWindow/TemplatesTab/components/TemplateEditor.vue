@@ -48,6 +48,8 @@ const selectedTemplateIds = ref<Set<string>>(new Set())
 const editorDrawerRef = ref<InstanceType<typeof TemplateEditorDrawer> | null>(null)
 /** 头部+表格头部高度 */
 const totalHeaderHeight = ref(260)
+/** 当前打开的表格行操作菜单模板 ID；受控关闭可避免进入抽屉后浮层残留。 */
+const openActionMenuTemplateId = ref<string | null>(null)
 
 /**
  * @description: 从本地存储读取分页大小
@@ -218,6 +220,7 @@ async function createBlankTemplate(): Promise<void> {
  * @return {Promise<void>} 无返回值
  */
 async function createFromTemplate(template: KeyTemplate): Promise<void> {
+  closeTemplateActionMenu()
   await editorDrawerRef.value?.createFromTemplate(template)
 }
 
@@ -227,6 +230,7 @@ async function createFromTemplate(template: KeyTemplate): Promise<void> {
  * @return {Promise<void>} 无返回值
  */
 async function editTemplate(template: KeyTemplate): Promise<void> {
+  closeTemplateActionMenu()
   await editorDrawerRef.value?.editTemplate(template)
 }
 
@@ -236,6 +240,7 @@ async function editTemplate(template: KeyTemplate): Promise<void> {
  * @return {Promise<void>} 无返回值
  */
 async function deleteTemplate(template: KeyTemplate): Promise<void> {
+  closeTemplateActionMenu()
   const confirmed = await confirmTemplateAction(t('actions.delete'), t('template.confirmDelete'))
   if (!confirmed) return
 
@@ -309,6 +314,7 @@ async function importTemplate(): Promise<void> {
  * @return {Promise<void>} 无返回值
  */
 async function exportTemplate(template: KeyTemplate): Promise<void> {
+  closeTemplateActionMenu()
   const target = await saveDialog({
     defaultPath: `${template.name || template.id}.json`,
     filters: [{ name: 'Template JSON', extensions: ['json'] }],
@@ -324,6 +330,25 @@ async function exportTemplate(template: KeyTemplate): Promise<void> {
     // 保存路径权限或模板读取失败都需要展示给用户。
     toast.error(t('template.exportFailed'), { description: String(error), richColors: true })
   }
+}
+
+/**
+ * @description: 关闭模板行操作菜单
+ * @return {void}
+ */
+function closeTemplateActionMenu(): void {
+  openActionMenuTemplateId.value = null
+}
+
+/**
+ * @description: 更新指定模板行操作菜单打开状态
+ * @param {string} templateId - 模板 ID
+ * @param {boolean} open - 是否打开
+ * @return {void}
+ */
+function setTemplateActionMenuOpen(templateId: string, open: boolean): void {
+  // 同一时间只保留一个行菜单，选择任意操作后由动作函数主动关闭。
+  openActionMenuTemplateId.value = open ? templateId : null
 }
 
 /**
@@ -549,7 +574,12 @@ defineExpose({
 
             <template v-else-if="column.key === 'actions'">
               <div @click.stop>
-                <Popover trigger="click" placement="bottomRight">
+                <Popover
+                  trigger="click"
+                  placement="bottomRight"
+                  :open="openActionMenuTemplateId === template.id"
+                  @update:open="setTemplateActionMenuOpen(template.id, $event)"
+                >
                   <template #content>
                     <div class="flex flex-col">
                       <Button type="text" class="justify-start" @click="editTemplate(template)">

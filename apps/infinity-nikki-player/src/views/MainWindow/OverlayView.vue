@@ -204,11 +204,10 @@ watch(
 watch(
   () => settingsStore.currentTemplateId,
   () => {
-    if (playerStore.isPreviewPlaying) {
-      void playerStore.stopPreviewPlayback()
-    }
     cancelCountdown()
+    void playerStore.stopPreviewPlayback()
     if (keyboardMapper.value) {
+      keyboardMapper.value.releaseAll(playerStore.previewCurrentTime)
       keyboardMapper.value.reset()
     }
     initKeyboardMapper()

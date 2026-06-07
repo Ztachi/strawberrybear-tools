@@ -182,7 +182,7 @@ export class TemplatePianoEditor {
     this.resizeObserver = new ResizeObserver(() => this.setCanvasSize())
     this.resizeObserver.observe(this.container)
     this.setCanvasSize()
-    this.scrollPitchIntoView(this.selectedPitch)
+    this.scheduleSelectedPitchIntoView()
     this.emitState()
   }
 
@@ -200,6 +200,9 @@ export class TemplatePianoEditor {
       this.redoStack = []
     }
     this.drawCanvas()
+    if (options.resetHistory) {
+      this.scheduleSelectedPitchIntoView()
+    }
     this.emitState()
   }
 
@@ -284,6 +287,12 @@ export class TemplatePianoEditor {
     if (this.mode !== 'edit') return
     const whiteIndex = this.getWhiteKeyIndex(isBlackKey(pitch) ? pitch - 1 : pitch)
     if (whiteIndex < 0) return
+    const keyLeft = whiteIndex * WHITE_KEY_WIDTH
+    const keyRight = keyLeft + WHITE_KEY_WIDTH
+    const visibleLeft = this.container.scrollLeft
+    const visibleRight = visibleLeft + this.container.clientWidth
+    // 目标琴键已经完整在可视范围内时不改 scrollLeft，避免连续按键时界面来回滚动。
+    if (keyLeft >= visibleLeft && keyRight <= visibleRight) return
     const targetLeft =
       whiteIndex * WHITE_KEY_WIDTH - this.container.clientWidth / 2 + WHITE_KEY_WIDTH
     this.container.scrollLeft = Math.max(0, targetLeft)
@@ -401,6 +410,7 @@ export class TemplatePianoEditor {
       // 使用新 Set 保存按下状态，驱动 Canvas 和虚拟键盘反向高亮。
       this.pressedMappedKeys = new Set(this.pressedMappedKeys).add(normalized)
       this.selectedPitch = pressedMappedPitch
+      this.scrollPitchIntoView(pressedMappedPitch)
       void this.playNote(pressedMappedPitch, 88, KEYBOARD_HOLD_PREVIEW_DURATION_SECONDS)
       this.drawCanvas()
       this.emitState()
@@ -567,6 +577,13 @@ export class TemplatePianoEditor {
     this.canvas.height = Math.floor(height * ratio)
     // 尺寸变化后必须重绘，否则 Canvas 会被浏览器清空。
     this.drawCanvas()
+  }
+
+  private scheduleSelectedPitchIntoView(): void {
+    // 抽屉打开和容器 resize 会让布局晚于编辑器构造稳定，延后一帧再滚动才能拿到真实宽度。
+    window.requestAnimationFrame(() => this.scrollPitchIntoView(this.selectedPitch))
+    // 抽屉过渡结束前可能再次改变宽度，再补一次轻量定位，保证首次进入能看到当前选中音。
+    window.setTimeout(() => this.scrollPitchIntoView(this.selectedPitch), 120)
   }
 
   private getContentWidth(): number {
