@@ -6,6 +6,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { i18n, initI18n } from './i18n'
+import { router } from './router'
 import { configureAntdvStaticContext } from './theme/infinityNikkiTheme'
 import 'antdv-next/dist/reset.css'
 import './style.css'
@@ -18,6 +19,9 @@ app.use(createPinia())
 
 /** 注册 i18n 国际化插件 */
 app.use(i18n)
+
+/** 注册 Vue Router，仅用于主窗口文件/模板页签 URL 状态同步 */
+app.use(router)
 
 /**
  * @description: 获取窗口标签

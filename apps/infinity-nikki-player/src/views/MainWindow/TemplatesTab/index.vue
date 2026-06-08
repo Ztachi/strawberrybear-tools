@@ -19,6 +19,22 @@ defineExpose({
     // TemplateEditor 尚未挂载时没有编辑状态，父级可以直接离开。
     return templateEditorRef.value?.confirmLeaveIfNeeded(context) ?? Promise.resolve(true)
   },
+  /**
+   * @description: 判断模板页是否存在刷新前需要保护的未保存改动
+   * @return {boolean} true 表示模板编辑器中存在未保存改动
+   */
+  hasPendingChanges(): boolean {
+    // 外层 Tab 不直接读取模板内容，只把编辑器内部 dirty 状态透传给主窗口。
+    return templateEditorRef.value?.hasPendingChanges() ?? false
+  },
+  /**
+   * @description: 刷新前写入当前模板草稿
+   * @return {void}
+   */
+  writePendingDraft(): void {
+    // 草稿 key 和写入条件由编辑器内部维护，避免 Tab 层出现并行状态。
+    templateEditorRef.value?.writePendingDraft()
+  },
 })
 </script>
 

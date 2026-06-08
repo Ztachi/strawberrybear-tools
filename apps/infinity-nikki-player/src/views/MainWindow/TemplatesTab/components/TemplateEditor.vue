@@ -462,6 +462,22 @@ defineExpose({
     // 未打开编辑抽屉时没有编辑状态，父级可以直接离开。
     return editorDrawerRef.value?.confirmLeaveIfNeeded(context) ?? Promise.resolve(true)
   },
+  /**
+   * @description: 暴露给父组件的刷新保护 dirty 状态
+   * @return {boolean} true 表示模板编辑抽屉存在未保存改动
+   */
+  hasPendingChanges(): boolean {
+    // dirty 判断仍由抽屉内部完成，页面层只负责向主窗口透传结果。
+    return editorDrawerRef.value?.hasPendingChanges() ?? false
+  },
+  /**
+   * @description: 刷新前写入模板草稿
+   * @return {void}
+   */
+  writePendingDraft(): void {
+    // 草稿写入复用抽屉内部逻辑，避免页面层理解模板草稿 key 和序列化细节。
+    editorDrawerRef.value?.writePendingDraft()
+  },
 })
 </script>
 

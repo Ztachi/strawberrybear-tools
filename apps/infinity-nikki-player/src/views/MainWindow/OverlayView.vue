@@ -468,6 +468,8 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 .track-info {
   min-width: 0;
   overflow: hidden;
+  display: flex;
+  align-items: center;
 }
 
 .marquee-wrapper {

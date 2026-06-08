@@ -620,6 +620,25 @@ async function confirmLeaveIfNeeded(context: 'close' | 'jump' = 'close'): Promis
 }
 
 /**
+ * @description: 判断刷新前是否需要阻止整页卸载
+ * @return {boolean} true 表示模板抽屉存在未保存改动
+ */
+function hasPendingChanges(): boolean {
+  // 刷新保护必须复用编辑器原有 dirty 判断，避免主窗口维护第二套模板差异状态。
+  return hasEditorChanges()
+}
+
+/**
+ * @description: 刷新前同步写入当前模板草稿
+ * @return {void}
+ */
+function writePendingDraft(): void {
+  // 只有真实 dirty 时才写草稿，避免普通刷新把空编辑器状态覆盖到 localStorage。
+  if (!hasEditorChanges()) return
+  writeCurrentTemplateDraft()
+}
+
+/**
  * @description: 停止草稿自动保存
  * @return {void}
  */
@@ -680,6 +699,8 @@ defineExpose({
   createFromTemplate,
   editTemplate,
   confirmLeaveIfNeeded,
+  hasPendingChanges,
+  writePendingDraft,
 })
 </script>
 

@@ -3,8 +3,9 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { invoke } from '@tauri-apps/api/core'
@@ -21,11 +22,19 @@ import AppHeader from './components/AppHeader/index.vue'
 import { isSupportedLocale } from '@/i18n'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
-/** 当前激活的标签页 @return {string} */
-const activeTab = ref('files')
+/** 主窗口支持的页签路由值。 */
+type MainWindowTab = 'files' | 'templates'
+
+/** 当前激活的标签页由路由决定，避免刷新后回到默认文件页。 */
+const activeTab = computed<MainWindowTab>(() => {
+  // 未知路径会被 router 重定向；重定向完成前按文件页渲染，保持首屏稳定。
+  return route.name === 'templates' ? 'templates' : 'files'
+})
 
 /** 模板 Tab 实例，用于在切页和导入前检查抽屉未保存编辑。 */
 const templatesTabRef = ref<InstanceType<typeof TemplatesTab> | null>(null)
@@ -284,8 +293,8 @@ async function ensureFilesTabForImport(): Promise<boolean> {
   const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('jump')
   if (canLeave === false) return false
 
-  // 守卫通过后先切到文件页，后续 import/selectMidi 打开的详情才能直接显示给用户。
-  activeTab.value = 'files'
+  // 守卫通过后先切到文件页路由，后续 import/selectMidi 打开的详情才能直接显示给用户。
+  await router.push({ name: 'files', query: route.query })
   return true
 }
 
@@ -295,7 +304,9 @@ async function ensureFilesTabForImport(): Promise<boolean> {
  * @return {Promise<void>} 无返回值
  */
 async function handleTabChange(nextTab: string | number): Promise<void> {
-  const normalizedNextTab = String(nextTab)
+  const normalizedNextTab = String(nextTab) as MainWindowTab
+  // RadioGroup 只会发出当前两个页签值；这里防御无效值，避免错误 URL 污染应用状态。
+  if (normalizedNextTab !== 'files' && normalizedNextTab !== 'templates') return
   // 点击当前 Tab 不需要走离开守卫。
   if (normalizedNextTab === activeTab.value) return
 
@@ -305,8 +316,23 @@ async function handleTabChange(nextTab: string | number): Promise<void> {
     if (canLeave === false) return
   }
 
-  // 守卫通过后再更新 v-model，防止 UI 先切走再被迫切回造成闪烁。
-  activeTab.value = normalizedNextTab
+  // 守卫通过后再更新路由，防止 UI 先切走再被迫切回造成闪烁。
+  await router.push({ name: normalizedNextTab, query: route.query })
+}
+
+/**
+ * @description: 处理整页刷新前的模板草稿保护
+ * @description beforeunload 无法使用自定义确认框，只能先落草稿并交给浏览器/Tauri WebView 提示。
+ * @param {BeforeUnloadEvent} event - 浏览器刷新或关闭事件
+ */
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  // 只有模板抽屉存在真实未保存改动时才阻止刷新，避免普通刷新被无意义打断。
+  if (!templatesTabRef.value?.hasPendingChanges()) return
+
+  // 刷新会销毁 Vue 组件，必须先同步写入草稿，确保用户下次进入模板编辑仍可恢复。
+  templatesTabRef.value.writePendingDraft()
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 /**
@@ -419,6 +445,8 @@ onMounted(async () => {
   await playerStore.loadMidiLibrary()
   // 绑定拖拽事件
   removeDomDragListeners = bindDomDragEvents()
+  // 绑定整页刷新保护，覆盖用户在模板编辑抽屉中直接刷新窗口的场景。
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 /** 组件卸载时清理 */
@@ -427,6 +455,7 @@ onUnmounted(() => {
     removeDomDragListeners()
     removeDomDragListeners = null
   }
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
 /**
