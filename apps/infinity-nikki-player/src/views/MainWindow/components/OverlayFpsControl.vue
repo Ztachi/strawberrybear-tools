@@ -52,8 +52,20 @@ const inputValue = computed(() => {
 
 const statusMessage = computed(() => {
   if (!settingsStore.autoFpsEnabled) return t('overlay.fpsManualTip')
-  if (!autoCaptureAvailable.value) return capability.value?.message || t('overlay.fpsUnsupported')
-  return snapshot.value?.message || t('overlay.fpsAutoTip')
+  if (!autoCaptureAvailable.value) return t('overlay.fpsUnsupported')
+
+  switch (snapshot.value?.status) {
+    case 'target_not_found':
+      return t('overlay.fpsWaiting')
+    case 'present_mon_missing':
+      return t('overlay.fpsMissing')
+    case 'permission_denied':
+      return t('overlay.fpsPermissionDenied')
+    case 'error':
+      return t('overlay.fpsError')
+    default:
+      return t('overlay.fpsAutoTip')
+  }
 })
 
 /**

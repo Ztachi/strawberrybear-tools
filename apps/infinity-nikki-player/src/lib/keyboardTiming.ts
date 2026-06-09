@@ -1,3 +1,11 @@
+/*
+ * @Author: ztachi(legendryztachi@gmail.com)
+ * @Date: 2026-06-09 10:48:37
+ * @LastEditors: ztachi(legendryztachi@gmail.com)
+ * @LastEditTime: 2026-06-09 13:53:19
+ * @FilePath: /strawberrybear-tools/apps/infinity-nikki-player/src/lib/keyboardTiming.ts
+ * @Description:
+ */
 /**
  * @fileOverview 自动演奏按键时序策略
  * @description 根据游戏实际 FPS 推导模拟按键的保持时间和间隔时间
@@ -5,6 +13,14 @@
 
 /** 默认 FPS，自动获取不可用或手动值异常时使用。 */
 export const DEFAULT_PLAYBACK_FPS = 60
+
+/**
+ * FPS 自适应总开关。
+ *
+ * true：启用自动/手动 FPS 适配、悬浮窗 FPS 控件和播放前锁定策略。
+ * false：完全回到旧策略，按固定 60fps 计算按键持续和间隔。
+ */
+export const ENABLE_ADAPTIVE_FPS_TIMING = true
 
 /** 最低可接受 FPS，避免极小值把按键保持时间拉得过长。 */
 export const MIN_PLAYBACK_FPS = 15
@@ -43,7 +59,9 @@ export function normalizePlaybackFps(fps: number | null | undefined): number {
  * @return {number} 推荐毫秒数
  */
 export function getRecommendedKeyTimingMs(fps: number): number {
-  const normalizedFps = normalizePlaybackFps(fps)
+  const normalizedFps = ENABLE_ADAPTIVE_FPS_TIMING
+    ? normalizePlaybackFps(fps)
+    : DEFAULT_PLAYBACK_FPS
   return Math.ceil(
     (REQUIRED_POLLING_FRAMES * 1000) / normalizedFps + WINDOWS_SLEEP_JITTER_MARGIN_MS
   )
@@ -55,7 +73,9 @@ export function getRecommendedKeyTimingMs(fps: number): number {
  * @return {KeyboardTimingProfile} 键盘模拟时序
  */
 export function createKeyboardTimingProfile(fps?: number | null): KeyboardTimingProfile {
-  const normalizedFps = normalizePlaybackFps(fps)
+  const normalizedFps = ENABLE_ADAPTIVE_FPS_TIMING
+    ? normalizePlaybackFps(fps)
+    : DEFAULT_PLAYBACK_FPS
   const recommendedMs = getRecommendedKeyTimingMs(normalizedFps)
   return {
     fps: normalizedFps,

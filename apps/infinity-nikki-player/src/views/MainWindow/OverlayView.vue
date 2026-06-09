@@ -7,7 +7,11 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
-import { createKeyboardTimingProfile } from '@/lib/keyboardTiming'
+import {
+  DEFAULT_PLAYBACK_FPS,
+  ENABLE_ADAPTIVE_FPS_TIMING,
+  createKeyboardTimingProfile,
+} from '@/lib/keyboardTiming'
 import type { MidiInfo } from '@/types'
 import {
   setKeyboardEventCallback,
@@ -80,6 +84,11 @@ const countdown = ref(0)
 let countdownTimer: number | null = null
 
 async function lockKeyboardTimingProfile() {
+  if (!ENABLE_ADAPTIVE_FPS_TIMING) {
+    keyboardMapper.value?.setTimingProfile(createKeyboardTimingProfile(DEFAULT_PLAYBACK_FPS))
+    return
+  }
+
   const fps = await fpsControl.value
     ?.resolvePlaybackFps()
     .catch((error) => {
@@ -96,7 +105,9 @@ function runAfterCountdown(action: () => void | Promise<void>) {
     countdownTimer = null
   }
   // 倒计时本身就是播放前等待窗口，正好利用这 3 秒刷新自动 FPS 采样。
-  void fpsControl.value?.startCountdownSampling()
+  if (ENABLE_ADAPTIVE_FPS_TIMING) {
+    void fpsControl.value?.startCountdownSampling()
+  }
   countdown.value = 3
   countdownTimer = window.setInterval(() => {
     countdown.value--
@@ -177,7 +188,11 @@ function initKeyboardMapper() {
   if (template) {
     if (!keyboardMapper.value) {
       keyboardMapper.value = new KeyboardMapper()
-      keyboardMapper.value.setTimingProfile(createKeyboardTimingProfile(settingsStore.manualFps))
+      keyboardMapper.value.setTimingProfile(
+        createKeyboardTimingProfile(
+          ENABLE_ADAPTIVE_FPS_TIMING ? settingsStore.manualFps : DEFAULT_PLAYBACK_FPS
+        )
+      )
       // 设置键盘模拟回调（悬浮模式强制启用）
       keyboardMapper.value.setKeyboardSimCallback((action: string, key: string) => {
         if (
@@ -410,8 +425,13 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
       </div>
 
       <!-- 播放控制按钮 -->
-      <div class="playback-controls" @mousedown.stop @pointerdown.stop>
-        <OverlayFpsControl ref="fpsControl" />
+      <div
+        class="playback-controls"
+        :class="{ 'with-fps-control': ENABLE_ADAPTIVE_FPS_TIMING }"
+        @mousedown.stop
+        @pointerdown.stop
+      >
+        <OverlayFpsControl v-if="ENABLE_ADAPTIVE_FPS_TIMING" ref="fpsControl" />
         <PreviewTransportControls
           variant="overlay"
           :is-playing="isPlaying"
@@ -531,9 +551,19 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
 .playback-controls {
   display: grid;
-  grid-template-columns: 92px 1fr 32px;
+  grid-template-columns: 1fr 32px;
   align-items: center;
   gap: 4px;
+}
+
+.playback-controls.with-fps-control {
+  grid-template-columns: 92px 1fr 32px;
+}
+
+.overlay-progress,
+.playback-controls,
+.action-buttons {
+  cursor: default;
 }
 
 .playback-controls :deep(.transport-controls.overlay) {
@@ -544,6 +574,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   @apply w-8 h-8 flex items-center justify-center rounded-lg text-white/90;
   @apply transition-colors;
   background: transparent;
+  cursor: pointer;
 }
 
 .ctrl-btn:hover {

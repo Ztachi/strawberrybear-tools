@@ -244,9 +244,15 @@ export default {
     unmute: 'Unmute',
     fpsLabel: 'FPS:',
     fpsAuto: 'Auto',
-    fpsAutoTip: 'Captures Windows game FPS and locks playback timing when countdown ends.',
-    fpsManualTip: 'Manual FPS is active. Blur the field to save.',
-    fpsUnsupported: 'Auto FPS is not supported on this platform yet. Use manual FPS.',
+    fpsAutoTip: 'Detects game FPS before playback and adjusts key hold and gap timing.',
+    fpsManualTip: 'Auto detect is off. Enter the game FPS used for key hold and gap timing.',
+    fpsUnsupported: 'Auto detect is not supported on this platform. Enter the game FPS manually.',
+    fpsWaiting:
+      'No game FPS detected yet. Make sure the game is running; manual FPS will be used first.',
+    fpsMissing: 'Auto detect component is missing. Enter the game FPS manually.',
+    fpsPermissionDenied:
+      'Auto detect needs Windows frame capture permission. Enter the game FPS manually.',
+    fpsError: 'Auto detect failed. Enter the game FPS manually.',
   },
   status: {
     ready: 'Ready',
