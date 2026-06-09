@@ -17,6 +17,9 @@ use tauri::Manager;
 /// * `current_template_id` - 当前模板 ID
 /// * `play_mode` - 演奏模式："auto" | "piano"
 /// * `enable_keyboard_sim` - 是否启用键盘模拟（仅在 piano 模式下生效）
+/// * `auto_fps_enabled` - 是否启用自动 FPS 获取
+/// * `manual_fps` - 手动 FPS，自动获取不可用时作为兜底
+/// * `last_detected_fps` - 最近一次自动检测 FPS，仅用于展示回填
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     /// 当前语言
@@ -29,11 +32,30 @@ pub struct AppSettings {
     /// 是否启用键盘模拟（仅在模板演奏模式下生效）
     #[serde(default)]
     pub enable_keyboard_sim: bool,
+    /// 是否启用自动 FPS 获取
+    #[serde(default = "default_auto_fps_enabled")]
+    pub auto_fps_enabled: bool,
+    /// 手动 FPS，自动获取不可用或用户关闭自动获取时生效
+    #[serde(default = "default_manual_fps")]
+    pub manual_fps: u32,
+    /// 最近一次自动检测到的 FPS，仅用于 UI 展示，不作为强依赖
+    #[serde(default)]
+    pub last_detected_fps: Option<u32>,
 }
 
 /// 默认演奏模式
 fn default_play_mode() -> String {
     "auto".to_string()
+}
+
+/// 默认开启自动 FPS 获取；不支持的平台会在前端回落到手动 FPS。
+fn default_auto_fps_enabled() -> bool {
+    true
+}
+
+/// 默认手动 FPS，覆盖 60fps 常见场景。
+fn default_manual_fps() -> u32 {
+    60
 }
 
 impl Default for AppSettings {
@@ -43,7 +65,32 @@ impl Default for AppSettings {
             current_template_id: None,
             play_mode: "auto".to_string(),
             enable_keyboard_sim: false,
+            auto_fps_enabled: true,
+            manual_fps: default_manual_fps(),
+            last_detected_fps: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_settings_json_uses_fps_defaults() {
+        let settings: AppSettings = serde_json::from_str(
+            r#"{
+                "locale": "zh-CN",
+                "current_template_id": null,
+                "play_mode": "piano",
+                "enable_keyboard_sim": true
+            }"#,
+        )
+        .expect("settings");
+
+        assert!(settings.auto_fps_enabled);
+        assert_eq!(settings.manual_fps, 60);
+        assert_eq!(settings.last_detected_fps, None);
     }
 }
 

@@ -242,6 +242,11 @@ export default {
     stop: 'Stop',
     mute: 'Mute',
     unmute: 'Unmute',
+    fpsLabel: 'FPS:',
+    fpsAuto: 'Auto',
+    fpsAutoTip: 'Captures Windows game FPS and locks playback timing when countdown ends.',
+    fpsManualTip: 'Manual FPS is active. Blur the field to save.',
+    fpsUnsupported: 'Auto FPS is not supported on this platform yet. Use manual FPS.',
   },
   status: {
     ready: 'Ready',

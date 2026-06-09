@@ -31,6 +31,15 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 是否启用键盘模拟 */
   const enableKeyboardSim = ref(false)
 
+  /** 是否启用自动 FPS 获取 */
+  const autoFpsEnabled = ref(true)
+
+  /** 手动 FPS，自动获取不可用时作为兜底 */
+  const manualFps = ref(60)
+
+  /** 最近一次自动检测 FPS，仅用于 UI 展示回填 */
+  const lastDetectedFps = ref<number | null>(null)
+
   /** 是否处于悬浮模式 */
   const isOverlayMode = ref(false)
 
@@ -85,6 +94,14 @@ export const useSettingsStore = defineStore('settings', () => {
         enableKeyboardSim.value = false
       }
 
+      // 设置 FPS 获取策略；旧配置没有这些字段时由 Rust 默认值兜底。
+      autoFpsEnabled.value = settings.auto_fps_enabled !== false
+      manualFps.value = normalizeFps(settings.manual_fps)
+      lastDetectedFps.value =
+        typeof settings.last_detected_fps === 'number'
+          ? normalizeFps(settings.last_detected_fps)
+          : null
+
       // 从后端加载模板
       templates.value = await loadTemplatesFromBackend()
 
@@ -121,7 +138,20 @@ export const useSettingsStore = defineStore('settings', () => {
       current_template_id: currentTemplateId.value,
       play_mode: playMode.value,
       enable_keyboard_sim: enableKeyboardSim.value,
+      auto_fps_enabled: autoFpsEnabled.value,
+      manual_fps: manualFps.value,
+      last_detected_fps: lastDetectedFps.value,
     })
+  }
+
+  /**
+   * @description: 归一化 FPS，避免异常设置影响按键时序计算
+   * @param {number | undefined | null} fps - 待归一化 FPS
+   * @return {number} 可用于播放策略的 FPS
+   */
+  function normalizeFps(fps: number | undefined | null): number {
+    if (typeof fps !== 'number' || !Number.isFinite(fps)) return 60
+    return Math.min(360, Math.max(15, Math.round(fps)))
   }
 
   /**
@@ -133,6 +163,36 @@ export const useSettingsStore = defineStore('settings', () => {
   async function setEnableKeyboardSim(enabled: boolean) {
     if (enabled && playMode.value !== 'piano') return
     enableKeyboardSim.value = enabled
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置自动 FPS 获取开关
+   * @param {boolean} enabled - 是否启用自动 FPS
+   * @return Promise
+   */
+  async function setAutoFpsEnabled(enabled: boolean) {
+    autoFpsEnabled.value = enabled
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置手动 FPS
+   * @param {number} fps - 用户输入的手动 FPS
+   * @return Promise
+   */
+  async function setManualFps(fps: number) {
+    manualFps.value = normalizeFps(fps)
+    await persistSettings()
+  }
+
+  /**
+   * @description: 保存最近一次自动检测 FPS
+   * @param {number | null} fps - 自动检测 FPS
+   * @return Promise
+   */
+  async function setLastDetectedFps(fps: number | null) {
+    lastDetectedFps.value = fps === null ? null : normalizeFps(fps)
     await persistSettings()
   }
 
@@ -276,6 +336,9 @@ export const useSettingsStore = defineStore('settings', () => {
     currentTemplateId,
     playMode,
     enableKeyboardSim,
+    autoFpsEnabled,
+    manualFps,
+    lastDetectedFps,
     isOverlayMode,
     modeBeforeOverlay,
     templates,
@@ -293,5 +356,8 @@ export const useSettingsStore = defineStore('settings', () => {
     renameTemplate,
     setPlayMode,
     setEnableKeyboardSim,
+    setAutoFpsEnabled,
+    setManualFps,
+    setLastDetectedFps,
   }
 })

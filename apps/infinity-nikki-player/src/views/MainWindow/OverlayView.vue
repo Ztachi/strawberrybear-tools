@@ -7,6 +7,7 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { KeyboardMapper } from '@/lib/keyboardMapper'
+import { createKeyboardTimingProfile } from '@/lib/keyboardTiming'
 import type { MidiInfo } from '@/types'
 import {
   setKeyboardEventCallback,
@@ -18,6 +19,7 @@ import { Tooltip } from 'antdv-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
 import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
+import OverlayFpsControl from './components/OverlayFpsControl.vue'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
@@ -29,6 +31,14 @@ const OVERLAY_EXPANDED_HEIGHT = 320
 
 // 键盘映射器实例
 const keyboardMapper = ref<KeyboardMapper | null>(null) as any
+
+interface OverlayFpsControlExpose {
+  startCountdownSampling: () => Promise<void>
+  resolvePlaybackFps: () => Promise<number>
+}
+
+// 悬浮窗 FPS 控件实例，倒计时期间由父组件触发采样和锁定。
+const fpsControl = ref<OverlayFpsControlExpose | null>(null)
 
 // 悬浮层独立音量状态（与详情页的 previewVolume / isPreviewMuted 完全独立）
 const overlayMuted = ref(true)
@@ -69,12 +79,24 @@ const countdown = ref(0)
 // 倒计时定时器 ID
 let countdownTimer: number | null = null
 
+async function lockKeyboardTimingProfile() {
+  const fps = await fpsControl.value
+    ?.resolvePlaybackFps()
+    .catch((error) => {
+      console.error('锁定 FPS 失败:', error)
+      return settingsStore.manualFps
+    })
+  keyboardMapper.value?.setTimingProfile(createKeyboardTimingProfile(fps ?? settingsStore.manualFps))
+}
+
 function runAfterCountdown(action: () => void | Promise<void>) {
   // 清除之前的定时器
   if (countdownTimer) {
     clearInterval(countdownTimer)
     countdownTimer = null
   }
+  // 倒计时本身就是播放前等待窗口，正好利用这 3 秒刷新自动 FPS 采样。
+  void fpsControl.value?.startCountdownSampling()
   countdown.value = 3
   countdownTimer = window.setInterval(() => {
     countdown.value--
@@ -84,7 +106,10 @@ function runAfterCountdown(action: () => void | Promise<void>) {
         clearInterval(countdownTimer)
         countdownTimer = null
       }
-      Promise.resolve(action()).catch(console.error)
+      Promise.resolve()
+        .then(lockKeyboardTimingProfile)
+        .then(action)
+        .catch(console.error)
     }
   }, 1000)
 }
@@ -152,6 +177,7 @@ function initKeyboardMapper() {
   if (template) {
     if (!keyboardMapper.value) {
       keyboardMapper.value = new KeyboardMapper()
+      keyboardMapper.value.setTimingProfile(createKeyboardTimingProfile(settingsStore.manualFps))
       // 设置键盘模拟回调（悬浮模式强制启用）
       keyboardMapper.value.setKeyboardSimCallback((action: string, key: string) => {
         if (
@@ -385,6 +411,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
       <!-- 播放控制按钮 -->
       <div class="playback-controls" @mousedown.stop @pointerdown.stop>
+        <OverlayFpsControl ref="fpsControl" />
         <PreviewTransportControls
           variant="overlay"
           :is-playing="isPlaying"
@@ -503,7 +530,14 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 }
 
 .playback-controls {
-  @apply flex justify-center items-center gap-1;
+  display: grid;
+  grid-template-columns: 92px 1fr 32px;
+  align-items: center;
+  gap: 4px;
+}
+
+.playback-controls :deep(.transport-controls.overlay) {
+  justify-self: center;
 }
 
 .ctrl-btn {

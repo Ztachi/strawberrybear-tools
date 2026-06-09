@@ -231,6 +231,11 @@ export default {
     stop: '停止',
     mute: '静音',
     unmute: '取消静音',
+    fpsLabel: '帧数：',
+    fpsAuto: '自动获取',
+    fpsAutoTip: '自动获取 Windows 游戏进程 FPS，并在播放倒计时结束时锁定本次时序。',
+    fpsManualTip: '当前使用手动 FPS，失焦后保存。',
+    fpsUnsupported: '当前平台暂不支持自动 FPS 获取，请使用手动 FPS。',
   },
   status: {
     ready: '就绪',

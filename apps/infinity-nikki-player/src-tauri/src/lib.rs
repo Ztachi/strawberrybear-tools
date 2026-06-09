@@ -8,6 +8,7 @@ mod midi;
 mod types;
 mod window_state;
 
+use commands::frame_rate::FrameRateCaptureState;
 use commands::player::PlayerControl;
 use std::env;
 use tauri::{Emitter, Manager};
@@ -188,6 +189,8 @@ pub fn run() {
         .manage(AppState::default())
         // 管理播放控制状态
         .manage(PlayerControl::default())
+        // 管理 FPS 采集状态
+        .manage(FrameRateCaptureState::default())
         // 应用初始化设置
         .setup(move |app| {
             // 根据语言生成菜单
@@ -345,6 +348,10 @@ pub fn run() {
             commands::keyboard::clear_key_logs,
             commands::keyboard::simulate_key_down,
             commands::keyboard::simulate_key_up,
+            commands::frame_rate::get_frame_rate_capture_capability,
+            commands::frame_rate::start_frame_rate_capture,
+            commands::frame_rate::get_frame_rate_snapshot,
+            commands::frame_rate::stop_frame_rate_capture,
             commands::window::enter_overlay_mode,
             commands::window::exit_overlay_mode,
             commands::window::has_saved_overlay_window_state,

@@ -5,6 +5,8 @@ node_modules/
 
 # Build outputs
 dist/
+target/
+crates/*/target/
 .turbo/
 .next/
 output/

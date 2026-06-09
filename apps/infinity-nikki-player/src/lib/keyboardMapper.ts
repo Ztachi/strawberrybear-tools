@@ -5,6 +5,7 @@
 
 import type { KeyTemplate, KeyMapping } from '@/types'
 import { mappingKeyToCode } from '@/lib/templateKeys'
+import { createKeyboardTimingProfile, type KeyboardTimingProfile } from '@/lib/keyboardTiming'
 
 /**
  * C 大调白键相对于 C 的半音偏移量
@@ -64,19 +65,6 @@ export type KeyLogCallback = (entry: KeyLogEntry) => void
 /** 键盘模拟回调类型 */
 export type KeyboardSimCallback = (action: 'press' | 'release', key: string) => void
 
-const DEFAULT_PLAYBACK_FPS = 60
-
-function getKeyboardTimingProfile() {
-  const fps = DEFAULT_PLAYBACK_FPS
-  return {
-    fps,
-    holdMs: Math.ceil(2000 / fps + 4),
-    releaseMs: Math.ceil(1000 / fps + 1),
-  }
-}
-
-const KEY_TIMING_PROFILE = getKeyboardTimingProfile()
-
 interface KeySimulationState {
   isDown: boolean
   nextAvailableAt: number
@@ -122,6 +110,8 @@ export class KeyboardMapper {
   /** 键盘模拟回调 */
   private keyboardSimCallback: KeyboardSimCallback | null = null
   private keySimulationState = new Map<string, KeySimulationState>()
+  /** 当前键盘模拟时序，播放开始前按锁定 FPS 更新。 */
+  private timingProfile: KeyboardTimingProfile = createKeyboardTimingProfile()
 
   constructor(options: KeyboardMapperOptions = {}) {
     this.rows = options.rows ?? KEYBOARD_ROWS
@@ -219,6 +209,14 @@ export class KeyboardMapper {
     this.keyboardSimCallback = callback
   }
 
+  /**
+   * @description: 设置键盘模拟时序
+   * @param {KeyboardTimingProfile} profile 播放前锁定的按键时序
+   */
+  setTimingProfile(profile: KeyboardTimingProfile): void {
+    this.timingProfile = profile
+  }
+
   private getKeySimulationState(key: string): KeySimulationState {
     let state = this.keySimulationState.get(key)
     if (!state) {
@@ -236,8 +234,8 @@ export class KeyboardMapper {
     const state = this.getKeySimulationState(key)
     const now = performance.now()
     const pressAt = Math.max(now, state.nextAvailableAt)
-    const releaseAt = pressAt + KEY_TIMING_PROFILE.holdMs
-    state.nextAvailableAt = releaseAt + KEY_TIMING_PROFILE.releaseMs
+    const releaseAt = pressAt + this.timingProfile.holdMs
+    state.nextAvailableAt = releaseAt + this.timingProfile.releaseMs
 
     const pressTimer = window.setTimeout(() => {
       if (state.isDown) {

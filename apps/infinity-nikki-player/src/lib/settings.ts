@@ -16,6 +16,12 @@ export interface AppSettings {
   play_mode: 'auto' | 'piano'
   /** 是否启用键盘模拟 */
   enable_keyboard_sim: boolean
+  /** 是否启用自动 FPS 获取 */
+  auto_fps_enabled: boolean
+  /** 手动 FPS，自动获取不可用时作为兜底 */
+  manual_fps: number
+  /** 最近一次自动检测 FPS，仅用于展示回填 */
+  last_detected_fps?: number | null
 }
 
 /**
