@@ -6,7 +6,14 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { feedback as toast } from '@/lib/feedback'
-import { Player, type AudioPlayerPort, type MediaItem } from '@strawberrybear/player'
+import {
+  createPlayerState,
+  type MediaItem,
+  type Player,
+  type PlayerState,
+  type Unsubscribe,
+} from '@strawberrybear/player'
+import type { MidiPreviewPlaybackFeature } from '@/features/player/midiPreview'
 import type {
   KeyLogEntry,
   MidiInfo,
@@ -16,15 +23,7 @@ import type {
   NoteEvent,
 } from '@/types'
 import {
-  playMidi as playMidiAudio,
-  stopPreview as stopPreviewAudio,
-  pausePreview as pausePreviewAudio,
-  resumePreview as resumePreviewAudio,
-  getTotalDuration,
-  setVolume as setPreviewVolume,
-  seekTo,
   loadMidiForDuration,
-  setDisabledTracks,
   setNoteFilter,
   setPitchMapper,
   ensureInstrument,
@@ -144,39 +143,35 @@ export const usePlayerStore = defineStore('player', () => {
   /** 标记是否正在拖拽进度条（防止拖拽时定时器覆盖位置） */
   const isDragging = ref(false)
 
-  /** 预览定时器 ID */
-  let previewTimer: ReturnType<typeof setInterval> | null = null
+  /** 公共播放器状态快照；Pinia 只桥接快照，不直接维护队列状态机。 */
+  const previewState = ref<PlayerState>(
+    createPlayerState({
+      repeatMode: 'all',
+      endBehavior: 'stop',
+      volume: previewVolume.value,
+      muted: isPreviewMuted.value,
+    })
+  )
 
-  /** 开始播放时的时间戳（毫秒，用于计算已播放时间） */
-  let playbackStartTime = 0
+  /** bootstrap 注入的公共播放器实例。 */
+  let previewPlayer: Player | null = null
 
-  /** 暂停时的已播放时间（毫秒，用于恢复播放） */
-  let pausedAtTime = 0
+  /** bootstrap 注入的 MIDI 试听适配层。 */
+  let midiPreview: MidiPreviewPlaybackFeature | null = null
 
-  /** 当前已加载到音频端口的 MIDI 二进制数据 */
-  let loadedPreviewMidiData: ArrayBuffer | null = null
+  /** 公共播放器 statechange 订阅清理函数。 */
+  let unsubscribePreviewState: Unsubscribe | null = null
 
-  function midiToMediaItem(midi: MidiInfo): MediaItem {
-    return {
-      id: midi.filename,
-      title: midi.filename,
-      url: midi.file_path,
-      durationSeconds: (midi.duration_ms || previewDuration.value || 0) / 1000,
-      metadata: { midi },
-    }
-  }
+  /** 公共播放器 error 订阅清理函数。 */
+  let unsubscribePreviewError: Unsubscribe | null = null
 
-  function syncPreviewPlayerQueue() {
-    const items = midiLibrary.value.map(midiToMediaItem)
-    const currentIndex = Math.max(
-      0,
-      items.findIndex((item) => item.id === currentMidi.value?.filename)
-    )
-    previewPlayer.setQueue(items, currentIndex)
-  }
-
-  function syncPreviewStateFromPlayer() {
-    const state = previewPlayer.getState()
+  /**
+   * @description: 将公共播放器状态同步到旧 UI 字段
+   * @param {PlayerState} state - 公共播放器状态快照
+   * @return {void} 无返回值
+   */
+  function syncPreviewStateFromPlayerState(state: PlayerState) {
+    previewState.value = state
     isPreviewPlaying.value = state.status === 'playing'
     isPreviewPaused.value = state.status === 'paused'
     previewCurrentTime.value = state.positionSeconds * 1000
@@ -185,6 +180,11 @@ export const usePlayerStore = defineStore('player', () => {
     isPreviewMuted.value = state.muted
   }
 
+  /**
+   * @description: 根据播放器媒体同步当前 MIDI 选择
+   * @param {MediaItem | null} media - 公共播放器当前媒体
+   * @return {void} 无返回值
+   */
   function setCurrentMidiFromMedia(media: MediaItem | null) {
     const midi = media?.metadata?.midi as MidiInfo | undefined
     if (midi) {
@@ -192,83 +192,33 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  const previewAudioPort: AudioPlayerPort = {
-    async load(media) {
-      setCurrentMidiFromMedia(media)
-      configurePreviewFilter()
-      setDisabledTracks(disabledTracks.value)
+  /**
+   * @description: 绑定 bootstrap 创建的试听播放器运行时
+   * @param {Player} player - 公共播放器实例
+   * @param {MidiPreviewPlaybackFeature} feature - MIDI 试听适配层
+   * @return {void} 无返回值
+   */
+  function bindPreviewRuntime(player: Player, feature: MidiPreviewPlaybackFeature): void {
+    unsubscribePreviewState?.()
+    unsubscribePreviewError?.()
 
-      loadedPreviewMidiData = await readPreviewMidiData(media.url)
+    previewPlayer = player
+    midiPreview = feature
+    midiPreview.configure({
+      getDisabledTracks: () => disabledTracks.value,
+      getPlaybackSpeed: () => speed.value,
+      configurePlaybackFilter: configurePreviewFilter,
+      onMediaSelected: setCurrentMidiFromMedia,
+    })
 
-      const { duration } = await loadMidiForDuration(loadedPreviewMidiData)
-      previewPlayer.updateProgress(0, duration / 1000)
-    },
-    async play() {
-      if (!loadedPreviewMidiData) return
-      await playMidiAudio(loadedPreviewMidiData, speed.value)
-      const duration = getTotalDuration()
-      previewPlayer.updateProgress(previewCurrentTime.value / 1000, duration / 1000)
-      pausedAtTime = previewCurrentTime.value
-      startPreviewTimer()
-    },
-    async pause() {
-      pausedAtTime = previewCurrentTime.value
-      pausePreviewAudio()
-      stopPreviewTimer()
-    },
-    async resume() {
-      resumePreviewAudio()
-      startPreviewTimer()
-    },
-    async stop() {
-      stopPreviewAudio()
-      stopPreviewTimer()
-      loadedPreviewMidiData = null
-      pausedAtTime = 0
-    },
-    async seek(positionSeconds) {
-      if (!loadedPreviewMidiData && currentMidi.value) {
-        configurePreviewFilter()
-        setDisabledTracks(disabledTracks.value)
-        loadedPreviewMidiData = await readPreviewMidiData(currentMidi.value.file_path)
-      }
-      if (!loadedPreviewMidiData) return
-      const timeMs = positionSeconds * 1000
-      await playMidiAudio(loadedPreviewMidiData, speed.value)
-      seekTo(timeMs)
-      previewCurrentTime.value = timeMs
-      pausedAtTime = timeMs
-      playbackStartTime = performance.now() - timeMs
-      startPreviewTimer()
-    },
-    async setVolume(volume) {
-      setPreviewVolume(volume)
-    },
-    async setMuted(muted) {
-      setPreviewVolume(muted ? 0 : previewVolume.value)
-    },
+    syncPreviewStateFromPlayerState(player.getState())
+    unsubscribePreviewState = player.on('statechange', syncPreviewStateFromPlayerState)
+    unsubscribePreviewError = player.on('error', (state) => {
+      const message = state.error?.message || '播放器错误'
+      toast.error('试听失败', { description: message, richColors: true })
+      console.error('试听失败:', state.error)
+    })
   }
-
-  async function readPreviewMidiData(filename: string): Promise<ArrayBuffer> {
-    const midiData = await invoke<number[]>('read_midi_data', { filename })
-    return new Uint8Array(midiData).buffer
-  }
-
-  const previewPlayer = new Player({
-    audio: previewAudioPort,
-    endBehavior: 'stop',
-    initialState: {
-      volume: previewVolume.value,
-      muted: isPreviewMuted.value,
-    },
-  })
-
-  previewPlayer.on('statechange', syncPreviewStateFromPlayer)
-  previewPlayer.on('error', (state) => {
-    const message = state.error?.message || '播放器错误'
-    toast.error('试听失败', { description: message, richColors: true })
-    console.error('试听失败:', state.error)
-  })
 
   // ============================================
   // 辅助功能
@@ -616,10 +566,15 @@ export const usePlayerStore = defineStore('player', () => {
     if (index !== -1) {
       midiLibrary.value.splice(index, 1)
     }
+    const removedCurrent = currentMidi.value?.filename === filename
     // 如果删除的是当前选中的，关闭详情
-    if (currentMidi.value?.filename === filename) {
+    if (removedCurrent) {
       closeDetail()
+      previewPlayer?.clearQueue()
+      return
     }
+    // 删除非当前项时同步公共队列，避免后续上一曲/下一曲命中已不存在的文件。
+    previewPlayer?.removeFromQueue(filename)
   }
 
   // ============================================
@@ -771,8 +726,16 @@ export const usePlayerStore = defineStore('player', () => {
    * @param {boolean} [options.openDetail=true] - 是否打开主界面详情抽屉；悬浮模式仅读取列表播放，应传 false 避免影响主界面状态
    * @return Promise
    */
-  async function selectMidi(midi: MidiInfo, options: { openDetail?: boolean } = {}) {
+  async function selectMidi(
+    midi: MidiInfo,
+    options: {
+      openDetail?: boolean
+      syncPreviewQueue?: boolean
+      resetPreviewProgress?: boolean
+    } = {}
+  ) {
     const { openDetail = true } = options
+    const { syncPreviewQueue = true, resetPreviewProgress = true } = options
     currentMidi.value = midi
     try {
       // 从缓存的 events 提取旋律（包含 pitch_name）
@@ -802,8 +765,15 @@ export const usePlayerStore = defineStore('player', () => {
       const uint8Array = new Uint8Array(midiData)
       const { duration } = await loadMidiForDuration(uint8Array.buffer)
       previewDuration.value = duration
-      syncPreviewPlayerQueue()
-      previewPlayer.updateProgress(0, duration / 1000)
+      if (syncPreviewQueue) {
+        // 选中 MIDI 时把库列表同步给公共 Player，后续上一曲/下一曲由公共状态机负责。
+        midiPreview?.syncLibraryQueue(midiLibrary.value, midi)
+      }
+      if (resetPreviewProgress) {
+        previewPlayer?.updateProgress(0, duration / 1000)
+      } else {
+        previewPlayer?.updateProgress(previewCurrentTime.value / 1000, duration / 1000)
+      }
     } catch (e) {
       toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
@@ -995,8 +965,7 @@ export const usePlayerStore = defineStore('player', () => {
   async function startPreview() {
     if (!currentMidi.value) return
 
-    syncPreviewPlayerQueue()
-    await previewPlayer.play(midiToMediaItem(currentMidi.value))
+    await midiPreview?.start(currentMidi.value, midiLibrary.value)
   }
 
   /**
@@ -1004,7 +973,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return 无
    */
   async function stopPreviewPlayback() {
-    await previewPlayer.stop()
+    await previewPlayer?.stop()
   }
 
   /**
@@ -1013,12 +982,7 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function restartPreview() {
     if (!currentMidi.value) return
-    const currentTime = previewCurrentTime.value
-    await previewPlayer.stop()
-    await startPreview()
-    if (currentTime > 0) {
-      await seekPreview(currentTime)
-    }
+    await midiPreview?.restart(currentMidi.value, midiLibrary.value)
   }
 
   /**
@@ -1047,7 +1011,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return 无
    */
   function applyPlayModeFilter() {
-    configurePreviewFilter()
+    midiPreview?.applyPlaybackFilter()
   }
 
   function configurePreviewFilter() {
@@ -1110,7 +1074,7 @@ export const usePlayerStore = defineStore('player', () => {
    */
   function pausePreviewPlayback() {
     if (!isPreviewPlaying.value) return
-    void previewPlayer.pause()
+    void previewPlayer?.pause()
   }
 
   /**
@@ -1119,7 +1083,7 @@ export const usePlayerStore = defineStore('player', () => {
    */
   function resumePreviewPlayback() {
     if (!isPreviewPaused.value) return
-    void previewPlayer.resume()
+    void previewPlayer?.resume()
   }
 
   /**
@@ -1128,7 +1092,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return 无
    */
   function setPreviewVolumeValue(value: number) {
-    void previewPlayer.setVolume(value)
+    void previewPlayer?.setVolume(value)
   }
 
   /**
@@ -1136,7 +1100,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return 无
    */
   function toggleMute() {
-    void previewPlayer.setMuted(!isPreviewMuted.value)
+    void previewPlayer?.setMuted(!isPreviewMuted.value)
   }
 
   /**
@@ -1144,11 +1108,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return 无
    */
   function applyDetailVolume() {
-    if (isPreviewMuted.value) {
-      setPreviewVolume(0)
-    } else {
-      setPreviewVolume(previewVolume.value)
-    }
+    midiPreview?.applyCurrentVolume()
   }
 
   /**
@@ -1158,9 +1118,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return Promise
    */
   async function restorePreviewVolumeState(volume: number, muted: boolean) {
-    await previewPlayer.setVolume(volume)
-    await previewPlayer.setMuted(muted)
-    setPreviewVolume(muted ? 0 : volume)
+    await midiPreview?.restoreVolumeState(volume, muted)
   }
 
   /**
@@ -1169,39 +1127,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return Promise
    */
   async function seekPreview(time: number) {
-    previewCurrentTime.value = time
-    pausedAtTime = time
-    if (!isDragging.value) {
-      await previewPlayer.seek(time / 1000)
-    }
-  }
-
-  // ============================================
-  // 定时器管理
-  // ============================================
-
-  /**
-   * @description: 开始预览定时器（60fps 平滑更新播放时间）
-   * @return 无
-   */
-  function startPreviewTimer() {
-    stopPreviewTimer()
-    playbackStartTime = performance.now() - pausedAtTime
-
-    previewTimer = setInterval(() => {
-      // 如果不在拖拽中，用 performance.now() 计算时间
-      if (!isDragging.value) {
-        pausedAtTime = performance.now() - playbackStartTime
-        // 播放结束，停止计时
-        if (pausedAtTime >= previewDuration.value) {
-          stopPreviewTimer()
-          previewPlayer.updateProgress(previewDuration.value / 1000, previewDuration.value / 1000)
-          void previewPlayer.handleEnded()
-          return
-        }
-        previewPlayer.updateProgress(Math.max(0, pausedAtTime) / 1000, previewDuration.value / 1000)
-      }
-    }, 16) // 16ms ≈ 60fps
+    await midiPreview?.seekMs(time)
   }
 
   /**
@@ -1211,10 +1137,7 @@ export const usePlayerStore = defineStore('player', () => {
    */
   function setDragging(dragging: boolean) {
     isDragging.value = dragging
-    if (!dragging) {
-      // 拖拽结束，重置播放起始时间
-      playbackStartTime = performance.now() - previewCurrentTime.value
-    }
+    midiPreview?.setDragging(dragging)
   }
 
   /**
@@ -1223,19 +1146,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @return 无
    */
   function setPreviewTime(time: number) {
-    previewCurrentTime.value = time
-    previewPlayer.updateProgress(time / 1000, previewDuration.value / 1000)
-  }
-
-  /**
-   * @description: 停止预览定时器
-   * @return 无
-   */
-  function stopPreviewTimer() {
-    if (previewTimer) {
-      clearInterval(previewTimer)
-      previewTimer = null
-    }
+    midiPreview?.setPreviewTime(time)
   }
 
   // ============================================
@@ -1248,16 +1159,16 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function playPrev() {
     if (midiLibrary.value.length === 0) return
-    await stopPreviewPlayback()
-    const currentIndex = midiLibrary.value.findIndex(
-      (m) => m.filename === currentMidi.value?.filename
-    )
-    // 循环播放：到头则跳到最后一首
-    const prevIndex = currentIndex <= 0 ? midiLibrary.value.length - 1 : currentIndex - 1
-    const prevMidi = midiLibrary.value[prevIndex]
     try {
-      await selectMidi(prevMidi)
-      await startPreview()
+      await midiPreview?.previous(midiLibrary.value, currentMidi.value)
+      const selected = currentMidi.value
+      if (selected) {
+        await selectMidi(selected, {
+          openDetail: showDetail.value,
+          syncPreviewQueue: false,
+          resetPreviewProgress: false,
+        })
+      }
     } catch (e) {
       toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
@@ -1270,16 +1181,16 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function playNext() {
     if (midiLibrary.value.length === 0) return
-    await stopPreviewPlayback()
-    const currentIndex = midiLibrary.value.findIndex(
-      (m) => m.filename === currentMidi.value?.filename
-    )
-    // 循环播放：到尾则跳到第一首
-    const nextIndex = currentIndex >= midiLibrary.value.length - 1 ? 0 : currentIndex + 1
-    const nextMidi = midiLibrary.value[nextIndex]
     try {
-      await selectMidi(nextMidi)
-      await startPreview()
+      await midiPreview?.next(midiLibrary.value, currentMidi.value)
+      const selected = currentMidi.value
+      if (selected) {
+        await selectMidi(selected, {
+          openDetail: showDetail.value,
+          syncPreviewQueue: false,
+          resetPreviewProgress: false,
+        })
+      }
     } catch (e) {
       toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
@@ -1425,7 +1336,9 @@ export const usePlayerStore = defineStore('player', () => {
     previewDuration,
     previewVolume,
     isPreviewMuted,
+    previewState,
     // 方法
+    bindPreviewRuntime,
     loadMidiLibrary,
     importPaths,
     importMidi,
@@ -1452,7 +1365,6 @@ export const usePlayerStore = defineStore('player', () => {
     pausePreviewPlayback,
     resumePreviewPlayback,
     seekPreview,
-    seekTo,
     setPreviewVolumeValue,
     setDragging,
     setPreviewTime,
