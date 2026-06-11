@@ -210,7 +210,7 @@ function initKeyboardMapper() {
     keyboardMapper.value.setTemplate(template)
 
     // 直接同步键盘事件回调（绕过 Vue 响应式批处理，精确到每个 NoteOn/NoteOff）
-    setKeyboardEventCallback((type, pitch) => {
+    setKeyboardEventCallback((type, pitch, _velocity, noteInstanceId) => {
       if (!keyboardMapper.value) return
       if (
         !(settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) ||
@@ -218,9 +218,9 @@ function initKeyboardMapper() {
       )
         return
       if (type === 'on') {
-        keyboardMapper.value.noteOn(pitch, playerStore.previewCurrentTime)
+        keyboardMapper.value.noteOn(pitch, playerStore.previewCurrentTime, noteInstanceId)
       } else {
-        keyboardMapper.value.noteOff(pitch, playerStore.previewCurrentTime)
+        keyboardMapper.value.noteOff(pitch, playerStore.previewCurrentTime, noteInstanceId)
       }
     })
 

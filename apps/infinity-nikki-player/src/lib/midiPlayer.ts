@@ -65,8 +65,9 @@ let noteFilter: ((event: { noteName: string; pitch: number; velocity: number }) 
 let pitchMapper: ((pitch: number) => number | null) | null = null
 
 /** 键盘事件回调（MIDI 事件处理时同步调用，不经过 Vue 响应式，精确到每个 NoteOn/NoteOff） */
-let keyboardEventCallback: ((type: 'on' | 'off', pitch: number, velocity: number) => void) | null =
-  null
+let keyboardEventCallback:
+  | ((type: 'on' | 'off', pitch: number, velocity: number, noteInstanceId?: number) => void)
+  | null = null
 
 /** 播放停止回调（用于释放所有按键） */
 let onPlaybackStopCallback: (() => void) | null = null
@@ -76,6 +77,62 @@ const activeNoteNodes = new Map<string, { stop: () => void }>()
 
 /** 当前活跃的音符列表（用于同步键盘高亮），key 是 pitch */
 const activeNotes = new Map<number, { pitch: number; noteName: string }>()
+
+interface MidiPlaybackEvent {
+  name: string
+  noteName?: string
+  velocity: number
+  track?: number
+  pitch?: number
+  noteNumber?: number
+  channel?: number
+}
+
+interface KeyboardNoteInstance {
+  id: number
+  targetPitch: number
+}
+
+let nextKeyboardNoteInstanceId = 1
+const activeKeyboardNoteInstances = new Map<string, KeyboardNoteInstance[]>()
+
+function getKeyboardNoteInstanceKey(event: MidiPlaybackEvent, originalPitch: number): string {
+  return `${event.track ?? -1}:${event.channel ?? -1}:${originalPitch}`
+}
+
+function createKeyboardNoteInstance(
+  event: MidiPlaybackEvent,
+  originalPitch: number,
+  targetPitch: number
+): KeyboardNoteInstance {
+  const instance = {
+    id: nextKeyboardNoteInstanceId++,
+    targetPitch,
+  }
+  const key = getKeyboardNoteInstanceKey(event, originalPitch)
+  const instances = activeKeyboardNoteInstances.get(key) ?? []
+  instances.push(instance)
+  activeKeyboardNoteInstances.set(key, instances)
+  return instance
+}
+
+function shiftKeyboardNoteInstance(
+  event: MidiPlaybackEvent,
+  originalPitch: number
+): KeyboardNoteInstance | null {
+  const key = getKeyboardNoteInstanceKey(event, originalPitch)
+  const instances = activeKeyboardNoteInstances.get(key)
+  const instance = instances?.shift()
+  if (instances && instances.length === 0) {
+    activeKeyboardNoteInstances.delete(key)
+  }
+  return instance ?? null
+}
+
+function clearKeyboardNoteInstances(): void {
+  activeKeyboardNoteInstances.clear()
+  nextKeyboardNoteInstanceId = 1
+}
 
 /**
  * @description: 初始化音频上下文和合成器
@@ -141,23 +198,17 @@ function getNoteGain(velocity: number): number {
 /**
  * @description: 播放 MIDI 事件
  */
-function handleMidiEvent(
-  event: { name: string; noteName?: string; velocity: number; track?: number; pitch?: number },
-  disabledTracks: Set<number>
-) {
+function handleMidiEvent(event: MidiPlaybackEvent, disabledTracks: Set<number>) {
   // 确保音频上下文和乐器已初始化
   if (!audioContext || !instrument) {
     return
   }
 
-  // 如果音轨被禁用，跳过播放
-  if (event.track !== undefined && disabledTracks.has(event.track)) {
-    return
-  }
+  const isTrackDisabled = event.track !== undefined && disabledTracks.has(event.track)
 
-  if (event.name === 'Note on' && event.velocity > 0 && event.noteName) {
+  if (event.name === 'Note on' && event.velocity > 0 && event.noteName && !isTrackDisabled) {
     // 直接使用 noteNumber（MIDI 标准），如果不存在则从 noteName 解析
-    const noteNumber = (event as any).noteNumber
+    const noteNumber = event.noteNumber
     const originalPitch = noteNumber ?? noteNameToPitch(event.noteName)
 
     // 如果有音高映射器，先转换音高
@@ -184,8 +235,14 @@ function handleMidiEvent(
       }
     }
 
+    const keyboardNoteInstance = createKeyboardNoteInstance(
+      event,
+      originalPitch ?? targetPitch,
+      targetPitch
+    )
+
     // 同步通知键盘事件（精确到每个 NoteOn，不经过 Vue 批处理）
-    keyboardEventCallback?.('on', targetPitch, event.velocity)
+    keyboardEventCallback?.('on', targetPitch, event.velocity, keyboardNoteInstance.id)
 
     // 播放音符
     const node = instrument.play(targetNoteName, audioContext.currentTime, {
@@ -205,11 +262,13 @@ function handleMidiEvent(
     event.noteName
   ) {
     // 直接使用 noteNumber（MIDI 标准），如果不存在则从 noteName 解析
-    const noteNumber = (event as any).noteNumber
+    const noteNumber = event.noteNumber
     const originalPitch = noteNumber ?? noteNameToPitch(event.noteName)
-    let targetPitch = originalPitch ?? 0
+    const keyboardNoteInstance =
+      originalPitch !== null ? shiftKeyboardNoteInstance(event, originalPitch) : null
+    let targetPitch = keyboardNoteInstance?.targetPitch ?? originalPitch ?? 0
 
-    if (pitchMapper && originalPitch !== null) {
+    if (!keyboardNoteInstance && pitchMapper && originalPitch !== null) {
       const mappedPitch = pitchMapper(originalPitch)
       if (mappedPitch !== null) {
         targetPitch = mappedPitch
@@ -217,7 +276,7 @@ function handleMidiEvent(
     }
 
     // 同步通知键盘事件（精确到每个 NoteOff）
-    keyboardEventCallback?.('off', targetPitch, 0)
+    keyboardEventCallback?.('off', targetPitch, 0, keyboardNoteInstance?.id)
 
     activeNoteNodes.delete(pitchToNoteName(targetPitch))
     // 移除活跃音符
@@ -263,19 +322,11 @@ export async function playMidi(
 
   await initInstrument()
 
-  player = new Player(
-    (event: {
-      name: string
-      noteName?: string
-      velocity: number
-      track?: number
-      pitch?: number
-    }) => {
-      if (isPlaying && !isPaused) {
-        handleMidiEvent(event, disabledTracks)
-      }
+  player = new Player((event: MidiPlaybackEvent) => {
+    if (isPlaying && !isPaused) {
+      handleMidiEvent(event, disabledTracks)
     }
-  )
+  })
 
   player.on('playing', () => {
     if (!isPaused && player) {
@@ -289,6 +340,7 @@ export async function playMidi(
   player.on('endOfFile', () => {
     isPlaying = false
     isPaused = false
+    clearKeyboardNoteInstances()
     // 释放所有按键（与 stop() 保持一致）
     onPlaybackStopCallback?.()
     onEndCallback?.()
@@ -343,6 +395,7 @@ export function stop() {
   activeNoteNodes.clear()
   // 清空活跃音符列表
   activeNotes.clear()
+  clearKeyboardNoteInstances()
   notifyActiveNotesChange()
 }
 
@@ -616,7 +669,9 @@ export function setOnActiveNotesChange(
  * @param cb 回调函数，type='on' 表示按下，type='off' 表示释放，pitch 是映射后的音高
  */
 export function setKeyboardEventCallback(
-  cb: ((type: 'on' | 'off', pitch: number, velocity: number) => void) | null
+  cb:
+    | ((type: 'on' | 'off', pitch: number, velocity: number, noteInstanceId?: number) => void)
+    | null
 ): void {
   keyboardEventCallback = cb
 }

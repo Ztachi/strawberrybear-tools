@@ -37,9 +37,9 @@ const REQUIRED_POLLING_FRAMES = 2
 export interface KeyboardTimingProfile {
   /** 用于计算本 profile 的 FPS。 */
   fps: number
-  /** 模拟按键保持时间，单位毫秒。 */
+  /** 游戏识别一次按下所需的最短保持时间，单位毫秒。 */
   holdMs: number
-  /** 两次模拟按键之间的释放间隔，单位毫秒。 */
+  /** 同一个物理键两次独立按下之间的最短释放间隔，单位毫秒。 */
   releaseMs: number
 }
 
@@ -56,7 +56,7 @@ export function normalizePlaybackFps(fps: number | null | undefined): number {
 /**
  * @description: 根据 FPS 计算推荐按键持续/间隔
  * @param {number} fps - 游戏逻辑 FPS
- * @return {number} 推荐毫秒数
+ * @return {number} 覆盖游戏轮询和系统调度抖动的推荐毫秒数
  */
 export function getRecommendedKeyTimingMs(fps: number): number {
   const normalizedFps = ENABLE_ADAPTIVE_FPS_TIMING
@@ -70,7 +70,7 @@ export function getRecommendedKeyTimingMs(fps: number): number {
 /**
  * @description: 创建键盘模拟时序 profile
  * @param {number | null | undefined} fps - 游戏逻辑 FPS
- * @return {KeyboardTimingProfile} 键盘模拟时序
+ * @return {KeyboardTimingProfile} 键盘模拟最短保持和同键释放间隔
  */
 export function createKeyboardTimingProfile(fps?: number | null): KeyboardTimingProfile {
   const normalizedFps = ENABLE_ADAPTIVE_FPS_TIMING
