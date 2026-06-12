@@ -77,8 +77,10 @@ interface KeySimulationPress {
   id: number
   key: string
   pressAt: number | null
+  plannedReleaseDelayMs: number | null
   releaseRequestedAt: number | null
   startTimer: number | null
+  plannedReleaseTimer: number | null
   releaseTimer: number | null
   released: boolean
 }
@@ -270,7 +272,7 @@ export class KeyboardMapper {
     return typeof id === 'number' ? id : null
   }
 
-  private scheduleKeyboardPress(key: string, pressId: number): void {
+  private scheduleKeyboardPress(key: string, pressId: number, nextNoteDelayMs?: number): void {
     const state = this.getKeySimulationState(key)
     const existingPress = this.keyboardPressesById.get(pressId)
     if (existingPress && !existingPress.released) return
@@ -279,8 +281,13 @@ export class KeyboardMapper {
       id: pressId,
       key,
       pressAt: null,
+      plannedReleaseDelayMs:
+        typeof nextNoteDelayMs === 'number' && Number.isFinite(nextNoteDelayMs)
+          ? Math.max(0, nextNoteDelayMs - this.timingProfile.releaseMs)
+          : null,
       releaseRequestedAt: null,
       startTimer: null,
+      plannedReleaseTimer: null,
       releaseTimer: null,
       released: false,
     }
@@ -342,6 +349,15 @@ export class KeyboardMapper {
     press.pressAt = performance.now()
     this.keyboardSimCallback?.('press', press.key)
 
+    if (press.plannedReleaseDelayMs !== null) {
+      const plannedReleaseTimer = window.setTimeout(() => {
+        press.plannedReleaseTimer = null
+        this.requestKeyboardPressRelease(press, performance.now())
+      }, press.plannedReleaseDelayMs)
+      press.plannedReleaseTimer = plannedReleaseTimer
+      state.timers.push(plannedReleaseTimer)
+    }
+
     if (press.releaseRequestedAt !== null) {
       this.scheduleKeyboardPressRelease(press)
     }
@@ -374,6 +390,10 @@ export class KeyboardMapper {
     if (press.releaseTimer !== null) {
       clearTimeout(press.releaseTimer)
       press.releaseTimer = null
+    }
+    if (press.plannedReleaseTimer !== null) {
+      clearTimeout(press.plannedReleaseTimer)
+      press.plannedReleaseTimer = null
     }
 
     const now = performance.now()
@@ -442,7 +462,12 @@ export class KeyboardMapper {
    * @param {number} mappedPitch 映射后的模板音高
    * @param {number} currentTimeMs 当前播放时间
    */
-  noteOn(mappedPitch: number, currentTimeMs: number, noteInstanceId?: number): void {
+  noteOn(
+    mappedPitch: number,
+    currentTimeMs: number,
+    noteInstanceId?: number,
+    nextNoteDelayMs?: number
+  ): void {
     if (!this.template) return
     const mapping = this.template.mappings.find((m) => m.pitch === mappedPitch)
     if (!mapping) return
@@ -450,7 +475,11 @@ export class KeyboardMapper {
     const key = mapping.key
     const count = (this.keyRefCount.get(key) ?? 0) + 1
     this.keyRefCount.set(key, count)
-    this.scheduleKeyboardPress(key, this.resolveKeyboardPressId(mappedPitch, noteInstanceId))
+    this.scheduleKeyboardPress(
+      key,
+      this.resolveKeyboardPressId(mappedPitch, noteInstanceId),
+      nextNoteDelayMs
+    )
 
     if (count === 1) {
       // 首次按下该键 → 发送 press
