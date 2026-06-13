@@ -566,8 +566,11 @@ export function getTotalDuration(): number {
 
 /**
  * @description: 跳转到指定位置（毫秒）
+ * @param {number} timeMs - 目标播放位置
+ * @param {{ autoPlay?: boolean }} options - 跳转后是否自动恢复播放
+ * @return {void} 无返回值
  */
-export function seekTo(timeMs: number) {
+export function seekTo(timeMs: number, options: { autoPlay?: boolean } = {}) {
   if (!player) {
     console.warn('seekTo: player not initialized')
     return
@@ -575,9 +578,12 @@ export function seekTo(timeMs: number) {
   const seconds = timeMs / 1000
   try {
     player.skipToSeconds(seconds)
-    setTimeout(() => {
-      player?.play()
-    }, 100)
+    if (options.autoPlay !== false) {
+      // midi-player-js 的 skip 需要下一轮 play 才能继续推进，停止/归零场景会显式关闭 autoPlay。
+      setTimeout(() => {
+        player?.play()
+      }, 100)
+    }
   } catch (e) {
     console.error('seekTo failed:', e)
   }

@@ -89,12 +89,17 @@ describe('Player', () => {
     expect(audio.load).not.toHaveBeenCalled()
   })
 
-  it('replays the same item in repeat-one mode', async () => {
+  it('uses repeat-one only for natural endings and keeps manual next available', async () => {
     const player = new Player({ audio: createAudioMock(), initialState: { repeatMode: 'one' } })
     player.setQueue(tracks, 1)
 
     await player.next()
-    expect(player.getState().current?.id).toBe('b')
+    expect(player.getState().current?.id).toBe('c')
+
+    player.setPlaybackMode('repeat-one')
+    await player.handleEnded()
+    expect(player.getState().current?.id).toBe('c')
+    expect(player.getState().status).toBe('playing')
   })
 
   it('uses shuffle for next and real history for previous', async () => {
@@ -173,6 +178,52 @@ describe('Player', () => {
 
     expect(player.getState().current?.id).toBe('b')
     expect(player.getState().status).toBe('playing')
+  })
+
+  it('stops at the end of a sequential queue', async () => {
+    const player = new Player({ audio: createAudioMock() })
+    player.setQueue(tracks, 2)
+    await player.play()
+
+    await player.handleEnded()
+
+    expect(player.getState()).toMatchObject({
+      currentIndex: 2,
+      status: 'stopped',
+      positionSeconds: 0,
+    })
+  })
+
+  it('uses playback mode as the public mode contract', () => {
+    const player = new Player({ audio: createAudioMock() })
+
+    player.setPlaybackMode('shuffle')
+    expect(player.getState()).toMatchObject({
+      playbackMode: 'shuffle',
+      repeatMode: 'all',
+      shuffleMode: 'on',
+      endBehavior: 'advance',
+    })
+
+    player.setPlaybackMode('sequential')
+    expect(player.getState()).toMatchObject({
+      playbackMode: 'sequential',
+      repeatMode: 'none',
+      shuffleMode: 'off',
+    })
+  })
+
+  it('selects next without invoking the audio port', () => {
+    const audio = createAudioMock()
+    const player = new Player({ audio })
+    player.setQueue(tracks, 0)
+
+    const selected = player.selectNext()
+
+    expect(selected?.id).toBe('b')
+    expect(player.getState()).toMatchObject({ currentIndex: 1, status: 'stopped' })
+    expect(audio.load).not.toHaveBeenCalled()
+    expect(audio.play).not.toHaveBeenCalled()
   })
 
   it('stops on ended when configured', async () => {

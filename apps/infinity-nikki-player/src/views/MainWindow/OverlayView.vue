@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 悬浮模式视图组件 - 可悬浮于游戏界面上方的迷你播放器，支持展开/收起面板、播放控制、模板切换
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
@@ -18,9 +18,10 @@ import {
   setOnPlaybackStopCallback,
   setVolume as setMidiPreviewVolume,
 } from '@/lib/midiPlayer'
-import { ChevronDown, ChevronUp, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Crosshair, X } from 'lucide-vue-next'
 import { Tooltip } from 'antdv-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
+import PlaybackModeControl from '@/components/PlaybackModeControl.vue'
 import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
 import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
 import OverlayFpsControl from './components/OverlayFpsControl.vue'
@@ -301,7 +302,7 @@ async function startDrag(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (
     target.closest(
-      'button, select, input, textarea, [role="button"], .ant-select, .playlist-item, .overlay-progress, .playback-controls',
+      'button, select, input, textarea, [role="button"], .ant-select, .playlist-item, .overlay-progress, .overlay-fps-control, .playback-controls',
     )
   ) {
     return
@@ -313,10 +314,26 @@ async function startDrag(e: MouseEvent) {
 // 是否展开面板
 const isExpanded = ref(false)
 
+// 展开面板播放列表滚动容器，用于“定位当前歌曲”。
+const playlistRef = ref<HTMLElement | null>(null)
+
 // 切换展开/收起面板
 async function toggleExpand() {
   isExpanded.value = !isExpanded.value
   await resizeOverlayWindow()
+}
+
+/**
+ * @description: 平滑滚动到当前选中歌曲
+ * @return {Promise<void>} 无返回值
+ */
+async function locateCurrentMidi() {
+  await nextTick()
+  const activeItem = playlistRef.value?.querySelector<HTMLElement>('.playlist-item.active')
+  if (!activeItem) return
+
+  // 使用 scrollIntoView 让浏览器处理容器内偏移，避免手写高度测量。
+  activeItem.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 // 退出悬浮模式 - 恢复窗口状态、保存配置、重置模式
@@ -349,19 +366,16 @@ async function playMidi(midi: MidiInfo) {
 async function playRelativeMidi(direction: 'prev' | 'next') {
   if (playerStore.midiLibrary.length === 0) return
 
-  const currentIndex = playerStore.midiLibrary.findIndex(
-    (m) => m.filename === playerStore.currentMidi?.filename
-  )
-  const lastIndex = playerStore.midiLibrary.length - 1
-  let targetIndex = 0
+  cancelCountdown()
+  await playerStore.stopPreviewPlayback()
+  resetOverlayKeyboardState()
 
-  if (direction === 'prev') {
-    targetIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1
-  } else {
-    targetIndex = currentIndex >= lastIndex ? 0 : currentIndex + 1
-  }
+  // 相邻曲目由公共播放器按当前播放模式计算，悬浮窗只负责倒计时后的实际播放。
+  const selected = await playerStore.selectRelativePreview(direction, { openDetail: false })
+  if (!selected) return
 
-  await playFromStartWithCountdown(playerStore.midiLibrary[targetIndex])
+  resetOverlayKeyboardState()
+  startWithCountdown()
 }
 
 // 格式化时长
@@ -385,17 +399,21 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   <div class="overlay-view" :class="{ expanded: isExpanded }">
     <!-- 迷你悬浮条 - 整个区域可拖拽 -->
     <div class="mini-bar" @mousedown="startDrag">
-      <!-- 曲目名称（走马灯效果）- 悬停显示全名 -->
-      <Tooltip :title="currentMidiName">
-        <div class="track-info">
-          <div class="marquee-wrapper">
-            <div class="marquee-track">
-              <span class="marquee-text">{{ currentMidiName }}</span>
-              <span class="marquee-text" aria-hidden="true">{{ currentMidiName }}</span>
+      <div class="track-stack">
+        <OverlayFpsControl v-if="ENABLE_ADAPTIVE_FPS_TIMING" ref="fpsControl" />
+
+        <!-- 曲目名称（走马灯效果）- 悬停显示全名 -->
+        <Tooltip :title="currentMidiName">
+          <div class="track-info">
+            <div class="marquee-wrapper">
+              <div class="marquee-track">
+                <span class="marquee-text">{{ currentMidiName }}</span>
+                <span class="marquee-text" aria-hidden="true">{{ currentMidiName }}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </Tooltip>
+        </Tooltip>
+      </div>
 
       <!-- 操作按钮 -->
       <div class="action-buttons">
@@ -430,13 +448,12 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
       </div>
 
       <!-- 播放控制按钮 -->
-      <div
-        class="playback-controls"
-        :class="{ 'with-fps-control': ENABLE_ADAPTIVE_FPS_TIMING }"
-        @mousedown.stop
-        @pointerdown.stop
-      >
-        <OverlayFpsControl v-if="ENABLE_ADAPTIVE_FPS_TIMING" ref="fpsControl" />
+      <div class="playback-controls" @mousedown.stop @pointerdown.stop>
+        <PlaybackModeControl
+          :mode="playerStore.previewPlaybackMode"
+          variant="overlay"
+          @change="playerStore.setPlaylistPlaybackMode"
+        />
         <PreviewTransportControls
           variant="overlay"
           :is-playing="isPlaying"
@@ -469,7 +486,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
     <!-- 展开面板 - 显示播放列表 -->
     <div v-if="isExpanded" class="expand-panel">
-      <div class="playlist">
+      <div ref="playlistRef" class="playlist">
         <div
           v-for="midi in playerStore.midiLibrary"
           :key="midi.filename"
@@ -480,13 +497,19 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
           <Tooltip :title="midi.filename">
             <span class="playlist-name">{{ midi.filename }}</span>
           </Tooltip>
-          <span class="playlist-duration">{{ formatDuration(midi.duration_ms) }}</span>
+          <span class="playlist-duration">
+            {{ formatDuration(midi.duration_ms) }}
+          </span>
         </div>
         <!-- 空状态 -->
         <div v-if="playerStore.midiLibrary.length === 0" class="playlist-empty">
           {{ t('midi.libraryEmpty') }}
         </div>
       </div>
+
+      <Tooltip :title="t('overlay.locateCurrent')" placement="left">
+        <Crosshair class="locate-current-btn" @click.stop="locateCurrentMidi" />
+      </Tooltip>
     </div>
   </div>
 </template>
@@ -504,7 +527,6 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   grid-template-columns: repeat(2, 1fr);
   gap: 8px 10px;
   background: linear-gradient(135deg, rgba(247, 192, 193, 0.8) 0%, rgba(245, 184, 192, 0.8) 100%);
-  border-radius: 16px;
   cursor: move;
   user-select: none;
 }
@@ -522,6 +544,10 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   overflow: hidden;
   display: flex;
   align-items: center;
+}
+
+.track-stack {
+  @apply flex min-w-0 flex-col gap-1;
 }
 
 .marquee-wrapper {
@@ -549,6 +575,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   0% {
     transform: translateX(0);
   }
+
   100% {
     transform: translateX(-50%);
   }
@@ -556,13 +583,9 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
 .playback-controls {
   display: grid;
-  grid-template-columns: 1fr 32px;
+  grid-template-columns: 32px 1fr 32px;
   align-items: center;
   gap: 4px;
-}
-
-.playback-controls.with-fps-control {
-  grid-template-columns: 92px 1fr 32px;
 }
 
 .overlay-progress,
@@ -606,13 +629,13 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 }
 
 .expand-panel {
-  @apply absolute bottom-0 left-0 right-0 overflow-hidden rounded-sm;
+  @apply absolute bottom-0 left-0 right-0 overflow-hidden;
   top: 156px;
   background: rgba(255, 255, 255, 0.92);
 }
 
 .playlist {
-  @apply h-full overflow-y-auto p-2 rounded-sm;
+  @apply h-full overflow-y-auto rounded-sm p-2;
 }
 
 .playlist-item {
@@ -640,5 +663,15 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 .playlist-empty {
   @apply px-4 py-8 text-center text-sm;
   color: var(--color-muted-dark);
+}
+
+.locate-current-btn {
+  @apply absolute bottom-3 right-3 flex h-4 w-4 items-center justify-center transition-colors cursor-pointer;
+  color: var(--color-primary);
+  stroke-width: 2.25;
+}
+
+.locate-current-btn:hover {
+  color: var(--color-primary-hover);
 }
 </style>

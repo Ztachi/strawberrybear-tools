@@ -10,6 +10,7 @@ import {
   createPlayerState,
   type MediaItem,
   type Player,
+  type PlaybackMode,
   type PlayerState,
   type Unsubscribe,
 } from '@strawberrybear/player'
@@ -146,12 +147,14 @@ export const usePlayerStore = defineStore('player', () => {
   /** 公共播放器状态快照；Pinia 只桥接快照，不直接维护队列状态机。 */
   const previewState = ref<PlayerState>(
     createPlayerState({
-      repeatMode: 'all',
-      endBehavior: 'stop',
+      playbackMode: 'sequential',
       volume: previewVolume.value,
       muted: isPreviewMuted.value,
     })
   )
+
+  /** 当前播放列表调度模式，来自公共播放器快照。 */
+  const previewPlaybackMode = computed(() => previewState.value.playbackMode)
 
   /** bootstrap 注入的公共播放器实例。 */
   let previewPlayer: Player | null = null
@@ -211,6 +214,8 @@ export const usePlayerStore = defineStore('player', () => {
       onMediaSelected: setCurrentMidiFromMedia,
     })
 
+    // settings 可能已经先于运行时绑定完成，绑定时主动同步一次持久化播放模式。
+    player.setPlaybackMode(settingsStore.playlistPlaybackMode)
     syncPreviewStateFromPlayerState(player.getState())
     unsubscribePreviewState = player.on('statechange', syncPreviewStateFromPlayerState)
     unsubscribePreviewError = player.on('error', (state) => {
@@ -218,6 +223,25 @@ export const usePlayerStore = defineStore('player', () => {
       toast.error('试听失败', { description: message, richColors: true })
       console.error('试听失败:', state.error)
     })
+  }
+
+  /**
+   * @description: 应用持久化的播放列表模式到公共播放器
+   * @return {void} 无返回值
+   */
+  function applyPlaylistPlaybackMode() {
+    previewPlayer?.setPlaybackMode(settingsStore.playlistPlaybackMode)
+  }
+
+  /**
+   * @description: 设置播放列表调度模式
+   * @param {PlaybackMode} mode - 目标播放列表模式
+   * @return {Promise<void>} 无返回值
+   */
+  async function setPlaylistPlaybackMode(mode: PlaybackMode) {
+    // 先更新公共 Player，让 UI 快照立即反映新模式；随后再写入 settings 持久化。
+    previewPlayer?.setPlaybackMode(mode)
+    await settingsStore.setPlaylistPlaybackMode(mode)
   }
 
   // ============================================
@@ -1197,6 +1221,45 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  /**
+   * @description: 从播放器媒体中取回 MIDI 信息
+   * @param {MediaItem | null} media - 公共播放器媒体
+   * @return {MidiInfo | null} MIDI 信息或 null
+   */
+  function getMidiFromMedia(media: MediaItem | null): MidiInfo | null {
+    const midi = media?.metadata?.midi as MidiInfo | undefined
+    if (midi) return midi
+    return midiLibrary.value.find((item) => item.filename === media?.id) ?? null
+  }
+
+  /**
+   * @description: 只选择相邻曲目，不立即播放
+   * @description 悬浮窗需要切歌后倒计时播放，因此这里只更新当前 MIDI 和进度。
+   * @param {'prev' | 'next'} direction - 切歌方向
+   * @param {{ openDetail?: boolean }} options - 是否同步打开详情抽屉
+   * @return {Promise<boolean>} 是否成功切换到目标曲目
+   */
+  async function selectRelativePreview(
+    direction: 'prev' | 'next',
+    options: { openDetail?: boolean } = {}
+  ): Promise<boolean> {
+    if (midiLibrary.value.length === 0) return false
+
+    const selectedMedia =
+      direction === 'prev'
+        ? midiPreview?.selectPrevious(midiLibrary.value, currentMidi.value)
+        : midiPreview?.selectNext(midiLibrary.value, currentMidi.value)
+    const selectedMidi = getMidiFromMedia(selectedMedia ?? null)
+    if (!selectedMidi) return false
+
+    await selectMidi(selectedMidi, {
+      openDetail: options.openDetail ?? showDetail.value,
+      syncPreviewQueue: false,
+      resetPreviewProgress: true,
+    })
+    return true
+  }
+
   // ============================================
   // 状态同步
   // ============================================
@@ -1337,6 +1400,7 @@ export const usePlayerStore = defineStore('player', () => {
     previewVolume,
     isPreviewMuted,
     previewState,
+    previewPlaybackMode,
     // 方法
     bindPreviewRuntime,
     loadMidiLibrary,
@@ -1371,8 +1435,11 @@ export const usePlayerStore = defineStore('player', () => {
     toggleMute,
     applyDetailVolume,
     restorePreviewVolumeState,
+    applyPlaylistPlaybackMode,
+    setPlaylistPlaybackMode,
     playPrev,
     playNext,
+    selectRelativePreview,
     toggleTrack,
     initPianoEngine,
     applyPlayModeFilter,

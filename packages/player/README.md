@@ -22,7 +22,7 @@
 - 当前媒体、播放队列、播放列表元信息、最近播放和播放历史。
 - 播放命令：`play`、`pause`、`resume`、`stop`、`seek`、`previous`、`next`。
 - 队列编辑：`setQueue`、`setPlaylist`、`addToQueue`、`insertNext`、`removeFromQueue`、`clearQueue`。
-- 播放策略：列表循环、单曲循环、随机播放、自然结束策略。
+- 播放策略：顺序播放、随机播放、单曲循环、列表循环和自然结束策略。
 - 平台事件回灌：开始播放、暂停、等待缓冲、停止、进度、自然结束和错误。
 - 通过事件订阅向应用层输出不可变状态快照。
 
@@ -74,8 +74,7 @@ const audio: AudioPlayerPort = {
 const player = new Player({
   audio,
   initialState: {
-    repeatMode: 'all',
-    endBehavior: 'advance',
+    playbackMode: 'repeat-all',
   },
 })
 
@@ -119,12 +118,16 @@ unsubscribe()
 
 `queue` 是上一曲/下一曲实际使用的有序队列。`playlist` 是可选的来源元信息，用于表示当前队列来自某个业务播放列表。手动编辑队列会清空 `playlist`，因为队列已经不再等同于原播放列表快照。
 
-### Repeat 与 Shuffle
+### Playback Mode
 
-- `repeatMode: 'none'`：上一曲/下一曲到队列边界后不再切换。
-- `repeatMode: 'all'`：上一曲/下一曲在队列首尾循环。
-- `repeatMode: 'one'`：上一曲/下一曲仍停留在当前媒体。
-- `shuffleMode: 'on'`：下一曲随机选择非当前媒体；上一曲优先按照真实播放历史回退。
+`playbackMode` 是推荐给 UI 和持久化使用的产品级播放模式：
+
+- `sequential`：顺序播放一轮，最后一首自然结束后停止并归零。
+- `shuffle`：持续随机播放；下一曲随机到非当前媒体，上一曲优先按照真实播放历史回退。
+- `repeat-one`：自然结束后重播当前媒体，手动上一曲/下一曲仍会切换曲目。
+- `repeat-all`：列表循环播放，上一曲/下一曲在队列首尾循环。
+
+`repeatMode`、`shuffleMode` 和 `endBehavior` 仍保留为兼容字段；新业务应优先调用 `setPlaybackMode()`。
 
 ### End Behavior
 
@@ -141,6 +144,7 @@ unsubscribe()
 - `RepeatMode`
 - `ShuffleMode`
 - `EndBehavior`
+- `PlaybackMode`
 - `PlayerEventType`
 - `Unsubscribe`
 - `PlayerError`
@@ -154,6 +158,7 @@ unsubscribe()
 ### 工具函数
 
 - `createPlayerState(initialState?)`
+- `isPlaybackMode(value)`
 
 ### Player 方法
 
@@ -169,6 +174,8 @@ unsubscribe()
 - `prepare(media)`
 - `play(media?)`
 - `playIndex(index)`
+- `selectPrevious()`
+- `selectNext()`
 - `pause()`
 - `resume()`
 - `stop()`
@@ -187,6 +194,7 @@ unsubscribe()
 - `setRepeatMode(mode)`
 - `setShuffleMode(mode)`
 - `setEndBehavior(behavior)`
+- `setPlaybackMode(mode)`
 - `setLiked(mediaId, liked)`
 - `clearError()`
 

@@ -225,41 +225,39 @@ defineExpose({
           @press-enter="commitManualFps"
         />
       </label>
-      <div class="auto-row">
-        <Switch size="small" :checked="settingsStore.autoFpsEnabled" @change="handleAutoChange" />
-        <span>{{ t('overlay.fpsAuto') }}</span>
-      </div>
+      <Switch
+        class="fps-auto-switch ml-2"
+        size="small"
+        :checked="settingsStore.autoFpsEnabled"
+        @change="handleAutoChange"
+      />
+      <span class="auto-label">{{ t('overlay.fpsAuto') }}</span>
     </div>
   </Tooltip>
 </template>
 
 <style scoped>
 .overlay-fps-control {
-  width: 92px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  color: rgba(255, 255, 255, 0.92);
+  @apply flex items-center gap-1 text-white/90;
   cursor: default;
 }
 
-.fps-row,
-.auto-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
+.fps-row {
+  @apply flex min-w-0 items-center gap-1;
 }
 
-.fps-label,
-.auto-row span {
+.fps-label {
   font-size: 10px;
   line-height: 1;
   white-space: nowrap;
 }
 
+.auto-label {
+  @apply whitespace-nowrap text-[10px] leading-none;
+}
+
 .fps-input {
-  width: 45px;
+  width: 38px;
 }
 
 .fps-input :deep(.ant-input-number-input) {
@@ -273,12 +271,12 @@ defineExpose({
   height: 20px;
 }
 
-.auto-row :deep(.ant-switch) {
+.fps-auto-switch {
   min-width: 24px;
   height: 14px;
 }
 
-.auto-row :deep(.ant-switch-handle) {
+.fps-auto-switch :deep(.ant-switch-handle) {
   width: 10px;
   height: 10px;
 }

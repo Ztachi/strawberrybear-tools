@@ -7,12 +7,6 @@
 import { Player } from '@strawberrybear/player'
 import { MidiPreviewPlaybackFeature } from '@/features/player/midiPreview'
 
-/** MIDI 试听默认启用首尾循环，匹配旧版上一曲/下一曲的循环体验。 */
-const MIDI_PREVIEW_REPEAT_MODE = 'all'
-
-/** MIDI 试听自然结束后停止并归零，保持当前详情页试听条的旧交互语义。 */
-const MIDI_PREVIEW_END_BEHAVIOR = 'stop'
-
 /**
  * @description: Infinity Nikki 应用运行时上下文
  */
@@ -35,8 +29,7 @@ export function createAppContext(): AppContext {
   const player = new Player({
     audio: midiPreview,
     initialState: {
-      repeatMode: MIDI_PREVIEW_REPEAT_MODE,
-      endBehavior: MIDI_PREVIEW_END_BEHAVIOR,
+      playbackMode: 'sequential',
     },
   })
   midiPreview.bindPlayer(player)

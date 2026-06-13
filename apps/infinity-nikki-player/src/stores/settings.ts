@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core'
 import type { KeyTemplate } from '@/types'
 import i18n, { DEFAULT_LOCALE, getPreferredLocale, isSupportedLocale } from '@/i18n'
 import type { LocaleType } from '@/i18n'
+import { isPlaybackMode, type PlaybackMode } from '@strawberrybear/player'
 
 /**
  * @description: 设置 Store - 管理所有应用设置
@@ -39,6 +40,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** 最近一次自动检测 FPS，仅用于 UI 展示回填 */
   const lastDetectedFps = ref<number | null>(null)
+
+  /** 播放列表调度模式，独立于自动演奏/模板发音模式。 */
+  const playlistPlaybackMode = ref<PlaybackMode>('sequential')
 
   /** 是否处于悬浮模式 */
   const isOverlayMode = ref(false)
@@ -101,6 +105,10 @@ export const useSettingsStore = defineStore('settings', () => {
         typeof settings.last_detected_fps === 'number'
           ? normalizeFps(settings.last_detected_fps)
           : null
+      // 旧配置没有播放列表模式时默认顺序播放，符合“只播放一轮列表”的默认体验。
+      playlistPlaybackMode.value = isPlaybackMode(settings.playlist_playback_mode)
+        ? settings.playlist_playback_mode
+        : 'sequential'
 
       // 从后端加载模板
       templates.value = await loadTemplatesFromBackend()
@@ -141,6 +149,7 @@ export const useSettingsStore = defineStore('settings', () => {
       auto_fps_enabled: autoFpsEnabled.value,
       manual_fps: manualFps.value,
       last_detected_fps: lastDetectedFps.value,
+      playlist_playback_mode: playlistPlaybackMode.value,
     })
   }
 
@@ -193,6 +202,16 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   async function setLastDetectedFps(fps: number | null) {
     lastDetectedFps.value = fps === null ? null : normalizeFps(fps)
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置播放列表调度模式
+   * @param {PlaybackMode} mode - 播放列表调度模式
+   * @return {Promise<void>} 无返回值
+   */
+  async function setPlaylistPlaybackMode(mode: PlaybackMode) {
+    playlistPlaybackMode.value = mode
     await persistSettings()
   }
 
@@ -339,6 +358,7 @@ export const useSettingsStore = defineStore('settings', () => {
     autoFpsEnabled,
     manualFps,
     lastDetectedFps,
+    playlistPlaybackMode,
     isOverlayMode,
     modeBeforeOverlay,
     templates,
@@ -359,5 +379,6 @@ export const useSettingsStore = defineStore('settings', () => {
     setAutoFpsEnabled,
     setManualFps,
     setLastDetectedFps,
+    setPlaylistPlaybackMode,
   }
 })

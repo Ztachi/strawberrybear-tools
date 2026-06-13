@@ -158,6 +158,32 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   }
 
   /**
+   * @description: 仅选择上一首 MIDI
+   * @description 悬浮窗切歌后需要先倒计时，因此这里只更新公共队列当前项，不立即发声。
+   * @param {MidiInfo[]} library - 当前 MIDI 库
+   * @param {MidiInfo | null} currentMidi - 当前 MIDI
+   * @return {MediaItem | null} 选中的播放器媒体
+   */
+  selectPrevious(library: MidiInfo[], currentMidi: MidiInfo | null): MediaItem | null {
+    if (!this.player) return null
+    this.syncLibraryQueue(library, currentMidi)
+    return this.player.selectPrevious()
+  }
+
+  /**
+   * @description: 仅选择下一首 MIDI
+   * @description 悬浮窗切歌后需要先倒计时，因此这里只更新公共队列当前项，不立即发声。
+   * @param {MidiInfo[]} library - 当前 MIDI 库
+   * @param {MidiInfo | null} currentMidi - 当前 MIDI
+   * @return {MediaItem | null} 选中的播放器媒体
+   */
+  selectNext(library: MidiInfo[], currentMidi: MidiInfo | null): MediaItem | null {
+    if (!this.player) return null
+    this.syncLibraryQueue(library, currentMidi)
+    return this.player.selectNext()
+  }
+
+  /**
    * @description: 标记进度条拖拽状态
    * @param {boolean} dragging - 是否正在拖拽
    * @return {void} 无返回值
@@ -334,6 +360,20 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @return {Promise<void>} 跳转完成后 resolve
    */
   async seek(positionSeconds: number): Promise<void> {
+    const stateBeforeSeek = this.player?.getState()
+    const shouldContinuePlaying =
+      stateBeforeSeek?.status === 'playing' || stateBeforeSeek?.status === 'loading'
+
+    if (!shouldContinuePlaying && positionSeconds <= 0) {
+      // 公共 Player 在停止或播完时会 seek(0) 归位；此时只需要释放平台游标，不能重新发声。
+      stopPreviewAudio()
+      this.stopPreviewTimer()
+      this.loadedMidiData = null
+      this.pausedAtTime = 0
+      this.resumePending = false
+      return
+    }
+
     if (!this.loadedMidiData) {
       const current = this.player?.getState().current
       if (current) {
@@ -347,12 +387,17 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     const timeMs = positionSeconds * 1000
     this.resumePending = false
     await playMidiAudio(this.loadedMidiData, this.getPlaybackSpeed())
-    seekTo(timeMs)
+    seekTo(timeMs, { autoPlay: shouldContinuePlaying })
     this.pausedAtTime = timeMs
     this.playbackStartTime = performance.now() - timeMs
-    this.startPreviewTimer()
-    // midi-player-js 的 seek 会重新进入播放态，主动回灌给公共状态机，避免 UI 仍显示 paused。
-    this.player?.handlePlaying()
+    if (shouldContinuePlaying) {
+      this.startPreviewTimer()
+      // midi-player-js 的 seek 会重新进入播放态，主动回灌给公共状态机，避免 UI 仍显示 paused。
+      this.player?.handlePlaying()
+    } else {
+      pausePreviewAudio()
+      this.stopPreviewTimer()
+    }
   }
 
   /**

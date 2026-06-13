@@ -20,6 +20,7 @@ use tauri::Manager;
 /// * `auto_fps_enabled` - 是否启用自动 FPS 获取
 /// * `manual_fps` - 手动 FPS，自动获取不可用时作为兜底
 /// * `last_detected_fps` - 最近一次自动检测 FPS，仅用于展示回填
+/// * `playlist_playback_mode` - 播放列表调度模式
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     /// 当前语言
@@ -41,6 +42,9 @@ pub struct AppSettings {
     /// 最近一次自动检测到的 FPS，仅用于 UI 展示，不作为强依赖
     #[serde(default)]
     pub last_detected_fps: Option<u32>,
+    /// 播放列表调度模式："sequential" | "shuffle" | "repeat-one" | "repeat-all"
+    #[serde(default = "default_playlist_playback_mode")]
+    pub playlist_playback_mode: String,
 }
 
 /// 默认演奏模式
@@ -58,6 +62,11 @@ fn default_manual_fps() -> u32 {
     60
 }
 
+/// 默认播放列表调度模式：顺序播放一轮。
+fn default_playlist_playback_mode() -> String {
+    "sequential".to_string()
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -68,6 +77,7 @@ impl Default for AppSettings {
             auto_fps_enabled: true,
             manual_fps: default_manual_fps(),
             last_detected_fps: None,
+            playlist_playback_mode: default_playlist_playback_mode(),
         }
     }
 }
@@ -91,6 +101,7 @@ mod tests {
         assert!(settings.auto_fps_enabled);
         assert_eq!(settings.manual_fps, 60);
         assert_eq!(settings.last_detected_fps, None);
+        assert_eq!(settings.playlist_playback_mode, "sequential");
     }
 }
 

@@ -439,6 +439,8 @@ onMounted(async () => {
   await playerStore.checkAccessibility()
   // 加载设置
   await settingsStore.loadSettings()
+  // settings 中的播放列表模式需要同步到公共播放器状态机，后续队列调度都以它为准。
+  playerStore.applyPlaylistPlaybackMode()
   // 如果用户在悬浮窗口中刷新页面，前端状态会重建；这里从 Rust 侧持久化快照恢复悬浮 UI。
   settingsStore.isOverlayMode = await invoke<boolean>('has_saved_overlay_window_state')
   // 加载 MIDI 库

@@ -21,6 +21,9 @@ export type ShuffleMode = 'off' | 'on'
 /** 当前媒体自然结束后的处理策略。 */
 export type EndBehavior = 'advance' | 'pause' | 'stop'
 
+/** 产品层播放模式，面向 UI 和持久化设置使用。 */
+export type PlaybackMode = 'sequential' | 'shuffle' | 'repeat-one' | 'repeat-all'
+
 /** 播放器对外派发的事件类型。 */
 export type PlayerEventType = 'statechange' | 'error' | 'ended'
 
@@ -151,6 +154,8 @@ export interface PlayerState {
   shuffleMode: ShuffleMode
   /** 自然结束后的处理策略。 */
   endBehavior: EndBehavior
+  /** 产品层播放模式。 */
+  playbackMode: PlaybackMode
   /** 最近播放列表，最新在前。 */
   recent: MediaItem[]
   /** 播放历史，最新在前；随机上一曲会优先使用它回退真实路径。 */
@@ -186,13 +191,21 @@ const DEFAULT_RECENT_LIMIT = 20
 /** 播放历史默认保留数量。 */
 const DEFAULT_HISTORY_LIMIT = 100
 
+/** 可持久化的产品播放模式列表。 */
+export const PLAYBACK_MODES: PlaybackMode[] = [
+  'sequential',
+  'shuffle',
+  'repeat-one',
+  'repeat-all',
+]
+
 /**
  * @description: 创建播放器默认状态
  * @param {Partial<PlayerState>} initialState - 可选初始状态覆盖项
  * @return {PlayerState} 完整播放器状态快照
  */
 export function createPlayerState(initialState: Partial<PlayerState> = {}): PlayerState {
-  return {
+  const state: PlayerState = {
     status: 'idle',
     current: null,
     queue: [],
@@ -205,12 +218,23 @@ export function createPlayerState(initialState: Partial<PlayerState> = {}): Play
     repeatMode: 'none',
     shuffleMode: 'off',
     endBehavior: 'advance',
+    playbackMode: 'sequential',
     recent: [],
     history: [],
     likedIds: [],
     error: null,
     ...initialState,
   }
+
+  if (initialState.playbackMode) {
+    // 播放模式是面向产品的高层设置；显式传入时用它覆盖底层兼容字段，保证状态一致。
+    applyPlaybackModeToState(state, initialState.playbackMode)
+  } else {
+    // 旧调用方可能只传 repeat/shuffle/endBehavior，状态快照仍给出最接近的产品模式。
+    state.playbackMode = derivePlaybackModeFromLegacyState(state)
+  }
+
+  return state
 }
 
 /**
@@ -552,7 +576,7 @@ export class Player {
    * @return {Promise<void>} 切换完成后 resolve
    */
   async previous(): Promise<void> {
-    const index = this.getPreviousIndex()
+    const index = this.getPreviousIndex('manual')
     if (index >= 0) await this.playIndex(index)
   }
 
@@ -561,8 +585,26 @@ export class Player {
    * @return {Promise<void>} 切换完成后 resolve
    */
   async next(): Promise<void> {
-    const index = this.getRelativeIndex(1)
+    const index = this.getNextIndex('manual')
     if (index >= 0) await this.playIndex(index)
+  }
+
+  /**
+   * @description: 仅选择上一首
+   * @description 用于需要先切歌再倒计时播放的场景；不会触发平台音频端口。
+   * @return {MediaItem | null} 选中的媒体，边界不可切换时返回 null
+   */
+  selectPrevious(): MediaItem | null {
+    return this.selectQueueIndex(this.getPreviousIndex('manual'))
+  }
+
+  /**
+   * @description: 仅选择下一首
+   * @description 用于需要先切歌再倒计时播放的场景；不会触发平台音频端口。
+   * @return {MediaItem | null} 选中的媒体，边界不可切换时返回 null
+   */
+  selectNext(): MediaItem | null {
+    return this.selectQueueIndex(this.getNextIndex('manual'))
   }
 
   /**
@@ -584,7 +626,7 @@ export class Player {
       return
     }
 
-    const index = this.getRelativeIndex(1)
+    const index = this.getNextIndex('ended')
     if (index >= 0) {
       await this.playIndex(index)
       return
@@ -706,6 +748,7 @@ export class Player {
    */
   setRepeatMode(mode: RepeatMode): void {
     this.state.repeatMode = mode
+    this.state.playbackMode = derivePlaybackModeFromLegacyState(this.state)
     this.emit('statechange')
   }
 
@@ -716,6 +759,7 @@ export class Player {
    */
   setShuffleMode(mode: ShuffleMode): void {
     this.state.shuffleMode = mode
+    this.state.playbackMode = derivePlaybackModeFromLegacyState(this.state)
     this.emit('statechange')
   }
 
@@ -726,6 +770,17 @@ export class Player {
    */
   setEndBehavior(behavior: EndBehavior): void {
     this.state.endBehavior = behavior
+    this.emit('statechange')
+  }
+
+  /**
+   * @description: 设置产品层播放模式
+   * @param {PlaybackMode} mode - 目标播放模式
+   * @return {void} 无返回值
+   */
+  setPlaybackMode(mode: PlaybackMode): void {
+    // 产品模式是 UI 和持久化的唯一入口，这里同步底层兼容字段，避免旧 API 读取到矛盾状态。
+    applyPlaybackModeToState(this.state, mode)
     this.emit('statechange')
   }
 
@@ -775,37 +830,58 @@ export class Player {
   }
 
   /**
-   * @description: 根据方向计算相邻媒体索引
-   * @param {1 | -1} direction - 1 表示下一首，-1 表示上一首
+   * @description: 只选择队列中的媒体
+   * @param {number} index - 目标队列索引
+   * @return {MediaItem | null} 选中的媒体，索引无效时返回 null
+   */
+  private selectQueueIndex(index: number): MediaItem | null {
+    const media = this.state.queue[index]
+    if (!media) return null
+
+    // 只切换选择也要让未完成的异步 play 失效，避免旧请求稍后覆盖当前曲目。
+    this.requestSeq += 1
+    this.selectMedia(media)
+    this.state.status = 'stopped'
+    this.state.error = null
+    this.emit('statechange')
+    return cloneMedia(media)
+  }
+
+  /**
+   * @description: 计算下一首索引
+   * @param {'manual' | 'ended'} reason - 调度来源，区分手动切歌和自然结束
    * @return {number} 目标索引，不存在时返回 -1
    */
-  private getRelativeIndex(direction: 1 | -1): number {
+  private getNextIndex(reason: 'manual' | 'ended'): number {
     if (this.state.queue.length === 0) return -1
-    if (this.state.repeatMode === 'one' && this.state.currentIndex >= 0) {
+    if (reason === 'ended' && this.state.playbackMode === 'repeat-one') {
       return this.state.currentIndex
     }
-    if (this.state.shuffleMode === 'on' && this.state.queue.length > 1) {
+
+    if (this.state.playbackMode === 'shuffle') {
+      // 随机模式是持续随机；单曲列表自然结束时只能回到当前曲。
+      if (this.state.queue.length === 1) return this.state.currentIndex
       const candidates = this.state.queue
         .map((_, index) => index)
         .filter((index) => index !== this.state.currentIndex)
       return candidates[Math.floor(this.random() * candidates.length)] ?? -1
     }
 
-    const nextIndex = this.state.currentIndex + direction
+    const nextIndex = this.state.currentIndex + 1
     if (nextIndex >= 0 && nextIndex < this.state.queue.length) return nextIndex
-    return this.state.repeatMode === 'all' ? (direction > 0 ? 0 : this.state.queue.length - 1) : -1
+    return this.state.playbackMode === 'repeat-all' ? 0 : -1
   }
 
   /**
    * @description: 计算上一首索引
+   * @param {'manual' | 'ended'} reason - 调度来源，当前仅用于保持接口与下一首计算对称
    * @return {number} 目标索引，不存在时返回 -1
    */
-  private getPreviousIndex(): number {
+  private getPreviousIndex(reason: 'manual' | 'ended'): number {
     if (this.state.queue.length === 0) return -1
-    if (this.state.repeatMode === 'one' && this.state.currentIndex >= 0) {
-      return this.state.currentIndex
-    }
-    if (this.state.shuffleMode === 'on') {
+    if (reason === 'ended' && this.state.playbackMode === 'repeat-one') return this.state.currentIndex
+
+    if (this.state.playbackMode === 'shuffle') {
       // 随机模式下“上一首”应回到真实听过的上一项，而不是再次随机。
       const previous = this.state.history.find((item) => item.id !== this.state.current?.id)
       const historyIndex = previous
@@ -816,7 +892,7 @@ export class Player {
 
     const previousIndex = this.state.currentIndex - 1
     if (previousIndex >= 0) return previousIndex
-    return this.state.repeatMode === 'all' ? this.state.queue.length - 1 : -1
+    return this.state.playbackMode === 'repeat-all' ? this.state.queue.length - 1 : -1
   }
 
   /**
@@ -882,6 +958,57 @@ export class Player {
     this.state.positionSeconds = 0
     this.emit('statechange')
   }
+}
+
+/**
+ * @description: 判断未知值是否为合法播放模式
+ * @param {unknown} value - 待判断值
+ * @return {value is PlaybackMode} 是否为合法播放模式
+ */
+export function isPlaybackMode(value: unknown): value is PlaybackMode {
+  return typeof value === 'string' && PLAYBACK_MODES.includes(value as PlaybackMode)
+}
+
+/**
+ * @description: 将产品播放模式写入底层兼容字段
+ * @param {PlayerState} state - 需要更新的播放器状态
+ * @param {PlaybackMode} mode - 产品播放模式
+ * @return {void} 无返回值
+ */
+function applyPlaybackModeToState(state: PlayerState, mode: PlaybackMode): void {
+  state.playbackMode = mode
+  state.endBehavior = 'advance'
+
+  switch (mode) {
+    case 'shuffle':
+      state.repeatMode = 'all'
+      state.shuffleMode = 'on'
+      break
+    case 'repeat-one':
+      state.repeatMode = 'one'
+      state.shuffleMode = 'off'
+      break
+    case 'repeat-all':
+      state.repeatMode = 'all'
+      state.shuffleMode = 'off'
+      break
+    default:
+      state.repeatMode = 'none'
+      state.shuffleMode = 'off'
+      break
+  }
+}
+
+/**
+ * @description: 从旧 repeat/shuffle 字段推导产品播放模式
+ * @param {PlayerState} state - 当前播放器状态
+ * @return {PlaybackMode} 最接近旧状态的产品播放模式
+ */
+function derivePlaybackModeFromLegacyState(state: PlayerState): PlaybackMode {
+  if (state.shuffleMode === 'on') return 'shuffle'
+  if (state.repeatMode === 'one') return 'repeat-one'
+  if (state.repeatMode === 'all') return 'repeat-all'
+  return 'sequential'
 }
 
 /**

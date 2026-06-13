@@ -3,6 +3,7 @@
  * @description 提供与 Rust 后端交互的应用设置加载和保存功能
  */
 import { invoke } from '@tauri-apps/api/core'
+import type { PlaybackMode } from '@strawberrybear/player'
 
 /**
  * @description: 应用设置数据结构
@@ -22,6 +23,8 @@ export interface AppSettings {
   manual_fps: number
   /** 最近一次自动检测 FPS，仅用于展示回填 */
   last_detected_fps?: number | null
+  /** 播放列表调度模式 */
+  playlist_playback_mode?: PlaybackMode
 }
 
 /**
