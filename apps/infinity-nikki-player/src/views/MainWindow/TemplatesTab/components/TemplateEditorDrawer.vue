@@ -3,7 +3,7 @@
  * @description: TemplateEditorDrawer - 模板编辑抽屉
  * @description 对齐 MIDI 详情抽屉交互，负责模板名称、Canvas 映射、草稿和未保存离开确认
  */
-import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
 import { Save, X } from 'lucide-vue-next'
@@ -97,6 +97,15 @@ const leaveConfirm = ref<LeaveConfirmState>({
   context: 'close',
   resolve: null,
 })
+/** 发现草稿确认框状态，使用组件内 Modal 保持主题一致。 */
+const draftConfirm = ref<{
+  open: boolean
+  resolve: CallableFunction | null
+}>({
+  open: false,
+  resolve: null,
+})
+let draftConfirmPromise: Promise<DraftDecision> | null = null
 
 /** 抽屉标题根据编辑模式展示。 */
 const drawerTitle = computed(() => {
@@ -339,64 +348,22 @@ async function createBlankTemplate(): Promise<void> {
 }
 
 function confirmLoadDraft(): Promise<DraftDecision> {
-  return new Promise((resolve) => {
-    const modal = Modal.confirm({
-      title: t('template.draftFound'),
-      content: t('template.loadDraftPrompt'),
-      okText: t('template.loadDraft'),
-      cancelText: t('actions.cancel'),
-      centered: true,
-      footer: () => [
-        h(
-          Button,
-          {
-            key: 'cancel',
-            size: 'small',
-            color: 'primary',
-            variant: 'outlined',
-            onClick: () => {
-              modal.destroy()
-              resolve('cancel')
-            },
-          },
-          () => t('actions.cancel')
-        ),
-        h(
-          Button,
-          {
-            key: 'discard',
-            size: 'small',
-            color: 'primary',
-            variant: 'outlined',
-            onClick: () => {
-              modal.destroy()
-              resolve('discard')
-            },
-          },
-          () => t('template.discardDraft')
-        ),
-        h(
-          Button,
-          {
-            key: 'load',
-            type: 'primary',
-            size: 'small',
-            onClick: () => {
-              modal.destroy()
-              resolve('load')
-            },
-          },
-          () => t('template.loadDraft')
-        ),
-      ],
-      onOk: () => {
-        resolve('load')
-      },
-      onCancel: () => {
-        resolve('cancel')
-      },
-    })
+  if (draftConfirmPromise) return draftConfirmPromise
+  draftConfirmPromise = new Promise((resolve) => {
+    draftConfirm.value = {
+      open: true,
+      resolve,
+    }
   })
+  return draftConfirmPromise
+}
+
+function resolveDraftConfirm(decision: DraftDecision): void {
+  const resolve = draftConfirm.value.resolve
+  draftConfirm.value.open = false
+  draftConfirm.value.resolve = null
+  draftConfirmPromise = null
+  if (resolve) resolve(decision)
 }
 
 /**
@@ -691,6 +658,7 @@ onBeforeUnmount(() => {
   stopDraftAutosave()
   // 如果确认框还在等待，按取消处理，避免父级 await 永久挂起。
   resolveLeaveDecision('cancel')
+  resolveDraftConfirm('cancel')
   window.removeEventListener('keydown', handleSaveShortcut)
 })
 
@@ -811,6 +779,40 @@ defineExpose({
       </Button>
       <Button type="primary" size="small" @click="resolveLeaveDecision('save')">
         {{ leaveConfirm.context === 'jump' ? t('template.saveAndJump') : t('template.saveAndExit') }}
+      </Button>
+    </div>
+  </Modal>
+
+  <Modal
+    :open="draftConfirm.open"
+    :title="t('template.draftFound')"
+    :footer="null"
+    width="420"
+    centered
+    @cancel="resolveDraftConfirm('cancel')"
+  >
+    <div class="text-sm leading-6 text-muted-foreground">
+      {{ t('template.loadDraftPrompt') }}
+    </div>
+    <div class="mt-4 flex flex-wrap justify-end gap-2">
+      <Button
+        size="small"
+        color="primary"
+        variant="outlined"
+        @click="resolveDraftConfirm('cancel')"
+      >
+        {{ t('actions.cancel') }}
+      </Button>
+      <Button
+        size="small"
+        color="primary"
+        variant="outlined"
+        @click="resolveDraftConfirm('discard')"
+      >
+        {{ t('template.discardDraft') }}
+      </Button>
+      <Button type="primary" size="small" @click="resolveDraftConfirm('load')">
+        {{ t('template.loadDraft') }}
       </Button>
     </div>
   </Modal>

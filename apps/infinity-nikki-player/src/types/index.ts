@@ -62,6 +62,27 @@ export interface MidiInfo {
 }
 
 /**
+ * @description: 自建歌单信息
+ * @description 歌单只保存 MIDI 文件名索引，不拥有本地 MIDI 文件本身。
+ */
+export interface SongList {
+  /** 歌单 ID */
+  id: string
+  /** 歌单名称 */
+  name: string
+  /** 歌单描述 */
+  description: string
+  /** 封面文件名，没有封面时为 null */
+  cover_filename: string | null
+  /** 歌单内 MIDI 文件名，顺序即添加顺序 */
+  song_filenames: string[]
+  /** 创建时间戳，毫秒 */
+  created_at: number
+  /** 更新时间戳，毫秒 */
+  updated_at: number
+}
+
+/**
  * @description: 提取后的旋律事件
  */
 export interface MelodyEvent {

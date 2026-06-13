@@ -4,7 +4,10 @@
  * @description 接管内部滚动，提供返回顶部和刷新页面功能
  */
 import { ref, onMounted, onUnmounted } from 'vue'
-import { RotateCw, ArrowUp } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+import FloatingActionGroup from './FloatingActionGroup.vue'
+
+const { t } = useI18n()
 
 /** 滚动容器 DOM 引用 */
 const containerRef = ref<HTMLElement | null>(null)
@@ -57,23 +60,14 @@ onUnmounted(() => {
       <slot />
     </div>
 
-    <!-- 右下角浮动按钮组 -->
-    <div class="fab-group">
-      <!-- 返回顶部按钮（滚动超过阈值时显示） -->
-      <button
-        v-show="showBackToTop"
-        class="fab-btn back-to-top"
-        title="返回顶部"
-        @click="scrollToTop"
-      >
-        <ArrowUp :size="18" />
-      </button>
-
-      <!-- 刷新页面按钮 -->
-      <button class="fab-btn refresh" title="刷新页面" @click="refreshPage">
-        <RotateCw :size="18" />
-      </button>
-    </div>
+    <FloatingActionGroup
+      position="fixed"
+      :show-back-to-top="showBackToTop"
+      :back-to-top-title="t('actions.backToTop')"
+      :refresh-title="t('actions.refresh')"
+      @back-to-top="scrollToTop"
+      @refresh="refreshPage"
+    />
   </div>
 </template>
 
@@ -86,63 +80,5 @@ onUnmounted(() => {
   @apply w-full h-full overflow-y-auto overflow-x-hidden;
   padding: 0 20px 0 20px;
   box-sizing: border-box;
-}
-
-/* 浮动按钮组 - 固定在右下角 */
-.fab-group {
-  @apply fixed flex flex-col gap-2 items-end;
-  bottom: .5rem;
-  right: .5rem;
-  z-index: 50;
-}
-
-.fab-btn {
-  @apply w-10 h-10 rounded-xl flex items-center justify-center;
-  background: var(--bg-white-80);
-  border: 1px solid var(--border-primary-20);
-  color: var(--color-primary);
-  transition: all 0.2s;
-}
-
-:deep(.fab-btn) {
-  @apply w-10 h-10 rounded-xl flex items-center justify-center;
-  background: var(--bg-white-80);
-  border: 1px solid var(--border-primary-20);
-  color: var(--color-primary);
-  transition: all 0.2s;
-}
-
-:deep(.fab-btn:hover) {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: white;
-  border-color: transparent;
-  box-shadow: var(--shadow-pink-sm);
-}
-
-.fab-btn:hover {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: white;
-  border-color: transparent;
-  box-shadow: var(--shadow-pink-sm);
-}
-
-.fab-btn.refresh:hover {
-  transform: rotate(180deg);
-}
-
-/* 返回顶部按钮动画 */
-.fab-btn.back-to-top {
-  animation: fadeInUp 0.2s ease-out;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 </style>

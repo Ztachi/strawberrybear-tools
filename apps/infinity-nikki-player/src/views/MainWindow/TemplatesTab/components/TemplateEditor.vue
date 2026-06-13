@@ -3,7 +3,7 @@
  * @description: TemplateEditor - 模板管理页主体
  * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容，并将重编辑区域委托给 TemplateEditorDrawer
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { open, save as saveDialog } from '@tauri-apps/plugin-dialog'
@@ -50,6 +50,19 @@ const editorDrawerRef = ref<InstanceType<typeof TemplateEditorDrawer> | null>(nu
 const totalHeaderHeight = ref(260)
 /** 当前打开的表格行操作菜单模板 ID；受控关闭可避免进入抽屉后浮层残留。 */
 const openActionMenuTemplateId = ref<string | null>(null)
+/** 模板删除确认框状态，使用页面内 Modal 保持主题一致。 */
+const actionConfirm = ref<{
+  open: boolean
+  title: string
+  content: string
+  resolve: CallableFunction | null
+}>({
+  open: false,
+  title: '',
+  content: '',
+  resolve: null,
+})
+let actionConfirmPromise: Promise<boolean> | null = null
 
 /**
  * @description: 从本地存储读取分页大小
@@ -420,18 +433,24 @@ function getTemplateRowClassName(template: KeyTemplate): string {
 }
 
 function confirmTemplateAction(title: string, content: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    Modal.confirm({
+  if (actionConfirmPromise) return actionConfirmPromise
+  actionConfirmPromise = new Promise((resolve) => {
+    actionConfirm.value = {
+      open: true,
       title,
       content,
-      okText: t('actions.delete'),
-      cancelText: t('actions.cancel'),
-      okButtonProps: { danger: true },
-      centered: true,
-      onOk: () => resolve(true),
-      onCancel: () => resolve(false),
-    })
+      resolve,
+    }
   })
+  return actionConfirmPromise
+}
+
+function resolveActionConfirm(value: boolean): void {
+  const resolve = actionConfirm.value.resolve
+  actionConfirm.value.open = false
+  actionConfirm.value.resolve = null
+  actionConfirmPromise = null
+  if (resolve) resolve(value)
 }
 
 watch(searchKeyword, () => {
@@ -451,6 +470,10 @@ watch(
     pruneSelection()
   }
 )
+
+onBeforeUnmount(() => {
+  resolveActionConfirm(false)
+})
 
 defineExpose({
   /**
@@ -665,6 +688,32 @@ defineExpose({
     </section>
 
     <TemplateEditorDrawer ref="editorDrawerRef" @saved="pruneSelection" />
+
+    <Modal
+      :open="actionConfirm.open"
+      :title="actionConfirm.title"
+      :footer="null"
+      width="420"
+      centered
+      @cancel="resolveActionConfirm(false)"
+    >
+      <div class="text-sm leading-6 text-muted-foreground">
+        {{ actionConfirm.content }}
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <Button
+          size="small"
+          color="primary"
+          variant="outlined"
+          @click="resolveActionConfirm(false)"
+        >
+          {{ t('actions.cancel') }}
+        </Button>
+        <Button type="primary" size="small" danger @click="resolveActionConfirm(true)">
+          {{ t('actions.delete') }}
+        </Button>
+      </div>
+    </Modal>
   </div>
 </template>
 

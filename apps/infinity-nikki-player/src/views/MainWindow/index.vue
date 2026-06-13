@@ -3,37 +3,44 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
-import { Button, RadioButton, RadioGroup } from 'antdv-next'
-import { Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
-import ScrollableContainer from '@/components/ScrollableContainer.vue'
+import { Upload } from 'lucide-vue-next'
+import type { RouteLocationRaw } from 'vue-router'
+import FloatingActionGroup from '@/components/FloatingActionGroup.vue'
 import FilesTab from './FilesTab/index.vue'
+import OnlineLibraryTab from './OnlineLibraryTab/index.vue'
 import TemplatesTab from './TemplatesTab/index.vue'
 import OverlayView from './OverlayView.vue'
 import AppHeader from './components/AppHeader/index.vue'
 import { isSupportedLocale } from '@/i18n'
+import { midiImportActionsKey } from './importActions'
+import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 
 /** 主窗口支持的页签路由值。 */
-type MainWindowTab = 'files' | 'templates'
+type MainWindowTab = 'files' | 'templates' | 'online'
 
 /** 当前激活的标签页由路由决定，避免刷新后回到默认文件页。 */
 const activeTab = computed<MainWindowTab>(() => {
   // 未知路径会被 router 重定向；重定向完成前按文件页渲染，保持首屏稳定。
-  return route.name === 'templates' ? 'templates' : 'files'
+  if (route.path.startsWith('/templates')) return 'templates'
+  if (route.path.startsWith('/online-library')) return 'online'
+  return 'files'
 })
 
 /** 模板 Tab 实例，用于在切页和导入前检查抽屉未保存编辑。 */
@@ -294,30 +301,46 @@ async function ensureFilesTabForImport(): Promise<boolean> {
   if (canLeave === false) return false
 
   // 守卫通过后先切到文件页路由，后续 import/selectMidi 打开的详情才能直接显示给用户。
-  await router.push({ name: 'files', query: route.query })
+  await router.push({ name: 'files-all', query: route.query })
   return true
 }
 
 /**
  * @description: 处理主标签页切换
  * @param {string | number} nextTab - 目标标签页值
- * @return {Promise<void>} 无返回值
+ * @param {RouteLocationRaw} [targetRoute] - 可选目标路由
+ * @return {Promise<boolean>} 是否完成导航
  */
-async function handleTabChange(nextTab: string | number): Promise<void> {
+async function handleMainNavigate(
+  nextTab: string | number,
+  targetRoute?: RouteLocationRaw
+): Promise<boolean> {
   const normalizedNextTab = String(nextTab) as MainWindowTab
-  // RadioGroup 只会发出当前两个页签值；这里防御无效值，避免错误 URL 污染应用状态。
-  if (normalizedNextTab !== 'files' && normalizedNextTab !== 'templates') return
-  // 点击当前 Tab 不需要走离开守卫。
-  if (normalizedNextTab === activeTab.value) return
+  // 左侧菜单只会发出已声明的页签值；这里防御无效值，避免错误 URL 污染应用状态。
+  if (!['files', 'templates', 'online'].includes(normalizedNextTab)) return false
+  const routeTarget =
+    targetRoute ??
+    ({
+      name:
+        normalizedNextTab === 'files'
+          ? 'files-all'
+          : normalizedNextTab === 'templates'
+            ? 'templates'
+            : 'online-library',
+      query: route.query,
+    } as RouteLocationRaw)
+
+  if (normalizedNextTab === activeTab.value && !targetRoute) return true
 
   if (activeTab.value === 'templates') {
-    // 从模板页离开时统一检查抽屉 dirty 状态，避免用户通过 Tab 切换绕过确认。
+    // 从模板页离开时统一检查抽屉 dirty 状态，避免用户通过左侧菜单绕过确认。
     const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('close')
-    if (canLeave === false) return
+    if (canLeave === false) return false
   }
 
   // 守卫通过后再更新路由，防止 UI 先切走再被迫切回造成闪烁。
-  await router.push({ name: normalizedNextTab, query: route.query })
+  await router.push(routeTarget)
+  return true
 }
 
 /**
@@ -342,8 +365,13 @@ function handleBeforeUnload(event: BeforeUnloadEvent): void {
 function bindDomDragEvents() {
   const dragOptions = { capture: true }
 
+  function shouldSkipMidiDrag(): boolean {
+    return document.querySelector('.cover-cropper-modal-root') !== null
+  }
+
   /** 处理 dragenter 事件 */
   const handleDragEnter = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     dragEnterDepth += 1
@@ -353,6 +381,7 @@ function bindDomDragEvents() {
 
   /** 处理 dragover 事件 */
   const handleDragOver = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     if (event.dataTransfer) {
@@ -364,6 +393,7 @@ function bindDomDragEvents() {
 
   /** 处理 dragleave 事件 */
   const handleDragLeave = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     dragEnterDepth = Math.max(0, dragEnterDepth - 1)
@@ -375,6 +405,7 @@ function bindDomDragEvents() {
 
   /** 处理 drop 事件 */
   const handleDrop = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     dragEnterDepth = 0
@@ -412,6 +443,10 @@ function switchLocale(targetLocale: string) {
   }
 
   settingsStore.setLocale(targetLocale)
+}
+
+function refreshWindow(): void {
+  window.location.reload()
 }
 
 /**
@@ -519,6 +554,15 @@ async function enterOverlayMode() {
     console.error('进入悬浮模式失败:', e)
   }
 }
+
+provide(midiImportActionsKey, {
+  selectFile,
+  selectFolder,
+})
+
+watch(activeTab, (tab) => {
+  if (tab !== 'files') mainWindowUiStore.clearBackToTop()
+})
 </script>
 
 <template>
@@ -564,54 +608,31 @@ async function enterOverlayMode() {
       <!-- 主内容区 -->
       <main id="main-window-body" class="content">
         <div id="main-window-portal-root" class="content-portal-root" />
-        <ScrollableContainer>
-          <div class="main-content-shell has-[.empty-state]:h-full">
-            <div class="section-toolbar">
-              <RadioGroup
-                :value="activeTab"
-                button-style="solid"
-                class="view-switch"
-                @update:value="handleTabChange"
-              >
-                <RadioButton value="files">
-                  <span class="view-switch-label">
-                    <Music class="view-switch-icon" />
-                    {{ t('tabs.files') }}
-                  </span>
-                </RadioButton>
-                <RadioButton value="templates">
-                  <span class="view-switch-label">
-                    <LayoutGrid class="view-switch-icon" />
-                    {{ t('tabs.templates') }}
-                  </span>
-                </RadioButton>
-              </RadioGroup>
+        <div class="main-content-shell">
+          <SongListSidebar :request-navigate="handleMainNavigate" />
 
-              <div class="file-actions">
-                <Button size="small" color="primary" variant="outlined" @click="selectFile">
-                  <template #icon>
-                    <Upload class="header-btn-icon" />
-                  </template>
-                  {{ t('actions.selectFile') }}
-                </Button>
-                <Button size="small" color="primary" variant="outlined" @click="selectFolder">
-                  <template #icon>
-                    <Folder class="header-btn-icon" />
-                  </template>
-                  {{ t('actions.selectFolder') }}
-                </Button>
-              </div>
-            </div>
-
-            <section v-show="activeTab === 'files'" class="tab-content flex-1">
+          <section class="route-content">
+            <section v-show="activeTab === 'files'" class="tab-content">
               <FilesTab />
             </section>
 
-            <section v-show="activeTab === 'templates'" class="tab-content flex-1">
+            <section v-show="activeTab === 'templates'" class="tab-content">
               <TemplatesTab ref="templatesTabRef" />
             </section>
-          </div>
-        </ScrollableContainer>
+
+            <section v-show="activeTab === 'online'" class="tab-content">
+              <OnlineLibraryTab />
+            </section>
+          </section>
+        </div>
+
+        <FloatingActionGroup
+          :show-back-to-top="mainWindowUiStore.canBackToTop"
+          :back-to-top-title="t('actions.backToTop')"
+          :refresh-title="t('actions.refresh')"
+          @back-to-top="mainWindowUiStore.triggerBackToTop"
+          @refresh="refreshWindow"
+        />
       </main>
     </div>
   </div>
@@ -706,61 +727,24 @@ async function enterOverlayMode() {
 .content-portal-root :global(.ant-drawer-root),
 .content-portal-root :global(.ant-drawer-mask),
 .content-portal-root :global(.ant-drawer-wrap),
-.content-portal-root :global(.ant-drawer-content-wrapper) {
+.content-portal-root :global(.ant-drawer-content-wrapper),
+.content-portal-root :global(.ant-dropdown),
+.content-portal-root :global(.ant-popover),
+.content-portal-root :global(.ant-tooltip),
+.content-portal-root :global(.ant-modal-root) {
   pointer-events: auto;
 }
 
 .main-content-shell {
-  @apply flex min-h-full flex-col;
+  @apply flex h-full min-h-0 gap-4 px-5 pb-5 pt-2;
 }
 
-.section-toolbar {
-  @apply sticky top-0 z-10 flex items-center justify-between gap-3 py-2;
-}
-
-.view-switch :deep(.ant-radio-button-wrapper) {
-  height: 32px;
-  border-color: var(--border-primary-20);
-  color: var(--color-primary-active);
-  background: var(--bg-white-80);
-}
-
-.view-switch :deep(.ant-radio-button-wrapper:first-child) {
-  border-start-start-radius: 10px;
-  border-end-start-radius: 10px;
-}
-
-.view-switch :deep(.ant-radio-button-wrapper:last-child) {
-  border-start-end-radius: 10px;
-  border-end-end-radius: 10px;
-}
-
-.view-switch :deep(.ant-radio-button-wrapper:hover) {
-  color: var(--color-secondary);
-}
-
-.view-switch :deep(.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)) {
-  border-color: transparent;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
-}
-
-.view-switch-label {
-  @apply inline-flex items-center gap-2 text-sm font-medium;
-}
-
-.view-switch-icon {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2.25;
-}
-
-.file-actions {
-  @apply flex items-center gap-2;
+.route-content {
+  @apply min-h-0 min-w-0 flex-1 overflow-hidden;
 }
 
 .tab-content {
-  @apply flex-1 h-full;
+  @apply h-full min-h-0;
   animation: fadeIn 0.2s ease-out;
 }
 

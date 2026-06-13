@@ -400,6 +400,8 @@ pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Resu
         fs::remove_file(&config_path).map_err(|e| format!("删除配置文件失败: {}", e))?;
     }
 
+    crate::commands::song_lists::remove_filename_from_all_song_lists(&app, &filename)?;
+
     Ok(())
 }
 

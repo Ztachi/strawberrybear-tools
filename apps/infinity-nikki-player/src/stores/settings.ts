@@ -2,7 +2,7 @@
  * @fileOverview 应用设置状态管理
  * @description 使用 Pinia 管理的设置状态，包含语言、当前模板 ID、演奏模式等功能
  */
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { saveSettings, loadSettings as loadSettingsApi } from '@/lib/settings'
 import { invoke } from '@tauri-apps/api/core'
@@ -43,6 +43,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** 播放列表调度模式，独立于自动演奏/模板发音模式。 */
   const playlistPlaybackMode = ref<PlaybackMode>('sequential')
+
+  /** 歌单侧栏是否收起 */
+  const songListSidebarCollapsed = ref(false)
 
   /** 是否处于悬浮模式 */
   const isOverlayMode = ref(false)
@@ -109,6 +112,7 @@ export const useSettingsStore = defineStore('settings', () => {
       playlistPlaybackMode.value = isPlaybackMode(settings.playlist_playback_mode)
         ? settings.playlist_playback_mode
         : 'sequential'
+      songListSidebarCollapsed.value = settings.song_list_sidebar_collapsed === true
 
       // 从后端加载模板
       templates.value = await loadTemplatesFromBackend()
@@ -150,6 +154,7 @@ export const useSettingsStore = defineStore('settings', () => {
       manual_fps: manualFps.value,
       last_detected_fps: lastDetectedFps.value,
       playlist_playback_mode: playlistPlaybackMode.value,
+      song_list_sidebar_collapsed: songListSidebarCollapsed.value,
     })
   }
 
@@ -212,6 +217,16 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   async function setPlaylistPlaybackMode(mode: PlaybackMode) {
     playlistPlaybackMode.value = mode
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置歌单侧栏收起状态
+   * @param {boolean} collapsed - 是否收起
+   * @return {Promise<void>} 无返回值
+   */
+  async function setSongListSidebarCollapsed(collapsed: boolean) {
+    songListSidebarCollapsed.value = collapsed
     await persistSettings()
   }
 
@@ -359,6 +374,7 @@ export const useSettingsStore = defineStore('settings', () => {
     manualFps,
     lastDetectedFps,
     playlistPlaybackMode,
+    songListSidebarCollapsed,
     isOverlayMode,
     modeBeforeOverlay,
     templates,
@@ -380,5 +396,10 @@ export const useSettingsStore = defineStore('settings', () => {
     setManualFps,
     setLastDetectedFps,
     setPlaylistPlaybackMode,
+    setSongListSidebarCollapsed,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useSettingsStore, import.meta.hot))
+}

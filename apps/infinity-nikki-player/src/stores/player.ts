@@ -15,6 +15,7 @@ import {
   type Unsubscribe,
 } from '@strawberrybear/player'
 import type { MidiPreviewPlaybackFeature } from '@/features/player/midiPreview'
+import type { MidiPreviewQueueContext } from '@/features/player/midiPreview'
 import type {
   KeyLogEntry,
   MidiInfo,
@@ -31,6 +32,7 @@ import {
   setOnActiveNotesChange,
 } from '@/lib/midiPlayer'
 import { useSettingsStore } from './settings'
+import { useSongListStore } from './songLists'
 
 /** 支持的 MIDI 文件扩展名集合 */
 const MIDI_EXTENSIONS = new Set(['mid', 'midi'])
@@ -55,6 +57,12 @@ export interface ImportPathsResult {
  */
 interface ImportMidiBufferOptions {
   autoSelect?: boolean
+}
+
+/** 选择 MIDI 时可指定的试听队列上下文。 */
+interface SelectMidiQueueOptions {
+  queueItems?: MidiInfo[]
+  queueContext?: MidiPreviewQueueContext | null
 }
 
 /**
@@ -167,6 +175,12 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 公共播放器 error 订阅清理函数。 */
   let unsubscribePreviewError: Unsubscribe | null = null
+
+  /** 当前试听队列来源列表，用于上一曲/下一曲保持在歌单或筛选结果内。 */
+  const previewQueueItems = ref<MidiInfo[]>([])
+
+  /** 当前试听队列来源信息；null 表示普通临时队列。 */
+  const previewQueueContext = ref<MidiPreviewQueueContext | null>(null)
 
   /**
    * @description: 将公共播放器状态同步到旧 UI 字段
@@ -366,7 +380,7 @@ export const usePlayerStore = defineStore('player', () => {
       const existingIndex = midiLibrary.value.findIndex((m) => m.filename === info.filename)
       if (existingIndex !== -1) {
         // 已存在，直接打开详情
-        await selectMidi(midiLibrary.value[existingIndex])
+        await selectMidi(midiLibrary.value[existingIndex], { openDetail: false })
         return true
       }
 
@@ -399,7 +413,7 @@ export const usePlayerStore = defineStore('player', () => {
       midiLibrary.value.push(info)
 
       // 选中并打开详情
-      await selectMidi(info)
+      await selectMidi(info, { openDetail: false })
       return true
     } catch (e) {
       toast.error('导入 MIDI 失败', { description: String(e), richColors: true })
@@ -437,7 +451,7 @@ export const usePlayerStore = defineStore('player', () => {
       const existingIndex = midiLibrary.value.findIndex((m) => m.filename === info.filename)
       if (existingIndex !== -1) {
         if (autoSelect) {
-          await selectMidi(midiLibrary.value[existingIndex])
+          await selectMidi(midiLibrary.value[existingIndex], { openDetail: false })
         }
         return true
       }
@@ -469,7 +483,7 @@ export const usePlayerStore = defineStore('player', () => {
 
       midiLibrary.value.push(info)
       if (autoSelect) {
-        await selectMidi(info)
+        await selectMidi(info, { openDetail: false })
       }
       return true
     } catch (e) {
@@ -562,6 +576,49 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   /**
+   * @description: 获取当前有效试听队列
+   * @return {MidiInfo[]} 当前队列为空时回退完整 MIDI 库
+   */
+  function getActivePreviewQueue(): MidiInfo[] {
+    return previewQueueItems.value.length > 0 ? previewQueueItems.value : midiLibrary.value
+  }
+
+  /**
+   * @description: 更新当前试听队列上下文
+   * @param {MidiInfo[]} items - 队列内 MIDI 列表
+   * @param {MidiPreviewQueueContext | null} context - 队列来源信息
+   * @return {void} 无返回值
+   */
+  function setPreviewQueueContext(
+    items: MidiInfo[],
+    context: MidiPreviewQueueContext | null = null
+  ): void {
+    previewQueueItems.value = items
+    previewQueueContext.value = context
+  }
+
+  /**
+   * @description: 选择并播放指定集合中的 MIDI
+   * @param {MidiInfo} midi - 要播放的 MIDI
+   * @param {MidiInfo[]} items - 当前播放集合
+   * @param {MidiPreviewQueueContext | null} context - 播放来源
+   * @return {Promise<void>} 无返回值
+   */
+  async function playMidiInQueue(
+    midi: MidiInfo,
+    items: MidiInfo[],
+    context: MidiPreviewQueueContext | null = null
+  ): Promise<void> {
+    setPreviewQueueContext(items, context)
+    await selectMidi(midi, {
+      openDetail: false,
+      queueItems: items,
+      queueContext: context,
+    })
+    await startPreview()
+  }
+
+  /**
    * @description: 从库中删除 MIDI 文件
    * @param {string} filename - 要删除的文件名
    * @return Promise 删除是否成功
@@ -572,6 +629,7 @@ export const usePlayerStore = defineStore('player', () => {
       await invoke('delete_midi_from_library', { filename })
       // 从本地库移除
       removeFromLibrary(filename)
+      useSongListStore().removeSongFromLocalLists(filename)
       return true
     } catch (e) {
       toast.error('删除 MIDI 失败', { description: String(e), richColors: true })
@@ -590,6 +648,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (index !== -1) {
       midiLibrary.value.splice(index, 1)
     }
+    previewQueueItems.value = previewQueueItems.value.filter((midi) => midi.filename !== filename)
     const removedCurrent = currentMidi.value?.filename === filename
     // 如果删除的是当前选中的，关闭详情
     if (removedCurrent) {
@@ -756,10 +815,13 @@ export const usePlayerStore = defineStore('player', () => {
       openDetail?: boolean
       syncPreviewQueue?: boolean
       resetPreviewProgress?: boolean
-    } = {}
+    } & SelectMidiQueueOptions = {}
   ) {
     const { openDetail = true } = options
     const { syncPreviewQueue = true, resetPreviewProgress = true } = options
+    if (options.queueItems) {
+      setPreviewQueueContext(options.queueItems, options.queueContext ?? null)
+    }
     currentMidi.value = midi
     try {
       // 从缓存的 events 提取旋律（包含 pitch_name）
@@ -790,8 +852,8 @@ export const usePlayerStore = defineStore('player', () => {
       const { duration } = await loadMidiForDuration(uint8Array.buffer)
       previewDuration.value = duration
       if (syncPreviewQueue) {
-        // 选中 MIDI 时把库列表同步给公共 Player，后续上一曲/下一曲由公共状态机负责。
-        midiPreview?.syncLibraryQueue(midiLibrary.value, midi)
+        // 选中 MIDI 时把当前上下文同步给公共 Player，避免歌单播放回退到完整库列表。
+        midiPreview?.syncMidiQueue(getActivePreviewQueue(), midi, previewQueueContext.value)
       }
       if (resetPreviewProgress) {
         previewPlayer?.updateProgress(0, duration / 1000)
@@ -989,7 +1051,7 @@ export const usePlayerStore = defineStore('player', () => {
   async function startPreview() {
     if (!currentMidi.value) return
 
-    await midiPreview?.start(currentMidi.value, midiLibrary.value)
+    await midiPreview?.start(currentMidi.value, getActivePreviewQueue(), previewQueueContext.value)
   }
 
   /**
@@ -1006,7 +1068,11 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function restartPreview() {
     if (!currentMidi.value) return
-    await midiPreview?.restart(currentMidi.value, midiLibrary.value)
+    await midiPreview?.restart(
+      currentMidi.value,
+      getActivePreviewQueue(),
+      previewQueueContext.value
+    )
   }
 
   /**
@@ -1182,9 +1248,13 @@ export const usePlayerStore = defineStore('player', () => {
    * @return Promise
    */
   async function playPrev() {
-    if (midiLibrary.value.length === 0) return
+    if (getActivePreviewQueue().length === 0) return
     try {
-      await midiPreview?.previous(midiLibrary.value, currentMidi.value)
+      await midiPreview?.previous(
+        getActivePreviewQueue(),
+        currentMidi.value,
+        previewQueueContext.value
+      )
       const selected = currentMidi.value
       if (selected) {
         await selectMidi(selected, {
@@ -1204,9 +1274,9 @@ export const usePlayerStore = defineStore('player', () => {
    * @return Promise
    */
   async function playNext() {
-    if (midiLibrary.value.length === 0) return
+    if (getActivePreviewQueue().length === 0) return
     try {
-      await midiPreview?.next(midiLibrary.value, currentMidi.value)
+      await midiPreview?.next(getActivePreviewQueue(), currentMidi.value, previewQueueContext.value)
       const selected = currentMidi.value
       if (selected) {
         await selectMidi(selected, {
@@ -1243,12 +1313,20 @@ export const usePlayerStore = defineStore('player', () => {
     direction: 'prev' | 'next',
     options: { openDetail?: boolean } = {}
   ): Promise<boolean> {
-    if (midiLibrary.value.length === 0) return false
+    if (getActivePreviewQueue().length === 0) return false
 
     const selectedMedia =
       direction === 'prev'
-        ? midiPreview?.selectPrevious(midiLibrary.value, currentMidi.value)
-        : midiPreview?.selectNext(midiLibrary.value, currentMidi.value)
+        ? midiPreview?.selectPrevious(
+            getActivePreviewQueue(),
+            currentMidi.value,
+            previewQueueContext.value
+          )
+        : midiPreview?.selectNext(
+            getActivePreviewQueue(),
+            currentMidi.value,
+            previewQueueContext.value
+          )
     const selectedMidi = getMidiFromMedia(selectedMedia ?? null)
     if (!selectedMidi) return false
 
@@ -1409,6 +1487,8 @@ export const usePlayerStore = defineStore('player', () => {
     importMidiBuffer,
     deleteMidi,
     removeFromLibrary,
+    setPreviewQueueContext,
+    playMidiInQueue,
     selectMidi,
     closeDetail,
     scanFolder,

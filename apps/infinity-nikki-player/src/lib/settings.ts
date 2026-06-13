@@ -25,6 +25,8 @@ export interface AppSettings {
   last_detected_fps?: number | null
   /** 播放列表调度模式 */
   playlist_playback_mode?: PlaybackMode
+  /** 歌单侧栏是否收起 */
+  song_list_sidebar_collapsed?: boolean
 }
 
 /**

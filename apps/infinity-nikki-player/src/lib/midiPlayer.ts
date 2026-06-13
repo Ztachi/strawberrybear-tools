@@ -208,7 +208,11 @@ function buildKeyboardNotePlans(playerInstance: InstanceType<typeof Player>): vo
     startMs: number
   }> = []
 
-  for (const trackEvents of playerInstance.events as MidiPlaybackEvent[][]) {
+  const playerEvents =
+    (playerInstance as InstanceType<typeof Player> & { events?: MidiPlaybackEvent[][] }).events ??
+    []
+
+  for (const trackEvents of playerEvents) {
     for (const event of trackEvents) {
       if (event.name !== 'Note on' || event.velocity <= 0 || !event.noteName) continue
       if (event.track !== undefined && disabledTracks.has(event.track)) continue

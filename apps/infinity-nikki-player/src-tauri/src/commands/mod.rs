@@ -7,6 +7,7 @@ pub mod keyboard;
 pub mod midi;
 pub mod player;
 pub mod settings;
+pub mod song_lists;
 pub mod templates;
 pub mod window;
 pub mod window_controls;

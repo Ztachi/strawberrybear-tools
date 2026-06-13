@@ -21,6 +21,7 @@ use tauri::Manager;
 /// * `manual_fps` - 手动 FPS，自动获取不可用时作为兜底
 /// * `last_detected_fps` - 最近一次自动检测 FPS，仅用于展示回填
 /// * `playlist_playback_mode` - 播放列表调度模式
+/// * `song_list_sidebar_collapsed` - 歌单侧栏是否收起
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     /// 当前语言
@@ -45,6 +46,9 @@ pub struct AppSettings {
     /// 播放列表调度模式："sequential" | "shuffle" | "repeat-one" | "repeat-all"
     #[serde(default = "default_playlist_playback_mode")]
     pub playlist_playback_mode: String,
+    /// 歌单侧栏是否收起
+    #[serde(default)]
+    pub song_list_sidebar_collapsed: bool,
 }
 
 /// 默认演奏模式
@@ -78,6 +82,7 @@ impl Default for AppSettings {
             manual_fps: default_manual_fps(),
             last_detected_fps: None,
             playlist_playback_mode: default_playlist_playback_mode(),
+            song_list_sidebar_collapsed: false,
         }
     }
 }
@@ -102,6 +107,7 @@ mod tests {
         assert_eq!(settings.manual_fps, 60);
         assert_eq!(settings.last_detected_fps, None);
         assert_eq!(settings.playlist_playback_mode, "sequential");
+        assert!(!settings.song_list_sidebar_collapsed);
     }
 }
 

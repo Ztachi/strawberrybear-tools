@@ -35,6 +35,14 @@ export interface MidiPreviewPlaybackBindings {
   onMediaSelected?: (media: MediaItem | null) => void
 }
 
+/** MIDI 试听队列来源，用于保留播放列表语义。 */
+export interface MidiPreviewQueueContext {
+  /** 队列来源 ID，例如 all 或 song-list-id。 */
+  id: string
+  /** 队列来源标题。 */
+  title: string
+}
+
 /**
  * @description: MIDI 试听播放器 feature
  * @description
@@ -100,6 +108,21 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @return {void} 无返回值
    */
   syncLibraryQueue(library: MidiInfo[], currentMidi: MidiInfo | null): void {
+    this.syncMidiQueue(library, currentMidi)
+  }
+
+  /**
+   * @description: 根据任意 MIDI 集合同步公共播放器队列
+   * @param {MidiInfo[]} library - 当前播放上下文内的 MIDI 列表
+   * @param {MidiInfo | null} currentMidi - 当前选中的 MIDI
+   * @param {MidiPreviewQueueContext} [context] - 播放列表来源信息
+   * @return {void} 无返回值
+   */
+  syncMidiQueue(
+    library: MidiInfo[],
+    currentMidi: MidiInfo | null,
+    context?: MidiPreviewQueueContext | null
+  ): void {
     if (!this.player) return
     if (!library.length) {
       this.player.clearQueue()
@@ -110,6 +133,17 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
       0,
       items.findIndex((item) => item.id === currentMidi?.filename)
     )
+    if (context) {
+      this.player.setPlaylist(
+        {
+          id: context.id,
+          title: context.title,
+          items,
+        },
+        currentIndex
+      )
+      return
+    }
     this.player.setQueue(items, currentIndex)
   }
 
@@ -119,9 +153,13 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @param {MidiInfo[]} library - 当前 MIDI 库，用于同步上一曲/下一曲队列
    * @return {Promise<void>} 播放命令完成后 resolve
    */
-  async start(midi: MidiInfo, library: MidiInfo[]): Promise<void> {
+  async start(
+    midi: MidiInfo,
+    library: MidiInfo[],
+    context?: MidiPreviewQueueContext | null
+  ): Promise<void> {
     if (!this.player) return
-    this.syncLibraryQueue(library, midi)
+    this.syncMidiQueue(library, midi, context)
     await this.player.play(this.midiToMediaItem(midi, this.getDurationMs()))
   }
 
@@ -139,9 +177,13 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @param {MidiInfo | null} currentMidi - 当前 MIDI
    * @return {Promise<void>} 切换完成后 resolve
    */
-  async previous(library: MidiInfo[], currentMidi: MidiInfo | null): Promise<void> {
+  async previous(
+    library: MidiInfo[],
+    currentMidi: MidiInfo | null,
+    context?: MidiPreviewQueueContext | null
+  ): Promise<void> {
     if (!this.player) return
-    this.syncLibraryQueue(library, currentMidi)
+    this.syncMidiQueue(library, currentMidi, context)
     await this.player.previous()
   }
 
@@ -151,9 +193,13 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @param {MidiInfo | null} currentMidi - 当前 MIDI
    * @return {Promise<void>} 切换完成后 resolve
    */
-  async next(library: MidiInfo[], currentMidi: MidiInfo | null): Promise<void> {
+  async next(
+    library: MidiInfo[],
+    currentMidi: MidiInfo | null,
+    context?: MidiPreviewQueueContext | null
+  ): Promise<void> {
     if (!this.player) return
-    this.syncLibraryQueue(library, currentMidi)
+    this.syncMidiQueue(library, currentMidi, context)
     await this.player.next()
   }
 
@@ -164,9 +210,13 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @param {MidiInfo | null} currentMidi - 当前 MIDI
    * @return {MediaItem | null} 选中的播放器媒体
    */
-  selectPrevious(library: MidiInfo[], currentMidi: MidiInfo | null): MediaItem | null {
+  selectPrevious(
+    library: MidiInfo[],
+    currentMidi: MidiInfo | null,
+    context?: MidiPreviewQueueContext | null
+  ): MediaItem | null {
     if (!this.player) return null
-    this.syncLibraryQueue(library, currentMidi)
+    this.syncMidiQueue(library, currentMidi, context)
     return this.player.selectPrevious()
   }
 
@@ -177,9 +227,13 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @param {MidiInfo | null} currentMidi - 当前 MIDI
    * @return {MediaItem | null} 选中的播放器媒体
    */
-  selectNext(library: MidiInfo[], currentMidi: MidiInfo | null): MediaItem | null {
+  selectNext(
+    library: MidiInfo[],
+    currentMidi: MidiInfo | null,
+    context?: MidiPreviewQueueContext | null
+  ): MediaItem | null {
     if (!this.player) return null
-    this.syncLibraryQueue(library, currentMidi)
+    this.syncMidiQueue(library, currentMidi, context)
     return this.player.selectNext()
   }
 
@@ -224,10 +278,14 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @param {MidiInfo[]} library - 当前 MIDI 库
    * @return {Promise<void>} 重启完成后 resolve
    */
-  async restart(midi: MidiInfo, library: MidiInfo[]): Promise<void> {
+  async restart(
+    midi: MidiInfo,
+    library: MidiInfo[],
+    context?: MidiPreviewQueueContext | null
+  ): Promise<void> {
     const currentTime = this.getPositionMs()
     await this.player?.stop()
-    await this.start(midi, library)
+    await this.start(midi, library, context)
     if (currentTime > 0) {
       await this.seekMs(currentTime)
     }
