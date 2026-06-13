@@ -5,8 +5,8 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, List, Repeat, Repeat1, Shuffle } from 'lucide-vue-next'
-import { Popover } from 'antdv-next'
+import { Check, RotateCwSquare, Repeat, Repeat1, Shuffle } from 'lucide-vue-next'
+import { Popover, Tooltip } from 'antdv-next'
 import type { Component } from 'vue'
 import type { PlaybackMode } from '@strawberrybear/player'
 
@@ -46,7 +46,7 @@ interface PlaybackModeOption {
 
 /** 播放模式选项顺序，和常见音乐播放器的模式菜单保持一致。 */
 const playbackModeOptions: PlaybackModeOption[] = [
-  { value: 'sequential', icon: List },
+  { value: 'sequential', icon: RotateCwSquare },
   { value: 'shuffle', icon: Shuffle },
   { value: 'repeat-one', icon: Repeat1 },
   { value: 'repeat-all', icon: Repeat },
@@ -62,6 +62,9 @@ const currentModeLabel = computed(() => t(`overlay.playbackModes.${props.mode}`)
 
 /** 悬浮窗靠左显示，避免 Popover 从按钮中心展开后被窗口 overflow 裁切。 */
 const popoverPlacement = computed(() => (props.variant === 'overlay' ? 'rightTop' : 'top'))
+
+/** Hover 提示只展示当前模式名称，悬浮窗从按钮右侧弹出。 */
+const tooltipPlacement = computed(() => (props.variant === 'overlay' ? 'right' : 'top'))
 
 /** Popover 全局 class；悬浮窗使用更紧凑的尺寸。 */
 const popoverClassName = computed(() =>
@@ -85,39 +88,41 @@ function selectPlaybackMode(mode: PlaybackMode) {
 </script>
 
 <template>
-  <Popover
-    v-model:open="popoverOpen"
-    trigger="click"
-    :placement="popoverPlacement"
-    :overlay-class-name="popoverClassName"
-  >
-    <template #content>
-      <div class="mode-menu" :class="{ compact: variant === 'overlay' }">
-        <button
-          v-for="option in playbackModeOptions"
-          :key="option.value"
-          class="mode-option"
-          :class="{ active: option.value === mode }"
-          type="button"
-          @click="selectPlaybackMode(option.value)"
-        >
-          <component :is="option.icon" class="mode-option-icon" />
-          <span class="mode-option-label">{{ t(`overlay.playbackModes.${option.value}`) }}</span>
-          <Check v-if="option.value === mode" class="mode-option-check" />
-        </button>
-      </div>
-    </template>
-
-    <button
-      class="mode-trigger"
-      :class="variant"
-      type="button"
-      :aria-label="currentModeLabel"
-      @click.stop
+  <Tooltip :title="popoverOpen ? '' : currentModeLabel" :placement="tooltipPlacement">
+    <Popover
+      v-model:open="popoverOpen"
+      trigger="click"
+      :placement="popoverPlacement"
+      :overlay-class-name="popoverClassName"
     >
-      <component :is="currentOption.icon" class="mode-trigger-icon" />
-    </button>
-  </Popover>
+      <template #content>
+        <div class="mode-menu" :class="{ compact: variant === 'overlay' }">
+          <button
+            v-for="option in playbackModeOptions"
+            :key="option.value"
+            class="mode-option"
+            :class="{ active: option.value === mode }"
+            type="button"
+            @click="selectPlaybackMode(option.value)"
+          >
+            <component :is="option.icon" class="mode-option-icon" />
+            <span class="mode-option-label">{{ t(`overlay.playbackModes.${option.value}`) }}</span>
+            <Check v-if="option.value === mode" class="mode-option-check" />
+          </button>
+        </div>
+      </template>
+
+      <button
+        class="mode-trigger"
+        :class="variant"
+        type="button"
+        :aria-label="currentModeLabel"
+        @click.stop
+      >
+        <component :is="currentOption.icon" class="mode-trigger-icon" />
+      </button>
+    </Popover>
+  </Tooltip>
 </template>
 
 <style scoped>
