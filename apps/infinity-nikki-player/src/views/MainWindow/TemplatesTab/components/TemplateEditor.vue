@@ -507,7 +507,7 @@ defineExpose({
       class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-primary/15 bg-white/75"
     >
       <div class="flex flex-wrap items-center gap-2 border-b border-primary/10 p-3">
-        <div class="w-[320px] max-w-full">
+        <div class="w-[220px] max-w-full">
           <Input
             v-model:value="searchKeyword"
             class="h-9 bg-white"

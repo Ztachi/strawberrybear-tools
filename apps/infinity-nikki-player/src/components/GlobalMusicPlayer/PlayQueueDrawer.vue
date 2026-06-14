@@ -2,12 +2,14 @@
 /**
  * @description: 当前播放队列抽屉
  */
-import { computed } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Drawer, Tooltip } from 'antdv-next'
 import { ListMusic, Music2, X } from 'lucide-vue-next'
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { getContentDrawerRootStyle, getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
+import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
 import { formatDuration } from '@/views/MainWindow/FilesTab/utils'
 
 const props = defineProps<{
@@ -19,18 +21,95 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 
+const queueListRef = ref<HTMLElement | null>(null)
 const queueItems = computed(() => playerStore.activePreviewQueueItems)
 const queueTitle = computed(
   () => playerStore.previewQueueContext?.title || t('player.currentQueue')
 )
+
+const SCROLL_THRESHOLD = 120
+let backToTopRegistration: FloatingActionRegistration | null = null
+let locateCurrentRegistration: FloatingActionRegistration | null = null
 
 async function playQueueItem(index: number): Promise<void> {
   const midi = queueItems.value[index]
   if (!midi) return
   await playerStore.playMidiInQueue(midi, queueItems.value, playerStore.previewQueueContext)
 }
+
+function handleQueueScroll(): void {
+  backToTopRegistration?.setVisible((queueListRef.value?.scrollTop ?? 0) > SCROLL_THRESHOLD)
+}
+
+function updateLocateCurrentVisible(): void {
+  const filename = playerStore.currentMidi?.filename
+  locateCurrentRegistration?.setVisible(
+    Boolean(filename && queueItems.value.some((midi) => midi.filename === filename))
+  )
+}
+
+function scrollQueueToTop(): void {
+  queueListRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function locateCurrentQueueItem(): Promise<void> {
+  const filename = playerStore.currentMidi?.filename
+  if (!filename) return
+
+  const targetIndex = queueItems.value.findIndex((midi) => midi.filename === filename)
+  if (targetIndex === -1) return
+
+  await nextTick()
+  queueListRef.value
+    ?.querySelector<HTMLElement>(`[data-queue-index="${targetIndex}"]`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+async function registerQueueFocus(): Promise<void> {
+  if (backToTopRegistration || locateCurrentRegistration) return
+
+  backToTopRegistration = mainWindowUiStore.registerBackToTop(scrollQueueToTop)
+  locateCurrentRegistration = mainWindowUiStore.registerLocateCurrent(() => {
+    void locateCurrentQueueItem()
+  })
+
+  await nextTick()
+  handleQueueScroll()
+  updateLocateCurrentVisible()
+}
+
+function unregisterQueueFocus(): void {
+  backToTopRegistration?.()
+  backToTopRegistration = null
+  locateCurrentRegistration?.()
+  locateCurrentRegistration = null
+}
+
+watch(
+  () => props.open,
+  (open) => {
+    if (open) {
+      void registerQueueFocus()
+      return
+    }
+    unregisterQueueFocus()
+  },
+  { immediate: true }
+)
+
+watch(
+  [() => playerStore.currentMidi?.filename, () => queueItems.value.map((midi) => midi.filename).join('\n')],
+  () => {
+    updateLocateCurrentVisible()
+  }
+)
+
+onUnmounted(() => {
+  unregisterQueueFocus()
+})
 </script>
 
 <template>
@@ -71,13 +150,14 @@ async function playQueueItem(index: number): Promise<void> {
       <span>{{ t('player.noQueue') }}</span>
     </div>
 
-    <div v-else class="queue-list">
+    <div v-else ref="queueListRef" class="queue-list" @scroll="handleQueueScroll">
       <button
         v-for="(midi, index) in queueItems"
         :key="`${midi.filename}-${index}`"
         type="button"
         class="queue-item"
         :class="{ active: playerStore.currentMidi?.filename === midi.filename }"
+        :data-queue-index="index"
         @click="playQueueItem(index)"
       >
         <div class="queue-cover">

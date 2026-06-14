@@ -13,6 +13,7 @@ import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSongListStore } from '@/stores/songLists'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
+import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
 import type { MidiInfo } from '@/types'
 import { buildCollectionContext, formatDuration } from '../utils'
 import SongActionMenu from './SongActionMenu.vue'
@@ -48,11 +49,12 @@ const confirmDialog = ref<{
   okText: '',
   resolve: null,
 })
-let unregisterBackToTop: (() => void) | null = null
-let unregisterLocateCurrent: (() => void) | null = null
+let backToTopRegistration: FloatingActionRegistration | null = null
+let locateCurrentRegistration: FloatingActionRegistration | null = null
 let confirmPromise: Promise<boolean> | null = null
 
 const SCROLL_THRESHOLD = 200
+const ROW_ESTIMATED_SIZE = 74
 
 const filteredSongs = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
@@ -71,7 +73,7 @@ const rowVirtualizer = useVirtualizer(
   computed(() => ({
     count: filteredSongs.value.length,
     getScrollElement: () => scrollElement.value,
-    estimateSize: () => 74,
+    estimateSize: () => ROW_ESTIMATED_SIZE,
     overscan: 8,
   }))
 )
@@ -82,8 +84,9 @@ const selectedCount = computed(() => selectedFilenames.value.size)
 const selectedSongs = computed(() =>
   filteredSongs.value.filter((song) => selectedFilenames.value.has(song.filename))
 )
+const currentFilename = computed(() => playerStore.currentMidi?.filename ?? '')
 const currentSongInCollection = computed(() => {
-  const filename = playerStore.currentMidi?.filename
+  const filename = currentFilename.value
   return Boolean(filename && props.songs.some((song) => song.filename === filename))
 })
 
@@ -192,11 +195,20 @@ async function addSelectedToSongList(info: { key: string | number }): Promise<vo
 }
 
 function handleScroll(): void {
-  mainWindowUiStore.setBackToTopVisible((scrollElement.value?.scrollTop ?? 0) > SCROLL_THRESHOLD)
+  backToTopRegistration?.setVisible((scrollElement.value?.scrollTop ?? 0) > SCROLL_THRESHOLD)
 }
 
 function scrollToTop(): void {
   scrollElement.value?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function getCenteredScrollTop(index: number): number {
+  const element = scrollElement.value
+  if (!element) return 0
+
+  const rawOffset = index * ROW_ESTIMATED_SIZE - (element.clientHeight - ROW_ESTIMATED_SIZE) / 2
+  const maxOffset = Math.max(0, totalSize.value - element.clientHeight)
+  return Math.min(Math.max(0, rawOffset), maxOffset)
 }
 
 async function locateCurrentSong(): Promise<void> {
@@ -211,7 +223,10 @@ async function locateCurrentSong(): Promise<void> {
   }
   if (targetIndex === -1) return
 
-  rowVirtualizer.value.scrollToIndex(targetIndex, { align: 'center' })
+  scrollElement.value?.scrollTo({
+    top: getCenteredScrollTop(targetIndex),
+    behavior: 'smooth',
+  })
   handleScroll()
 }
 
@@ -233,25 +248,25 @@ watch(
 watch(
   [() => playerStore.currentMidi?.filename, () => props.songs.map((song) => song.filename).join('\n')],
   () => {
-    mainWindowUiStore.setLocateCurrentVisible(currentSongInCollection.value)
+    locateCurrentRegistration?.setVisible(currentSongInCollection.value)
   },
   { immediate: true }
 )
 
 onMounted(() => {
-  unregisterBackToTop = mainWindowUiStore.registerBackToTop(scrollToTop)
-  unregisterLocateCurrent = mainWindowUiStore.registerLocateCurrent(() => {
+  backToTopRegistration = mainWindowUiStore.registerBackToTop(scrollToTop)
+  locateCurrentRegistration = mainWindowUiStore.registerLocateCurrent(() => {
     void locateCurrentSong()
   })
   handleScroll()
-  mainWindowUiStore.setLocateCurrentVisible(currentSongInCollection.value)
+  locateCurrentRegistration.setVisible(currentSongInCollection.value)
 })
 
 onUnmounted(() => {
-  unregisterBackToTop?.()
-  unregisterBackToTop = null
-  unregisterLocateCurrent?.()
-  unregisterLocateCurrent = null
+  backToTopRegistration?.()
+  backToTopRegistration = null
+  locateCurrentRegistration?.()
+  locateCurrentRegistration = null
   resolveConfirmDialog(false)
 })
 </script>
@@ -346,6 +361,7 @@ onUnmounted(() => {
               class="song-row group/song-row"
               :class="{
                 'song-row-selected': selectedFilenames.has(filteredSongs[virtualRow.index]!.filename),
+                'song-row-current': currentFilename === filteredSongs[virtualRow.index]!.filename,
               }"
               role="button"
               tabindex="0"
@@ -483,9 +499,14 @@ onUnmounted(() => {
 }
 
 .song-row:hover,
-.song-row-selected {
+.song-row-selected,
+.song-row-current {
   background: var(--bg-white-95);
-  border-color: var(--border-primary-30);
+  border-color: var(--color-primary);
+}
+
+.song-row:hover,
+.song-row-selected {
   transform: translateX(3px);
 }
 

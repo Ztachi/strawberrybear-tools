@@ -74,7 +74,7 @@ function openCurrentSongDetail(): void {
 <style scoped>
 .global-music-player {
   @apply  h-[68px] grid grid-cols-[repeat(3,1fr)] rounded-2xl px-3 py-1;
-  background: var(--bg-white-80);
+  background: var(--bg-white-50);
   border: 1px solid var(--border-primary-20);
   box-shadow: 0 16px 48px rgba(201, 67, 127, 0.12);
 }

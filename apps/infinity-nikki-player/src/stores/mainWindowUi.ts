@@ -8,76 +8,119 @@ import { defineStore } from 'pinia'
 type BackToTopHandler = () => void
 type LocateCurrentHandler = () => void
 
+interface FloatingActionEntry<THandler extends () => void> {
+  token: symbol
+  handler: THandler
+  visible: boolean
+}
+
+export type FloatingActionRegistration = (() => void) & {
+  setVisible: (visible: boolean) => void
+}
+
 export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
   const canBackToTop = ref(false)
   const canLocateCurrent = ref(false)
-  let activeBackToTopToken: symbol | null = null
-  let backToTopHandler: BackToTopHandler | null = null
-  let activeLocateCurrentToken: symbol | null = null
-  let locateCurrentHandler: LocateCurrentHandler | null = null
 
-  function registerBackToTop(handler: BackToTopHandler): () => void {
+  // 右下角悬浮按钮是全局入口，但实际目标会随界面焦点变化。
+  // 页面先注册，抽屉/浮层打开后再注册并位于栈顶；关闭时出栈，按钮自然回到下层页面。
+  let backToTopStack: FloatingActionEntry<BackToTopHandler>[] = []
+  let locateCurrentStack: FloatingActionEntry<LocateCurrentHandler>[] = []
+
+  function getTopEntry<THandler extends () => void>(
+    stack: FloatingActionEntry<THandler>[]
+  ): FloatingActionEntry<THandler> | null {
+    return stack[stack.length - 1] ?? null
+  }
+
+  function syncBackToTopVisible(): void {
+    canBackToTop.value = Boolean(getTopEntry(backToTopStack)?.visible)
+  }
+
+  function syncLocateCurrentVisible(): void {
+    canLocateCurrent.value = Boolean(getTopEntry(locateCurrentStack)?.visible)
+  }
+
+  function registerBackToTop(handler: BackToTopHandler): FloatingActionRegistration {
     const token = Symbol('back-to-top')
-    activeBackToTopToken = token
-    backToTopHandler = handler
-    canBackToTop.value = false
-
-    return () => {
-      if (activeBackToTopToken !== token) return
-      activeBackToTopToken = null
-      backToTopHandler = null
-      canBackToTop.value = false
+    const entry: FloatingActionEntry<BackToTopHandler> = {
+      token,
+      handler,
+      visible: false,
     }
+    backToTopStack = [...backToTopStack, entry]
+    syncBackToTopVisible()
+
+    const unregister = (() => {
+      backToTopStack = backToTopStack.filter((item) => item.token !== token)
+      syncBackToTopVisible()
+    }) as FloatingActionRegistration
+
+    unregister.setVisible = (visible: boolean) => {
+      const target = backToTopStack.find((item) => item.token === token)
+      if (!target) return
+      target.visible = visible
+      syncBackToTopVisible()
+    }
+
+    return unregister
   }
 
   function setBackToTopVisible(visible: boolean): void {
-    if (!backToTopHandler) {
-      canBackToTop.value = false
-      return
-    }
-    canBackToTop.value = visible
+    const target = getTopEntry(backToTopStack)
+    if (!target) return syncBackToTopVisible()
+    target.visible = visible
+    syncBackToTopVisible()
   }
 
-  function registerLocateCurrent(handler: LocateCurrentHandler): () => void {
+  function registerLocateCurrent(handler: LocateCurrentHandler): FloatingActionRegistration {
     const token = Symbol('locate-current')
-    activeLocateCurrentToken = token
-    locateCurrentHandler = handler
-    canLocateCurrent.value = false
-
-    return () => {
-      if (activeLocateCurrentToken !== token) return
-      activeLocateCurrentToken = null
-      locateCurrentHandler = null
-      canLocateCurrent.value = false
+    const entry: FloatingActionEntry<LocateCurrentHandler> = {
+      token,
+      handler,
+      visible: false,
     }
+    locateCurrentStack = [...locateCurrentStack, entry]
+    syncLocateCurrentVisible()
+
+    const unregister = (() => {
+      locateCurrentStack = locateCurrentStack.filter((item) => item.token !== token)
+      syncLocateCurrentVisible()
+    }) as FloatingActionRegistration
+
+    unregister.setVisible = (visible: boolean) => {
+      const target = locateCurrentStack.find((item) => item.token === token)
+      if (!target) return
+      target.visible = visible
+      syncLocateCurrentVisible()
+    }
+
+    return unregister
   }
 
   function setLocateCurrentVisible(visible: boolean): void {
-    if (!locateCurrentHandler) {
-      canLocateCurrent.value = false
-      return
-    }
-    canLocateCurrent.value = visible
+    const target = getTopEntry(locateCurrentStack)
+    if (!target) return syncLocateCurrentVisible()
+    target.visible = visible
+    syncLocateCurrentVisible()
   }
 
   function triggerBackToTop(): void {
-    backToTopHandler?.()
+    getTopEntry(backToTopStack)?.handler()
   }
 
   function triggerLocateCurrent(): void {
-    locateCurrentHandler?.()
+    getTopEntry(locateCurrentStack)?.handler()
   }
 
   function clearBackToTop(): void {
-    activeBackToTopToken = null
-    backToTopHandler = null
-    canBackToTop.value = false
+    backToTopStack = []
+    syncBackToTopVisible()
   }
 
   function clearLocateCurrent(): void {
-    activeLocateCurrentToken = null
-    locateCurrentHandler = null
-    canLocateCurrent.value = false
+    locateCurrentStack = []
+    syncLocateCurrentVisible()
   }
 
   return {

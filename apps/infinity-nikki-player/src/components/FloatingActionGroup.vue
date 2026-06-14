@@ -80,7 +80,7 @@ const emit = defineEmits<{
 
 <style scoped>
 .floating-action-group {
-  @apply pointer-events-none z-30 flex flex-col items-end;
+  @apply pointer-events-none z-[80] flex flex-col items-end;
   gap: 5px;
   right: 5px;
   bottom: 20px;

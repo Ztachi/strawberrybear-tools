@@ -3,7 +3,7 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, isNavigationFailure, useRoute, useRouter } from 'vue-router'
 import { useMainWindowUiStore } from '@/stores/mainWindowUi'
@@ -554,13 +554,6 @@ provide(midiImportActionsKey, {
   selectFile,
   selectFolder,
 })
-
-watch(activeTab, (tab) => {
-  if (tab !== 'files') {
-    mainWindowUiStore.clearBackToTop()
-    mainWindowUiStore.clearLocateCurrent()
-  }
-})
 </script>
 
 <template>
@@ -744,7 +737,7 @@ watch(activeTab, (tab) => {
 
 .route-page-host {
   @apply flex-1 overflow-hidden rounded-2xl p-4;
-  background: var(--bg-white-95);
+  background: var(--bg-white-50);
   border: 1px solid var(--border-primary-15);
 }
 
