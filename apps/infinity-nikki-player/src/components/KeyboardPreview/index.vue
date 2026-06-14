@@ -72,8 +72,14 @@ function pitchToNoteName(pitch: number): string {
 /**
  * @description: 处理按键点击事件
  * @param {string} code - 按键代码
+ * @param {MouseEvent} event - 鼠标点击事件
  */
-function handleKeyClick(code: string) {
+function handleKeyClick(code: string, event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.currentTarget instanceof HTMLElement) {
+    event.currentTarget.blur()
+  }
   if (!props.keyCodeToPitch?.has(code)) return
   emit('keyClick', code)
 }
@@ -227,6 +233,7 @@ watch(
           >
             <div
               class="key"
+              tabindex="-1"
               :class="{
                 active: activeKeySet.has(key.code), // 是否激活
                 function: key.type === 'function', // 是否为功能键
@@ -235,7 +242,8 @@ watch(
                 [`width-${key.width}`]: key.width,
                 [getKeyClass(key.key)]: getKeyClass(key.key),
               }"
-              @click="handleKeyClick(key.code)"
+              @mousedown.prevent.stop
+              @click="handleKeyClick(key.code, $event)"
             >
               <!-- 按键标签 -->
               <span class="key-label">{{ getKeyLabel(key.key) }}</span>

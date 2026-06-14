@@ -2,7 +2,7 @@
 /**
  * @description: MIDI 歌曲详情页
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, Popover, Switch, Tooltip } from 'antdv-next'
@@ -18,6 +18,7 @@ import { playNote } from '@/lib/midiPlayer'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import type { TrackInfo } from '@/types'
+import { getMidiDisplayArtist, getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
 import { formatDuration } from '../utils'
 
 type DetailTab = 'tracks' | 'keyboard'
@@ -45,6 +46,32 @@ const detailPlaybackState = computed(() =>
   detailMidi.value ? playerStore.getSongPlaybackState(detailMidi.value.filename) : 'idle'
 )
 const isDetailPlaying = computed(() => detailPlaybackState.value === 'playing')
+const detailDisplayTitle = computed(() =>
+  detailMidi.value ? getMidiDisplayTitle(detailMidi.value) : ''
+)
+const detailDisplayName = computed(() =>
+  detailMidi.value ? getMidiDisplayName(detailMidi.value) : ''
+)
+const detailAuthor = computed(() =>
+  detailMidi.value ? getMidiDisplayArtist(detailMidi.value) : ''
+)
+const detailDescription = computed(() => detailMidi.value?.description?.trim() ?? '')
+
+const descriptionRef = ref<HTMLElement | null>(null)
+const isDescriptionOverflowing = ref(false)
+const isDescriptionPopoverOpen = ref(false)
+let descriptionResizeObserver: ResizeObserver | null = null
+
+function updateDescriptionOverflow(): void {
+  const element = descriptionRef.value
+  if (!element) {
+    isDescriptionOverflowing.value = false
+    isDescriptionPopoverOpen.value = false
+    return
+  }
+  isDescriptionOverflowing.value = element.scrollHeight > element.clientHeight + 1
+  if (!isDescriptionOverflowing.value) isDescriptionPopoverOpen.value = false
+}
 
 const detailStats = computed(() => [
   {
@@ -210,6 +237,24 @@ watch(
     }
   }
 )
+
+watch(detailDescription, () => {
+  void nextTick(() => {
+    if (descriptionRef.value) descriptionResizeObserver?.observe(descriptionRef.value)
+    updateDescriptionOverflow()
+  })
+})
+
+onMounted(() => {
+  descriptionResizeObserver = new ResizeObserver(updateDescriptionOverflow)
+  if (descriptionRef.value) descriptionResizeObserver.observe(descriptionRef.value)
+  void nextTick(updateDescriptionOverflow)
+})
+
+onBeforeUnmount(() => {
+  descriptionResizeObserver?.disconnect()
+  descriptionResizeObserver = null
+})
 </script>
 
 <template>
@@ -232,11 +277,35 @@ watch(
         </button>
 
         <div class="detail-main">
-          <Popover :content="detailMidi.filename" placement="topLeft">
+          <Popover :content="detailDisplayName" placement="topLeft">
             <h1 class="detail-title">
-              {{ detailMidi.filename }}
+              {{ detailDisplayTitle }}
             </h1>
           </Popover>
+          <p v-if="detailAuthor" class="detail-author">
+            {{ detailAuthor }}
+          </p>
+          <div v-if="detailDescription" class="description-row">
+            <p ref="descriptionRef" class="detail-description">
+              {{ detailDescription }}
+            </p>
+            <Popover
+              v-if="isDescriptionOverflowing"
+              v-model:open="isDescriptionPopoverOpen"
+              trigger="click"
+              placement="bottom"
+              overlay-class-name="midi-description-popover"
+            >
+              <template #content>
+                <div class="description-popover-content">
+                  {{ detailDescription }}
+                </div>
+              </template>
+              <button type="button" class="description-detail-link">
+                {{ t('onlineLibrary.detail.actions.detail') }}
+              </button>
+            </Popover>
+          </div>
           <div class="detail-stats">
             <div v-for="stat in detailStats" :key="stat.key" class="detail-stat">
               <component :is="stat.icon" class="detail-stat-icon" />
@@ -379,6 +448,34 @@ watch(
   overflow: hidden;
 }
 
+.detail-author {
+  @apply mt-1 truncate text-sm;
+  color: var(--color-muted-dark);
+}
+
+.description-row {
+  @apply mt-2 flex min-w-0 items-start gap-1;
+}
+
+.detail-description {
+  @apply min-w-0 flex-1 text-sm leading-6;
+  color: var(--color-foreground);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.description-detail-link {
+  @apply inline-flex h-6 shrink-0 items-center rounded px-1 text-sm font-medium transition-colors;
+  color: var(--color-primary);
+}
+
+.description-detail-link:hover {
+  color: var(--color-primary-hover);
+  background: var(--bg-primary-10);
+}
+
 .detail-stats {
   @apply mt-3 flex flex-wrap items-center gap-3;
 }
@@ -471,5 +568,14 @@ watch(
   width: 42px;
   height: 42px;
   color: var(--color-primary-active);
+}
+
+:global(.midi-description-popover) {
+  max-width: 520px;
+}
+
+.description-popover-content {
+  @apply max-h-64 max-w-[520px] overflow-auto whitespace-pre-wrap text-sm leading-6;
+  color: var(--color-foreground);
 }
 </style>

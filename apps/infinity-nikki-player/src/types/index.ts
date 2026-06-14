@@ -47,6 +47,16 @@ export interface MidiInfo {
   filename: string
   /** 文件完整路径 */
   file_path: string
+  /** 展示标题（在线曲库导入时写入） */
+  title?: string | null
+  /** 作者名（在线曲库导入时写入） */
+  author_name?: string | null
+  /** 描述（在线曲库导入时写入） */
+  description?: string | null
+  /** 在线曲库歌曲 ID */
+  online_song_id?: string | null
+  /** 在线曲库文件 SHA-256 */
+  online_sha256?: string | null
   /** 时长（毫秒） */
   duration_ms: number
   /** 音轨数量 */

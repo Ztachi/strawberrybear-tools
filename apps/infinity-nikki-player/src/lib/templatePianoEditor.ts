@@ -430,6 +430,9 @@ export class TemplatePianoEditor {
     }
 
     if (normalized && pressedMappedPitch !== undefined) {
+      // 已映射演奏键由模板编辑器消费，避免 Tab/Space/方向键继续触发浏览器焦点或滚动。
+      event.preventDefault()
+      event.stopPropagation()
       if (event.repeat || this.pressedMappedKeys.has(normalized)) return
       // 使用新 Set 保存按下状态，驱动 Canvas 和虚拟键盘反向高亮。
       this.pressedMappedKeys = new Set(this.pressedMappedKeys).add(normalized)
@@ -452,6 +455,8 @@ export class TemplatePianoEditor {
       ? this.mappings.find((mapping) => mapping.key === normalized)
       : undefined
     if (releasedMapping) {
+      event.preventDefault()
+      event.stopPropagation()
       this.stopNote(releasedMapping.pitch)
     }
     // 替换 Set 实例，保持状态快照不可变。

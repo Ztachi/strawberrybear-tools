@@ -77,6 +77,10 @@ function stopPlayback(): void {
     emit('stop')
     return
   }
+  if (playerStore.currentTemporaryOnlineSongId) {
+    void playerStore.restoreTemporaryOnlinePreview()
+    return
+  }
   void playerStore.stopPreviewPlayback()
   playerStore.setPreviewTime(0)
 }

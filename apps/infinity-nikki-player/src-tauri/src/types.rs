@@ -27,6 +27,21 @@ pub struct MidiInfo {
     pub filename: String,
     /// 文件完整路径
     pub file_path: String,
+    /// 展示标题，在线曲库导入时写入
+    #[serde(default)]
+    pub title: Option<String>,
+    /// 作者名，在线曲库导入时写入
+    #[serde(default)]
+    pub author_name: Option<String>,
+    /// 描述，在线曲库导入时写入
+    #[serde(default)]
+    pub description: Option<String>,
+    /// 在线曲库歌曲 ID
+    #[serde(default)]
+    pub online_song_id: Option<String>,
+    /// 在线曲库文件 SHA-256
+    #[serde(default)]
+    pub online_sha256: Option<String>,
     /// 时长（毫秒）
     pub duration_ms: u64,
     /// 音轨数量

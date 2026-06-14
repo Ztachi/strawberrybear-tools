@@ -80,7 +80,9 @@ const activeSongListId = computed(() =>
 
 const isAllSongsActive = computed(() => route.name === 'files-all')
 const isTemplatesActive = computed(() => route.name === 'templates')
-const isOnlineActive = computed(() => route.name === 'online-library')
+const isOnlineActive = computed(
+  () => route.name === 'online-library' || route.name === 'online-library-song-detail'
+)
 
 function getDefaultRoute(tab: MainWindowTab): RouteLocationRaw {
   if (tab === 'templates') return { name: 'templates' }

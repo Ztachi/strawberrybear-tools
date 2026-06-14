@@ -15,6 +15,7 @@ import { useSongListStore } from '@/stores/songLists'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
 import type { MidiInfo } from '@/types'
+import { getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
 import { buildCollectionContext, formatDuration } from '../utils'
 import SongActionMenu from './SongActionMenu.vue'
 import SongPlaybackCover from './SongPlaybackCover.vue'
@@ -59,7 +60,19 @@ const ROW_ESTIMATED_SIZE = 74
 const filteredSongs = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
   if (!keyword) return props.songs
-  return props.songs.filter((song) => song.filename.toLowerCase().includes(keyword))
+  return props.songs.filter((song) =>
+    [
+      getMidiDisplayTitle(song),
+      song.author_name,
+      song.description,
+      song.filename,
+      getMidiDisplayName(song),
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .toLowerCase()
+      .includes(keyword)
+  )
 })
 
 const collectionContext = computed(() =>
@@ -383,8 +396,10 @@ onUnmounted(() => {
               />
 
               <div class="song-main">
-                <Tooltip :title="filteredSongs[virtualRow.index]!.filename">
-                  <span class="song-title">{{ filteredSongs[virtualRow.index]!.filename }}</span>
+                <Tooltip :title="getMidiDisplayName(filteredSongs[virtualRow.index]!)">
+                  <span class="song-title">
+                    {{ getMidiDisplayName(filteredSongs[virtualRow.index]!) }}
+                  </span>
                 </Tooltip>
                 <span class="song-meta">
                   {{ filteredSongs[virtualRow.index]!.track_count }}

@@ -8,6 +8,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { AudioPlayerPort, MediaItem, Player, PlayerState } from '@strawberrybear/player'
 import type { MidiInfo } from '@/types'
+import { getMidiDisplayTitle } from '@/lib/midiDisplay'
 import {
   getTotalDuration,
   loadMidiForDuration,
@@ -32,7 +33,7 @@ export interface MidiPreviewPlaybackBindings {
   /** 同步当前播放模式下的音符过滤器和音高映射器。 */
   configurePlaybackFilter?: () => void
   /** 平台加载媒体后通知应用层更新当前 MIDI 选择。 */
-  onMediaSelected?: (media: MediaItem | null) => void
+  onMediaSelected?: (media: MediaItem | null) => void | Promise<void>
 }
 
 /** MIDI 试听队列来源，用于保留播放列表语义。 */
@@ -98,7 +99,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   midiToMediaItem(midi: MidiInfo, fallbackDurationMs = 0): MediaItem {
     return {
       id: midi.filename,
-      title: midi.filename,
+      title: getMidiDisplayTitle(midi),
       url: midi.file_path,
       durationSeconds: (midi.duration_ms || fallbackDurationMs || 0) / 1000,
       metadata: { midi },
@@ -366,7 +367,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @return {Promise<void>} 加载完成后 resolve
    */
   async load(media: MediaItem): Promise<void> {
-    this.bindings.onMediaSelected?.(media)
+    await this.bindings.onMediaSelected?.(media)
     this.bindings.configurePlaybackFilter?.()
     setDisabledTracks(this.bindings.getDisabledTracks?.() ?? new Set())
 

@@ -1,69 +1,85 @@
 <script setup lang="ts">
 /**
- * @description: 在线曲库 - 列表 + 过滤 + 试听/导入
- * @description 全部交互组件走 antdv-next（Input / Select / Button / Tooltip），不再使用原生 HTML。
+ * @description: 在线曲库 - 本地缓存优先 + 虚拟滚动列表。
  */
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { Button, Empty, Input, Pagination, Select, SelectOption, Spin, Tooltip } from 'antdv-next'
-import { Download, Info, Play, RefreshCw, Square } from 'lucide-vue-next'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { Button, Empty, Input, Spin, Tooltip } from 'antdv-next'
+import { Check, Download, Info, Play, RefreshCw, Square } from 'lucide-vue-next'
 import { feedback as toast } from '@/lib/feedback'
-import { playMidi, stopPreview } from '@/lib/midiPlayer'
 import {
   downloadOnlineMidiSongFile,
-  fetchOnlineMidiSongs,
-  ONLINE_MIDI_DIFFICULTY_TYPES,
-  ONLINE_MIDI_GENRE_TYPES,
-  ONLINE_MIDI_SOURCE_TYPES,
   type OnlineMidiSong,
 } from '@/lib/onlineMidiLibraryApi'
-import { usePlayerStore } from '@/stores/player'
+import { sanitizeMidiFilename, stripMidiExtension } from '@/lib/midiDisplay'
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
+import { useOnlineMidiLibraryStore } from '@/stores/onlineMidiLibrary'
+import { usePlayerStore, type OnlineMidiMetadata } from '@/stores/player'
+import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
+import type { MidiInfo } from '@/types'
 
 const { t } = useI18n()
 const router = useRouter()
+const mainWindowUiStore = useMainWindowUiStore()
+const onlineStore = useOnlineMidiLibraryStore()
 const playerStore = usePlayerStore()
 
-const songs = ref<OnlineMidiSong[]>([])
-const isLoading = ref(false)
-const errorMessage = ref('')
+const GRID_COLUMN_COUNT = 2
+const CARD_HEIGHT = 324
+const CARD_GAP = 16
+const ROW_HEIGHT = CARD_HEIGHT + CARD_GAP
+const SCROLL_THRESHOLD = 200
+
+const viewportRef = ref<HTMLElement | null>(null)
 const previewLoadingId = ref<string | null>(null)
 const importLoadingId = ref<string | null>(null)
-const currentPreviewId = ref<string | null>(null)
-const pagination = reactive({
-  page: 1,
-  pageSize: 12,
-  total: 0,
-  totalPages: 1,
-})
-const filters = reactive({
-  keyword: '',
-  genreType: undefined as string | undefined,
-  sourceType: undefined as string | undefined,
-  difficultyType: undefined as string | undefined,
-})
+const shouldRestoreOnUnmount = ref(true)
 
-/** 已下载文件的内存缓存，跨试听/导入复用。 */
 const downloadedFiles = new Map<string, Uint8Array>()
-/** 防抖用的关键字搜索定时器。 */
-let keywordTimer: number | undefined
-/** 试听结束自动停止的定时器。 */
-let previewEndTimer: number | undefined
+let resizeObserver: ResizeObserver | null = null
+let backToTopRegistration: FloatingActionRegistration | null = null
 
-const hasFilters = computed(
-  () =>
-    Boolean(filters.keyword.trim()) ||
-    Boolean(filters.genreType) ||
-    Boolean(filters.sourceType) ||
-    Boolean(filters.difficultyType)
+const songs = computed(() => onlineStore.filteredSongs)
+const filters = onlineStore.filters
+const isInitialLoading = computed(() => onlineStore.isSyncing && !onlineStore.hasCache)
+const virtualRowsCount = computed(() => Math.ceil(songs.value.length / GRID_COLUMN_COUNT))
+const rowVirtualizer = useVirtualizer(
+  computed(() => ({
+    count: virtualRowsCount.value,
+    getScrollElement: () => viewportRef.value,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+  }))
 )
+const virtualRows = computed(() => rowVirtualizer.value.getVirtualItems())
+const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
+const gridStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${GRID_COLUMN_COUNT}, minmax(0, 1fr))`,
+  gap: `${CARD_GAP}px`,
+}))
 
 function describeError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function toArrayBuffer(bytes: Uint8Array) {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+function displaySongTitle(song: OnlineMidiSong) {
+  return stripMidiExtension(song.title || song.downloadFilename || song.originalFilename || song.id)
+}
+
+function displaySongAuthor(song: OnlineMidiSong) {
+  return song.authorName?.trim() || t('onlineLibrary.unknownAuthor')
+}
+
+function getSongMetadata(song: OnlineMidiSong): OnlineMidiMetadata {
+  return {
+    title: displaySongTitle(song),
+    authorName: song.authorName,
+    description: song.description,
+    onlineSongId: song.id,
+    onlineSha256: song.sha256,
+  }
 }
 
 function formatDuration(ms: number) {
@@ -86,13 +102,11 @@ function formatDate(ms: number) {
   return new Date(ms).toLocaleDateString()
 }
 
-/**
- * @description: 将字段值展示为本地化的展示文案（无对应 key 时回退原值）
- * @description 集中管理 5 个枚举（曲风 / 来源 / 难度 / 版权）的标签查找逻辑。
- * @param {'genre' | 'source' | 'difficulty' | 'license'} group - 枚举分组
- * @param {string} value - 原始枚举值
- * @return {string} 展示文案
- */
+function formatSyncTime(ms: number | null) {
+  if (!ms) return ''
+  return t('onlineLibrary.syncedAt', { time: new Date(ms).toLocaleString() })
+}
+
 function labelFor(
   group: 'genre' | 'source' | 'difficulty' | 'license',
   value: string
@@ -103,85 +117,107 @@ function labelFor(
   return label === key ? value : label
 }
 
-async function loadSongs() {
-  isLoading.value = true
-  errorMessage.value = ''
-  try {
-    const result = await fetchOnlineMidiSongs({
-      keyword: filters.keyword.trim() || undefined,
-      genreType: filters.genreType,
-      sourceType: filters.sourceType,
-      difficultyType: filters.difficultyType,
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-    })
-    songs.value = result.list
-    pagination.page = result.pagination.page
-    pagination.pageSize = result.pagination.pageSize
-    pagination.total = result.pagination.total
-    pagination.totalPages = Math.max(1, result.pagination.totalPages)
-  } catch (error) {
-    errorMessage.value = describeError(error)
-  } finally {
-    isLoading.value = false
+function getRowSongs(rowIndex: number) {
+  const start = rowIndex * GRID_COLUMN_COUNT
+  return songs.value.slice(start, start + GRID_COLUMN_COUNT)
+}
+
+function findImportedMidi(song: OnlineMidiSong): MidiInfo | null {
+  return (
+    playerStore.midiLibrary.find((midi) => {
+      if (midi.online_song_id && midi.online_song_id === song.id) return true
+      if (midi.online_sha256 && song.sha256 && midi.online_sha256 === song.sha256) return true
+      return false
+    }) ?? null
+  )
+}
+
+function isSongPlaying(song: OnlineMidiSong) {
+  if (
+    playerStore.currentTemporaryOnlineSongId === song.id &&
+    playerStore.currentMidi?.online_song_id === song.id
+  ) {
+    return playerStore.isPreviewPlaying || playerStore.isPreviewPaused
   }
-}
-
-function scheduleKeywordSearch() {
-  window.clearTimeout(keywordTimer)
-  keywordTimer = window.setTimeout(() => {
-    pagination.page = 1
-    void loadSongs()
-  }, 320)
-}
-
-function resetFilters() {
-  filters.keyword = ''
-  filters.genreType = undefined
-  filters.sourceType = undefined
-  filters.difficultyType = undefined
-  pagination.page = 1
-  void loadSongs()
+  const imported = findImportedMidi(song)
+  return imported ? playerStore.getSongPlaybackState(imported.filename) !== 'idle' : false
 }
 
 async function getSongBytes(song: OnlineMidiSong) {
   const cached = downloadedFiles.get(song.id)
   if (cached) return cached
-
   const bytes = await downloadOnlineMidiSongFile(song.id)
   downloadedFiles.set(song.id, bytes)
   return bytes
 }
 
-async function stopOnlinePreview() {
-  window.clearTimeout(previewEndTimer)
-  previewEndTimer = undefined
-  currentPreviewId.value = null
-  stopPreview()
-  await playerStore.stopPreviewPlayback().catch(() => undefined)
+async function syncLibrary() {
+  const ok = await onlineStore.syncAllSongs()
+  if (!ok && onlineStore.errorMessage) {
+    toast.error(t('onlineLibrary.feedback.loadFailed'), {
+      description: onlineStore.errorMessage,
+      richColors: true,
+    })
+  }
 }
 
-async function togglePreview(song: OnlineMidiSong) {
-  if (currentPreviewId.value === song.id) {
-    await stopOnlinePreview()
+function clearHiddenFilters() {
+  filters.genreType = undefined
+  filters.sourceType = undefined
+  filters.difficultyType = undefined
+}
+
+function observeViewport(element: HTMLElement | null) {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  if (!element) return
+
+  resizeObserver = new ResizeObserver(() => {
+    rowVirtualizer.value.measure()
+  })
+  resizeObserver.observe(element)
+  void nextTick(() => {
+    rowVirtualizer.value.measure()
+  })
+}
+
+function handleScroll(): void {
+  backToTopRegistration?.setVisible((viewportRef.value?.scrollTop ?? 0) > SCROLL_THRESHOLD)
+}
+
+function scrollToTop(): void {
+  viewportRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function togglePlay(song: OnlineMidiSong) {
+  if (isSongPlaying(song)) {
+    if (playerStore.currentTemporaryOnlineSongId === song.id) {
+      await playerStore.restoreTemporaryOnlinePreview()
+    } else {
+      await playerStore.stopPreviewPlayback()
+    }
     return
   }
 
   previewLoadingId.value = song.id
   try {
-    await stopOnlinePreview()
-    const bytes = await getSongBytes(song)
-    await playMidi(toArrayBuffer(bytes), 1)
-    currentPreviewId.value = song.id
+    const imported = findImportedMidi(song)
+    if (imported) {
+      if (playerStore.currentTemporaryOnlineSongId) {
+        await playerStore.restoreTemporaryOnlinePreview()
+      }
+      await playerStore.playMidiInQueue(imported, playerStore.midiLibrary, {
+        id: 'all',
+        title: t('songList.allSongs'),
+      })
+      return
+    }
 
-    const fallbackDuration = 60_000
-    previewEndTimer = window.setTimeout(
-      () => {
-        if (currentPreviewId.value === song.id) {
-          currentPreviewId.value = null
-        }
-      },
-      Math.max(song.durationMs || fallbackDuration, 1000) + 800
+    const bytes = await getSongBytes(song)
+    await playerStore.playTemporaryMidiBuffer(
+      sanitizeMidiFilename(displaySongTitle(song) || song.downloadFilename || song.id),
+      bytes,
+      getSongMetadata(song)
     )
   } catch (error) {
     toast.error(t('onlineLibrary.feedback.previewFailed'), {
@@ -194,15 +230,25 @@ async function togglePreview(song: OnlineMidiSong) {
 }
 
 async function importSong(song: OnlineMidiSong) {
+  if (findImportedMidi(song)) return
   importLoadingId.value = song.id
   try {
-    await stopOnlinePreview()
     const bytes = await getSongBytes(song)
-    const filename = song.downloadFilename || `${song.title || song.id}.mid`
-    const imported = await playerStore.importMidiBuffer(filename, bytes, { autoSelect: true })
+    const imported = await playerStore.importMidiBuffer(
+      sanitizeMidiFilename(displaySongTitle(song) || song.downloadFilename || song.id),
+      bytes,
+      { autoSelect: false, metadata: getSongMetadata(song) }
+    )
     if (imported) {
       toast.success(t('onlineLibrary.feedback.imported'), { richColors: true })
-      await router.push({ name: 'files-all' })
+      const importedMidi = findImportedMidi(song)
+      if (importedMidi && playerStore.currentTemporaryOnlineSongId === song.id) {
+        await playerStore.replaceTemporaryOnlinePreviewWithLocal(
+          importedMidi,
+          playerStore.midiLibrary,
+          { id: 'all', title: t('songList.allSongs') }
+        )
+      }
     }
   } catch (error) {
     toast.error(t('onlineLibrary.feedback.importFailed'), {
@@ -214,119 +260,88 @@ async function importSong(song: OnlineMidiSong) {
   }
 }
 
-/**
- * @description: 跳转到在线歌曲详情页
- * @param {OnlineMidiSong} song - 当前歌曲
- * @return {void}
- */
 function openSongDetail(song: OnlineMidiSong) {
   void router.push({ name: 'online-library-song-detail', params: { id: song.id } })
 }
 
-function gotoPage(page: number) {
-  const nextPage = Math.min(Math.max(1, page), pagination.totalPages)
-  if (nextPage === pagination.page) return
-  pagination.page = nextPage
-  void loadSongs()
-}
-
 watch(
-  () => [filters.genreType, filters.sourceType, filters.difficultyType],
+  () => songs.value.length,
   () => {
-    pagination.page = 1
-    void loadSongs()
+    void nextTick(() => {
+      rowVirtualizer.value.measure()
+      rowVirtualizer.value.scrollToIndex(0)
+    })
   }
 )
 
+watch(viewportRef, observeViewport, { immediate: true })
+
 onMounted(() => {
-  void loadSongs()
+  clearHiddenFilters()
+  backToTopRegistration = mainWindowUiStore.registerBackToTop(scrollToTop)
+  handleScroll()
+  void onlineStore.ensureReady()
 })
 
-onUnmounted(() => {
-  window.clearTimeout(keywordTimer)
-  void stopOnlinePreview()
+onBeforeRouteLeave((to) => {
+  shouldRestoreOnUnmount.value =
+    to.name !== 'online-library' && to.name !== 'online-library-song-detail'
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  backToTopRegistration?.()
+  backToTopRegistration = null
+  if (shouldRestoreOnUnmount.value) {
+    void playerStore.restoreTemporaryOnlinePreview()
+  }
 })
 </script>
 
 <template>
   <div class="online-library">
-    <!-- 工具栏：搜索 + 三个过滤下拉 + 清空 + 刷新，全部走 antdv-next -->
     <div class="online-toolbar">
       <Input
         v-model:value="filters.keyword"
         :placeholder="t('onlineLibrary.searchPlaceholder')"
         allow-clear
         class="toolbar-search"
-        @input="scheduleKeywordSearch"
       />
 
-      <Select
-        v-model:value="filters.genreType"
-        :placeholder="t('onlineLibrary.filters.allGenres')"
-        :aria-label="t('onlineLibrary.filters.genre')"
-        allow-clear
-        class="toolbar-select"
-      >
-        <SelectOption v-for="genre in ONLINE_MIDI_GENRE_TYPES" :key="genre" :value="genre">
-          {{ labelFor('genre', genre) }}
-        </SelectOption>
-      </Select>
-
-      <Select
-        v-model:value="filters.difficultyType"
-        :placeholder="t('onlineLibrary.filters.allDifficulties')"
-        :aria-label="t('onlineLibrary.filters.difficulty')"
-        allow-clear
-        class="toolbar-select"
-      >
-        <SelectOption
-          v-for="difficulty in ONLINE_MIDI_DIFFICULTY_TYPES"
-          :key="difficulty"
-          :value="difficulty"
-        >
-          {{ labelFor('difficulty', difficulty) }}
-        </SelectOption>
-      </Select>
-
-      <Select
-        v-model:value="filters.sourceType"
-        :placeholder="t('onlineLibrary.filters.allSources')"
-        :aria-label="t('onlineLibrary.filters.source')"
-        allow-clear
-        class="toolbar-select"
-      >
-        <SelectOption v-for="source in ONLINE_MIDI_SOURCE_TYPES" :key="source" :value="source">
-          {{ labelFor('source', source) }}
-        </SelectOption>
-      </Select>
-
-      <Button v-if="hasFilters" @click="resetFilters">
-        {{ t('actions.clear') }}
-      </Button>
-
-      <Tooltip :title="t('onlineLibrary.refresh')" placement="bottom">
+      <Tooltip :title="t('onlineLibrary.sync')" placement="bottom">
         <Button
           shape="circle"
-          :aria-label="t('onlineLibrary.refresh')"
-          :disabled="isLoading"
-          @click="loadSongs"
+          :aria-label="t('onlineLibrary.sync')"
+          :disabled="onlineStore.isSyncing"
+          @click="syncLibrary"
         >
           <template #icon>
-            <RefreshCw :class="{ spinning: isLoading }" />
+            <RefreshCw :class="{ spinning: onlineStore.isSyncing }" />
           </template>
         </Button>
       </Tooltip>
+
+      <span v-if="onlineStore.syncedAt" class="sync-time">
+        {{ formatSyncTime(onlineStore.syncedAt) }}
+      </span>
     </div>
 
-    <!-- 错误状态：显示错误信息和重试按钮 -->
-    <div v-if="errorMessage" class="state-panel">
+    <div v-if="onlineStore.errorMessage && songs.length > 0" class="inline-error">
+      {{ onlineStore.errorMessage }}
+    </div>
+
+    <div
+      v-if="onlineStore.errorMessage && songs.length === 0 && !isInitialLoading"
+      class="state-panel"
+    >
       <p class="state-title">
         {{ t('onlineLibrary.feedback.loadFailed') }}
       </p>
       <p class="state-text">
-        {{ errorMessage }}
+        {{ onlineStore.errorMessage }}
       </p>
-      <Button type="primary" @click="loadSongs">
+      <Button type="primary" @click="syncLibrary">
         <template #icon>
           <RefreshCw />
         </template>
@@ -334,143 +349,157 @@ onUnmounted(() => {
       </Button>
     </div>
 
-    <!-- 加载中（首次） -->
-    <div v-else-if="isLoading && songs.length === 0" class="state-panel">
+    <div v-else-if="isInitialLoading" class="state-panel">
       <Spin />
       <p class="state-title">
         {{ t('onlineLibrary.loading') }}
       </p>
     </div>
 
-    <!-- 空状态：使用 antdv-next Empty 统一风格 -->
     <div v-else-if="songs.length === 0" class="state-panel">
       <Empty :description="t('onlineLibrary.empty')" />
     </div>
 
-    <template v-else>
-      <!-- 列表刷新时保留旧数据，但加 dim 效果 -->
-      <div class="song-grid" :class="{ 'is-refreshing': isLoading }">
-        <article v-for="song in songs" :key="song.id" class="song-card">
-          <div class="song-card-head">
-            <div class="song-title-group">
-              <Tooltip :title="song.title">
-                <h3>{{ song.title }}</h3>
+    <div v-else ref="viewportRef" class="virtual-scroll" @scroll="handleScroll">
+      <div class="virtual-canvas" :style="{ height: `${totalSize}px` }">
+        <div
+          v-for="virtualRow in virtualRows"
+          :key="String(virtualRow.key)"
+          class="virtual-row"
+          :style="{ transform: `translateY(${virtualRow.start}px)` }"
+        >
+          <div class="song-grid-row" :style="gridStyle">
+            <article v-for="song in getRowSongs(virtualRow.index)" :key="song.id" class="song-card">
+              <div class="song-card-head">
+                <div class="song-title-group">
+                  <Tooltip :title="displaySongTitle(song)">
+                    <h3>{{ displaySongTitle(song) }}</h3>
+                  </Tooltip>
+                  <Tooltip :title="displaySongAuthor(song)">
+                    <p>{{ displaySongAuthor(song) }}</p>
+                  </Tooltip>
+                </div>
+                <Tooltip :title="t('onlineLibrary.detail.actions.detail')" placement="top">
+                  <Button
+                    shape="circle"
+                    :aria-label="t('onlineLibrary.detail.actions.detail')"
+                    @click="openSongDetail(song)"
+                  >
+                    <template #icon>
+                      <Info />
+                    </template>
+                  </Button>
+                </Tooltip>
+              </div>
+
+              <Tooltip v-if="song.description" :title="song.description" placement="topLeft">
+                <p class="song-description">
+                  {{ song.description }}
+                </p>
               </Tooltip>
-              <Tooltip :title="song.authorName || t('onlineLibrary.unknownAuthor')">
-                <p>{{ song.authorName || t('onlineLibrary.unknownAuthor') }}</p>
-              </Tooltip>
-            </div>
-            <span class="difficulty-chip">
-              {{ labelFor('difficulty', song.difficultyType) }}
-            </span>
-          </div>
+              <p v-else class="song-description muted">
+                {{ t('onlineLibrary.detail.noDescription') }}
+              </p>
 
-          <!-- 描述仅截断 2 行展示，完整内容跳转详情页查看 -->
-          <p v-if="song.description" class="song-description">
-            {{ song.description }}
-          </p>
+              <div class="metadata-row">
+                <span>{{ formatDuration(song.durationMs) }}</span>
+                <span>{{ t('onlineLibrary.trackCount', { count: song.trackCount || 0 }) }}</span>
+                <span>{{ t('onlineLibrary.noteCount', { count: song.noteCount || 0 }) }}</span>
+                <span>{{ formatFileSize(song.fileSize) }}</span>
+              </div>
 
-          <div class="metadata-row">
-            <span>{{ formatDuration(song.durationMs) }}</span>
-            <span>{{ t('onlineLibrary.trackCount', { count: song.trackCount || 0 }) }}</span>
-            <span>{{ t('onlineLibrary.noteCount', { count: song.noteCount || 0 }) }}</span>
-            <span>{{ formatFileSize(song.fileSize) }}</span>
-          </div>
+              <div class="tag-row">
+                <span
+                  v-for="genre in song.genreTypes.slice(0, 2)"
+                  :key="genre"
+                  class="tag-chip genre-tag"
+                >
+                  {{ labelFor('genre', genre) }}
+                </span>
+                <span class="tag-chip source-tag">{{ labelFor('source', song.sourceType) }}</span>
+                <span class="tag-chip date-tag">{{ formatDate(song.entryDate) }}</span>
+              </div>
 
-          <div class="tag-row">
-            <span v-for="genre in song.genreTypes" :key="genre" class="tag-chip">
-              {{ labelFor('genre', genre) }}
-            </span>
-            <span class="tag-chip muted">{{ labelFor('source', song.sourceType) }}</span>
-            <span class="tag-chip muted">{{ formatDate(song.entryDate) }}</span>
-          </div>
+              <div class="tag-row compact">
+                <span v-for="tag in song.tags.slice(0, 3)" :key="tag" class="plain-tag">
+                  {{ tag }}
+                </span>
+              </div>
 
-          <div v-if="song.tags.length > 0" class="tag-row compact">
-            <span v-for="tag in song.tags.slice(0, 4)" :key="tag" class="plain-tag">{{ tag }}</span>
+              <div class="song-actions">
+                <Button
+                  :disabled="previewLoadingId === song.id || importLoadingId === song.id"
+                  @click="togglePlay(song)"
+                >
+                  <template #icon>
+                    <Square v-if="isSongPlaying(song)" />
+                    <Play v-else />
+                  </template>
+                  {{
+                    isSongPlaying(song)
+                      ? t('onlineLibrary.stopPlaying')
+                      : previewLoadingId === song.id
+                        ? t('onlineLibrary.loading')
+                        : t('onlineLibrary.play')
+                  }}
+                </Button>
+                <Button
+                  type="primary"
+                  :disabled="Boolean(findImportedMidi(song)) || importLoadingId === song.id"
+                  @click="importSong(song)"
+                >
+                  <template #icon>
+                    <Check v-if="findImportedMidi(song)" />
+                    <Download v-else />
+                  </template>
+                  {{
+                    findImportedMidi(song)
+                      ? t('onlineLibrary.imported')
+                      : importLoadingId === song.id
+                        ? t('onlineLibrary.importing')
+                        : t('songList.actions.import')
+                  }}
+                </Button>
+              </div>
+            </article>
           </div>
-
-          <div class="song-actions">
-            <Button
-              :disabled="previewLoadingId === song.id || importLoadingId === song.id"
-              @click="togglePreview(song)"
-            >
-              <template #icon>
-                <Square v-if="currentPreviewId === song.id" />
-                <Play v-else />
-              </template>
-              {{
-                currentPreviewId === song.id
-                  ? t('player.stopPreview')
-                  : previewLoadingId === song.id
-                    ? t('onlineLibrary.loading')
-                    : t('player.preview')
-              }}
-            </Button>
-            <Button
-              type="primary"
-              :disabled="importLoadingId === song.id || previewLoadingId === song.id"
-              @click="importSong(song)"
-            >
-              <template #icon>
-                <Download />
-              </template>
-              {{
-                importLoadingId === song.id
-                  ? t('onlineLibrary.importing')
-                  : t('songList.actions.import')
-              }}
-            </Button>
-            <Tooltip :title="t('onlineLibrary.detail.actions.detail')" placement="top">
-              <Button
-                shape="circle"
-                :aria-label="t('onlineLibrary.detail.actions.detail')"
-                @click="openSongDetail(song)"
-              >
-                <template #icon>
-                  <Info />
-                </template>
-              </Button>
-            </Tooltip>
-          </div>
-        </article>
+        </div>
       </div>
-
-      <Pagination
-        v-if="pagination.totalPages > 1"
-        class="pagination-bar"
-        :current="pagination.page"
-        :page-size="pagination.pageSize"
-        :total="pagination.total"
-        :show-size-changer="false"
-        @change="gotoPage"
-      />
-    </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .online-library {
-  @apply flex min-h-full flex-col gap-4 pb-6;
+  @apply flex h-full min-h-0 flex-col gap-3 pb-4;
 }
 
 .online-toolbar {
-  @apply flex flex-wrap items-center gap-2;
+  @apply flex shrink-0 items-center gap-3;
 }
 
 .toolbar-search {
-  @apply min-w-[220px] flex-1;
+  width: 370px;
+  max-width: 44vw;
 }
 
-.toolbar-select {
-  width: 160px;
+.sync-time {
+  @apply whitespace-nowrap text-xs;
+  color: var(--color-muted-dark);
 }
 
 .spinning {
   animation: spin 0.9s linear infinite;
 }
 
+.inline-error {
+  @apply rounded-lg px-3 py-2 text-sm;
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+}
+
 .state-panel {
-  @apply flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-2xl px-6 text-center;
+  @apply flex min-h-[280px] flex-1 flex-col items-center justify-center gap-3 rounded-2xl px-6 text-center;
   border: 1px dashed var(--border-primary-20);
   background: rgba(255, 255, 255, 0.62);
 }
@@ -485,20 +514,28 @@ onUnmounted(() => {
   color: var(--color-muted-dark);
 }
 
-.song-grid {
-  @apply grid gap-3;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+.virtual-scroll {
+  @apply min-h-0 flex-1 overflow-auto pr-1;
 }
 
-.song-grid.is-refreshing {
-  opacity: 0.72;
+.virtual-canvas {
+  @apply relative w-full;
+}
+
+.virtual-row {
+  @apply absolute left-0 top-0 w-full;
+  height: 324px;
+}
+
+.song-grid-row {
+  @apply grid mb-[16px];
 }
 
 .song-card {
-  @apply flex min-h-[230px] flex-col gap-3 rounded-xl p-4;
+  @apply flex justify-between min-w-0 flex-col gap-2.5 overflow-hidden rounded-lg p-5;
   border: 1px solid rgba(214, 94, 143, 0.16);
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: 0 12px 32px rgba(201, 67, 127, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 10px 26px rgba(201, 67, 127, 0.07);
 }
 
 .song-card-head {
@@ -510,7 +547,7 @@ onUnmounted(() => {
 }
 
 .song-title-group h3 {
-  @apply line-clamp-2 text-base font-semibold leading-6;
+  @apply truncate text-base font-semibold leading-6;
   color: var(--color-foreground);
 }
 
@@ -526,19 +563,11 @@ onUnmounted(() => {
 }
 
 .song-description {
-  @apply line-clamp-2 min-h-[40px] text-sm leading-5;
+  @apply line-clamp-2 text-sm leading-5;
 }
 
-.difficulty-chip,
-.tag-chip,
-.plain-tag {
-  @apply inline-flex shrink-0 items-center rounded-full text-xs;
-}
-
-.difficulty-chip {
-  @apply px-2.5 py-1 font-semibold;
-  background: rgba(74, 144, 226, 0.13);
-  color: #2563a8;
+.song-description.muted {
+  color: var(--color-muted);
 }
 
 .metadata-row {
@@ -547,7 +576,7 @@ onUnmounted(() => {
 }
 
 .metadata-row span {
-  @apply truncate rounded-lg px-2 py-1;
+  @apply truncate rounded-md px-2 py-1;
   background: rgba(255, 255, 255, 0.66);
 }
 
@@ -555,37 +584,34 @@ onUnmounted(() => {
   @apply flex flex-wrap gap-1.5;
 }
 
-.tag-row.compact {
-  @apply min-h-[22px];
+.tag-chip,
+.plain-tag {
+  @apply inline-flex max-w-full shrink-0 items-center truncate rounded-full px-2 py-1 text-xs;
 }
 
-.tag-chip {
-  @apply px-2 py-1 font-medium;
-  background: var(--bg-primary-15);
-  color: var(--color-primary-active);
+.genre-tag {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
 }
 
-.tag-chip.muted {
-  background: rgba(95, 118, 137, 0.1);
-  color: var(--color-muted-dark);
+.source-tag {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+
+.date-tag {
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
 }
 
 .plain-tag {
-  @apply px-2 py-0.5;
-  background: rgba(255, 255, 255, 0.58);
+  @apply py-0.5;
+  background: var(--color-primary);
+  color: white;
 }
 
 .song-actions {
-  @apply mt-auto flex items-center gap-2;
-}
-
-.song-actions > :first-child,
-.song-actions > :nth-child(2) {
-  @apply flex-1;
-}
-
-.pagination-bar {
-  @apply flex items-center justify-center pt-2;
+  @apply grid shrink-0 grid-cols-2 gap-3 pt-1;
 }
 
 @keyframes spin {

@@ -24,6 +24,7 @@ import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import MarqueeText from '@/components/MarqueeText.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import OverlayFpsControl from './components/OverlayFpsControl.vue'
+import { getMidiDisplayName } from '@/lib/midiDisplay'
 
 const { t } = useI18n()
 const playerStore = usePlayerStore()
@@ -186,6 +187,10 @@ async function playFromStartWithCountdown(midi?: MidiInfo) {
 
 function stopOverlayPlayback() {
   cancelCountdown()
+  if (playerStore.currentTemporaryOnlineSongId) {
+    void playerStore.restoreTemporaryOnlinePreview()
+    return
+  }
   void playerStore.stopPreviewPlayback()
 }
 
@@ -403,9 +408,9 @@ function formatDuration(ms: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-// 当前 MIDI 文件名
-const currentMidiName = computed(
-  () => playerStore.currentMidi?.filename || t('overlay.noFile')
+// 当前 MIDI 展示名
+const currentMidiName = computed(() =>
+  playerStore.currentMidi ? getMidiDisplayName(playerStore.currentMidi) : t('overlay.noFile')
 )
 </script>
 
@@ -488,8 +493,8 @@ const currentMidiName = computed(
           :class="{ active: playerStore.currentMidi?.filename === midi.filename }"
           @click="playMidi(midi)"
         >
-          <Tooltip :title="midi.filename">
-            <span class="playlist-name">{{ midi.filename }}</span>
+          <Tooltip :title="getMidiDisplayName(midi)">
+            <span class="playlist-name">{{ getMidiDisplayName(midi) }}</span>
           </Tooltip>
           <span class="playlist-duration">
             {{ formatDuration(midi.duration_ms) }}

@@ -57,6 +57,10 @@ function handleModeSwitch(isPiano: unknown) {
  * @description: 停止播放并回到起点
  */
 function stopPlayback() {
+  if (playerStore.currentTemporaryOnlineSongId) {
+    void playerStore.restoreTemporaryOnlinePreview()
+    return
+  }
   void playerStore.stopPreviewPlayback()
   playerStore.setPreviewTime(0)
 }

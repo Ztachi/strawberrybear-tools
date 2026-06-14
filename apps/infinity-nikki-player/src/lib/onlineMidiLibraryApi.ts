@@ -2,11 +2,14 @@ import { invoke } from '@tauri-apps/api/core'
 
 const DEFAULT_API_BASE = 'https://ztachi.com'
 const DB_NAME = 'infinity-nikki-online-midi'
-const DB_VERSION = 1
-const STORE_NAME = 'identity'
+const DB_VERSION = 2
+const IDENTITY_STORE_NAME = 'identity'
+const LIBRARY_STORE_NAME = 'library'
 const IDENTITY_KEY = 'default'
+const LIBRARY_CACHE_KEY = 'songs'
 const APP_VERSION = '1.0.0'
 const EMPTY_BODY_SHA256 = '47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU'
+const MAX_PAGE_SIZE = 30
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -115,6 +118,13 @@ type StoredIdentity = {
   registeredApiBase?: string
 }
 
+export type OnlineMidiLibraryCache = {
+  id: typeof LIBRARY_CACHE_KEY
+  apiBase: string
+  syncedAt: number
+  songsById: Record<string, OnlineMidiSong>
+}
+
 function getApiBase() {
   return (import.meta.env.VITE_MIDI_LIBRARY_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '')
 }
@@ -189,8 +199,11 @@ function openIdentityDb() {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
     request.onupgradeneeded = () => {
       const db = request.result
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' })
+      if (!db.objectStoreNames.contains(IDENTITY_STORE_NAME)) {
+        db.createObjectStore(IDENTITY_STORE_NAME, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(LIBRARY_STORE_NAME)) {
+        db.createObjectStore(LIBRARY_STORE_NAME, { keyPath: 'id' })
       }
     }
     request.onsuccess = () => resolve(request.result)
@@ -201,8 +214,8 @@ function openIdentityDb() {
 async function readIdentity() {
   const db = await openIdentityDb()
   try {
-    const tx = db.transaction(STORE_NAME, 'readonly')
-    const store = tx.objectStore(STORE_NAME)
+    const tx = db.transaction(IDENTITY_STORE_NAME, 'readonly')
+    const store = tx.objectStore(IDENTITY_STORE_NAME)
     return (await requestToPromise(store.get(IDENTITY_KEY))) as StoredIdentity | undefined
   } finally {
     db.close()
@@ -212,12 +225,68 @@ async function readIdentity() {
 async function saveIdentity(identity: StoredIdentity) {
   const db = await openIdentityDb()
   try {
-    const tx = db.transaction(STORE_NAME, 'readwrite')
-    const store = tx.objectStore(STORE_NAME)
+    const tx = db.transaction(IDENTITY_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(IDENTITY_STORE_NAME)
     await requestToPromise(store.put(identity))
   } finally {
     db.close()
   }
+}
+
+export async function readOnlineMidiLibraryCache() {
+  const apiBase = getApiBase()
+  const db = await openIdentityDb()
+  try {
+    const tx = db.transaction(LIBRARY_STORE_NAME, 'readonly')
+    const store = tx.objectStore(LIBRARY_STORE_NAME)
+    const cache = (await requestToPromise(store.get(LIBRARY_CACHE_KEY))) as
+      | OnlineMidiLibraryCache
+      | undefined
+    if (!cache || cache.apiBase !== apiBase) return null
+    return cache
+  } finally {
+    db.close()
+  }
+}
+
+export async function saveOnlineMidiLibraryCache(songs: OnlineMidiSong[]) {
+  const cache: OnlineMidiLibraryCache = {
+    id: LIBRARY_CACHE_KEY,
+    apiBase: getApiBase(),
+    syncedAt: Date.now(),
+    songsById: Object.fromEntries(songs.map((song) => [song.id, song])),
+  }
+  const db = await openIdentityDb()
+  try {
+    const tx = db.transaction(LIBRARY_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(LIBRARY_STORE_NAME)
+    await requestToPromise(store.put(cache))
+  } finally {
+    db.close()
+  }
+  return cache
+}
+
+export async function upsertOnlineMidiSongCache(song: OnlineMidiSong) {
+  const existing = await readOnlineMidiLibraryCache()
+  const cache: OnlineMidiLibraryCache = {
+    id: LIBRARY_CACHE_KEY,
+    apiBase: getApiBase(),
+    syncedAt: existing?.syncedAt ?? Date.now(),
+    songsById: {
+      ...(existing?.songsById ?? {}),
+      [song.id]: song,
+    },
+  }
+  const db = await openIdentityDb()
+  try {
+    const tx = db.transaction(LIBRARY_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(LIBRARY_STORE_NAME)
+    await requestToPromise(store.put(cache))
+  } finally {
+    db.close()
+  }
+  return cache
 }
 
 async function createIdentity(extractablePrivateKey = false): Promise<StoredIdentity> {
@@ -389,6 +458,21 @@ export async function fetchOnlineMidiSongs(query: OnlineMidiSongQuery = {}) {
   })
 
   return parseJsonResponse<OnlineMidiSongListResponse>(response)
+}
+
+export async function fetchAllOnlineMidiSongs() {
+  const allSongs: OnlineMidiSong[] = []
+  let page = 1
+  let totalPages = 1
+
+  do {
+    const result = await fetchOnlineMidiSongs({ page, pageSize: MAX_PAGE_SIZE })
+    allSongs.push(...result.list)
+    totalPages = Math.max(1, result.pagination.totalPages)
+    page += 1
+  } while (page <= totalPages)
+
+  return allSongs
 }
 
 export async function fetchOnlineMidiSong(id: string) {

@@ -10,6 +10,7 @@ import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { getContentDrawerRootStyle, getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
+import { getMidiDisplayName } from '@/lib/midiDisplay'
 import { formatDuration } from '@/views/MainWindow/FilesTab/utils'
 
 const props = defineProps<{
@@ -164,8 +165,8 @@ onUnmounted(() => {
           <Music2 class="queue-cover-icon" />
         </div>
         <div class="queue-main">
-          <Tooltip :title="midi.filename">
-            <span class="queue-song-title">{{ midi.filename }}</span>
+          <Tooltip :title="getMidiDisplayName(midi)">
+            <span class="queue-song-title">{{ getMidiDisplayName(midi) }}</span>
           </Tooltip>
           <span class="queue-song-meta">
             {{ midi.track_count }} {{ t('midi.tracks') }} · {{ midi.melody_note_count || 0 }}

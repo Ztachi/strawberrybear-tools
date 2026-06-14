@@ -2,13 +2,14 @@
 /**
  * @description: 正常模式右侧常驻全局播放器
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Button, Tooltip } from 'antdv-next'
 import { Expand, ListMusic, Music2 } from 'lucide-vue-next'
 import MarqueeText from '@/components/MarqueeText.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
+import { getMidiDisplayName } from '@/lib/midiDisplay'
 import { usePlayerStore } from '@/stores/player'
 import PlayQueueDrawer from './PlayQueueDrawer.vue'
 
@@ -16,16 +17,26 @@ const { t } = useI18n()
 const router = useRouter()
 const playerStore = usePlayerStore()
 const queueDrawerOpen = ref(false)
+const currentDisplayName = computed(() =>
+  playerStore.currentMidi ? getMidiDisplayName(playerStore.currentMidi) : t('player.noMedia')
+)
 
 function openCurrentSongDetail(): void {
-  const filename = playerStore.currentMidi?.filename
-  if (!filename) return
-  void router.push({ name: 'files-midi-detail', params: { filename } })
+  const midi = playerStore.currentMidi
+  if (!midi) return
+  if (midi.online_song_id && playerStore.currentTemporaryOnlineSongId === midi.online_song_id) {
+    void router.push({ name: 'online-library-song-detail', params: { id: midi.online_song_id } })
+    return
+  }
+  void router.push({ name: 'files-midi-detail', params: { filename: midi.filename } })
 }
 </script>
 
 <template>
-  <section v-if="playerStore.midiLibrary.length > 0" class="global-music-player">
+  <section
+    v-if="playerStore.midiLibrary.length > 0 || playerStore.currentMidi"
+    class="global-music-player"
+  >
     <div class="current-song">
       <Tooltip :title="playerStore.currentMidi ? t('player.openSongDetail') : t('player.noMedia')">
         <button
@@ -41,11 +52,8 @@ function openCurrentSongDetail(): void {
         </button>
       </Tooltip>
       <div class="current-main">
-        <Tooltip :title="playerStore.currentMidi?.filename || t('player.noMedia')">
-          <MarqueeText
-            class="current-title"
-            :text="playerStore.currentMidi?.filename || t('player.noMedia')"
-          />
+        <Tooltip :title="currentDisplayName">
+          <MarqueeText class="current-title" :text="currentDisplayName" />
         </Tooltip>
       </div>
     </div>
