@@ -8,6 +8,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, Square, X, Copy } from 'lucide-vue-next'
+import { Tooltip } from 'antdv-next'
 import { useI18n } from 'vue-i18n'
 
 const appWindow = getCurrentWindow()
@@ -123,38 +124,44 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full shrink-0 items-center">
-    <button
-      class="window-control-btn"
-      type="button"
-      :title="t('windowControls.minimize')"
-      :aria-label="t('windowControls.minimize')"
-      @click="minimizeWindow"
-    >
-      <Minus :size="16" :stroke-width="1.8" />
-    </button>
+    <Tooltip :title="t('windowControls.minimize')" placement="bottom">
+      <button
+        class="window-control-btn"
+        type="button"
+        :aria-label="t('windowControls.minimize')"
+        @click="minimizeWindow"
+      >
+        <Minus :size="16" :stroke-width="1.8" />
+      </button>
+    </Tooltip>
 
-    <button
-      class="window-control-btn"
-      type="button"
+    <Tooltip
       :title="isMaximized ? t('windowControls.restore') : t('windowControls.maximize')"
-      :aria-label="isMaximized ? t('windowControls.restore') : t('windowControls.maximize')"
-      @mouseenter="scheduleSnapOverlay"
-      @mouseleave="hideSnapOverlay"
-      @click="toggleMaximizeWindow"
+      placement="bottom"
     >
-      <Copy v-if="isMaximized" :size="14" :stroke-width="1.7" />
-      <Square v-else :size="14" :stroke-width="1.7" />
-    </button>
+      <button
+        class="window-control-btn"
+        type="button"
+        :aria-label="isMaximized ? t('windowControls.restore') : t('windowControls.maximize')"
+        @mouseenter="scheduleSnapOverlay"
+        @mouseleave="hideSnapOverlay"
+        @click="toggleMaximizeWindow"
+      >
+        <Copy v-if="isMaximized" :size="14" :stroke-width="1.7" />
+        <Square v-else :size="14" :stroke-width="1.7" />
+      </button>
+    </Tooltip>
 
-    <button
-      class="window-control-btn close"
-      type="button"
-      :title="t('windowControls.close')"
-      :aria-label="t('windowControls.close')"
-      @click="closeWindow"
-    >
-      <X :size="17" :stroke-width="1.8" />
-    </button>
+    <Tooltip :title="t('windowControls.close')" placement="bottom">
+      <button
+        class="window-control-btn close"
+        type="button"
+        :aria-label="t('windowControls.close')"
+        @click="closeWindow"
+      >
+        <X :size="17" :stroke-width="1.8" />
+      </button>
+    </Tooltip>
   </div>
 </template>
 

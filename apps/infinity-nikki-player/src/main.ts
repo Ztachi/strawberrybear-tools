@@ -6,6 +6,9 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { i18n, initI18n } from './i18n'
+import { router } from './router'
+import { getAppContext } from './bootstrap/createAppContext'
+import { bindAppContextStores } from './bootstrap/bindAppContextStores'
 import { configureAntdvStaticContext } from './theme/infinityNikkiTheme'
 import 'antdv-next/dist/reset.css'
 import './style.css'
@@ -14,10 +17,17 @@ import './style.css'
 const app = createApp(App)
 
 /** 注册 Pinia 状态管理插件 */
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
+
+/** 绑定应用级播放器运行时，确保 store 只桥接公共 Player 状态 */
+bindAppContextStores(pinia, getAppContext())
 
 /** 注册 i18n 国际化插件 */
 app.use(i18n)
+
+/** 注册 Vue Router，仅用于主窗口文件/模板页签 URL 状态同步 */
+app.use(router)
 
 /**
  * @description: 获取窗口标签

@@ -2,10 +2,13 @@
 //!
 //! 聚合所有 Tauri 命令，包含系统信息获取、权限检查、外部链接等功能
 
+pub mod frame_rate;
 pub mod keyboard;
 pub mod midi;
+pub mod online_midi_library;
 pub mod player;
 pub mod settings;
+pub mod song_lists;
 pub mod templates;
 pub mod window;
 pub mod window_controls;

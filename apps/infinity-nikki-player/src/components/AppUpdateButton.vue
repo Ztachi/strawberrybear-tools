@@ -4,6 +4,7 @@
  * @description 静默检查到新版本后显示，放置在主窗口 Header 标题区
  */
 import { computed } from 'vue'
+import { Tooltip } from 'antdv-next'
 import { Download, Loader2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useAppUpdater } from '@/composables/useAppUpdater'
@@ -37,22 +38,22 @@ async function handleClick() {
 </script>
 
 <template>
-  <button
-    v-if="updater.hasUpdate.value"
-    class="app-update-button"
-    :class="{ busy: updater.isDownloading.value || updater.isInstalling.value }"
-    :disabled="updater.isBusy.value"
-    :title="buttonText"
-    @click="handleClick"
-  >
-    <component
-      :is="buttonIcon"
-      class="update-icon"
-      :class="{ spinning: updater.isDownloading.value || updater.isInstalling.value }"
-      :size="18"
-    />
-    <span class="update-label">{{ buttonText }}</span>
-  </button>
+  <Tooltip v-if="updater.hasUpdate.value" :title="buttonText" placement="bottom">
+    <button
+      class="app-update-button"
+      :class="{ busy: updater.isDownloading.value || updater.isInstalling.value }"
+      :disabled="updater.isBusy.value"
+      @click="handleClick"
+    >
+      <component
+        :is="buttonIcon"
+        class="update-icon"
+        :class="{ spinning: updater.isDownloading.value || updater.isInstalling.value }"
+        :size="18"
+      />
+      <span class="update-label">{{ buttonText }}</span>
+    </button>
+  </Tooltip>
 </template>
 
 <style scoped>

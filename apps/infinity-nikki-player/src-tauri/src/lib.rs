@@ -8,6 +8,7 @@ mod midi;
 mod types;
 mod window_state;
 
+use commands::frame_rate::FrameRateCaptureState;
 use commands::player::PlayerControl;
 use std::env;
 use tauri::{Emitter, Manager};
@@ -188,6 +189,8 @@ pub fn run() {
         .manage(AppState::default())
         // 管理播放控制状态
         .manage(PlayerControl::default())
+        // 管理 FPS 采集状态
+        .manage(FrameRateCaptureState::default())
         // 应用初始化设置
         .setup(move |app| {
             // 根据语言生成菜单
@@ -331,10 +334,13 @@ pub fn run() {
             commands::midi::read_midi_data,
             commands::midi::import_midi,
             commands::midi::import_midi_buffer,
+            commands::midi::prepare_online_midi_preview,
+            commands::midi::cleanup_online_midi_preview,
             commands::midi::get_midi_library,
             commands::midi::delete_midi_from_library,
             commands::midi::load_midi_config,
             commands::midi::save_midi_config,
+            commands::online_midi_library::online_midi_library_request,
             commands::player::start_playback,
             commands::player::pause_playback,
             commands::player::resume_playback,
@@ -345,6 +351,10 @@ pub fn run() {
             commands::keyboard::clear_key_logs,
             commands::keyboard::simulate_key_down,
             commands::keyboard::simulate_key_up,
+            commands::frame_rate::get_frame_rate_capture_capability,
+            commands::frame_rate::start_frame_rate_capture,
+            commands::frame_rate::get_frame_rate_snapshot,
+            commands::frame_rate::stop_frame_rate_capture,
             commands::window::enter_overlay_mode,
             commands::window::exit_overlay_mode,
             commands::window::has_saved_overlay_window_state,
@@ -357,6 +367,17 @@ pub fn run() {
             commands::templates::export_template,
             commands::templates::export_templates_archive,
             commands::templates::rename_template,
+            commands::song_lists::get_song_lists,
+            commands::song_lists::create_song_list,
+            commands::song_lists::save_song_list,
+            commands::song_lists::rename_song_list,
+            commands::song_lists::delete_song_list,
+            commands::song_lists::add_songs_to_song_list,
+            commands::song_lists::remove_songs_from_song_list,
+            commands::song_lists::save_song_list_cover,
+            commands::song_lists::read_song_list_cover,
+            commands::song_lists::export_song_lists_archive,
+            commands::song_lists::import_song_lists_archive,
             commands::settings::load_settings,
             commands::settings::save_settings,
             commands::check_accessibility,

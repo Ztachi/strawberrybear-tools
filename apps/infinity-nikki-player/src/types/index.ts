@@ -47,6 +47,16 @@ export interface MidiInfo {
   filename: string
   /** 文件完整路径 */
   file_path: string
+  /** 展示标题（在线曲库导入时写入） */
+  title?: string | null
+  /** 作者名（在线曲库导入时写入） */
+  author_name?: string | null
+  /** 描述（在线曲库导入时写入） */
+  description?: string | null
+  /** 在线曲库歌曲 ID */
+  online_song_id?: string | null
+  /** 在线曲库文件 SHA-256 */
+  online_sha256?: string | null
   /** 时长（毫秒） */
   duration_ms: number
   /** 音轨数量 */
@@ -59,6 +69,27 @@ export interface MidiInfo {
   tempo: number
   /** 音符事件列表 */
   events: NoteEvent[]
+}
+
+/**
+ * @description: 自建歌单信息
+ * @description 歌单只保存 MIDI 文件名索引，不拥有本地 MIDI 文件本身。
+ */
+export interface SongList {
+  /** 歌单 ID */
+  id: string
+  /** 歌单名称 */
+  name: string
+  /** 歌单描述 */
+  description: string
+  /** 封面文件名，没有封面时为 null */
+  cover_filename: string | null
+  /** 歌单内 MIDI 文件名，顺序即添加顺序 */
+  song_filenames: string[]
+  /** 创建时间戳，毫秒 */
+  created_at: number
+  /** 更新时间戳，毫秒 */
+  updated_at: number
 }
 
 /**

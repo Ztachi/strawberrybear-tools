@@ -23,6 +23,7 @@
         "center": true,
         "resizable": true,
         "decorations": true,
+        "shadow": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": {
@@ -44,7 +45,7 @@
     "targets": ["dmg", "nsis"],
     "createUpdaterArtifacts": true,
     "icon": ["icons/icon.png", "icons/icon.icns"],
-    "resources": ["en.lproj", "zh-Hans.lproj", "templates", "midi"],
+    "resources": ["en.lproj", "zh-Hans.lproj", "templates", "midi", "presentmon"],
     "macOS": {
       "minimumSystemVersion": "10.15",
       "signingIdentity": "-"

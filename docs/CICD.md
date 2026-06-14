@@ -245,6 +245,20 @@ awk "/^## ${VERSION}/{flag=1; next} /^## [0-9]/{if(flag) exit} flag" apps/<app-n
 
 ---
 
+## 发版前的变更文档规范
+
+当发版涉及以下情况时，发版前必须同步更新应用文档：
+
+1. **README.md** —— 新增/移除重要功能、调整了项目结构、改动了技术栈或安装流程时更新。
+2. **USER_GUIDE.md / 用户手册** —— UI 布局、新功能、权限流程、使用步骤有用户可见变化时更新。
+3. **CHANGELOG.md** —— 由 `pnpm ci:version` + changeset 自动生成，无需手写。
+
+文档更新与 changeset 必须在同一个 PR/同一个版本号里合入 main，保证发版时文档与产物一致。
+
+README/USER_GUIDE 的更新不计入 changeset 的 `major/minor/patch` 等级（纯文档改动不触发发版；如仅文档改动，直接走 main → workflow_dispatch）。
+
+---
+
 ## Changeset 文件命名规范
 
 `.changeset/` 下的文件名任意（通常由工具自动生成随机名），内容格式：

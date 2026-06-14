@@ -17,6 +17,13 @@ use tauri::Manager;
 /// * `current_template_id` - 当前模板 ID
 /// * `play_mode` - 演奏模式："auto" | "piano"
 /// * `enable_keyboard_sim` - 是否启用键盘模拟（仅在 piano 模式下生效）
+/// * `auto_fps_enabled` - 是否启用自动 FPS 获取
+/// * `manual_fps` - 手动 FPS，自动获取不可用时作为兜底
+/// * `last_detected_fps` - 最近一次自动检测 FPS，仅用于展示回填
+/// * `playlist_playback_mode` - 播放列表调度模式
+/// * `song_list_sidebar_collapsed` - 歌单侧栏是否收起
+/// * `last_preview_filename` - 上次预览选中的 MIDI 文件名
+/// * `last_preview_source_id` - 上次预览队列来源 ID
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     /// 当前语言
@@ -29,11 +36,47 @@ pub struct AppSettings {
     /// 是否启用键盘模拟（仅在模板演奏模式下生效）
     #[serde(default)]
     pub enable_keyboard_sim: bool,
+    /// 是否启用自动 FPS 获取
+    #[serde(default = "default_auto_fps_enabled")]
+    pub auto_fps_enabled: bool,
+    /// 手动 FPS，自动获取不可用或用户关闭自动获取时生效
+    #[serde(default = "default_manual_fps")]
+    pub manual_fps: u32,
+    /// 最近一次自动检测到的 FPS，仅用于 UI 展示，不作为强依赖
+    #[serde(default)]
+    pub last_detected_fps: Option<u32>,
+    /// 播放列表调度模式："sequential" | "shuffle" | "repeat-one" | "repeat-all"
+    #[serde(default = "default_playlist_playback_mode")]
+    pub playlist_playback_mode: String,
+    /// 歌单侧栏是否收起
+    #[serde(default)]
+    pub song_list_sidebar_collapsed: bool,
+    /// 上次预览选中的 MIDI 文件名
+    #[serde(default)]
+    pub last_preview_filename: Option<String>,
+    /// 上次预览队列来源 ID，例如 all 或 song-list:<id>
+    #[serde(default)]
+    pub last_preview_source_id: Option<String>,
 }
 
 /// 默认演奏模式
 fn default_play_mode() -> String {
     "auto".to_string()
+}
+
+/// 默认关闭自动 FPS 获取；该功能仍处于测试阶段，用户需要主动开启。
+fn default_auto_fps_enabled() -> bool {
+    false
+}
+
+/// 默认手动 FPS，覆盖 60fps 常见场景。
+fn default_manual_fps() -> u32 {
+    60
+}
+
+/// 默认播放列表调度模式：顺序播放一轮。
+fn default_playlist_playback_mode() -> String {
+    "sequential".to_string()
 }
 
 impl Default for AppSettings {
@@ -43,7 +86,40 @@ impl Default for AppSettings {
             current_template_id: None,
             play_mode: "auto".to_string(),
             enable_keyboard_sim: false,
+            auto_fps_enabled: false,
+            manual_fps: default_manual_fps(),
+            last_detected_fps: None,
+            playlist_playback_mode: default_playlist_playback_mode(),
+            song_list_sidebar_collapsed: false,
+            last_preview_filename: None,
+            last_preview_source_id: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_settings_json_uses_fps_defaults() {
+        let settings: AppSettings = serde_json::from_str(
+            r#"{
+                "locale": "zh-CN",
+                "current_template_id": null,
+                "play_mode": "piano",
+                "enable_keyboard_sim": true
+            }"#,
+        )
+        .expect("settings");
+
+        assert!(!settings.auto_fps_enabled);
+        assert_eq!(settings.manual_fps, 60);
+        assert_eq!(settings.last_detected_fps, None);
+        assert_eq!(settings.playlist_playback_mode, "sequential");
+        assert!(!settings.song_list_sidebar_collapsed);
+        assert_eq!(settings.last_preview_filename, None);
+        assert_eq!(settings.last_preview_source_id, None);
     }
 }
 

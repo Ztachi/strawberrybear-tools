@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
  * @description: TemplateEditor - 模板管理页主体
- * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容，并将重编辑区域委托给 TemplateEditorDrawer
+ * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { open, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
 import {
@@ -23,9 +24,9 @@ import { Button, Checkbox, Input, Modal, Pagination, Popover, Table, Tooltip } f
 import type { PaginationProps, TableColumnsType } from 'antdv-next'
 import { useSettingsStore } from '@/stores/settings'
 import type { KeyTemplate } from '@/types'
-import TemplateEditorDrawer from './TemplateEditorDrawer.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const settingsStore = useSettingsStore()
 
 /** 模板页页大小持久化键，避免刷新后丢失用户常用分页密度。 */
@@ -44,12 +45,23 @@ const currentPage = ref(1)
 const pageSize = ref(readPersistedPageSize())
 /** 被勾选模板 ID 集合，跨分页保留选择。 */
 const selectedTemplateIds = ref<Set<string>>(new Set())
-/** 模板编辑抽屉实例，负责编辑、草稿和未保存离开确认。 */
-const editorDrawerRef = ref<InstanceType<typeof TemplateEditorDrawer> | null>(null)
 /** 头部+表格头部高度 */
 const totalHeaderHeight = ref(260)
 /** 当前打开的表格行操作菜单模板 ID；受控关闭可避免进入抽屉后浮层残留。 */
 const openActionMenuTemplateId = ref<string | null>(null)
+/** 模板删除确认框状态，使用页面内 Modal 保持主题一致。 */
+const actionConfirm = ref<{
+  open: boolean
+  title: string
+  content: string
+  resolve: CallableFunction | null
+}>({
+  open: false,
+  title: '',
+  content: '',
+  resolve: null,
+})
+let actionConfirmPromise: Promise<boolean> | null = null
 
 /**
  * @description: 从本地存储读取分页大小
@@ -211,7 +223,7 @@ function pruneSelection(): void {
  * @return {Promise<void>} 无返回值
  */
 async function createBlankTemplate(): Promise<void> {
-  await editorDrawerRef.value?.createBlankTemplate()
+  await router.push({ name: 'templates-create' })
 }
 
 /**
@@ -221,7 +233,7 @@ async function createBlankTemplate(): Promise<void> {
  */
 async function createFromTemplate(template: KeyTemplate): Promise<void> {
   closeTemplateActionMenu()
-  await editorDrawerRef.value?.createFromTemplate(template)
+  await router.push({ name: 'templates-create', query: { from: template.id } })
 }
 
 /**
@@ -231,7 +243,7 @@ async function createFromTemplate(template: KeyTemplate): Promise<void> {
  */
 async function editTemplate(template: KeyTemplate): Promise<void> {
   closeTemplateActionMenu()
-  await editorDrawerRef.value?.editTemplate(template)
+  await router.push({ name: 'templates-edit', params: { id: template.id } })
 }
 
 /**
@@ -420,18 +432,24 @@ function getTemplateRowClassName(template: KeyTemplate): string {
 }
 
 function confirmTemplateAction(title: string, content: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    Modal.confirm({
+  if (actionConfirmPromise) return actionConfirmPromise
+  actionConfirmPromise = new Promise((resolve) => {
+    actionConfirm.value = {
+      open: true,
       title,
       content,
-      okText: t('actions.delete'),
-      cancelText: t('actions.cancel'),
-      okButtonProps: { danger: true },
-      centered: true,
-      onOk: () => resolve(true),
-      onCancel: () => resolve(false),
-    })
+      resolve,
+    }
   })
+  return actionConfirmPromise
+}
+
+function resolveActionConfirm(value: boolean): void {
+  const resolve = actionConfirm.value.resolve
+  actionConfirm.value.open = false
+  actionConfirm.value.resolve = null
+  actionConfirmPromise = null
+  if (resolve) resolve(value)
 }
 
 watch(searchKeyword, () => {
@@ -452,6 +470,10 @@ watch(
   }
 )
 
+onBeforeUnmount(() => {
+  resolveActionConfirm(false)
+})
+
 defineExpose({
   /**
    * @description: 暴露给父组件的离开守卫
@@ -459,8 +481,22 @@ defineExpose({
    * @return {Promise<boolean>} true 表示允许离开模板页
    */
   confirmLeaveIfNeeded(context: 'close' | 'jump' = 'close'): Promise<boolean> {
-    // 未打开编辑抽屉时没有编辑状态，父级可以直接离开。
-    return editorDrawerRef.value?.confirmLeaveIfNeeded(context) ?? Promise.resolve(true)
+    void context
+    return Promise.resolve(true)
+  },
+  /**
+   * @description: 暴露给父组件的刷新保护 dirty 状态
+   * @return {boolean} true 表示模板编辑抽屉存在未保存改动
+   */
+  hasPendingChanges(): boolean {
+    return false
+  },
+  /**
+   * @description: 刷新前写入模板草稿
+   * @return {void}
+   */
+  writePendingDraft(): void {
+    // 模板列表页没有编辑草稿。
   },
 })
 </script>
@@ -471,10 +507,11 @@ defineExpose({
       class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-primary/15 bg-white/75"
     >
       <div class="flex flex-wrap items-center gap-2 border-b border-primary/10 p-3">
-        <div class="w-[320px] max-w-full">
+        <div class="w-[220px] max-w-full">
           <Input
             v-model:value="searchKeyword"
             class="h-9 bg-white"
+            allow-clear
             :placeholder="t('template.searchPlaceholder')"
           >
             <template #prefix>
@@ -648,7 +685,31 @@ defineExpose({
       </div>
     </section>
 
-    <TemplateEditorDrawer ref="editorDrawerRef" @saved="pruneSelection" />
+    <Modal
+      :open="actionConfirm.open"
+      :title="actionConfirm.title"
+      :footer="null"
+      width="420"
+      centered
+      @cancel="resolveActionConfirm(false)"
+    >
+      <div class="text-sm leading-6 text-muted-foreground">
+        {{ actionConfirm.content }}
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <Button
+          size="small"
+          color="primary"
+          variant="outlined"
+          @click="resolveActionConfirm(false)"
+        >
+          {{ t('actions.cancel') }}
+        </Button>
+        <Button type="primary" size="small" danger @click="resolveActionConfirm(true)">
+          {{ t('actions.delete') }}
+        </Button>
+      </div>
+    </Modal>
   </div>
 </template>
 

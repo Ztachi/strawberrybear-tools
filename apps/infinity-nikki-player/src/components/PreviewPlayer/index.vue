@@ -8,6 +8,7 @@ import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { Switch, Tooltip } from 'antdv-next'
 import { HelpCircle } from 'lucide-vue-next'
+import PlaybackModeControl from '@/components/PlaybackModeControl.vue'
 import PreviewProgressBar from './PreviewProgressBar.vue'
 import PreviewTransportControls from './PreviewTransportControls.vue'
 
@@ -56,6 +57,10 @@ function handleModeSwitch(isPiano: unknown) {
  * @description: 停止播放并回到起点
  */
 function stopPlayback() {
+  if (playerStore.currentTemporaryOnlineSongId) {
+    void playerStore.restoreTemporaryOnlinePreview()
+    return
+  }
   void playerStore.stopPreviewPlayback()
   playerStore.setPreviewTime(0)
 }
@@ -71,19 +76,28 @@ function stopPlayback() {
       @seek="playerStore.seekPreview"
     />
 
-    <PreviewTransportControls
-      :is-playing="playerStore.isPreviewPlaying && !playerStore.isPreviewPaused"
-      :is-paused="playerStore.isPreviewPaused"
-      :has-media="!!playerStore.currentMidi"
-      :volume="playerStore.previewVolume"
-      :muted="playerStore.isPreviewMuted"
-      @previous="playerStore.playPrev"
-      @next="playerStore.playNext"
-      @toggle-play="togglePlay"
-      @stop="stopPlayback"
-      @toggle-mute="playerStore.toggleMute"
-      @set-volume="playerStore.setPreviewVolumeValue"
-    />
+    <div class="transport-row">
+      <PlaybackModeControl
+        v-if="!compact"
+        :mode="playerStore.previewPlaybackMode"
+        @change="playerStore.setPlaylistPlaybackMode"
+      />
+
+      <PreviewTransportControls
+        class="transport-main"
+        :is-playing="playerStore.isPreviewPlaying && !playerStore.isPreviewPaused"
+        :is-paused="playerStore.isPreviewPaused"
+        :has-media="!!playerStore.currentMidi"
+        :volume="playerStore.previewVolume"
+        :muted="playerStore.isPreviewMuted"
+        @previous="playerStore.playPrev"
+        @next="playerStore.playNext"
+        @toggle-play="togglePlay"
+        @stop="stopPlayback"
+        @toggle-mute="playerStore.toggleMute"
+        @set-volume="playerStore.setPreviewVolumeValue"
+      />
+    </div>
 
     <!-- 演奏模式切换（非精简模式显示） -->
     <template v-if="!compact">
@@ -123,6 +137,18 @@ function stopPlayback() {
 
 .preview-player.compact {
   @apply gap-2;
+}
+
+.transport-row {
+  @apply grid grid-cols-[40px_minmax(0,1fr)] items-center gap-2;
+}
+
+.preview-player.compact .transport-row {
+  @apply block;
+}
+
+.transport-main {
+  @apply min-w-0;
 }
 
 .play-mode-row {

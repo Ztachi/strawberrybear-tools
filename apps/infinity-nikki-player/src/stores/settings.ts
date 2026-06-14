@@ -2,13 +2,15 @@
  * @fileOverview 应用设置状态管理
  * @description 使用 Pinia 管理的设置状态，包含语言、当前模板 ID、演奏模式等功能
  */
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { saveSettings, loadSettings as loadSettingsApi } from '@/lib/settings'
 import { invoke } from '@tauri-apps/api/core'
 import type { KeyTemplate } from '@/types'
 import i18n, { DEFAULT_LOCALE, getPreferredLocale, isSupportedLocale } from '@/i18n'
 import type { LocaleType } from '@/i18n'
+import { isPlaybackMode, type PlaybackMode } from '@strawberrybear/player'
+import { DEFAULT_PLAYBACK_FPS } from '@/lib/keyboardTiming'
 
 /**
  * @description: 设置 Store - 管理所有应用设置
@@ -30,6 +32,27 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** 是否启用键盘模拟 */
   const enableKeyboardSim = ref(false)
+
+  /** 是否启用自动 FPS 获取 */
+  const autoFpsEnabled = ref(false)
+
+  /** 手动 FPS，自动获取不可用时作为兜底 */
+  const manualFps = ref(DEFAULT_PLAYBACK_FPS)
+
+  /** 最近一次自动检测 FPS，仅用于 UI 展示回填 */
+  const lastDetectedFps = ref<number | null>(null)
+
+  /** 播放列表调度模式，独立于自动演奏/模板发音模式。 */
+  const playlistPlaybackMode = ref<PlaybackMode>('sequential')
+
+  /** 歌单侧栏是否收起 */
+  const songListSidebarCollapsed = ref(false)
+
+  /** 上次预览选中的 MIDI 文件名 */
+  const lastPreviewFilename = ref<string | null>(null)
+
+  /** 上次预览队列来源 ID，例如 all 或 song-list:<id> */
+  const lastPreviewSourceId = ref<string | null>(null)
 
   /** 是否处于悬浮模式 */
   const isOverlayMode = ref(false)
@@ -85,6 +108,21 @@ export const useSettingsStore = defineStore('settings', () => {
         enableKeyboardSim.value = false
       }
 
+      // 设置 FPS 获取策略；自动获取是测试功能，默认关闭，只有显式 true 才启用。
+      autoFpsEnabled.value = settings.auto_fps_enabled === true
+      manualFps.value = normalizeFps(settings.manual_fps)
+      lastDetectedFps.value =
+        typeof settings.last_detected_fps === 'number'
+          ? normalizeFps(settings.last_detected_fps)
+          : null
+      // 旧配置没有播放列表模式时默认顺序播放，符合“只播放一轮列表”的默认体验。
+      playlistPlaybackMode.value = isPlaybackMode(settings.playlist_playback_mode)
+        ? settings.playlist_playback_mode
+        : 'sequential'
+      songListSidebarCollapsed.value = settings.song_list_sidebar_collapsed === true
+      lastPreviewFilename.value = settings.last_preview_filename ?? null
+      lastPreviewSourceId.value = settings.last_preview_source_id ?? null
+
       // 从后端加载模板
       templates.value = await loadTemplatesFromBackend()
 
@@ -121,7 +159,24 @@ export const useSettingsStore = defineStore('settings', () => {
       current_template_id: currentTemplateId.value,
       play_mode: playMode.value,
       enable_keyboard_sim: enableKeyboardSim.value,
+      auto_fps_enabled: autoFpsEnabled.value,
+      manual_fps: manualFps.value,
+      last_detected_fps: lastDetectedFps.value,
+      playlist_playback_mode: playlistPlaybackMode.value,
+      song_list_sidebar_collapsed: songListSidebarCollapsed.value,
+      last_preview_filename: lastPreviewFilename.value,
+      last_preview_source_id: lastPreviewSourceId.value,
     })
+  }
+
+  /**
+   * @description: 归一化 FPS，避免异常设置影响按键时序计算
+   * @param {number | undefined | null} fps - 待归一化 FPS
+   * @return {number} 可用于播放策略的 FPS
+   */
+  function normalizeFps(fps: number | undefined | null): number {
+    if (typeof fps !== 'number' || !Number.isFinite(fps)) return DEFAULT_PLAYBACK_FPS
+    return Math.min(360, Math.max(15, Math.round(fps)))
   }
 
   /**
@@ -133,6 +188,71 @@ export const useSettingsStore = defineStore('settings', () => {
   async function setEnableKeyboardSim(enabled: boolean) {
     if (enabled && playMode.value !== 'piano') return
     enableKeyboardSim.value = enabled
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置自动 FPS 获取开关
+   * @param {boolean} enabled - 是否启用自动 FPS
+   * @return Promise
+   */
+  async function setAutoFpsEnabled(enabled: boolean) {
+    autoFpsEnabled.value = enabled
+    if (!enabled) {
+      manualFps.value = DEFAULT_PLAYBACK_FPS
+    }
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置手动 FPS
+   * @param {number} fps - 用户输入的手动 FPS
+   * @return Promise
+   */
+  async function setManualFps(fps: number) {
+    manualFps.value = normalizeFps(fps)
+    await persistSettings()
+  }
+
+  /**
+   * @description: 保存最近一次自动检测 FPS
+   * @param {number | null} fps - 自动检测 FPS
+   * @return Promise
+   */
+  async function setLastDetectedFps(fps: number | null) {
+    lastDetectedFps.value = fps === null ? null : normalizeFps(fps)
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置播放列表调度模式
+   * @param {PlaybackMode} mode - 播放列表调度模式
+   * @return {Promise<void>} 无返回值
+   */
+  async function setPlaylistPlaybackMode(mode: PlaybackMode) {
+    playlistPlaybackMode.value = mode
+    await persistSettings()
+  }
+
+  /**
+   * @description: 设置歌单侧栏收起状态
+   * @param {boolean} collapsed - 是否收起
+   * @return {Promise<void>} 无返回值
+   */
+  async function setSongListSidebarCollapsed(collapsed: boolean) {
+    songListSidebarCollapsed.value = collapsed
+    await persistSettings()
+  }
+
+  /**
+   * @description: 保存上次预览选中项和播放来源
+   * @param {string | null} filename - MIDI 文件名
+   * @param {string | null} sourceId - 来源 ID
+   * @return {Promise<void>} 无返回值
+   */
+  async function setLastPreviewSelection(filename: string | null, sourceId: string | null) {
+    lastPreviewFilename.value = filename
+    lastPreviewSourceId.value = sourceId
     await persistSettings()
   }
 
@@ -276,6 +396,13 @@ export const useSettingsStore = defineStore('settings', () => {
     currentTemplateId,
     playMode,
     enableKeyboardSim,
+    autoFpsEnabled,
+    manualFps,
+    lastDetectedFps,
+    playlistPlaybackMode,
+    songListSidebarCollapsed,
+    lastPreviewFilename,
+    lastPreviewSourceId,
     isOverlayMode,
     modeBeforeOverlay,
     templates,
@@ -293,5 +420,15 @@ export const useSettingsStore = defineStore('settings', () => {
     renameTemplate,
     setPlayMode,
     setEnableKeyboardSim,
+    setAutoFpsEnabled,
+    setManualFps,
+    setLastDetectedFps,
+    setPlaylistPlaybackMode,
+    setSongListSidebarCollapsed,
+    setLastPreviewSelection,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useSettingsStore, import.meta.hot))
+}

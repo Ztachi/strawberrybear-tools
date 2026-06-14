@@ -3,32 +3,45 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterView, isNavigationFailure, useRoute, useRouter } from 'vue-router'
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
+import { useSongListStore } from '@/stores/songLists'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
-import { Button, RadioButton, RadioGroup } from 'antdv-next'
-import { Music, LayoutGrid, Upload, Folder } from 'lucide-vue-next'
-import ScrollableContainer from '@/components/ScrollableContainer.vue'
-import FilesTab from './FilesTab/index.vue'
-import TemplatesTab from './TemplatesTab/index.vue'
+import { Upload } from 'lucide-vue-next'
+import type { RouteLocationRaw } from 'vue-router'
+import FloatingActionGroup from '@/components/FloatingActionGroup.vue'
 import OverlayView from './OverlayView.vue'
 import AppHeader from './components/AppHeader/index.vue'
+import GlobalMusicPlayer from '@/components/GlobalMusicPlayer/index.vue'
 import { isSupportedLocale } from '@/i18n'
+import { midiImportActionsKey } from './importActions'
+import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
+const songListStore = useSongListStore()
 
-/** 当前激活的标签页 @return {string} */
-const activeTab = ref('files')
+/** 主窗口支持的页签路由值。 */
+type MainWindowTab = 'files' | 'templates' | 'online'
 
-/** 模板 Tab 实例，用于在切页和导入前检查抽屉未保存编辑。 */
-const templatesTabRef = ref<InstanceType<typeof TemplatesTab> | null>(null)
+/** 当前激活的标签页由路由决定，避免刷新后回到默认文件页。 */
+const activeTab = computed<MainWindowTab>(() => {
+  // 未知路径会被 router 重定向；重定向完成前按文件页渲染，保持首屏稳定。
+  if (route.path.startsWith('/templates')) return 'templates'
+  if (route.path.startsWith('/online-library')) return 'online'
+  return 'files'
+})
 
 /** 是否显示拖拽覆盖层 @return {boolean} */
 const isDragOverlayVisible = ref(false)
@@ -229,12 +242,23 @@ async function handleImportPaths(paths: string[]) {
   if (!canImport) return
 
   const result = await playerStore.importPaths(paths)
+  const shouldOpenDetail =
+    result.importedFiles === 1 && result.scannedFolders === 0 && playerStore.lastImportedMidi
 
   if (result.invalidPaths.length > 0) {
     toast.error(t('dragdrop.invalidTitle'), {
       description: formatInvalidDropDescription(result.invalidPaths),
       richColors: true,
     })
+  }
+
+  if (shouldOpenDetail && playerStore.lastImportedMidi) {
+    await router.push({
+      name: 'files-midi-detail',
+      params: { filename: playerStore.lastImportedMidi.filename },
+      query: route.query,
+    })
+    playerStore.clearLastImportedMidi()
   }
 }
 
@@ -256,6 +280,8 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
     if (!canImport) return
   }
 
+  playerStore.clearLastImportedMidi()
+
   // 导入 MIDI 文件
   for (const file of midiFiles) {
     const bytes = await readFileAsUint8Array(file)
@@ -269,6 +295,15 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
       richColors: true,
     })
   }
+
+  if (shouldAutoSelect && playerStore.lastImportedMidi) {
+    await router.push({
+      name: 'files-midi-detail',
+      params: { filename: playerStore.lastImportedMidi.filename },
+      query: route.query,
+    })
+    playerStore.clearLastImportedMidi()
+  }
 }
 
 /**
@@ -280,33 +315,41 @@ async function ensureFilesTabForImport(): Promise<boolean> {
   // 已经在文件页时不需要询问模板页，避免无关编辑状态影响文件页重复导入。
   if (activeTab.value === 'files') return true
 
-  // 从模板页离开前询问子组件；保存失败或用户取消时中止导入。
-  const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('jump')
-  if (canLeave === false) return false
-
-  // 守卫通过后先切到文件页，后续 import/selectMidi 打开的详情才能直接显示给用户。
-  activeTab.value = 'files'
-  return true
+  // 路由离开守卫会处理模板编辑页的未保存确认。
+  const failure = await router.push({ name: 'files-all', query: route.query })
+  return !isNavigationFailure(failure)
 }
 
 /**
  * @description: 处理主标签页切换
  * @param {string | number} nextTab - 目标标签页值
- * @return {Promise<void>} 无返回值
+ * @param {RouteLocationRaw} [targetRoute] - 可选目标路由
+ * @return {Promise<boolean>} 是否完成导航
  */
-async function handleTabChange(nextTab: string | number): Promise<void> {
-  const normalizedNextTab = String(nextTab)
-  // 点击当前 Tab 不需要走离开守卫。
-  if (normalizedNextTab === activeTab.value) return
+async function handleMainNavigate(
+  nextTab: string | number,
+  targetRoute?: RouteLocationRaw
+): Promise<boolean> {
+  const normalizedNextTab = String(nextTab) as MainWindowTab
+  // 左侧菜单只会发出已声明的页签值；这里防御无效值，避免错误 URL 污染应用状态。
+  if (!['files', 'templates', 'online'].includes(normalizedNextTab)) return false
+  const routeTarget =
+    targetRoute ??
+    ({
+      name:
+        normalizedNextTab === 'files'
+          ? 'files-all'
+          : normalizedNextTab === 'templates'
+            ? 'templates'
+            : 'online-library',
+      query: route.query,
+    } as RouteLocationRaw)
 
-  if (activeTab.value === 'templates') {
-    // 从模板页离开时统一检查抽屉 dirty 状态，避免用户通过 Tab 切换绕过确认。
-    const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('close')
-    if (canLeave === false) return
-  }
+  if (normalizedNextTab === activeTab.value && !targetRoute) return true
 
-  // 守卫通过后再更新 v-model，防止 UI 先切走再被迫切回造成闪烁。
-  activeTab.value = normalizedNextTab
+  // 路由离开守卫会处理模板编辑页的未保存确认。
+  await router.push(routeTarget)
+  return true
 }
 
 /**
@@ -316,8 +359,13 @@ async function handleTabChange(nextTab: string | number): Promise<void> {
 function bindDomDragEvents() {
   const dragOptions = { capture: true }
 
+  function shouldSkipMidiDrag(): boolean {
+    return document.querySelector('.cover-cropper-modal-root') !== null
+  }
+
   /** 处理 dragenter 事件 */
   const handleDragEnter = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     dragEnterDepth += 1
@@ -327,6 +375,7 @@ function bindDomDragEvents() {
 
   /** 处理 dragover 事件 */
   const handleDragOver = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     if (event.dataTransfer) {
@@ -338,6 +387,7 @@ function bindDomDragEvents() {
 
   /** 处理 dragleave 事件 */
   const handleDragLeave = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     dragEnterDepth = Math.max(0, dragEnterDepth - 1)
@@ -349,6 +399,7 @@ function bindDomDragEvents() {
 
   /** 处理 drop 事件 */
   const handleDrop = (event: DragEvent) => {
+    if (shouldSkipMidiDrag()) return
     event.preventDefault()
     event.stopPropagation()
     dragEnterDepth = 0
@@ -413,10 +464,13 @@ onMounted(async () => {
   await playerStore.checkAccessibility()
   // 加载设置
   await settingsStore.loadSettings()
+  // settings 中的播放列表模式需要同步到公共播放器状态机，后续队列调度都以它为准。
+  playerStore.applyPlaylistPlaybackMode()
   // 如果用户在悬浮窗口中刷新页面，前端状态会重建；这里从 Rust 侧持久化快照恢复悬浮 UI。
   settingsStore.isOverlayMode = await invoke<boolean>('has_saved_overlay_window_state')
-  // 加载 MIDI 库
-  await playerStore.loadMidiLibrary()
+  // 加载歌单和 MIDI 库后恢复上次预览选中与播放作用域。
+  await Promise.all([songListStore.loadSongLists(), playerStore.loadMidiLibrary()])
+  await playerStore.restoreInitialPreviewSelection()
   // 绑定拖拽事件
   removeDomDragListeners = bindDomDragEvents()
 })
@@ -443,7 +497,7 @@ async function selectFile() {
     await handleImportPaths(files)
     // 多个文件时关闭详情
     if (files.length > 1) {
-      playerStore.closeDetail()
+      await router.push({ name: 'files-all', query: route.query })
     }
   }
 }
@@ -467,9 +521,12 @@ async function selectFolder() {
  */
 async function enterOverlayMode() {
   try {
-    // 没有选中 MIDI 时自动选中第一首，仅用于悬浮列表展示与播放，不打开主界面详情抽屉
+    // 没有选中 MIDI 时自动选中第一首，仅用于悬浮列表展示与播放，不打开主界面详情页
     if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
-      await playerStore.selectMidi(playerStore.midiLibrary[0], { openDetail: false })
+      await playerStore.selectMidiInQueue(playerStore.midiLibrary[0], playerStore.midiLibrary, {
+        id: 'all',
+        title: t('songList.allSongs'),
+      })
     }
     // 停止预览播放
     void playerStore.stopPreviewPlayback()
@@ -488,6 +545,11 @@ async function enterOverlayMode() {
     console.error('进入悬浮模式失败:', e)
   }
 }
+
+provide(midiImportActionsKey, {
+  selectFile,
+  selectFolder,
+})
 </script>
 
 <template>
@@ -533,54 +595,32 @@ async function enterOverlayMode() {
       <!-- 主内容区 -->
       <main id="main-window-body" class="content">
         <div id="main-window-portal-root" class="content-portal-root" />
-        <ScrollableContainer>
-          <div class="main-content-shell has-[.empty-state]:h-full">
-            <div class="section-toolbar">
-              <RadioGroup
-                :value="activeTab"
-                button-style="solid"
-                class="view-switch"
-                @update:value="handleTabChange"
-              >
-                <RadioButton value="files">
-                  <span class="view-switch-label">
-                    <Music class="view-switch-icon" />
-                    {{ t('tabs.files') }}
-                  </span>
-                </RadioButton>
-                <RadioButton value="templates">
-                  <span class="view-switch-label">
-                    <LayoutGrid class="view-switch-icon" />
-                    {{ t('tabs.templates') }}
-                  </span>
-                </RadioButton>
-              </RadioGroup>
+        <div class="main-content-shell">
+          <SongListSidebar :request-navigate="handleMainNavigate" />
 
-              <div class="file-actions">
-                <Button size="small" color="primary" variant="outlined" @click="selectFile">
-                  <template #icon>
-                    <Upload class="header-btn-icon" />
-                  </template>
-                  {{ t('actions.selectFile') }}
-                </Button>
-                <Button size="small" color="primary" variant="outlined" @click="selectFolder">
-                  <template #icon>
-                    <Folder class="header-btn-icon" />
-                  </template>
-                  {{ t('actions.selectFolder') }}
-                </Button>
-              </div>
-            </div>
-
-            <section v-show="activeTab === 'files'" class="tab-content flex-1">
-              <FilesTab />
+          <section class="route-content">
+            <section class="route-page-stage">
+              <RouterView v-slot="{ Component, route: pageRoute }">
+                <Transition name="main-page">
+                  <section :key="pageRoute.fullPath" class="route-page-host">
+                    <component :is="Component" />
+                  </section>
+                </Transition>
+              </RouterView>
             </section>
 
-            <section v-show="activeTab === 'templates'" class="tab-content flex-1">
-              <TemplatesTab ref="templatesTabRef" />
-            </section>
-          </div>
-        </ScrollableContainer>
+            <GlobalMusicPlayer />
+          </section>
+        </div>
+
+        <FloatingActionGroup
+          :show-back-to-top="mainWindowUiStore.canBackToTop"
+          :show-locate-current="mainWindowUiStore.canLocateCurrent"
+          :back-to-top-title="t('actions.backToTop')"
+          :locate-current-title="t('overlay.locateCurrent')"
+          @back-to-top="mainWindowUiStore.triggerBackToTop"
+          @locate-current="mainWindowUiStore.triggerLocateCurrent"
+        />
       </main>
     </div>
   </div>
@@ -675,73 +715,55 @@ async function enterOverlayMode() {
 .content-portal-root :global(.ant-drawer-root),
 .content-portal-root :global(.ant-drawer-mask),
 .content-portal-root :global(.ant-drawer-wrap),
-.content-portal-root :global(.ant-drawer-content-wrapper) {
+.content-portal-root :global(.ant-drawer-content-wrapper),
+.content-portal-root :global(.ant-dropdown),
+.content-portal-root :global(.ant-popover),
+.content-portal-root :global(.ant-tooltip),
+.content-portal-root :global(.ant-modal-root) {
   pointer-events: auto;
 }
 
 .main-content-shell {
-  @apply flex min-h-full flex-col;
+  @apply flex h-full min-h-0 gap-2 px-2 pb-2;
 }
 
-.section-toolbar {
-  @apply sticky top-0 z-10 flex items-center justify-between gap-3 py-2;
+.route-content {
+  @apply flex min-h-0 min-w-0 flex-1 flex-col gap-2;
 }
 
-.view-switch :deep(.ant-radio-button-wrapper) {
-  height: 32px;
-  border-color: var(--border-primary-20);
-  color: var(--color-primary-active);
-  background: var(--bg-white-80);
+.route-page-stage {
+  @apply relative min-h-0 flex-1 overflow-hidden;
 }
 
-.view-switch :deep(.ant-radio-button-wrapper:first-child) {
-  border-start-start-radius: 10px;
-  border-end-start-radius: 10px;
+.route-page-host {
+  @apply absolute inset-0 overflow-hidden rounded-2xl p-4;
+  background: var(--bg-white-50);
+  border: 1px solid var(--border-primary-15);
 }
 
-.view-switch :deep(.ant-radio-button-wrapper:last-child) {
-  border-start-end-radius: 10px;
-  border-end-end-radius: 10px;
+.main-page-enter-active,
+.main-page-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 
-.view-switch :deep(.ant-radio-button-wrapper:hover) {
-  color: var(--color-secondary);
+.main-page-enter-active {
+  z-index: 2;
 }
 
-.view-switch :deep(.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)) {
-  border-color: transparent;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
+.main-page-leave-active {
+  z-index: 1;
+  pointer-events: none;
 }
 
-.view-switch-label {
-  @apply inline-flex items-center gap-2 text-sm font-medium;
+.main-page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
-.view-switch-icon {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2.25;
-}
-
-.file-actions {
-  @apply flex items-center gap-2;
-}
-
-.tab-content {
-  @apply flex-1 h-full;
-  animation: fadeIn 0.2s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.main-page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

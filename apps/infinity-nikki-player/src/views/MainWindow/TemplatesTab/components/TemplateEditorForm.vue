@@ -1,15 +1,13 @@
 <script setup lang="ts">
 /**
- * @description: TemplateEditorDrawer - 模板编辑抽屉
- * @description 对齐 MIDI 详情抽屉交互，负责模板名称、Canvas 映射、草稿和未保存离开确认
+ * @description: TemplateEditorForm - 模板编辑页面表单
+ * @description 负责模板名称、Canvas 映射、草稿和未保存离开确认
  */
-import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { feedback as toast } from '@/lib/feedback'
-import { Save, X } from 'lucide-vue-next'
-import { Button, Drawer, Input, Modal, Tag, TypographyText } from 'antdv-next'
+import { Button, Input, Modal, TypographyText } from 'antdv-next'
 import { useSettingsStore } from '@/stores/settings'
-import { getContentDrawerRootStyle, getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { KeyTemplate } from '@/types'
 import { normalizeTemplateMappings } from '@/lib/templateKeys'
 import VisualTemplateEditor from './VisualTemplateEditor.vue'
@@ -79,8 +77,8 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-/** 抽屉是否打开，关闭动作统一走 dirty guard。 */
-const isDrawerOpen = ref(false)
+/** 编辑会话是否打开，关闭动作统一走 dirty guard。 */
+const isEditorOpen = ref(false)
 /** 当前编辑器模式，决定保存后是新增、编辑还是基于副本新增。 */
 const editorMode = ref<EditorMode>('create')
 /** 当前正在编辑的模板副本；始终不直接修改 Pinia 列表中的对象。 */
@@ -97,6 +95,15 @@ const leaveConfirm = ref<LeaveConfirmState>({
   context: 'close',
   resolve: null,
 })
+/** 发现草稿确认框状态，使用组件内 Modal 保持主题一致。 */
+const draftConfirm = ref<{
+  open: boolean
+  resolve: CallableFunction | null
+}>({
+  open: false,
+  resolve: null,
+})
+let draftConfirmPromise: Promise<DraftDecision> | null = null
 
 /** 抽屉标题根据编辑模式展示。 */
 const drawerTitle = computed(() => {
@@ -208,7 +215,7 @@ function isValidTemplateFileName(name: string): boolean {
  */
 function hasEditorChanges(): boolean {
   // 抽屉关闭或没有编辑对象时，不应阻止 Tab 切换和 MIDI 导入。
-  if (!isDrawerOpen.value || !editingTemplate.value) return false
+  if (!isEditorOpen.value || !editingTemplate.value) return false
   // 序列化比对只关注持久化字段，避免响应式代理和对象引用影响结果。
   return serializeTemplate(editingTemplate.value) !== initialEditorSnapshot.value
 }
@@ -236,7 +243,7 @@ function openEditor(
   // 初始快照在抽屉打开前写入，用于关闭和 Tab 切换时判断 dirty。
   initialEditorSnapshot.value = serializeTemplate(options.baselineTemplate ?? editingTemplate.value)
   // 打开抽屉后才启动草稿计时，避免关闭状态写入空草稿。
-  isDrawerOpen.value = true
+  isEditorOpen.value = true
   restartDraftAutosave()
 }
 
@@ -339,64 +346,22 @@ async function createBlankTemplate(): Promise<void> {
 }
 
 function confirmLoadDraft(): Promise<DraftDecision> {
-  return new Promise((resolve) => {
-    const modal = Modal.confirm({
-      title: t('template.draftFound'),
-      content: t('template.loadDraftPrompt'),
-      okText: t('template.loadDraft'),
-      cancelText: t('actions.cancel'),
-      centered: true,
-      footer: () => [
-        h(
-          Button,
-          {
-            key: 'cancel',
-            size: 'small',
-            color: 'primary',
-            variant: 'outlined',
-            onClick: () => {
-              modal.destroy()
-              resolve('cancel')
-            },
-          },
-          () => t('actions.cancel')
-        ),
-        h(
-          Button,
-          {
-            key: 'discard',
-            size: 'small',
-            color: 'primary',
-            variant: 'outlined',
-            onClick: () => {
-              modal.destroy()
-              resolve('discard')
-            },
-          },
-          () => t('template.discardDraft')
-        ),
-        h(
-          Button,
-          {
-            key: 'load',
-            type: 'primary',
-            size: 'small',
-            onClick: () => {
-              modal.destroy()
-              resolve('load')
-            },
-          },
-          () => t('template.loadDraft')
-        ),
-      ],
-      onOk: () => {
-        resolve('load')
-      },
-      onCancel: () => {
-        resolve('cancel')
-      },
-    })
+  if (draftConfirmPromise) return draftConfirmPromise
+  draftConfirmPromise = new Promise((resolve) => {
+    draftConfirm.value = {
+      open: true,
+      resolve,
+    }
   })
+  return draftConfirmPromise
+}
+
+function resolveDraftConfirm(decision: DraftDecision): void {
+  const resolve = draftConfirm.value.resolve
+  draftConfirm.value.open = false
+  draftConfirm.value.resolve = null
+  draftConfirmPromise = null
+  if (resolve) resolve(decision)
 }
 
 /**
@@ -538,22 +503,7 @@ function closeEditorWithoutPrompt(): void {
   editingTemplate.value = null
   initialEditorSnapshot.value = ''
   activeDraftKey.value = ''
-  isDrawerOpen.value = false
-}
-
-/**
- * @description: 处理 Drawer open 状态变更
- * @param {boolean} nextOpen - 目标打开状态
- * @return {Promise<void>} 无返回值
- */
-async function handleDrawerOpenChange(nextOpen: boolean): Promise<void> {
-  if (nextOpen) {
-    // 抽屉只能通过新增/编辑入口打开，外部 open=true 仅同步状态。
-    isDrawerOpen.value = true
-    return
-  }
-  // 用户点遮罩或系统触发关闭时，必须走统一未保存守卫。
-  await confirmLeaveIfNeeded('close')
+  isEditorOpen.value = false
 }
 
 /**
@@ -595,7 +545,7 @@ async function confirmLeaveIfNeeded(context: 'close' | 'jump' = 'close'): Promis
   // 没有真实改动时不弹窗，避免无意义阻塞导入和 Tab 切换。
   if (!hasEditorChanges()) {
     // 离开动作本身仍然要清理抽屉，否则切页或导入后编辑器会继续覆盖新页面。
-    if (isDrawerOpen.value) closeEditorWithoutPrompt()
+    if (isEditorOpen.value) closeEditorWithoutPrompt()
     return true
   }
 
@@ -617,6 +567,33 @@ async function confirmLeaveIfNeeded(context: 'close' | 'jump' = 'close'): Promis
   const saved = await saveEditingTemplate()
   if (saved) closeEditorWithoutPrompt()
   return saved
+}
+
+/**
+ * @description: 判断刷新前是否需要阻止整页卸载
+ * @return {boolean} true 表示模板抽屉存在未保存改动
+ */
+function hasPendingChanges(): boolean {
+  // 刷新保护必须复用编辑器原有 dirty 判断，避免主窗口维护第二套模板差异状态。
+  return hasEditorChanges()
+}
+
+/**
+ * @description: 刷新前同步写入当前模板草稿
+ * @return {void}
+ */
+function writePendingDraft(): void {
+  // 只有真实 dirty 时才写草稿，避免普通刷新把空编辑器状态覆盖到 localStorage。
+  if (!hasEditorChanges()) return
+  writeCurrentTemplateDraft()
+}
+
+/**
+ * @description: 获取当前编辑模板 ID
+ * @return {string | null} 当前编辑模板 ID
+ */
+function getEditingTemplateId(): string | null {
+  return editingTemplate.value?.id ?? null
 }
 
 /**
@@ -657,7 +634,7 @@ function isSaveShortcut(event: KeyboardEvent): boolean {
  * @return {void}
  */
 function handleSaveShortcut(event: KeyboardEvent): void {
-  if (!isDrawerOpen.value || !editingTemplate.value || !isSaveShortcut(event)) return
+  if (!isEditorOpen.value || !editingTemplate.value || !isSaveShortcut(event)) return
   event.preventDefault()
   event.stopPropagation()
   void saveAndKeepEditing()
@@ -672,6 +649,7 @@ onBeforeUnmount(() => {
   stopDraftAutosave()
   // 如果确认框还在等待，按取消处理，避免父级 await 永久挂起。
   resolveLeaveDecision('cancel')
+  resolveDraftConfirm('cancel')
   window.removeEventListener('keydown', handleSaveShortcut)
 })
 
@@ -679,82 +657,43 @@ defineExpose({
   createBlankTemplate,
   createFromTemplate,
   editTemplate,
+  saveEditingTemplate,
+  saveAndCloseEditor,
+  saveAndKeepEditing,
+  closeEditorWithoutPrompt,
   confirmLeaveIfNeeded,
+  hasEditorChanges,
+  hasPendingChanges,
+  writePendingDraft,
+  getEditingTemplateId,
+  drawerTitle,
+  editingTemplate,
 })
 </script>
 
 <template>
-  <Drawer
-    :open="isDrawerOpen"
-    placement="left"
-    size="100%"
-    root-class="content-area-drawer template-editor-drawer"
-    :closable="false"
-    :get-container="getMainWindowPopupContainer"
-    :root-style="getContentDrawerRootStyle()"
-    @update:open="handleDrawerOpenChange"
-  >
-    <template #title>
-      <div>
-        <h2 class="text-base font-semibold text-foreground">
-          {{ drawerTitle }}
-        </h2>
-      </div>
-    </template>
-    <template #extra>
-      <div class="flex shrink-0 items-center gap-2">
-        <Tag v-if="hasEditorChanges()" color="pink">
-          {{ t('template.unsaved') }}
-        </Tag>
-        <Button
-          size="small"
-          color="primary"
-          variant="outlined"
-          @click="handleDrawerOpenChange(false)"
-        >
-          <template #icon>
-            <X class="size-4" />
-          </template>
-          {{ t('actions.cancel') }}
-        </Button>
-        <Button size="small" color="primary" variant="outlined" @click="saveAndKeepEditing">
-          <template #icon>
-            <Save class="size-4" />
-          </template>
-          {{ t('template.save') }}
-        </Button>
-        <Button type="primary" size="small" @click="saveAndCloseEditor">
-          <template #icon>
-            <Save class="size-4" />
-          </template>
-          {{ t('template.saveAndExit') }}
-        </Button>
-      </div>
-    </template>
-
-    <template v-if="editingTemplate">
-      <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-        <div class="max-w-xl">
-          <TypographyText class="mb-1 block text-xs font-medium text-muted-foreground">
-            {{ t('template.name') }}
-          </TypographyText>
-          <Input
-            v-model:value="editingTemplate.name"
-            class="h-9 bg-white"
-            allow-clear
-            show-count
-            :maxlength="TEMPLATE_NAME_MAX_LENGTH"
-          />
-        </div>
-
-        <VisualTemplateEditor
-          :mappings="editingTemplate.mappings"
-          class="shrink-0"
-          @update:mappings="editingTemplate.mappings = $event"
+  <section v-if="editingTemplate" class="template-editor-inline">
+    <div class="template-editor-body">
+      <div class="max-w-xl">
+        <TypographyText class="mb-1 block text-xs font-medium text-muted-foreground">
+          {{ t('template.name') }}
+        </TypographyText>
+        <Input
+          v-model:value="editingTemplate.name"
+          class="h-9 bg-white"
+          allow-clear
+          show-count
+          :maxlength="TEMPLATE_NAME_MAX_LENGTH"
         />
       </div>
-    </template>
-  </Drawer>
+
+      <VisualTemplateEditor
+        :mappings="editingTemplate.mappings"
+        class="flex-1"
+        @update:mappings="editingTemplate.mappings = $event"
+      />
+    </div>
+  </section>
 
   <Modal
     :open="leaveConfirm.open"
@@ -793,20 +732,48 @@ defineExpose({
       </Button>
     </div>
   </Modal>
+
+  <Modal
+    :open="draftConfirm.open"
+    :title="t('template.draftFound')"
+    :footer="null"
+    width="420"
+    centered
+    @cancel="resolveDraftConfirm('cancel')"
+  >
+    <div class="text-sm leading-6 text-muted-foreground">
+      {{ t('template.loadDraftPrompt') }}
+    </div>
+    <div class="mt-4 flex flex-wrap justify-end gap-2">
+      <Button
+        size="small"
+        color="primary"
+        variant="outlined"
+        @click="resolveDraftConfirm('cancel')"
+      >
+        {{ t('actions.cancel') }}
+      </Button>
+      <Button
+        size="small"
+        color="primary"
+        variant="outlined"
+        @click="resolveDraftConfirm('discard')"
+      >
+        {{ t('template.discardDraft') }}
+      </Button>
+      <Button type="primary" size="small" @click="resolveDraftConfirm('load')">
+        {{ t('template.loadDraft') }}
+      </Button>
+    </div>
+  </Modal>
 </template>
 
 <style scoped>
-:deep(.template-editor-drawer .ant-drawer-content) {
-  background: var(--bg-white-95);
+.template-editor-inline {
+  @apply flex h-full min-h-0 min-w-0 flex-col;
 }
 
-:deep(.template-editor-drawer .ant-drawer-header) {
-  border-bottom-color: var(--border-primary-15);
-}
-
-:deep(.template-editor-drawer .ant-drawer-body) {
-  display: flex;
-  min-height: 0;
-  padding: 0;
+.template-editor-body {
+  @apply flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden p-4;
 }
 </style>

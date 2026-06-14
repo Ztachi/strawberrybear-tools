@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
+use uuid::Uuid;
 
 /// MIDI 文件配置结构体
 ///
@@ -29,6 +30,21 @@ use tauri::Manager;
 pub struct MidiConfig {
     /// 文件名
     pub filename: String,
+    /// 展示标题，在线曲库导入时写入
+    #[serde(default)]
+    pub title: Option<String>,
+    /// 作者名，在线曲库导入时写入
+    #[serde(default)]
+    pub author_name: Option<String>,
+    /// 描述，在线曲库导入时写入
+    #[serde(default)]
+    pub description: Option<String>,
+    /// 在线曲库歌曲 ID
+    #[serde(default)]
+    pub online_song_id: Option<String>,
+    /// 在线曲库文件 SHA-256
+    #[serde(default)]
+    pub online_sha256: Option<String>,
     /// 计算出的准确时长（毫秒）
     pub duration_ms: u64,
     /// 音轨数量
@@ -47,6 +63,11 @@ impl Default for MidiConfig {
     fn default() -> Self {
         Self {
             filename: String::new(),
+            title: None,
+            author_name: None,
+            description: None,
+            online_song_id: None,
+            online_sha256: None,
             duration_ms: 0,
             track_count: 0,
             melody_note_count: 0,
@@ -78,6 +99,57 @@ fn get_midi_library_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         fs::create_dir_all(&midi_dir).map_err(|e| format!("创建目录失败: {}", e))?;
     }
     Ok(midi_dir)
+}
+
+fn get_online_preview_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("获取应用缓存目录失败: {}", e))?;
+    let preview_dir = cache_dir.join("online_midi_preview");
+    fs::create_dir_all(&preview_dir).map_err(|e| format!("创建在线试听缓存目录失败: {}", e))?;
+    Ok(preview_dir)
+}
+
+fn is_midi_filename(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("mid") || ext.eq_ignore_ascii_case("midi"))
+}
+
+fn safe_midi_filename(filename: &str) -> String {
+    let raw = Path::new(filename)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("online-preview.mid")
+        .trim();
+    let mut safe = raw
+        .chars()
+        .map(|ch| match ch {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            ch if ch.is_control() => '_',
+            ch => ch,
+        })
+        .collect::<String>();
+    if safe.is_empty() || safe == "." || safe == ".." {
+        safe = "online-preview.mid".to_string();
+    }
+    if !is_midi_filename(&safe) {
+        safe.push_str(".mid");
+    }
+    safe
+}
+
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 /// 解析 MIDI 文件
@@ -319,6 +391,49 @@ pub fn import_midi_buffer(
     Ok(info)
 }
 
+#[tauri::command]
+pub fn prepare_online_midi_preview(
+    app: tauri::AppHandle,
+    filename: String,
+    data: Vec<u8>,
+) -> Result<MidiInfo, String> {
+    let preview_dir = get_online_preview_dir(&app)?;
+    let safe_filename = safe_midi_filename(&filename);
+    let temp_filename = format!("{}-{}", Uuid::new_v4(), safe_filename);
+    let temp_path = preview_dir.join(temp_filename);
+
+    fs::write(&temp_path, data).map_err(|e| format!("写入在线试听缓存失败: {}", e))?;
+    match parse_midi_internal(temp_path.to_str().unwrap_or("")) {
+        Ok((info, _)) => Ok(info),
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+pub fn cleanup_online_midi_preview(app: tauri::AppHandle, file_path: String) -> Result<(), String> {
+    let preview_dir = get_online_preview_dir(&app)?;
+    let preview_dir = preview_dir
+        .canonicalize()
+        .map_err(|e| format!("解析在线试听缓存目录失败: {}", e))?;
+    let target_path = PathBuf::from(file_path);
+    if !target_path.exists() {
+        return Ok(());
+    }
+    let target_path = target_path
+        .canonicalize()
+        .map_err(|e| format!("解析在线试听缓存文件失败: {}", e))?;
+    if !target_path.starts_with(&preview_dir) {
+        return Err("只能清理在线试听缓存文件".to_string());
+    }
+    if target_path.is_file() {
+        fs::remove_file(target_path).map_err(|e| format!("清理在线试听缓存失败: {}", e))?;
+    }
+    Ok(())
+}
+
 /// 获取 MIDI 库列表
 ///
 /// 扫描库目录，返回所有 MIDI 文件的信息
@@ -400,6 +515,8 @@ pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Resu
         fs::remove_file(&config_path).map_err(|e| format!("删除配置文件失败: {}", e))?;
     }
 
+    crate::commands::song_lists::remove_filename_from_all_song_lists(&app, &filename)?;
+
     Ok(())
 }
 
@@ -473,13 +590,31 @@ pub fn save_midi_config(
     ticks_per_beat: u16,
     tempo: u32,
     disabled_tracks: Vec<u8>,
+    title: Option<String>,
+    author_name: Option<String>,
+    description: Option<String>,
+    online_song_id: Option<String>,
+    online_sha256: Option<String>,
 ) -> Result<(), String> {
     let library_dir = get_midi_library_dir(&app)?;
     let config_path = library_dir.join(format!("{}.midi-config", filename));
+    let existing_config = if config_path.exists() {
+        fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|content| serde_json::from_str::<MidiConfig>(&content).ok())
+            .unwrap_or_default()
+    } else {
+        MidiConfig::default()
+    };
 
     // 构建配置对象
     let config = MidiConfig {
         filename: filename.clone(),
+        title: normalize_optional_text(title).or(existing_config.title),
+        author_name: normalize_optional_text(author_name).or(existing_config.author_name),
+        description: normalize_optional_text(description).or(existing_config.description),
+        online_song_id: normalize_optional_text(online_song_id).or(existing_config.online_song_id),
+        online_sha256: normalize_optional_text(online_sha256).or(existing_config.online_sha256),
         duration_ms,
         track_count,
         melody_note_count,

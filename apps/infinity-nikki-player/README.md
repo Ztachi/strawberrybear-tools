@@ -89,6 +89,25 @@ pnpm --filter @strawberrybear/infinity-nikki-player tauri build
 - **信息缓存**：自动缓存文件时长、音轨数、旋律音符数等配置信息，加速下次加载
 - **支持格式**：`.mid`、`.midi`
 
+### 自建歌单
+
+- **完整 CRUD**：支持创建、编辑、复制、删除、导入、导出歌单
+- **封面设置**：为每个歌单设置自定义封面
+- **歌曲管理**：在歌单中自由增删 MIDI 曲目
+- **自动同步**：删除 MIDI 文件时自动从所有歌单中移除对应条目
+- **大列表优化**：启用虚拟滚动以保持流畅
+
+### 在线 MIDI 曲库
+
+- **应用内浏览**：无需离开应用即可浏览与导入更多乐谱
+- **试听预览**：在导入前可以试听曲库中的 MIDI
+
+### 播放模式控制
+
+- **四种模式**：顺序、随机、单曲循环、列表循环
+- **模式持久化**：选择自动保存，下次启动沿用
+- **主窗口与悬浮窗统一**：同一控件在两处共享
+
 ### 音轨管理
 
 - **音轨屏蔽**：支持屏蔽/启用特定音轨（如打击乐器音轨）
@@ -112,13 +131,17 @@ pnpm --filter @strawberrybear/infinity-nikki-player tauri build
 - **实时日志**：显示按键按下/释放的实时日志（最多 50 条）
 - **按键预览**：可视化键盘布局，实时高亮当前激活的按键
 - **模板化映射**：基于模板的音高到键盘按键映射
+- **自动获取游戏帧数（beta）**：在悬浮窗打开"自动 FPS"开关后，应用会在演奏前检测游戏帧数并据此调整按键的持续和间隔，减少断音；也可手动指定帧数
 
 ### 悬浮模式
 
 - **窗口特性**：透明背景、可拖拽、可悬浮于游戏窗口上方
 - **迷你播放器**：紧凑的悬浮条，显示当前曲目和播放控制
+- **常显进度条**：进入悬浮窗后，进度条始终可见、可拖动
+- **定位当前播放**：悬浮窗新增"定位当前播放歌曲"快捷按钮
 - **展开面板**：点击展开后显示完整播放列表
 - **倒计时播放**：进入悬浮模式后 3 秒倒计时开始播放，便于切换到游戏窗口
+- **状态隔离**：进入与退出悬浮时窗口状态彻底隔离，悬浮模式仅读取列表播放、不影响主界面页面状态
 - **独立音量**：悬浮层有独立的音量控制，与主窗口音量互不影响
 
 ### 智能音高适配算法
@@ -190,88 +213,105 @@ pnpm --filter @strawberrybear/infinity-nikki-player tauri build
 ```
 infinity-nikki-player/
 ├── src/                          # Vue 前端源码
-│   ├── assets/                    # 静态资源（图片等）
-│   ├── components/                # 公共组件
-│   │   ├── KeyboardPreview/      # 键盘预览组件
-│   │   ├── PreviewPlayer/        # 预览播放器组件
+│   ├── assets/                   # 静态资源
+│   ├── components/               # 公共组件
 │   │   ├── AboutDialog/          # 关于对话框
+│   │   ├── AppUpdateButton.vue   # 更新入口
+│   │   ├── FloatingActionGroup.vue  # 浮动操作按钮组
+│   │   ├── GlobalMusicPlayer/    # 全局音乐播放器
+│   │   ├── GlobalPlayerBar/      # 全局播放条
+│   │   ├── HeaderNavigation/     # 顶部导航
+│   │   ├── KeyboardPreview/      # 键盘预览与日志
+│   │   ├── KeyTemplateSelect.vue # 模板选择器
+│   │   ├── MarqueeText.vue       # 跑马灯文字
+│   │   ├── MusicPlayerCore/      # 播放核心
+│   │   ├── PlaybackModeControl.vue  # 播放模式控件
+│   │   ├── PlayerControls/       # 播放控制
+│   │   ├── PlayQueueDrawer/      # 播放列表面板
+│   │   ├── PreviewPlayer/        # 预览播放器
 │   │   └── ScrollableContainer.vue
-│   ├── views/                    # 页面视图
+│   ├── views/
 │   │   └── MainWindow/           # 主窗口
-│   │       ├── FilesTab/         # 文件 Tab
-│   │       │   ├── index.vue
-│   │       │   └── components/
-│   │       │       └── MidiLibrary/
-│   │       │           ├── index.vue
-│   │       │           └── components/
-│   │       │               └── MidiDetail/   # MIDI 详情面板
-│   │       ├── TemplatesTab/     # 模板 Tab（模板编辑器组件已实现，Tab 页面待启用）
+│   │       ├── FilesTab/         # 文件 Tab（含自建歌单）
+│   │       │   ├── components/   # SongListSidebar / SongCollectionView / CoverCropperModal 等
+│   │       │   └── pages/        # AllSongsPage / SongListDetailPage / SongListEditPage 等
+│   │       ├── OnlineLibraryTab/ # 在线 MIDI 曲库
+│   │       ├── TemplatesTab/     # 模板 Tab
+│   │       ├── LogsTab/          # 按键日志 Tab
+│   │       ├── components/       # AppHeader / OverlayFpsControl
 │   │       ├── OverlayView.vue   # 悬浮模式视图
-│   │       └── index.vue         # 主窗口根组件
-│   ├── stores/                   # Pinia 状态管理
-│   │   ├── player.ts            # 播放器状态
-│   │   └── settings.ts           # 设置状态
-│   ├── lib/                      # 业务逻辑库
+│   │       └── index.vue
+│   ├── stores/                   # Pinia 状态
+│   │   ├── player.ts             # 播放器状态
+│   │   ├── settings.ts           # 应用设置
+│   │   ├── songLists.ts          # 自建歌单
+│   │   ├── mainWindowUi.ts       # 主窗口 UI 状态
+│   │   └── onlineMidiLibrary.ts  # 在线曲库
+│   ├── lib/                      # 业务逻辑
 │   │   ├── feedback.ts           # antdv-next 反馈封装
-│   │   ├── midiPlayer.ts        # 音频播放器封装
-│   │   ├── keyboardMapper.ts    # 键盘映射器
-│   │   └── settings.ts          # 设置持久化
-│   ├── theme/                    # UI 框架主题配置
-│   │   └── infinityNikkiTheme.ts # antdv-next 无限暖暖主题
+│   │   ├── midiPlayer.ts         # 音频播放器
+│   │   ├── midiDisplay.ts        # MIDI 显示工具
+│   │   ├── keyboardMapper.ts     # 键盘映射器
+│   │   ├── keyboardTiming.ts     # 按键时序
+│   │   ├── frameRateCapture.ts   # 帧率采集封装
+│   │   ├── onlineMidiLibraryApi.ts  # 在线曲库接口
+│   │   ├── settings.ts           # 设置持久化
+│   │   ├── templateKeys.ts       # 模板按键工具
+│   │   └── templatePianoEditor.ts
+│   ├── features/                 # 业务特性
+│   │   └── player/midiPreview.ts
+│   ├── bootstrap/                # 应用启动
+│   │   ├── createAppContext.ts
+│   │   └── bindAppContextStores.ts
+│   ├── composables/              # 组合式 API
+│   │   └── useAppUpdater.ts
+│   ├── router/                   # 路由
+│   ├── theme/                    # 主题
+│   │   └── infinityNikkiTheme.ts
 │   ├── i18n/                     # 国际化
-│   │   ├── locales/
-│   │   │   ├── zh-CN.ts
-│   │   │   └── en-US.ts
-│   │   └── index.ts
-│   ├── types/                    # TypeScript 类型定义
-│   │   └── index.ts
-│   ├── App.vue                   # 根组件
-│   ├── main.ts                   # 入口文件
-│   └── style.css                 # 全局样式
+│   ├── types/                    # TypeScript 类型
+│   ├── App.vue
+│   ├── main.ts
+│   └── style.css
 │
-├── src-tauri/                    # Rust 后端源码
-│   ├── src/                      # Rust 源码
+├── src-tauri/                    # Rust 后端
+│   ├── src/
 │   │   ├── commands/             # Tauri 命令
-│   │   │   ├── midi.rs          # MIDI 相关命令
-│   │   │   ├── player.rs        # 播放控制命令
-│   │   │   ├── keyboard.rs      # 键盘模拟命令
-│   │   │   ├── templates.rs     # 模板管理命令
-│   │   │   ├── settings.rs      # 设置命令
+│   │   │   ├── midi.rs
+│   │   │   ├── player.rs
+│   │   │   ├── keyboard.rs
+│   │   │   ├── templates.rs
+│   │   │   ├── settings.rs
+│   │   │   ├── song_lists.rs     # 自建歌单
+│   │   │   ├── online_midi_library.rs  # 在线曲库
+│   │   │   ├── frame_rate.rs     # 帧率采集
+│   │   │   ├── window.rs
+│   │   │   ├── window_controls.rs
 │   │   │   └── mod.rs
-│   │   ├── midi/                # MIDI 解析模块
-│   │   │   ├── parser.rs        # MIDI 文件解析
-│   │   │   └── melody.rs        # 旋律提取
-│   │   ├── keyboard/            # 键盘模拟模块
-│   │   │   ├── simulator.rs     # 键盘模拟器
-│   │   │   ├── mod.rs
-│   │   │   └── win_input.rs     # Windows 输入
-│   │   ├── lib.rs               # 入口
-│   │   └── types.rs             # 类型定义
+│   │   ├── midi/                 # MIDI 解析
+│   │   ├── keyboard/             # 键盘模拟
+│   │   ├── window_state.rs       # 窗口状态快照
+│   │   ├── lib.rs
+│   │   ├── main.rs
+│   │   └── types.rs
 │   ├── templates/                # 内置键盘映射模板
-│   │   ├── piano.json
-│   │   ├── 21keys.json
-│   │   └── 14keys.json
-│   ├── midi/                    # 捆绑的示例 MIDI 文件
-│   │   └── .gitkeep
-│   ├── icons/                   # 应用图标
-│   ├── tauri.conf.json          # Tauri 配置
+│   ├── midi/                     # 捆绑的示例 MIDI 文件
+│   ├── presentmon/               # Windows 帧率采集工具
+│   ├── icons/                    # 应用图标
+│   ├── tauri.conf.json
 │   └── Cargo.toml
 │
-├── docs/                        # 文档
-│   ├── design/                  # 设计文档
-│   │   ├── README.md
-│   │   ├── ui-guide.md
-│   │   └── theme.md
-│   └── error/                   # 错误追踪
+├── docs/                         # 文档
+│   ├── design/                   # 设计文档
+│   ├── error/                    # 错误追踪
+│   └── USER_GUIDE.md             # 用户指南
 │
-├── scripts/                     # 构建脚本
-│   └── build-and-launch.sh
-│
-├── package.json                 # 前端依赖
-├── vite.config.ts              # Vite 配置
-├── tailwind.config.js          # Tailwind 配置
-├── tsconfig.json               # TypeScript 配置
-└── CHANGELOG.md                # 变更日志
+├── scripts/                      # 构建脚本
+├── package.json
+├── vite.config.ts
+├── tailwind.config.js
+├── tsconfig.json
+└── CHANGELOG.md
 ```
 
 ---
@@ -310,6 +350,22 @@ infinity-nikki-player/
 ### 悬浮模式说明
 
 悬浮模式窗口透明背景，可悬浮于游戏窗口上方。进入后有 3 秒倒计时，建议提前切换到游戏窗口。
+
+### 自建歌单相关
+
+- **删除 MIDI 后能否恢复**：删除 MIDI 时会自动从所有歌单中移除对应条目，该操作不可撤销；如需保留请先导出歌单备份。
+- **歌单导入/导出格式**：支持 JSON 格式的单歌单导出与整套歌单导出，导入时会按同名规则覆盖已有歌单。
+
+### 自动获取游戏帧数
+
+- **开关位置**：悬浮窗中的 FPS 控件（标注 beta）。
+- **开启效果**：应用会在演奏前检测游戏帧数并据此调整按键的持续和间隔，减少断音。
+- **macOS 行为**：暂不支持自动检测，会保持固定时序，仍可手动指定 FPS。
+- **不影响手动 FPS**：关闭自动 FPS 后，可手动在输入框中指定帧数并按回车生效。
+
+### 在线曲库
+
+- **找不到想用的乐谱**：在线曲库由后端服务提供，如遇空目录或加载失败，请稍后重试或前往本地导入。
 
 ---
 

@@ -3,6 +3,7 @@
  * @description 提供与 Rust 后端交互的应用设置加载和保存功能
  */
 import { invoke } from '@tauri-apps/api/core'
+import type { PlaybackMode } from '@strawberrybear/player'
 
 /**
  * @description: 应用设置数据结构
@@ -16,6 +17,20 @@ export interface AppSettings {
   play_mode: 'auto' | 'piano'
   /** 是否启用键盘模拟 */
   enable_keyboard_sim: boolean
+  /** 是否启用自动 FPS 获取 */
+  auto_fps_enabled: boolean
+  /** 手动 FPS，自动获取不可用时作为兜底 */
+  manual_fps: number
+  /** 最近一次自动检测 FPS，仅用于展示回填 */
+  last_detected_fps?: number | null
+  /** 播放列表调度模式 */
+  playlist_playback_mode?: PlaybackMode
+  /** 歌单侧栏是否收起 */
+  song_list_sidebar_collapsed?: boolean
+  /** 上次预览选中的 MIDI 文件名 */
+  last_preview_filename?: string | null
+  /** 上次预览队列来源 ID，例如 all 或 song-list:<id> */
+  last_preview_source_id?: string | null
 }
 
 /**

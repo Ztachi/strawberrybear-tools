@@ -1130,6 +1130,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-rate-capture"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "futf"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1890,16 +1898,18 @@ dependencies = [
 
 [[package]]
 name = "infinity-nikki-player"
-version = "0.3.2"
+version = "1.0.0"
 dependencies = [
  "check_elevation",
  "cocoa",
  "core-graphics 0.24.0",
  "enigo",
  "env_logger",
+ "frame-rate-capture",
  "log",
  "midly",
  "parking_lot",
+ "reqwest",
  "serde",
  "serde_json",
  "tauri",
