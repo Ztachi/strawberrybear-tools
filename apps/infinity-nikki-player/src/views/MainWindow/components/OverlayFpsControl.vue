@@ -10,7 +10,7 @@ import {
   type FrameRateCaptureCapability,
   type FrameRateSnapshot,
 } from '@/lib/frameRateCapture'
-import { normalizePlaybackFps } from '@/lib/keyboardTiming'
+import { DEFAULT_PLAYBACK_FPS, normalizePlaybackFps } from '@/lib/keyboardTiming'
 import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
@@ -51,21 +51,28 @@ const inputValue = computed(() => {
 })
 
 const statusMessage = computed(() => {
-  if (!settingsStore.autoFpsEnabled) return t('overlay.fpsManualTip')
-  if (!autoCaptureAvailable.value) return t('overlay.fpsUnsupported')
+  const betaWarning = t('overlay.fpsBetaWarning')
+  if (!settingsStore.autoFpsEnabled) return `${betaWarning} ${t('overlay.fpsManualTip')}`
+  if (!autoCaptureAvailable.value) return `${betaWarning} ${t('overlay.fpsUnsupported')}`
 
+  let detail: string
   switch (snapshot.value?.status) {
     case 'target_not_found':
-      return t('overlay.fpsWaiting')
+      detail = t('overlay.fpsWaiting')
+      break
     case 'present_mon_missing':
-      return t('overlay.fpsMissing')
+      detail = t('overlay.fpsMissing')
+      break
     case 'permission_denied':
-      return t('overlay.fpsPermissionDenied')
+      detail = t('overlay.fpsPermissionDenied')
+      break
     case 'error':
-      return t('overlay.fpsError')
+      detail = t('overlay.fpsError')
+      break
     default:
-      return t('overlay.fpsAutoTip')
+      detail = t('overlay.fpsAutoTip')
   }
+  return `${betaWarning} ${detail}`
 })
 
 /**
@@ -132,6 +139,8 @@ async function handleAutoChange(checked: boolean) {
   if (checked) {
     await startAutoCapture()
   } else {
+    manualInput.value = DEFAULT_PLAYBACK_FPS
+    snapshot.value = null
     stopPolling()
     await stopFrameRateCapture()
   }
@@ -232,7 +241,7 @@ defineExpose({
         :checked="settingsStore.autoFpsEnabled"
         @change="handleAutoChange"
       />
-      <span class="auto-label">{{ t('overlay.fpsAuto') }}</span>
+      <span class="auto-label">{{ t('overlay.fpsAuto') }}{{ t('overlay.fpsAutoBeta') }}</span>
     </div>
   </Tooltip>
 </template>

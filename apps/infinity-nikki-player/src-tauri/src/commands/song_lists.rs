@@ -122,7 +122,8 @@ fn read_song_lists_from_dir(app: &tauri::AppHandle) -> Result<Vec<SongList>, Str
     let dir = get_song_lists_dir(app)?;
     let mut song_lists = Vec::new();
 
-    for entry in fs::read_dir(&dir).map_err(|error| format!("读取歌单目录失败: {}", error))? {
+    for entry in fs::read_dir(&dir).map_err(|error| format!("读取歌单目录失败: {}", error))?
+    {
         let entry = entry.map_err(|error| format!("读取歌单条目失败: {}", error))?;
         let path = entry.path();
         if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
@@ -159,7 +160,10 @@ fn validate_unique_name(
     Ok(())
 }
 
-fn make_unique_song_list_name(app: &tauri::AppHandle, preferred_name: &str) -> Result<String, String> {
+fn make_unique_song_list_name(
+    app: &tauri::AppHandle,
+    preferred_name: &str,
+) -> Result<String, String> {
     let base_name = if preferred_name.trim().is_empty() {
         "Playlist"
     } else {
@@ -219,8 +223,14 @@ fn unique_midi_filename(library_dir: &Path, preferred_filename: &str) -> String 
     }
 
     let path = Path::new(&preferred);
-    let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("imported");
-    let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("mid");
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("imported");
+    let extension = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("mid");
     let mut suffix = 1;
     loop {
         let candidate = format!("{}-{}.{}", stem, suffix, extension);
@@ -238,13 +248,18 @@ fn import_midi_bytes_dedup(
 ) -> Result<String, String> {
     let library_dir = get_midi_library_dir(app)?;
 
-    for entry in fs::read_dir(&library_dir).map_err(|error| format!("读取 MIDI 目录失败: {}", error))? {
+    for entry in
+        fs::read_dir(&library_dir).map_err(|error| format!("读取 MIDI 目录失败: {}", error))?
+    {
         let entry = entry.map_err(|error| format!("读取 MIDI 条目失败: {}", error))?;
         let path = entry.path();
         if !path.is_file() || !is_midi_filename(path.to_string_lossy().as_ref()) {
             continue;
         }
-        if fs::read(&path).map(|existing| existing == data).unwrap_or(false) {
+        if fs::read(&path)
+            .map(|existing| existing == data)
+            .unwrap_or(false)
+        {
             if let Some(filename) = path.file_name().and_then(|name| name.to_str()) {
                 return Ok(filename.to_string());
             }
@@ -395,7 +410,10 @@ pub fn save_song_list_cover(
 }
 
 #[tauri::command]
-pub fn read_song_list_cover(app: tauri::AppHandle, cover_filename: String) -> Result<Vec<u8>, String> {
+pub fn read_song_list_cover(
+    app: tauri::AppHandle,
+    cover_filename: String,
+) -> Result<Vec<u8>, String> {
     let basename = safe_basename(&cover_filename).ok_or_else(|| "封面文件名不合法".to_string())?;
     let cover_path = get_song_list_covers_dir(&app)?.join(basename);
     fs::read(cover_path).map_err(|error| format!("读取封面失败: {}", error))
@@ -422,7 +440,8 @@ pub fn export_song_lists_archive(
         return Err("没有可导出的歌单".to_string());
     }
 
-    let target_file = File::create(&target_path).map_err(|error| format!("创建 ZIP 失败: {}", error))?;
+    let target_file =
+        File::create(&target_path).map_err(|error| format!("创建 ZIP 失败: {}", error))?;
     let mut zip = ZipWriter::new(target_file);
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     let cover_dir = get_song_list_covers_dir(&app)?;
@@ -442,7 +461,8 @@ pub fn export_song_lists_archive(
             if cover_path.exists() {
                 zip.start_file(format!("songList/{}/cover.png", song_list.id), options)
                     .map_err(|error| format!("写入封面失败: {}", error))?;
-                let cover_data = fs::read(cover_path).map_err(|error| format!("读取封面失败: {}", error))?;
+                let cover_data =
+                    fs::read(cover_path).map_err(|error| format!("读取封面失败: {}", error))?;
                 zip.write_all(&cover_data)
                     .map_err(|error| format!("写入封面失败: {}", error))?;
             }
@@ -458,7 +478,8 @@ pub fn export_song_lists_archive(
             }
             zip.start_file(format!("musics/{}", filename), options)
                 .map_err(|error| format!("写入 MIDI 失败: {}", error))?;
-            let midi_data = fs::read(midi_path).map_err(|error| format!("读取 MIDI 失败: {}", error))?;
+            let midi_data =
+                fs::read(midi_path).map_err(|error| format!("读取 MIDI 失败: {}", error))?;
             zip.write_all(&midi_data)
                 .map_err(|error| format!("写入 MIDI 失败: {}", error))?;
         }
@@ -549,8 +570,11 @@ pub fn import_song_lists_archive(
 
         if let Some(cover_data) = cover_by_id.remove(&source_id) {
             let cover_filename = format!("{}.png", imported.id);
-            fs::write(get_song_list_covers_dir(&app)?.join(&cover_filename), cover_data)
-                .map_err(|error| format!("保存封面失败: {}", error))?;
+            fs::write(
+                get_song_list_covers_dir(&app)?.join(&cover_filename),
+                cover_data,
+            )
+            .map_err(|error| format!("保存封面失败: {}", error))?;
             imported.cover_filename = Some(cover_filename);
         } else {
             imported.cover_filename = None;
@@ -572,7 +596,8 @@ pub(crate) fn remove_filename_from_all_song_lists(
     app: &tauri::AppHandle,
     filename: &str,
 ) -> Result<(), String> {
-    let normalized_filename = safe_basename(filename).ok_or_else(|| "MIDI 文件名不合法".to_string())?;
+    let normalized_filename =
+        safe_basename(filename).ok_or_else(|| "MIDI 文件名不合法".to_string())?;
     for mut song_list in read_song_lists_from_dir(app)? {
         let original_len = song_list.song_filenames.len();
         song_list

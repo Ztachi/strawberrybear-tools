@@ -64,9 +64,9 @@ fn default_play_mode() -> String {
     "auto".to_string()
 }
 
-/// 默认开启自动 FPS 获取；不支持的平台会在前端回落到手动 FPS。
+/// 默认关闭自动 FPS 获取；该功能仍处于测试阶段，用户需要主动开启。
 fn default_auto_fps_enabled() -> bool {
-    true
+    false
 }
 
 /// 默认手动 FPS，覆盖 60fps 常见场景。
@@ -86,7 +86,7 @@ impl Default for AppSettings {
             current_template_id: None,
             play_mode: "auto".to_string(),
             enable_keyboard_sim: false,
-            auto_fps_enabled: true,
+            auto_fps_enabled: false,
             manual_fps: default_manual_fps(),
             last_detected_fps: None,
             playlist_playback_mode: default_playlist_playback_mode(),
@@ -113,7 +113,7 @@ mod tests {
         )
         .expect("settings");
 
-        assert!(settings.auto_fps_enabled);
+        assert!(!settings.auto_fps_enabled);
         assert_eq!(settings.manual_fps, 60);
         assert_eq!(settings.last_detected_fps, None);
         assert_eq!(settings.playlist_playback_mode, "sequential");

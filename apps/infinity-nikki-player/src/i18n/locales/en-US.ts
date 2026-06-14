@@ -429,14 +429,18 @@ export default {
     unmute: 'Unmute',
     fpsLabel: 'FPS',
     fpsAuto: 'Auto',
+    fpsAutoBeta: '(beta)',
     playbackModes: {
       sequential: 'Sequential',
       shuffle: 'Shuffle',
       'repeat-one': 'Repeat One',
       'repeat-all': 'Repeat All',
     },
-    fpsAutoTip: 'Detects game FPS before playback and adjusts key hold and gap timing.',
-    fpsManualTip: 'Auto detect is off. Enter the game FPS used for key hold and gap timing.',
+    fpsBetaWarning: 'Auto FPS detection is experimental. Enable it with caution.',
+    fpsAutoTip:
+      'When enabled, it detects game FPS before playback and adjusts key hold and gap timing.',
+    fpsManualTip:
+      'Auto detect is off and 60 FPS is used by default. You can enter the game FPS manually.',
     fpsUnsupported: 'Auto detect is not supported on this platform. Enter the game FPS manually.',
     fpsWaiting:
       'No game FPS detected yet. Make sure the game is running; manual FPS will be used first.',

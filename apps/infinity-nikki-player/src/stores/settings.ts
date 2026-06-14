@@ -10,6 +10,7 @@ import type { KeyTemplate } from '@/types'
 import i18n, { DEFAULT_LOCALE, getPreferredLocale, isSupportedLocale } from '@/i18n'
 import type { LocaleType } from '@/i18n'
 import { isPlaybackMode, type PlaybackMode } from '@strawberrybear/player'
+import { DEFAULT_PLAYBACK_FPS } from '@/lib/keyboardTiming'
 
 /**
  * @description: 设置 Store - 管理所有应用设置
@@ -33,10 +34,10 @@ export const useSettingsStore = defineStore('settings', () => {
   const enableKeyboardSim = ref(false)
 
   /** 是否启用自动 FPS 获取 */
-  const autoFpsEnabled = ref(true)
+  const autoFpsEnabled = ref(false)
 
   /** 手动 FPS，自动获取不可用时作为兜底 */
-  const manualFps = ref(60)
+  const manualFps = ref(DEFAULT_PLAYBACK_FPS)
 
   /** 最近一次自动检测 FPS，仅用于 UI 展示回填 */
   const lastDetectedFps = ref<number | null>(null)
@@ -107,8 +108,8 @@ export const useSettingsStore = defineStore('settings', () => {
         enableKeyboardSim.value = false
       }
 
-      // 设置 FPS 获取策略；旧配置没有这些字段时由 Rust 默认值兜底。
-      autoFpsEnabled.value = settings.auto_fps_enabled !== false
+      // 设置 FPS 获取策略；自动获取是测试功能，默认关闭，只有显式 true 才启用。
+      autoFpsEnabled.value = settings.auto_fps_enabled === true
       manualFps.value = normalizeFps(settings.manual_fps)
       lastDetectedFps.value =
         typeof settings.last_detected_fps === 'number'
@@ -174,7 +175,7 @@ export const useSettingsStore = defineStore('settings', () => {
    * @return {number} 可用于播放策略的 FPS
    */
   function normalizeFps(fps: number | undefined | null): number {
-    if (typeof fps !== 'number' || !Number.isFinite(fps)) return 60
+    if (typeof fps !== 'number' || !Number.isFinite(fps)) return DEFAULT_PLAYBACK_FPS
     return Math.min(360, Math.max(15, Math.round(fps)))
   }
 
@@ -197,6 +198,9 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   async function setAutoFpsEnabled(enabled: boolean) {
     autoFpsEnabled.value = enabled
+    if (!enabled) {
+      manualFps.value = DEFAULT_PLAYBACK_FPS
+    }
     await persistSettings()
   }
 

@@ -585,7 +585,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .song-list-sidebar {
-  @apply flex h-full w-[220px] shrink-0 flex-col gap-3 rounded-2xl p-3;
+  @apply flex h-full w-[240px] shrink-0 flex-col gap-3 rounded-2xl p-3;
   background: var(--bg-white-50);
   border: 1px solid var(--border-primary-15);
   transition: width 0.2s ease;
