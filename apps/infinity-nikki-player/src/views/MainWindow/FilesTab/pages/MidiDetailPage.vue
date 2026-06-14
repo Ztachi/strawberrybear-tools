@@ -293,6 +293,7 @@ watch(
 
           <div v-show="activeTab === 'keyboard'" class="panel-scroll keyboard-panel">
             <KeyboardPreview
+              class="h-full w-full"
               :active-keys="activeKeys"
               :key-log="keyLog"
               :get-key-log-by-chapters="getKeyLogByChapters"
@@ -448,7 +449,7 @@ watch(
 }
 
 .keyboard-panel {
-  @apply flex items-start justify-center overflow-hidden;
+  @apply flex h-full min-h-0 items-stretch overflow-hidden;
 }
 
 .keyboard-mode-controls {

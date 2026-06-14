@@ -41,7 +41,7 @@ async function handleCoverAction(event: MouseEvent): Promise<void> {
     <Music2 class="h-[18px] w-[18px] stroke-[2.25]" />
 
     <span
-      class="absolute inset-0 bg-slate-950/45 opacity-0 transition-opacity group-hover/song-row:opacity-100"
+      class="absolute inset-0 bg-slate-950/25 opacity-0 transition-opacity group-hover/song-row:opacity-100"
       :class="{ 'opacity-100': isPlaying }"
       aria-hidden="true"
     />

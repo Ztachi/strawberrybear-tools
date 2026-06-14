@@ -21,6 +21,7 @@ import {
 import { ChevronDown, ChevronUp, Crosshair, X } from 'lucide-vue-next'
 import { Tooltip } from 'antdv-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
+import MarqueeText from '@/components/MarqueeText.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import OverlayFpsControl from './components/OverlayFpsControl.vue'
 
@@ -418,12 +419,7 @@ const currentMidiName = computed(
         <!-- 曲目名称（走马灯效果）- 悬停显示全名 -->
         <Tooltip :title="currentMidiName">
           <div class="track-info">
-            <div class="marquee-wrapper">
-              <div class="marquee-track">
-                <span class="marquee-text">{{ currentMidiName }}</span>
-                <span class="marquee-text" aria-hidden="true">{{ currentMidiName }}</span>
-              </div>
-            </div>
+            <MarqueeText class="overlay-marquee-text" :text="currentMidiName" :speed="26" />
           </div>
         </Tooltip>
       </div>
@@ -522,7 +518,7 @@ const currentMidiName = computed(
   min-height: 156px;
   padding: 10px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 8px 10px;
   background: linear-gradient(135deg, rgba(247, 192, 193, 0.8) 0%, rgba(245, 184, 192, 0.8) 100%);
   cursor: move;
@@ -534,45 +530,21 @@ const currentMidiName = computed(
 }
 
 .track-info {
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   display: flex;
   align-items: center;
 }
 
 .track-stack {
-  @apply flex min-w-0 flex-col gap-1;
+  @apply flex w-full min-w-0 max-w-full flex-col gap-1 overflow-hidden;
 }
 
-.marquee-wrapper {
-  overflow: hidden;
-  position: relative;
-}
-
-.marquee-track {
-  display: flex;
-  width: max-content;
-  animation: marquee-scroll 8s linear infinite;
-}
-
-.marquee-text {
-  @apply text-sm text-white whitespace-nowrap;
-  padding-right: 50px;
+.overlay-marquee-text {
+  @apply block w-full max-w-full min-w-0 overflow-hidden text-sm text-white;
   user-select: none;
-}
-
-.marquee-wrapper:hover .marquee-track {
-  animation-play-state: paused;
-}
-
-@keyframes marquee-scroll {
-  0% {
-    transform: translateX(0);
-  }
-
-  100% {
-    transform: translateX(-50%);
-  }
 }
 
 .playback-controls {
@@ -614,7 +586,7 @@ const currentMidiName = computed(
 }
 
 .action-buttons {
-  @apply flex justify-end items-center gap-1;
+  @apply flex min-w-max items-center justify-end gap-1;
 }
 
 :global(.overlay-template-select-popup .rc-virtual-list-holder) {

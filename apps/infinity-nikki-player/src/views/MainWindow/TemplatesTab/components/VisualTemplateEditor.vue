@@ -312,8 +312,8 @@ onUnmounted(() => {
 
     <div
       ref="pianoContainerRef"
-      class="piano-canvas-container min-h-0 overflow-x-auto rounded-lg border border-primary bg-white"
-      :class="editorState.mode === 'overview' ? 'overflow-hidden' : ''"
+      class="piano-canvas-container min-h-0 shrink-0 rounded-lg border border-primary bg-white"
+      :class="editorState.mode === 'overview' ? 'overflow-hidden' : 'overflow-x-auto overflow-y-hidden'"
     />
 
     <KeyboardPreview
@@ -351,12 +351,12 @@ onUnmounted(() => {
 
 <style scoped>
 .visual-template-editor {
-  @apply relative flex min-h-0 flex-col gap-4 rounded-xl border border-primary/20 bg-white/70 p-4;
+  @apply relative flex flex-col gap-4 rounded-xl border border-primary/20 bg-white/70 p-4;
 }
 
 .editor-status-row {
-  @apply grid items-center gap-3;
-  grid-template-columns: minmax(260px, 1fr) minmax(260px, auto) minmax(220px, 1fr);
+  @apply grid min-w-0 shrink-0 items-center gap-3;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
 }
 
 .editor-status-main {
@@ -401,7 +401,7 @@ onUnmounted(() => {
 }
 
 .editor-actions {
-  @apply flex flex-wrap items-center justify-start gap-2;
+  @apply flex min-w-0 flex-wrap items-center justify-start gap-2;
 }
 
 .mapping-mode-button {
@@ -449,6 +449,10 @@ onUnmounted(() => {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.template-keyboard-preview {
+  @apply min-h-[196px] min-w-0 flex-1;
 }
 
 .template-help-dialog {

@@ -735,7 +735,7 @@ watch(activeTab, (tab) => {
 }
 
 .main-content-shell {
-  @apply flex h-full min-h-0 gap-2 p-2;
+  @apply flex h-full min-h-0 gap-2 px-2 pb-2;
 }
 
 .route-content {

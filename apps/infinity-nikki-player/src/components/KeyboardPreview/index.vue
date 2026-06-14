@@ -32,11 +32,17 @@ const slots = defineSlots<{
   toolbarLeft?: () => unknown
 }>()
 const showToolbar = computed(() => showKeyLog.value || Boolean(slots.toolbarLeft))
+const keyboardPreviewRef = ref<HTMLDivElement | null>(null)
+const toolbarRef = ref<HTMLDivElement | null>(null)
 const scaleShellRef = ref<HTMLDivElement | null>(null)
 const keyboardAreaRef = ref<HTMLDivElement | null>(null)
 const keyboardScale = ref(1)
-const scaledKeyboardHeight = ref(0)
+const reservedKeyboardHeight = ref(0)
 let resizeObserver: ResizeObserver | null = null
+let resizeFrame: number | null = null
+const KEYBOARD_SCALE_SAFE_INSET = 10
+// 父容器没有明确高度时，键盘用自身缩放后的高度参与排版；有高度时完全贴合父容器。
+let usesIntrinsicHeight = false
 
 /**
  * @description: 组件事件
@@ -104,40 +110,80 @@ function getKeyClass(key: string) {
   return classes[key] ?? ''
 }
 
-function updateKeyboardScale() {
+function updateKeyboardScale(): void {
   const shell = scaleShellRef.value
   const area = keyboardAreaRef.value
   if (!shell || !area) return
 
-  const availableWidth = shell.clientWidth
   const contentWidth = area.scrollWidth
   const contentHeight = area.scrollHeight
-  const nextScale = contentWidth > 0 ? Math.min(1, availableWidth / contentWidth) : 1
-  keyboardScale.value = Number.isFinite(nextScale) ? nextScale : 1
-  scaledKeyboardHeight.value = Math.ceil(contentHeight * keyboardScale.value)
+  if (contentWidth <= 0 || contentHeight <= 0) return
+
+  const availableWidth = shell.clientWidth
+  if (availableWidth <= 0) return
+
+  const availableHeight = shell.clientHeight
+  const widthScale = availableWidth / contentWidth
+  const hasHeightConstraint =
+    availableHeight > 1 &&
+    (!usesIntrinsicHeight || availableHeight > reservedKeyboardHeight.value + 1)
+  const availableContentHeight = Math.max(1, availableHeight - KEYBOARD_SCALE_SAFE_INSET)
+  const heightScale = hasHeightConstraint
+    ? availableContentHeight / contentHeight
+    : Number.POSITIVE_INFINITY
+  const nextScale = Math.min(widthScale, heightScale)
+  if (!Number.isFinite(nextScale) || nextScale <= 0) return
+  keyboardScale.value = nextScale
+  usesIntrinsicHeight = !hasHeightConstraint
+  reservedKeyboardHeight.value = hasHeightConstraint
+    ? 0
+    : Math.ceil(contentHeight * nextScale + KEYBOARD_SCALE_SAFE_INSET)
+}
+
+function scheduleKeyboardScaleUpdate(): void {
+  if (resizeFrame !== null) {
+    cancelAnimationFrame(resizeFrame)
+  }
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = null
+    updateKeyboardScale()
+  })
 }
 
 onMounted(() => {
-  resizeObserver = new ResizeObserver(() => updateKeyboardScale())
+  resizeObserver = new ResizeObserver(() => scheduleKeyboardScaleUpdate())
+  if (keyboardPreviewRef.value) resizeObserver.observe(keyboardPreviewRef.value)
+  if (keyboardPreviewRef.value?.parentElement) {
+    resizeObserver.observe(keyboardPreviewRef.value.parentElement)
+  }
+  if (toolbarRef.value) resizeObserver.observe(toolbarRef.value)
   if (scaleShellRef.value) resizeObserver.observe(scaleShellRef.value)
   if (keyboardAreaRef.value) resizeObserver.observe(keyboardAreaRef.value)
-  void nextTick(updateKeyboardScale)
+  window.addEventListener('resize', scheduleKeyboardScaleUpdate)
+  void nextTick(() => {
+    scheduleKeyboardScaleUpdate()
+    requestAnimationFrame(scheduleKeyboardScaleUpdate)
+  })
 })
 
 onUnmounted(() => {
+  if (resizeFrame !== null) {
+    cancelAnimationFrame(resizeFrame)
+  }
+  window.removeEventListener('resize', scheduleKeyboardScaleUpdate)
   resizeObserver?.disconnect()
 })
 
 watch(
   () => [props.keyCodeToPitch, props.activeKeys, showToolbar.value],
-  () => void nextTick(updateKeyboardScale)
+  () => void nextTick(scheduleKeyboardScaleUpdate)
 )
 </script>
 
 <template>
-  <div class="keyboard-preview">
+  <div ref="keyboardPreviewRef" class="keyboard-preview">
     <!-- 顶部操作区 -->
-    <div v-if="showToolbar" class="toolbar">
+    <div v-if="showToolbar" ref="toolbarRef" class="toolbar">
       <div class="toolbar-left">
         <slot name="toolbarLeft" />
       </div>
@@ -155,12 +201,12 @@ watch(
     <div
       ref="scaleShellRef"
       class="keyboard-scale-shell"
-      :style="{ height: `${scaledKeyboardHeight}px` }"
+      :style="{ '--keyboard-reserved-height': `${reservedKeyboardHeight}px` }"
     >
       <div
         ref="keyboardAreaRef"
         class="keyboard-area"
-        :style="{ transform: `translateX(-50%) scale(${keyboardScale})` }"
+        :style="{ transform: `translate(-50%, -50%) scale(${keyboardScale})` }"
       >
         <!-- 遍历每一行键盘布局 -->
         <div
@@ -204,7 +250,7 @@ watch(
 
 <style scoped>
 .keyboard-preview {
-  @apply flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-lg p-1.5;
+  @apply flex h-full min-h-0 min-w-0 flex-col gap-1.5 overflow-hidden rounded-lg p-1.5;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
   width: 100%;
@@ -219,14 +265,15 @@ watch(
 }
 
 .keyboard-scale-shell {
-  @apply relative min-w-0 overflow-hidden;
+  @apply relative min-h-0 min-w-0 flex-1 overflow-hidden;
   width: 100%;
+  min-height: var(--keyboard-reserved-height, 0px);
 }
 
 .keyboard-area {
-  @apply absolute left-1/2 top-0 flex flex-col;
-  gap: 2px;
-  transform-origin: top center;
+  @apply absolute left-1/2 top-1/2 flex flex-col;
+  gap: 1px;
+  transform-origin: center center;
   width: max-content;
 }
 
@@ -236,11 +283,11 @@ watch(
 }
 
 .keyboard-row.function-row {
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .keyboard-row.space-row {
-  margin-top: 2px;
+  margin-top: 1px;
   justify-content: end;
 }
 
@@ -257,12 +304,12 @@ watch(
   border: 1px solid var(--border-primary-20);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   width: 29px;
-  height: 30px;
+  height: 28px;
 }
 
 .key.function {
   width: 34px;
-  height: 25px;
+  height: 23px;
 }
 
 .key.control {

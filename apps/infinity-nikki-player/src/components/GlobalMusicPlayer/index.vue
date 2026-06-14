@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Button, Tooltip } from 'antdv-next'
 import { Expand, ListMusic, Music2 } from 'lucide-vue-next'
+import MarqueeText from '@/components/MarqueeText.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import { usePlayerStore } from '@/stores/player'
 import PlayQueueDrawer from './PlayQueueDrawer.vue'
@@ -41,9 +42,10 @@ function openCurrentSongDetail(): void {
       </Tooltip>
       <div class="current-main">
         <Tooltip :title="playerStore.currentMidi?.filename || t('player.noMedia')">
-          <span class="current-title">
-            {{ playerStore.currentMidi?.filename || t('player.noMedia') }}
-          </span>
+          <MarqueeText
+            class="current-title"
+            :text="playerStore.currentMidi?.filename || t('player.noMedia')"
+          />
         </Tooltip>
       </div>
     </div>
@@ -119,7 +121,7 @@ function openCurrentSongDetail(): void {
 }
 
 .current-title {
-  @apply block truncate text-sm font-semibold;
+  @apply block text-sm font-semibold;
   color: var(--color-foreground);
 }
 

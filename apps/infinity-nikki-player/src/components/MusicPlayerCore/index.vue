@@ -190,7 +190,7 @@ function handleSeek(time: number): void {
 
 <style scoped>
 .music-player-core {
-  @apply w-[300px] flex flex-col gap-2;
+  @apply w-[300px] flex flex-col;
 }
 
 .core-control-row{

@@ -689,7 +689,7 @@ defineExpose({
 
       <VisualTemplateEditor
         :mappings="editingTemplate.mappings"
-        class="shrink-0"
+        class="flex-1"
         @update:mappings="editingTemplate.mappings = $event"
       />
     </div>
@@ -770,10 +770,10 @@ defineExpose({
 
 <style scoped>
 .template-editor-inline {
-  @apply flex h-full min-h-0 flex-col;
+  @apply flex h-full min-h-0 min-w-0 flex-col;
 }
 
 .template-editor-body {
-  @apply flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4;
+  @apply flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden p-4;
 }
 </style>
