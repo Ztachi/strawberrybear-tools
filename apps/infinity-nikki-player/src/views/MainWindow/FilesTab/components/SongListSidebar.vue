@@ -465,6 +465,7 @@ onBeforeUnmount(() => {
           autofocus
           size="small"
           :maxlength="20"
+          allow-clear
           class="create-input"
           @click.stop
           @keydown.enter.prevent="commitCreateSongList"
@@ -488,6 +489,7 @@ onBeforeUnmount(() => {
             autofocus
             size="small"
             :maxlength="20"
+            allow-clear
             class="rename-input"
             @click.stop
             @keydown.enter.prevent="commitRename(songList)"

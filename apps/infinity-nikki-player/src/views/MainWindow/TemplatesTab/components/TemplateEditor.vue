@@ -511,6 +511,7 @@ defineExpose({
           <Input
             v-model:value="searchKeyword"
             class="h-9 bg-white"
+            allow-clear
             :placeholder="t('template.searchPlaceholder')"
           >
             <template #prefix>

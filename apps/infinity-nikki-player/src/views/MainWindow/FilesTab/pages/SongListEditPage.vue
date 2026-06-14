@@ -222,13 +222,14 @@ onBeforeUnmount(() => {
 
       <Form ref="formRef" class="edit-form" layout="vertical" :model="formModel" :rules="formRules">
         <FormItem :label="t('songList.fields.name')" name="name">
-          <Input v-model:value="formModel.name" :maxlength="20" show-count />
+          <Input v-model:value="formModel.name" :maxlength="20" allow-clear show-count />
         </FormItem>
 
         <FormItem :label="t('songList.fields.description')" name="description">
           <TextArea
             v-model:value="formModel.description"
             :maxlength="1000"
+            allow-clear
             show-count
             class="description-textarea"
           />

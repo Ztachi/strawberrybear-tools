@@ -218,6 +218,7 @@ defineExpose({
           :min="15"
           :max="360"
           :precision="0"
+          allow-clear
           :value="inputValue"
           :disabled="inputDisabled"
           @update:value="handleManualInput"
