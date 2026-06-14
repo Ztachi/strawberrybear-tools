@@ -338,6 +338,7 @@ pub fn run() {
             commands::midi::delete_midi_from_library,
             commands::midi::load_midi_config,
             commands::midi::save_midi_config,
+            commands::online_midi_library::online_midi_library_request,
             commands::player::start_playback,
             commands::player::pause_playback,
             commands::player::resume_playback,

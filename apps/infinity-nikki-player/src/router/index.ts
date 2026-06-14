@@ -8,6 +8,7 @@ import MidiDetailPage from '@/views/MainWindow/FilesTab/pages/MidiDetailPage.vue
 import SongListDetailPage from '@/views/MainWindow/FilesTab/pages/SongListDetailPage.vue'
 import SongListEditPage from '@/views/MainWindow/FilesTab/pages/SongListEditPage.vue'
 import OnlineLibraryTab from '@/views/MainWindow/OnlineLibraryTab/index.vue'
+import OnlineSongDetailPage from '@/views/MainWindow/OnlineLibraryTab/pages/OnlineSongDetailPage.vue'
 import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
 import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
 
@@ -63,6 +64,11 @@ export const router = createRouter({
       path: '/online-library',
       name: 'online-library',
       component: OnlineLibraryTab,
+    },
+    {
+      path: '/online-library/song/:id',
+      name: 'online-library-song-detail',
+      component: OnlineSongDetailPage,
     },
     {
       path: '/:pathMatch(.*)*',

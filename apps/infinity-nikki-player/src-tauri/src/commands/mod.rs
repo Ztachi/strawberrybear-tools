@@ -5,6 +5,7 @@
 pub mod frame_rate;
 pub mod keyboard;
 pub mod midi;
+pub mod online_midi_library;
 pub mod player;
 pub mod settings;
 pub mod song_lists;

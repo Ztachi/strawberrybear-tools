@@ -1,9 +1,13 @@
 <script setup lang="ts">
+/**
+ * @description: 在线曲库 - 列表 + 过滤 + 试听/导入
+ * @description 全部交互组件走 antdv-next（Input / Select / Button / Tooltip），不再使用原生 HTML。
+ */
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { Tooltip } from 'antdv-next'
-import { Download, Play, RefreshCw, Search, Square } from 'lucide-vue-next'
+import { Button, Empty, Input, Pagination, Select, SelectOption, Spin, Tooltip } from 'antdv-next'
+import { Download, Info, Play, RefreshCw, Square } from 'lucide-vue-next'
 import { feedback as toast } from '@/lib/feedback'
 import { playMidi, stopPreview } from '@/lib/midiPlayer'
 import {
@@ -34,17 +38,24 @@ const pagination = reactive({
 })
 const filters = reactive({
   keyword: '',
-  genreType: '',
-  sourceType: '',
-  difficultyType: '',
+  genreType: undefined as string | undefined,
+  sourceType: undefined as string | undefined,
+  difficultyType: undefined as string | undefined,
 })
 
+/** 已下载文件的内存缓存，跨试听/导入复用。 */
 const downloadedFiles = new Map<string, Uint8Array>()
+/** 防抖用的关键字搜索定时器。 */
 let keywordTimer: number | undefined
+/** 试听结束自动停止的定时器。 */
 let previewEndTimer: number | undefined
 
 const hasFilters = computed(
-  () => filters.keyword || filters.genreType || filters.sourceType || filters.difficultyType
+  () =>
+    Boolean(filters.keyword.trim()) ||
+    Boolean(filters.genreType) ||
+    Boolean(filters.sourceType) ||
+    Boolean(filters.difficultyType)
 )
 
 function describeError(error: unknown) {
@@ -75,7 +86,17 @@ function formatDate(ms: number) {
   return new Date(ms).toLocaleDateString()
 }
 
-function labelFor(group: 'genre' | 'source' | 'difficulty', value: string) {
+/**
+ * @description: 将字段值展示为本地化的展示文案（无对应 key 时回退原值）
+ * @description 集中管理 5 个枚举（曲风 / 来源 / 难度 / 版权）的标签查找逻辑。
+ * @param {'genre' | 'source' | 'difficulty' | 'license'} group - 枚举分组
+ * @param {string} value - 原始枚举值
+ * @return {string} 展示文案
+ */
+function labelFor(
+  group: 'genre' | 'source' | 'difficulty' | 'license',
+  value: string
+): string {
   if (!value) return '--'
   const key = `onlineLibrary.${group}.${value}`
   const label = t(key)
@@ -87,7 +108,10 @@ async function loadSongs() {
   errorMessage.value = ''
   try {
     const result = await fetchOnlineMidiSongs({
-      ...filters,
+      keyword: filters.keyword.trim() || undefined,
+      genreType: filters.genreType,
+      sourceType: filters.sourceType,
+      difficultyType: filters.difficultyType,
       page: pagination.page,
       pageSize: pagination.pageSize,
     })
@@ -113,9 +137,9 @@ function scheduleKeywordSearch() {
 
 function resetFilters() {
   filters.keyword = ''
-  filters.genreType = ''
-  filters.sourceType = ''
-  filters.difficultyType = ''
+  filters.genreType = undefined
+  filters.sourceType = undefined
+  filters.difficultyType = undefined
   pagination.page = 1
   void loadSongs()
 }
@@ -190,6 +214,15 @@ async function importSong(song: OnlineMidiSong) {
   }
 }
 
+/**
+ * @description: 跳转到在线歌曲详情页
+ * @param {OnlineMidiSong} song - 当前歌曲
+ * @return {void}
+ */
+function openSongDetail(song: OnlineMidiSong) {
+  void router.push({ name: 'online-library-song-detail', params: { id: song.id } })
+}
+
 function gotoPage(page: number) {
   const nextPage = Math.min(Math.max(1, page), pagination.totalPages)
   if (nextPage === pagination.page) return
@@ -217,77 +250,75 @@ onUnmounted(() => {
 
 <template>
   <div class="online-library">
+    <!-- 工具栏：搜索 + 三个过滤下拉 + 清空 + 刷新，全部走 antdv-next -->
     <div class="online-toolbar">
-      <label class="search-field">
-        <Search class="search-icon" />
-        <input
-          v-model="filters.keyword"
-          type="search"
-          :placeholder="t('onlineLibrary.searchPlaceholder')"
-          @input="scheduleKeywordSearch"
-        />
-      </label>
+      <Input
+        v-model:value="filters.keyword"
+        :placeholder="t('onlineLibrary.searchPlaceholder')"
+        allow-clear
+        class="toolbar-search"
+        @input="scheduleKeywordSearch"
+      />
 
-      <select
-        v-model="filters.genreType"
-        class="filter-select"
+      <Select
+        v-model:value="filters.genreType"
+        :placeholder="t('onlineLibrary.filters.allGenres')"
         :aria-label="t('onlineLibrary.filters.genre')"
+        allow-clear
+        class="toolbar-select"
       >
-        <option value="">
-          {{ t('onlineLibrary.filters.allGenres') }}
-        </option>
-        <option v-for="genre in ONLINE_MIDI_GENRE_TYPES" :key="genre" :value="genre">
+        <SelectOption v-for="genre in ONLINE_MIDI_GENRE_TYPES" :key="genre" :value="genre">
           {{ labelFor('genre', genre) }}
-        </option>
-      </select>
+        </SelectOption>
+      </Select>
 
-      <select
-        v-model="filters.difficultyType"
-        class="filter-select"
+      <Select
+        v-model:value="filters.difficultyType"
+        :placeholder="t('onlineLibrary.filters.allDifficulties')"
         :aria-label="t('onlineLibrary.filters.difficulty')"
+        allow-clear
+        class="toolbar-select"
       >
-        <option value="">
-          {{ t('onlineLibrary.filters.allDifficulties') }}
-        </option>
-        <option
+        <SelectOption
           v-for="difficulty in ONLINE_MIDI_DIFFICULTY_TYPES"
           :key="difficulty"
           :value="difficulty"
         >
           {{ labelFor('difficulty', difficulty) }}
-        </option>
-      </select>
+        </SelectOption>
+      </Select>
 
-      <select
-        v-model="filters.sourceType"
-        class="filter-select"
+      <Select
+        v-model:value="filters.sourceType"
+        :placeholder="t('onlineLibrary.filters.allSources')"
         :aria-label="t('onlineLibrary.filters.source')"
+        allow-clear
+        class="toolbar-select"
       >
-        <option value="">
-          {{ t('onlineLibrary.filters.allSources') }}
-        </option>
-        <option v-for="source in ONLINE_MIDI_SOURCE_TYPES" :key="source" :value="source">
+        <SelectOption v-for="source in ONLINE_MIDI_SOURCE_TYPES" :key="source" :value="source">
           {{ labelFor('source', source) }}
-        </option>
-      </select>
+        </SelectOption>
+      </Select>
 
-      <button v-if="hasFilters" type="button" class="text-button" @click="resetFilters">
+      <Button v-if="hasFilters" @click="resetFilters">
         {{ t('actions.clear') }}
-      </button>
+      </Button>
 
       <Tooltip :title="t('onlineLibrary.refresh')" placement="bottom">
-        <button
-          type="button"
-          class="icon-button"
+        <Button
+          shape="circle"
           :aria-label="t('onlineLibrary.refresh')"
           :disabled="isLoading"
           @click="loadSongs"
         >
-          <RefreshCw :class="{ spinning: isLoading }" />
-        </button>
+          <template #icon>
+            <RefreshCw :class="{ spinning: isLoading }" />
+          </template>
+        </Button>
       </Tooltip>
     </div>
 
+    <!-- 错误状态：显示错误信息和重试按钮 -->
     <div v-if="errorMessage" class="state-panel">
       <p class="state-title">
         {{ t('onlineLibrary.feedback.loadFailed') }}
@@ -295,25 +326,29 @@ onUnmounted(() => {
       <p class="state-text">
         {{ errorMessage }}
       </p>
-      <button type="button" class="primary-button" @click="loadSongs">
-        <RefreshCw />
+      <Button type="primary" @click="loadSongs">
+        <template #icon>
+          <RefreshCw />
+        </template>
         {{ t('onlineLibrary.retry') }}
-      </button>
+      </Button>
     </div>
 
+    <!-- 加载中（首次） -->
     <div v-else-if="isLoading && songs.length === 0" class="state-panel">
+      <Spin />
       <p class="state-title">
         {{ t('onlineLibrary.loading') }}
       </p>
     </div>
 
+    <!-- 空状态：使用 antdv-next Empty 统一风格 -->
     <div v-else-if="songs.length === 0" class="state-panel">
-      <p class="state-title">
-        {{ t('onlineLibrary.empty') }}
-      </p>
+      <Empty :description="t('onlineLibrary.empty')" />
     </div>
 
     <template v-else>
+      <!-- 列表刷新时保留旧数据，但加 dim 效果 -->
       <div class="song-grid" :class="{ 'is-refreshing': isLoading }">
         <article v-for="song in songs" :key="song.id" class="song-card">
           <div class="song-card-head">
@@ -330,6 +365,7 @@ onUnmounted(() => {
             </span>
           </div>
 
+          <!-- 描述仅截断 2 行展示，完整内容跳转详情页查看 -->
           <p v-if="song.description" class="song-description">
             {{ song.description }}
           </p>
@@ -354,14 +390,14 @@ onUnmounted(() => {
           </div>
 
           <div class="song-actions">
-            <button
-              type="button"
-              class="secondary-button"
+            <Button
               :disabled="previewLoadingId === song.id || importLoadingId === song.id"
               @click="togglePreview(song)"
             >
-              <Square v-if="currentPreviewId === song.id" />
-              <Play v-else />
+              <template #icon>
+                <Square v-if="currentPreviewId === song.id" />
+                <Play v-else />
+              </template>
               {{
                 currentPreviewId === song.id
                   ? t('player.stopPreview')
@@ -369,41 +405,45 @@ onUnmounted(() => {
                     ? t('onlineLibrary.loading')
                     : t('player.preview')
               }}
-            </button>
-            <button
-              type="button"
-              class="primary-button"
+            </Button>
+            <Button
+              type="primary"
               :disabled="importLoadingId === song.id || previewLoadingId === song.id"
               @click="importSong(song)"
             >
-              <Download />
-              {{ importLoadingId === song.id ? t('onlineLibrary.importing') : t('songList.actions.import') }}
-            </button>
+              <template #icon>
+                <Download />
+              </template>
+              {{
+                importLoadingId === song.id
+                  ? t('onlineLibrary.importing')
+                  : t('songList.actions.import')
+              }}
+            </Button>
+            <Tooltip :title="t('onlineLibrary.detail.actions.detail')" placement="top">
+              <Button
+                shape="circle"
+                :aria-label="t('onlineLibrary.detail.actions.detail')"
+                @click="openSongDetail(song)"
+              >
+                <template #icon>
+                  <Info />
+                </template>
+              </Button>
+            </Tooltip>
           </div>
         </article>
       </div>
 
-      <div v-if="pagination.totalPages > 1" class="pagination-bar">
-        <button
-          type="button"
-          class="text-button"
-          :disabled="pagination.page <= 1"
-          @click="gotoPage(pagination.page - 1)"
-        >
-          {{ t('onlineLibrary.prev') }}
-        </button>
-        <span
-          >{{ t('onlineLibrary.pageInfo', { page: pagination.page, total: pagination.totalPages }) }}</span
-        >
-        <button
-          type="button"
-          class="text-button"
-          :disabled="pagination.page >= pagination.totalPages"
-          @click="gotoPage(pagination.page + 1)"
-        >
-          {{ t('onlineLibrary.next') }}
-        </button>
-      </div>
+      <Pagination
+        v-if="pagination.totalPages > 1"
+        class="pagination-bar"
+        :current="pagination.page"
+        :page-size="pagination.pageSize"
+        :total="pagination.total"
+        :show-size-changer="false"
+        @change="gotoPage"
+      />
     </template>
   </div>
 </template>
@@ -414,79 +454,19 @@ onUnmounted(() => {
 }
 
 .online-toolbar {
-  @apply grid items-center gap-2;
-  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, 0.45fr)) auto auto;
+  @apply flex flex-wrap items-center gap-2;
 }
 
-.search-field,
-.filter-select,
-.icon-button,
-.text-button,
-.primary-button,
-.secondary-button {
-  height: 34px;
-  border: 1px solid var(--border-primary-20);
-  background: var(--bg-white-80);
-  color: var(--color-foreground);
+.toolbar-search {
+  @apply min-w-[220px] flex-1;
 }
 
-.search-field {
-  @apply flex items-center gap-2 rounded-xl px-3;
+.toolbar-select {
+  width: 160px;
 }
 
-.search-field input {
-  @apply min-w-0 flex-1 bg-transparent text-sm outline-none;
-}
-
-.search-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--color-muted-dark);
-}
-
-.filter-select {
-  @apply rounded-xl px-3 text-sm outline-none;
-}
-
-.icon-button,
-.text-button,
-.primary-button,
-.secondary-button {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium transition;
-}
-
-.icon-button {
-  width: 34px;
-  padding: 0;
-}
-
-.icon-button svg,
-.primary-button svg,
-.secondary-button svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2.3;
-}
-
-.text-button:hover,
-.icon-button:hover,
-.secondary-button:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.primary-button {
-  border-color: transparent;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
-}
-
-.primary-button:disabled,
-.secondary-button:disabled,
-.text-button:disabled,
-.icon-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.56;
+.spinning {
+  animation: spin 0.9s linear infinite;
 }
 
 .state-panel {
@@ -596,38 +576,16 @@ onUnmounted(() => {
 }
 
 .song-actions {
-  @apply mt-auto grid gap-2;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  @apply mt-auto flex items-center gap-2;
+}
+
+.song-actions > :first-child,
+.song-actions > :nth-child(2) {
+  @apply flex-1;
 }
 
 .pagination-bar {
-  @apply flex items-center justify-center gap-4 py-2 text-sm;
-  color: var(--color-muted-dark);
-}
-
-.spinning {
-  animation: spin 0.9s linear infinite;
-}
-
-@media (max-width: 920px) {
-  .online-toolbar {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .search-field {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 620px) {
-  .online-toolbar,
-  .song-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .icon-button {
-    width: 100%;
-  }
+  @apply flex items-center justify-center pt-2;
 }
 
 @keyframes spin {

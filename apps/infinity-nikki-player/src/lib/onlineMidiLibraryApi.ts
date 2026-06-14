@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core'
+
 const DEFAULT_API_BASE = 'https://ztachi.com'
 const DB_NAME = 'infinity-nikki-online-midi'
 const DB_VERSION = 1
@@ -7,6 +9,7 @@ const APP_VERSION = '1.0.0'
 const EMPTY_BODY_SHA256 = '47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU'
 
 const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
 export const ONLINE_MIDI_GENRE_TYPES = [
   'classical',
@@ -27,6 +30,18 @@ export const ONLINE_MIDI_SOURCE_TYPES = [
 ] as const
 
 export const ONLINE_MIDI_DIFFICULTY_TYPES = ['unknown', 'easy', 'normal', 'hard', 'expert'] as const
+
+/**
+ * @description 版权类型枚举（与后端 D1 元数据保持一致）。
+ * @description 完整定义见 docs/ztachi.com/backend/midi-library-api.md。
+ */
+export const ONLINE_MIDI_LICENSE_TYPES = [
+  'unknown',
+  'public_domain',
+  'cc',
+  'authorized',
+  'copyrighted',
+] as const
 
 export type OnlineMidiSong = {
   id: string
@@ -79,6 +94,18 @@ type ApiResponse<T> = {
   data: T | null
 }
 
+type OnlineMidiLibraryProxyResponse = {
+  status: number
+  headers: Record<string, string>
+  body: number[] | Uint8Array
+}
+
+type OnlineMidiLibraryRequestOptions = {
+  method: 'GET' | 'POST'
+  headers?: Record<string, string>
+  body?: string
+}
+
 type StoredIdentity = {
   id: typeof IDENTITY_KEY
   deviceId: string
@@ -90,6 +117,50 @@ type StoredIdentity = {
 
 function getApiBase() {
   return (import.meta.env.VITE_MIDI_LIBRARY_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '')
+}
+
+function isTauriRuntime() {
+  return Boolean(
+    typeof window !== 'undefined' &&
+    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+  )
+}
+
+function isOkStatus(status: number) {
+  return status >= 200 && status < 300
+}
+
+function toUint8Array(body: number[] | Uint8Array) {
+  return body instanceof Uint8Array ? body : new Uint8Array(body)
+}
+
+async function requestOnlineMidiLibrary(
+  url: URL,
+  options: OnlineMidiLibraryRequestOptions
+): Promise<OnlineMidiLibraryProxyResponse> {
+  const headers = options.headers ?? {}
+  if (isTauriRuntime()) {
+    return invoke<OnlineMidiLibraryProxyResponse>('online_midi_library_request', {
+      request: {
+        method: options.method,
+        url: url.toString(),
+        headers,
+        body: options.body ?? null,
+      },
+    })
+  }
+
+  const response = await fetch(url, {
+    method: options.method,
+    headers,
+    body: options.body,
+  })
+
+  return {
+    status: response.status,
+    headers: Object.fromEntries(response.headers.entries()),
+    body: new Uint8Array(await response.arrayBuffer()),
+  }
 }
 
 function createDeviceId() {
@@ -190,20 +261,24 @@ async function getOrCreateIdentity() {
 }
 
 async function postRegister(identity: StoredIdentity, apiBase: string) {
-  const response = await fetch(`${apiBase}/api/infinity-nikki/player/register`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-inp-app-version': APP_VERSION,
-    },
-    body: JSON.stringify({
-      deviceId: identity.deviceId,
-      publicKeyJwk: identity.publicKeyJwk,
-      appVersion: APP_VERSION,
-    }),
+  const body = JSON.stringify({
+    deviceId: identity.deviceId,
+    publicKeyJwk: identity.publicKeyJwk,
+    appVersion: APP_VERSION,
   })
+  const response = await requestOnlineMidiLibrary(
+    new URL('/api/infinity-nikki/player/register', apiBase),
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-inp-app-version': APP_VERSION,
+      },
+      body,
+    }
+  )
 
-  const result = await parseJsonResponse<{ deviceId: string; enabled: number }>(response)
+  const result = parseJsonResponse<{ deviceId: string; enabled: number }>(response)
   if (!result.enabled) {
     throw new Error('This device has been disabled for the online MIDI library')
   }
@@ -271,7 +346,7 @@ async function signedFetch(
   const url = buildUrl(path, query)
   const pathWithSearch = `${url.pathname}${url.search}`
   const signedHeaders = await signRequest(identity, 'GET', pathWithSearch)
-  const response = await fetch(url, {
+  const response = await requestOnlineMidiLibrary(url, {
     method: 'GET',
     headers: signedHeaders,
   })
@@ -284,15 +359,16 @@ async function signedFetch(
   return response
 }
 
-async function parseJsonResponse<T>(response: Response) {
+function parseJsonResponse<T>(response: OnlineMidiLibraryProxyResponse) {
   let payload: ApiResponse<T> | null = null
+  const bytes = toUint8Array(response.body)
   try {
-    payload = (await response.json()) as ApiResponse<T>
+    payload = JSON.parse(decoder.decode(bytes)) as ApiResponse<T>
   } catch {
     // ignore non-JSON errors
   }
 
-  if (!response.ok) {
+  if (!isOkStatus(response.status)) {
     throw new Error(payload?.message || `HTTP ${response.status}`)
   }
   if (!payload || payload.code !== 0 || payload.data === null) {
@@ -324,9 +400,9 @@ export async function downloadOnlineMidiSongFile(id: string) {
   const response = await signedFetch(
     `/api/infinity-nikki/midi-songs/${encodeURIComponent(id)}/file`
   )
-  if (!response.ok) {
-    await parseJsonResponse<never>(response)
+  if (!isOkStatus(response.status)) {
+    parseJsonResponse<never>(response)
   }
 
-  return new Uint8Array(await response.arrayBuffer())
+  return toUint8Array(response.body)
 }
