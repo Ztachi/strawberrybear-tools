@@ -12,6 +12,9 @@
     "clean": "rimraf src-tauri/target",
     "tauri": "tauri",
     "tauri:dev": "pnpm clean && pnpm tauri dev",
+    "tauri:build:exe": "node scripts/tauri-build-with-mirror.mjs --no-bundle",
+    "tauri:build:msi": "node scripts/tauri-build-with-mirror.mjs --bundles msi",
+    "tauri:build:nsis": "node scripts/tauri-build-with-mirror.mjs --bundles nsis",
     "nikki": "bash scripts/build-and-launch.sh"
   },
   "dependencies": {

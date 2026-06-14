@@ -12,6 +12,9 @@ crates/*/target/
 output/
 apps/infinity-nikki-player/src-tauri/gen/
 
+# 本地 NSIS 源码（用于离线打包，体积较大，不入仓）
+apps/infinity-nikki-player/nsis/
+
 
 # Environment files
 .env
