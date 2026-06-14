@@ -27,6 +27,10 @@ export interface AppSettings {
   playlist_playback_mode?: PlaybackMode
   /** 歌单侧栏是否收起 */
   song_list_sidebar_collapsed?: boolean
+  /** 上次预览选中的 MIDI 文件名 */
+  last_preview_filename?: string | null
+  /** 上次预览队列来源 ID，例如 all 或 song-list:<id> */
+  last_preview_source_id?: string | null
 }
 
 /**

@@ -43,6 +43,7 @@ const confirmDialog = ref<{
 })
 
 let confirmPromise: Promise<boolean> | null = null
+const menuIconClass = 'size-4 shrink-0 translate-y-px'
 
 const addableSongLists = computed(() =>
   songListStore.songLists.filter((songList) => !songList.song_filenames.includes(props.midi.filename))
@@ -54,19 +55,19 @@ const menuItems = computed(() => {
     items.push({
       key: 'remove-from-song-list',
       label: t('songList.actions.removeFromSongList'),
-      icon: h(ListMinus, { class: 'h-4 w-4', strokeWidth: 2.2 }),
+      icon: h(ListMinus, { class: menuIconClass, strokeWidth: 2.2 }),
     })
   }
   items.push({
     key: 'delete-file',
     label: t('songList.actions.deleteFile'),
-    icon: h(Trash2, { class: 'h-4 w-4', strokeWidth: 2.2 }),
+    icon: h(Trash2, { class: menuIconClass, strokeWidth: 2.2 }),
     danger: true,
   })
   items.push({
     key: 'add-to',
     label: t('songList.actions.addTo'),
-    icon: h(Plus, { class: 'h-4 w-4', strokeWidth: 2.2 }),
+    icon: h(Plus, { class: menuIconClass, strokeWidth: 2.2 }),
     disabled: addableSongLists.value.length === 0,
     children: addableSongLists.value.map((songList) => ({
       key: `add-to:${songList.id}`,

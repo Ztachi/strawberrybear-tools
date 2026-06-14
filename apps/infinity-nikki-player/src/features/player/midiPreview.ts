@@ -56,6 +56,8 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   private bindings: MidiPreviewPlaybackBindings = {}
   /** 当前已读取到内存的 MIDI 二进制数据，seek/resume 会复用它。 */
   private loadedMidiData: ArrayBuffer | null = null
+  /** 当前已加载到 WebAudio 层的媒体 ID，用于发现 UI 当前曲和底层音频不一致的脏状态。 */
+  private loadedMediaId: string | null = null
   /** 预览进度刷新定时器，播放中按约 60fps 推进 Player 进度。 */
   private previewTimer: number | null = null
   /** 播放开始时的 performance 时间戳偏移，用于本地平滑计时。 */
@@ -66,6 +68,8 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   private dragging = false
   /** 标记下一次 play() 是否应映射为 midi-player-js 的 resume，而不是重新加载播放。 */
   private resumePending = false
+  /** 下一次 seek 是否即使当前未播放也直接进入播放态。 */
+  private forcePlayOnNextSeek = false
 
   /**
    * @description: 绑定公共播放器实例
@@ -159,6 +163,13 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     context?: MidiPreviewQueueContext | null
   ): Promise<void> {
     if (!this.player) return
+    const state = this.player.getState()
+    const loadedAnotherMidi = this.loadedMediaId !== null && this.loadedMediaId !== midi.filename
+    if (loadedAnotherMidi && ['loading', 'playing', 'paused'].includes(state.status)) {
+      // 详情查看、导入或队列同步可能只更新公共 Player 当前项，而旧 MIDI 音频仍在内存中。
+      // 播放一个不同文件前必须先停止旧音频，否则会出现“UI 显示 B、实际播放 A”。
+      await this.player.stop()
+    }
     this.syncMidiQueue(library, midi, context)
     await this.player.play(this.midiToMediaItem(midi, this.getDurationMs()))
   }
@@ -264,10 +275,11 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @param {number} timeMs - 目标时间，单位毫秒
    * @return {Promise<void>} seek 完成后 resolve
    */
-  async seekMs(timeMs: number): Promise<void> {
+  async seekMs(timeMs: number, options: { autoPlay?: boolean } = {}): Promise<void> {
     this.player?.updateProgress(timeMs / 1000, this.getDurationMs() / 1000)
     this.pausedAtTime = timeMs
     if (!this.dragging) {
+      this.forcePlayOnNextSeek = options.autoPlay === true
       await this.player?.seek(timeMs / 1000)
     }
   }
@@ -359,6 +371,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     setDisabledTracks(this.bindings.getDisabledTracks?.() ?? new Set())
 
     this.loadedMidiData = await this.readMidiData(media.url)
+    this.loadedMediaId = media.id
     const { duration } = await loadMidiForDuration(this.loadedMidiData)
     this.pausedAtTime = 0
     // 这里只同步总时长，不把 loading 提前改成 playing；真正播放开始由 play() 完成。
@@ -408,6 +421,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     stopPreviewAudio()
     this.stopPreviewTimer()
     this.loadedMidiData = null
+    this.loadedMediaId = null
     this.pausedAtTime = 0
     this.resumePending = false
   }
@@ -419,14 +433,17 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    */
   async seek(positionSeconds: number): Promise<void> {
     const stateBeforeSeek = this.player?.getState()
+    const forcePlay = this.forcePlayOnNextSeek
+    this.forcePlayOnNextSeek = false
     const shouldContinuePlaying =
-      stateBeforeSeek?.status === 'playing' || stateBeforeSeek?.status === 'loading'
+      forcePlay || stateBeforeSeek?.status === 'playing' || stateBeforeSeek?.status === 'loading'
 
     if (!shouldContinuePlaying && positionSeconds <= 0) {
       // 公共 Player 在停止或播完时会 seek(0) 归位；此时只需要释放平台游标，不能重新发声。
       stopPreviewAudio()
       this.stopPreviewTimer()
       this.loadedMidiData = null
+      this.loadedMediaId = null
       this.pausedAtTime = 0
       this.resumePending = false
       return
@@ -438,6 +455,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
         this.bindings.configurePlaybackFilter?.()
         setDisabledTracks(this.bindings.getDisabledTracks?.() ?? new Set())
         this.loadedMidiData = await this.readMidiData(current.url)
+        this.loadedMediaId = current.id
       }
     }
     if (!this.loadedMidiData) return

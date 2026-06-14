@@ -1,16 +1,15 @@
 /**
  * @fileOverview 主窗口路由配置
- * @description 只负责维护文件/模板页签的 URL 状态，页面组件仍由主窗口常驻渲染。
+ * @description 主窗口右侧页面路由配置。
  */
 import { createRouter, createWebHistory } from 'vue-router'
 import AllSongsPage from '@/views/MainWindow/FilesTab/pages/AllSongsPage.vue'
+import MidiDetailPage from '@/views/MainWindow/FilesTab/pages/MidiDetailPage.vue'
 import SongListDetailPage from '@/views/MainWindow/FilesTab/pages/SongListDetailPage.vue'
 import SongListEditPage from '@/views/MainWindow/FilesTab/pages/SongListEditPage.vue'
-
-/** 当前路由只作为页签状态源，不通过 RouterView 卸载业务页面。 */
-const RouteStateOnlyView = {
-  render: () => null,
-}
+import OnlineLibraryTab from '@/views/MainWindow/OnlineLibraryTab/index.vue'
+import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
+import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
 
 /** Infinity Nikki Player 主窗口路由实例。 */
 export const router = createRouter({
@@ -31,6 +30,11 @@ export const router = createRouter({
       component: AllSongsPage,
     },
     {
+      path: '/files/midi/:filename',
+      name: 'files-midi-detail',
+      component: MidiDetailPage,
+    },
+    {
       path: '/files/song-lists/:id',
       name: 'files-song-list-detail',
       component: SongListDetailPage,
@@ -43,12 +47,22 @@ export const router = createRouter({
     {
       path: '/templates',
       name: 'templates',
-      component: RouteStateOnlyView,
+      component: TemplateEditor,
+    },
+    {
+      path: '/templates/new',
+      name: 'templates-create',
+      component: TemplateEditorPage,
+    },
+    {
+      path: '/templates/:id/edit',
+      name: 'templates-edit',
+      component: TemplateEditorPage,
     },
     {
       path: '/online-library',
       name: 'online-library',
-      component: RouteStateOnlyView,
+      component: OnlineLibraryTab,
     },
     {
       path: '/:pathMatch(.*)*',

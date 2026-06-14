@@ -28,6 +28,10 @@ const activeKeySet = computed(() => props.activeKeys ?? new Set<string>())
 const showKeyLog = computed(
   () => Boolean(props.keyLog && props.getKeyLogByChapters && props.clearKeyLog)
 )
+const slots = defineSlots<{
+  toolbarLeft?: () => unknown
+}>()
+const showToolbar = computed(() => showKeyLog.value || Boolean(slots.toolbarLeft))
 const scaleShellRef = ref<HTMLDivElement | null>(null)
 const keyboardAreaRef = ref<HTMLDivElement | null>(null)
 const keyboardScale = ref(1)
@@ -125,7 +129,7 @@ onUnmounted(() => {
 })
 
 watch(
-  () => [props.keyCodeToPitch, props.activeKeys, showKeyLog.value],
+  () => [props.keyCodeToPitch, props.activeKeys, showToolbar.value],
   () => void nextTick(updateKeyboardScale)
 )
 </script>
@@ -133,9 +137,13 @@ watch(
 <template>
   <div class="keyboard-preview">
     <!-- 顶部操作区 -->
-    <div v-if="showKeyLog" class="toolbar">
+    <div v-if="showToolbar" class="toolbar">
+      <div class="toolbar-left">
+        <slot name="toolbarLeft" />
+      </div>
       <!-- 按键日志弹窗 -->
       <KeyLogPopover
+        v-if="showKeyLog"
         :active-keys="activeKeySet"
         :key-log="props.keyLog!"
         :get-key-log-by-chapters="props.getKeyLogByChapters!"
@@ -196,14 +204,18 @@ watch(
 
 <style scoped>
 .keyboard-preview {
-  @apply flex min-w-0 flex-col gap-2 overflow-hidden p-2 rounded-lg;
+  @apply flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-lg p-1.5;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
   width: 100%;
 }
 
 .toolbar {
-  @apply flex items-center justify-end;
+  @apply flex items-center justify-between gap-3;
+}
+
+.toolbar-left {
+  @apply min-w-0 flex-1;
 }
 
 .keyboard-scale-shell {
@@ -213,30 +225,30 @@ watch(
 
 .keyboard-area {
   @apply absolute left-1/2 top-0 flex flex-col;
-  gap: 3px;
+  gap: 2px;
   transform-origin: top center;
   width: max-content;
 }
 
 .keyboard-row {
   @apply flex items-center justify-center;
-  gap: 3px;
+  gap: 2px;
 }
 
 .keyboard-row.function-row {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .keyboard-row.space-row {
-  margin-top: 3px;
+  margin-top: 2px;
   justify-content: end;
 }
 
 .keyboard-row.space-row .key-arrow-left {
-  margin-left: 25px;
+  margin-left: 20px;
 }
 .keyboard-row.space-row .key-arrow-right {
-  margin-right: 20px;
+  margin-right: 16px;
 }
 
 .key {
@@ -244,13 +256,13 @@ watch(
   background: var(--bg-white-80);
   border: 1px solid var(--border-primary-20);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  width: 32px;
-  height: 34px;
+  width: 29px;
+  height: 30px;
 }
 
 .key.function {
-  width: 38px;
-  height: 28px;
+  width: 34px;
+  height: 25px;
 }
 
 .key.control {
@@ -258,19 +270,19 @@ watch(
 }
 
 .key.width-md {
-  width: 42px;
+  width: 38px;
 }
 
 .key.width-lg {
-  width: 52px;
+  width: 47px;
 }
 
 .key.width-xl {
-  width: 68px;
+  width: 60px;
 }
 
 .key.width-space {
-  width: 190px;
+  width: 170px;
 }
 
 .key.clickable {
@@ -291,7 +303,7 @@ watch(
 }
 
 .pitch-label {
-  @apply text-[8px] leading-none;
+  @apply text-[7px] leading-none;
   color: var(--color-muted);
   opacity: 0.7;
 }

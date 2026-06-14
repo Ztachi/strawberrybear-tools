@@ -22,6 +22,8 @@ use tauri::Manager;
 /// * `last_detected_fps` - 最近一次自动检测 FPS，仅用于展示回填
 /// * `playlist_playback_mode` - 播放列表调度模式
 /// * `song_list_sidebar_collapsed` - 歌单侧栏是否收起
+/// * `last_preview_filename` - 上次预览选中的 MIDI 文件名
+/// * `last_preview_source_id` - 上次预览队列来源 ID
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     /// 当前语言
@@ -49,6 +51,12 @@ pub struct AppSettings {
     /// 歌单侧栏是否收起
     #[serde(default)]
     pub song_list_sidebar_collapsed: bool,
+    /// 上次预览选中的 MIDI 文件名
+    #[serde(default)]
+    pub last_preview_filename: Option<String>,
+    /// 上次预览队列来源 ID，例如 all 或 song-list:<id>
+    #[serde(default)]
+    pub last_preview_source_id: Option<String>,
 }
 
 /// 默认演奏模式
@@ -83,6 +91,8 @@ impl Default for AppSettings {
             last_detected_fps: None,
             playlist_playback_mode: default_playlist_playback_mode(),
             song_list_sidebar_collapsed: false,
+            last_preview_filename: None,
+            last_preview_source_id: None,
         }
     }
 }
@@ -108,6 +118,8 @@ mod tests {
         assert_eq!(settings.last_detected_fps, None);
         assert_eq!(settings.playlist_playback_mode, "sequential");
         assert!(!settings.song_list_sidebar_collapsed);
+        assert_eq!(settings.last_preview_filename, None);
+        assert_eq!(settings.last_preview_source_id, None);
     }
 }
 

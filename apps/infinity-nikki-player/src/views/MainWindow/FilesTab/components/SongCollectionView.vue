@@ -3,8 +3,9 @@
  * @description: Song collection list
  * @description Shared by all songs and playlist song pages.
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Button, Checkbox, Dropdown, Input, Modal, Tooltip } from 'antdv-next'
 import { ListPlus, MoreVertical, Music, Search, Trash2, X } from 'lucide-vue-next'
@@ -15,6 +16,7 @@ import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { MidiInfo } from '@/types'
 import { buildCollectionContext, formatDuration } from '../utils'
 import SongActionMenu from './SongActionMenu.vue'
+import SongPlaybackCover from './SongPlaybackCover.vue'
 
 const props = defineProps<{
   type: 'all' | 'songList'
@@ -24,6 +26,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const songListStore = useSongListStore()
@@ -46,6 +49,7 @@ const confirmDialog = ref<{
   resolve: null,
 })
 let unregisterBackToTop: (() => void) | null = null
+let unregisterLocateCurrent: (() => void) | null = null
 let confirmPromise: Promise<boolean> | null = null
 
 const SCROLL_THRESHOLD = 200
@@ -78,6 +82,10 @@ const selectedCount = computed(() => selectedFilenames.value.size)
 const selectedSongs = computed(() =>
   filteredSongs.value.filter((song) => selectedFilenames.value.has(song.filename))
 )
+const currentSongInCollection = computed(() => {
+  const filename = playerStore.currentMidi?.filename
+  return Boolean(filename && props.songs.some((song) => song.filename === filename))
+})
 
 const batchAddTargets = computed(() => {
   const filenames = selectedSongs.value.map((song) => song.filename)
@@ -118,16 +126,7 @@ function handleRowClick(song: MidiInfo): void {
     toggleSong(song)
     return
   }
-  void playerStore.selectMidi(song, {
-    openDetail: true,
-    queueItems: filteredSongs.value,
-    queueContext: collectionContext.value,
-  })
-}
-
-function handleRowDoubleClick(song: MidiInfo): void {
-  if (batchMode.value) return
-  void playerStore.playMidiInQueue(song, filteredSongs.value, collectionContext.value)
+  void router.push({ name: 'files-midi-detail', params: { filename: song.filename } })
 }
 
 function confirmAction(title: string, content: string, okText: string): Promise<boolean> {
@@ -200,6 +199,22 @@ function scrollToTop(): void {
   scrollElement.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+async function locateCurrentSong(): Promise<void> {
+  const filename = playerStore.currentMidi?.filename
+  if (!filename) return
+
+  let targetIndex = filteredSongs.value.findIndex((song) => song.filename === filename)
+  if (targetIndex === -1 && props.songs.some((song) => song.filename === filename)) {
+    searchKeyword.value = ''
+    await nextTick()
+    targetIndex = props.songs.findIndex((song) => song.filename === filename)
+  }
+  if (targetIndex === -1) return
+
+  rowVirtualizer.value.scrollToIndex(targetIndex, { align: 'center' })
+  handleScroll()
+}
+
 watch(searchKeyword, () => {
   rowVirtualizer.value.scrollToIndex(0)
   handleScroll()
@@ -215,14 +230,28 @@ watch(
   }
 )
 
+watch(
+  [() => playerStore.currentMidi?.filename, () => props.songs.map((song) => song.filename).join('\n')],
+  () => {
+    mainWindowUiStore.setLocateCurrentVisible(currentSongInCollection.value)
+  },
+  { immediate: true }
+)
+
 onMounted(() => {
   unregisterBackToTop = mainWindowUiStore.registerBackToTop(scrollToTop)
+  unregisterLocateCurrent = mainWindowUiStore.registerLocateCurrent(() => {
+    void locateCurrentSong()
+  })
   handleScroll()
+  mainWindowUiStore.setLocateCurrentVisible(currentSongInCollection.value)
 })
 
 onUnmounted(() => {
   unregisterBackToTop?.()
   unregisterBackToTop = null
+  unregisterLocateCurrent?.()
+  unregisterLocateCurrent = null
   resolveConfirmDialog(false)
 })
 </script>
@@ -314,14 +343,13 @@ onUnmounted(() => {
             trigger="contextmenu"
           >
             <div
-              class="song-row"
+              class="song-row group/song-row"
               :class="{
                 'song-row-selected': selectedFilenames.has(filteredSongs[virtualRow.index]!.filename),
               }"
               role="button"
               tabindex="0"
               @click="handleRowClick(filteredSongs[virtualRow.index]!)"
-              @dblclick="handleRowDoubleClick(filteredSongs[virtualRow.index]!)"
               @keydown.enter="handleRowClick(filteredSongs[virtualRow.index]!)"
               @keydown.space.prevent="handleRowClick(filteredSongs[virtualRow.index]!)"
             >
@@ -332,9 +360,11 @@ onUnmounted(() => {
                 @click.stop="toggleSong(filteredSongs[virtualRow.index]!)"
               />
 
-              <div class="song-icon">
-                <Music :size="18" />
-              </div>
+              <SongPlaybackCover
+                :midi="filteredSongs[virtualRow.index]!"
+                :queue-items="songs"
+                :queue-context="collectionContext"
+              />
 
               <div class="song-main">
                 <Tooltip :title="filteredSongs[virtualRow.index]!.filename">

@@ -21,9 +21,7 @@ import {
 import { ChevronDown, ChevronUp, Crosshair, X } from 'lucide-vue-next'
 import { Tooltip } from 'antdv-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
-import PlaybackModeControl from '@/components/PlaybackModeControl.vue'
-import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
-import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
+import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import OverlayFpsControl from './components/OverlayFpsControl.vue'
 
 const { t } = useI18n()
@@ -170,8 +168,15 @@ async function playFromStartWithCountdown(midi?: MidiInfo) {
   resetOverlayKeyboardState()
 
   if (midi) {
-    // 悬浮模式只读取列表播放，不打开主界面详情抽屉，避免影响主界面页面状态
-    await playerStore.selectMidi(midi, { openDetail: false })
+    const queueItems =
+      playerStore.activePreviewQueueItems.length > 0
+        ? playerStore.activePreviewQueueItems
+        : playerStore.midiLibrary
+    const queueContext = playerStore.previewQueueContext ?? {
+      id: 'all',
+      title: t('songList.allSongs'),
+    }
+    await playerStore.selectMidiInQueue(midi, queueItems, queueContext)
     resetOverlayKeyboardState()
   }
 
@@ -181,6 +186,17 @@ async function playFromStartWithCountdown(midi?: MidiInfo) {
 function stopOverlayPlayback() {
   cancelCountdown()
   void playerStore.stopPreviewPlayback()
+}
+
+function seekOverlayPlayback(time: number) {
+  const isActivelyPlaying = playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
+  playerStore.setPreviewTime(time)
+  if (isActivelyPlaying && countdown.value <= 0) {
+    void playerStore.seekPreview(time)
+    return
+  }
+  cancelCountdown()
+  runAfterCountdown(() => playerStore.seekPreviewAndPlay(time))
 }
 
 // 初始化键盘映射器 - 创建键盘映射器实例，设置键盘模拟回调
@@ -302,7 +318,7 @@ async function startDrag(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (
     target.closest(
-      'button, select, input, textarea, [role="button"], .ant-select, .playlist-item, .overlay-progress, .overlay-fps-control, .playback-controls',
+      'button, select, input, textarea, [role="button"], .ant-select, .playlist-item, .overlay-fps-control, .playback-controls',
     )
   ) {
     return
@@ -364,14 +380,14 @@ async function playMidi(midi: MidiInfo) {
 }
 
 async function playRelativeMidi(direction: 'prev' | 'next') {
-  if (playerStore.midiLibrary.length === 0) return
+  if (playerStore.activePreviewQueueItems.length === 0) return
 
   cancelCountdown()
   await playerStore.stopPreviewPlayback()
   resetOverlayKeyboardState()
 
   // 相邻曲目由公共播放器按当前播放模式计算，悬浮窗只负责倒计时后的实际播放。
-  const selected = await playerStore.selectRelativePreview(direction, { openDetail: false })
+  const selected = await playerStore.selectRelativePreview(direction)
   if (!selected) return
 
   resetOverlayKeyboardState()
@@ -390,9 +406,6 @@ function formatDuration(ms: number): string {
 const currentMidiName = computed(
   () => playerStore.currentMidi?.filename || t('overlay.noFile')
 )
-
-// 是否正在播放
-const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.isPreviewPaused)
 </script>
 
 <template>
@@ -436,38 +449,23 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
         </Tooltip>
       </div>
 
-      <div class="overlay-progress" @mousedown.stop @pointerdown.stop>
-        <PreviewProgressBar
-          variant="overlay"
-          :current-time="playerStore.previewCurrentTime"
-          :duration="playerStore.previewDuration"
-          @dragging="playerStore.setDragging"
-          @preview="playerStore.setPreviewTime"
-          @seek="playerStore.seekPreview"
-        />
-      </div>
-
       <!-- 播放控制按钮 -->
       <div class="playback-controls" @mousedown.stop @pointerdown.stop>
-        <PlaybackModeControl
-          :mode="playerStore.previewPlaybackMode"
+        <MusicPlayerCore
+          class="overlay-player-core"
           variant="overlay"
-          @change="playerStore.setPlaylistPlaybackMode"
-        />
-        <PreviewTransportControls
-          variant="overlay"
-          :is-playing="isPlaying"
-          :is-paused="playerStore.isPreviewPaused"
-          :has-media="!!playerStore.currentMidi"
           :volume="overlayVolume"
           :muted="overlayMuted"
           :countdown="countdown"
+          :show-template="false"
+          :show-mode-row="false"
           @previous="playRelativeMidi('prev')"
           @next="playRelativeMidi('next')"
           @toggle-play="togglePlay"
           @stop="stopOverlayPlayback"
           @toggle-mute="toggleOverlayMute"
           @set-volume="setOverlayVolume"
+          @seek="seekOverlayPlayback"
         />
 
         <!-- 展开/收起按钮 -->
@@ -488,7 +486,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
     <div v-if="isExpanded" class="expand-panel">
       <div ref="playlistRef" class="playlist">
         <div
-          v-for="midi in playerStore.midiLibrary"
+          v-for="midi in playerStore.activePreviewQueueItems"
           :key="midi.filename"
           class="playlist-item"
           :class="{ active: playerStore.currentMidi?.filename === midi.filename }"
@@ -502,7 +500,7 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
           </span>
         </div>
         <!-- 空状态 -->
-        <div v-if="playerStore.midiLibrary.length === 0" class="playlist-empty">
+        <div v-if="playerStore.activePreviewQueueItems.length === 0" class="playlist-empty">
           {{ t('midi.libraryEmpty') }}
         </div>
       </div>
@@ -529,10 +527,6 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
   background: linear-gradient(135deg, rgba(247, 192, 193, 0.8) 0%, rgba(245, 184, 192, 0.8) 100%);
   cursor: move;
   user-select: none;
-}
-
-.overlay-progress {
-  grid-column: 1 / -1;
 }
 
 .playback-controls {
@@ -583,19 +577,18 @@ const isPlaying = computed(() => playerStore.isPreviewPlaying && !playerStore.is
 
 .playback-controls {
   display: grid;
-  grid-template-columns: 32px 1fr 32px;
+  grid-template-columns: minmax(0, 1fr) 32px;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
-.overlay-progress,
 .playback-controls,
 .action-buttons {
   cursor: default;
 }
 
-.playback-controls :deep(.transport-controls.overlay) {
-  justify-self: center;
+.overlay-player-core {
+  min-width: 0;
 }
 
 .ctrl-btn {

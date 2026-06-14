@@ -6,7 +6,7 @@ const props = withDefaults(
   defineProps<{
     currentTime: number
     duration: number
-    variant?: 'default' | 'overlay'
+    variant?: 'default' | 'compact' | 'overlay'
   }>(),
   {
     variant: 'default',
@@ -101,6 +101,10 @@ onUnmounted(() => {
   @apply gap-2;
 }
 
+.preview-progress.compact {
+  @apply gap-2;
+}
+
 .time {
   @apply text-xs font-mono w-10 text-center;
   color: var(--color-muted);
@@ -110,6 +114,10 @@ onUnmounted(() => {
   @apply w-8;
   color: rgba(255, 255, 255, 0.88);
   font-size: 10px;
+}
+
+.compact .time {
+  @apply w-9 text-[10px];
 }
 
 .time.current {
@@ -125,13 +133,18 @@ onUnmounted(() => {
 }
 
 .progress-slider {
-  @apply w-full cursor-pointer;
+  @apply w-full cursor-pointer m-0;
 }
 
 .progress-slider :deep(.ant-slider-rail),
 .progress-slider :deep(.ant-slider-track) {
   height: 4px;
   border-radius: 999px;
+}
+
+.compact .progress-slider :deep(.ant-slider-rail),
+.compact .progress-slider :deep(.ant-slider-track) {
+  height: 3px;
 }
 
 .progress-slider :deep(.ant-slider-rail) {

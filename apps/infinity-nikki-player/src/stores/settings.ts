@@ -47,6 +47,12 @@ export const useSettingsStore = defineStore('settings', () => {
   /** 歌单侧栏是否收起 */
   const songListSidebarCollapsed = ref(false)
 
+  /** 上次预览选中的 MIDI 文件名 */
+  const lastPreviewFilename = ref<string | null>(null)
+
+  /** 上次预览队列来源 ID，例如 all 或 song-list:<id> */
+  const lastPreviewSourceId = ref<string | null>(null)
+
   /** 是否处于悬浮模式 */
   const isOverlayMode = ref(false)
 
@@ -113,6 +119,8 @@ export const useSettingsStore = defineStore('settings', () => {
         ? settings.playlist_playback_mode
         : 'sequential'
       songListSidebarCollapsed.value = settings.song_list_sidebar_collapsed === true
+      lastPreviewFilename.value = settings.last_preview_filename ?? null
+      lastPreviewSourceId.value = settings.last_preview_source_id ?? null
 
       // 从后端加载模板
       templates.value = await loadTemplatesFromBackend()
@@ -155,6 +163,8 @@ export const useSettingsStore = defineStore('settings', () => {
       last_detected_fps: lastDetectedFps.value,
       playlist_playback_mode: playlistPlaybackMode.value,
       song_list_sidebar_collapsed: songListSidebarCollapsed.value,
+      last_preview_filename: lastPreviewFilename.value,
+      last_preview_source_id: lastPreviewSourceId.value,
     })
   }
 
@@ -227,6 +237,18 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   async function setSongListSidebarCollapsed(collapsed: boolean) {
     songListSidebarCollapsed.value = collapsed
+    await persistSettings()
+  }
+
+  /**
+   * @description: 保存上次预览选中项和播放来源
+   * @param {string | null} filename - MIDI 文件名
+   * @param {string | null} sourceId - 来源 ID
+   * @return {Promise<void>} 无返回值
+   */
+  async function setLastPreviewSelection(filename: string | null, sourceId: string | null) {
+    lastPreviewFilename.value = filename
+    lastPreviewSourceId.value = sourceId
     await persistSettings()
   }
 
@@ -375,6 +397,8 @@ export const useSettingsStore = defineStore('settings', () => {
     lastDetectedFps,
     playlistPlaybackMode,
     songListSidebarCollapsed,
+    lastPreviewFilename,
+    lastPreviewSourceId,
     isOverlayMode,
     modeBeforeOverlay,
     templates,
@@ -397,6 +421,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setLastDetectedFps,
     setPlaylistPlaybackMode,
     setSongListSidebarCollapsed,
+    setLastPreviewSelection,
   }
 })
 

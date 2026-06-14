@@ -11,7 +11,7 @@ const props = withDefaults(
     volume: number
     muted: boolean
     countdown?: number
-    variant?: 'default' | 'overlay'
+    variant?: 'default' | 'compact' | 'overlay'
   }>(),
   {
     countdown: 0,
@@ -30,24 +30,25 @@ const emit = defineEmits<{
 
 const volumePercent = computed(() => Math.round(props.volume * 100))
 const isOverlay = computed(() => props.variant === 'overlay')
+const isCompact = computed(() => props.variant === 'compact')
 </script>
 
 <template>
   <div class="transport-controls" :class="variant">
     <Button
       type="text"
-      :class="['transport-btn', 'prev', { overlay: isOverlay }]"
+      :class="['transport-btn', 'prev', { overlay: isOverlay, compact: isCompact }]"
       :disabled="!hasMedia"
       @click="emit('previous')"
     >
       <template #icon>
-        <SkipBack :class="['transport-icon', { overlay: isOverlay }]" />
+        <SkipBack :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]" />
       </template>
     </Button>
 
     <Button
       :type="isOverlay ? 'text' : 'primary'"
-      :class="['transport-btn', 'play', { overlay: isOverlay }]"
+      :class="['transport-btn', 'play', { overlay: isOverlay, compact: isCompact }]"
       :disabled="!hasMedia"
       :aria-pressed="isPlaying || isPaused"
       @click="emit('togglePlay')"
@@ -56,33 +57,36 @@ const isOverlay = computed(() => props.variant === 'overlay')
         <span v-if="countdown > 0" class="countdown-text">{{ countdown }}</span>
         <Pause
           v-else-if="isPlaying"
-          :class="['transport-icon', 'play-icon', { overlay: isOverlay }]"
+          :class="['transport-icon', 'play-icon', { overlay: isOverlay, compact: isCompact }]"
         />
-        <Play v-else :class="['transport-icon', 'play-icon', { overlay: isOverlay }]" />
+        <Play
+          v-else
+          :class="['transport-icon', 'play-icon', { overlay: isOverlay, compact: isCompact }]"
+        />
       </template>
     </Button>
 
     <Button
       type="text"
-      :class="['transport-btn', 'next', { overlay: isOverlay }]"
+      :class="['transport-btn', 'next', { overlay: isOverlay, compact: isCompact }]"
       :disabled="!hasMedia"
       @click="emit('next')"
     >
       <template #icon>
-        <SkipForward :class="['transport-icon', { overlay: isOverlay }]" />
+        <SkipForward :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]" />
       </template>
     </Button>
 
     <div class="right-controls">
       <Button
         type="text"
-        :class="['transport-btn', 'stop', { overlay: isOverlay }]"
+        :class="['transport-btn', 'stop', { overlay: isOverlay, compact: isCompact }]"
         :disabled="!hasMedia"
         @click="emit('stop')"
       >
         <template #icon>
           <Square
-            :class="['transport-icon', 'stop-icon', { overlay: isOverlay }]"
+            :class="['transport-icon', 'stop-icon', { overlay: isOverlay, compact: isCompact }]"
             fill="currentColor"
           />
         </template>
@@ -108,11 +112,17 @@ const isOverlay = computed(() => props.variant === 'overlay')
         </template>
         <Button
           type="text"
-          :class="['transport-btn', 'volume', { overlay: isOverlay, active: muted }]"
+          :class="['transport-btn', 'volume', { overlay: isOverlay, compact: isCompact, active: muted }]"
         >
           <template #icon>
-            <VolumeX v-if="muted" :class="['transport-icon', { overlay: isOverlay }]" />
-            <Volume2 v-else :class="['transport-icon', { overlay: isOverlay }]" />
+            <VolumeX
+              v-if="muted"
+              :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]"
+            />
+            <Volume2
+              v-else
+              :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]"
+            />
           </template>
         </Button>
       </Popover>
@@ -126,6 +136,10 @@ const isOverlay = computed(() => props.variant === 'overlay')
 }
 
 .transport-controls.overlay {
+  @apply gap-1;
+}
+
+.transport-controls.compact {
   @apply gap-1;
 }
 
@@ -149,6 +163,21 @@ const isOverlay = computed(() => props.variant === 'overlay')
 .transport-icon.play-icon {
   width: 24px;
   height: 24px;
+}
+
+.transport-icon.compact {
+  width: 18px;
+  height: 18px;
+}
+
+.transport-icon.compact.play-icon {
+  width: 21px;
+  height: 21px;
+}
+
+.transport-icon.compact.stop-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .transport-icon.stop-icon {
@@ -182,6 +211,10 @@ const isOverlay = computed(() => props.variant === 'overlay')
   color: var(--color-white);
 }
 
+.transport-btn.compact.play {
+  @apply h-10 w-10;
+}
+
 .transport-btn.play :deep(svg) {
   color: var(--color-white);
 }
@@ -191,6 +224,13 @@ const isOverlay = computed(() => props.variant === 'overlay')
 .transport-btn.volume,
 .transport-btn.stop {
   @apply w-10 h-10 rounded-xl;
+}
+
+.transport-btn.compact.prev,
+.transport-btn.compact.next,
+.transport-btn.compact.volume,
+.transport-btn.compact.stop {
+  @apply h-8 w-8 rounded-lg;
 }
 
 .transport-btn.overlay {
@@ -230,12 +270,7 @@ const isOverlay = computed(() => props.variant === 'overlay')
 }
 
 .right-controls {
-  @apply absolute flex items-center gap-1;
-  right: 0;
-}
-
-.overlay .right-controls {
-  @apply static;
+  @apply  flex gap-1;
 }
 
 .volume-popover {

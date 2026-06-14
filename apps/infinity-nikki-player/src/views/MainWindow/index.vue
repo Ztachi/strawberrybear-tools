@@ -5,10 +5,11 @@
  */
 import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterView, isNavigationFailure, useRoute, useRouter } from 'vue-router'
 import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
+import { useSongListStore } from '@/stores/songLists'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -16,11 +17,9 @@ import { feedback as toast } from '@/lib/feedback'
 import { Upload } from 'lucide-vue-next'
 import type { RouteLocationRaw } from 'vue-router'
 import FloatingActionGroup from '@/components/FloatingActionGroup.vue'
-import FilesTab from './FilesTab/index.vue'
-import OnlineLibraryTab from './OnlineLibraryTab/index.vue'
-import TemplatesTab from './TemplatesTab/index.vue'
 import OverlayView from './OverlayView.vue'
 import AppHeader from './components/AppHeader/index.vue'
+import GlobalMusicPlayer from '@/components/GlobalMusicPlayer/index.vue'
 import { isSupportedLocale } from '@/i18n'
 import { midiImportActionsKey } from './importActions'
 import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
@@ -31,6 +30,7 @@ const router = useRouter()
 const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
+const songListStore = useSongListStore()
 
 /** 主窗口支持的页签路由值。 */
 type MainWindowTab = 'files' | 'templates' | 'online'
@@ -42,9 +42,6 @@ const activeTab = computed<MainWindowTab>(() => {
   if (route.path.startsWith('/online-library')) return 'online'
   return 'files'
 })
-
-/** 模板 Tab 实例，用于在切页和导入前检查抽屉未保存编辑。 */
-const templatesTabRef = ref<InstanceType<typeof TemplatesTab> | null>(null)
 
 /** 是否显示拖拽覆盖层 @return {boolean} */
 const isDragOverlayVisible = ref(false)
@@ -245,12 +242,23 @@ async function handleImportPaths(paths: string[]) {
   if (!canImport) return
 
   const result = await playerStore.importPaths(paths)
+  const shouldOpenDetail =
+    result.importedFiles === 1 && result.scannedFolders === 0 && playerStore.lastImportedMidi
 
   if (result.invalidPaths.length > 0) {
     toast.error(t('dragdrop.invalidTitle'), {
       description: formatInvalidDropDescription(result.invalidPaths),
       richColors: true,
     })
+  }
+
+  if (shouldOpenDetail && playerStore.lastImportedMidi) {
+    await router.push({
+      name: 'files-midi-detail',
+      params: { filename: playerStore.lastImportedMidi.filename },
+      query: route.query,
+    })
+    playerStore.clearLastImportedMidi()
   }
 }
 
@@ -272,6 +280,8 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
     if (!canImport) return
   }
 
+  playerStore.clearLastImportedMidi()
+
   // 导入 MIDI 文件
   for (const file of midiFiles) {
     const bytes = await readFileAsUint8Array(file)
@@ -285,6 +295,15 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
       richColors: true,
     })
   }
+
+  if (shouldAutoSelect && playerStore.lastImportedMidi) {
+    await router.push({
+      name: 'files-midi-detail',
+      params: { filename: playerStore.lastImportedMidi.filename },
+      query: route.query,
+    })
+    playerStore.clearLastImportedMidi()
+  }
 }
 
 /**
@@ -296,13 +315,9 @@ async function ensureFilesTabForImport(): Promise<boolean> {
   // 已经在文件页时不需要询问模板页，避免无关编辑状态影响文件页重复导入。
   if (activeTab.value === 'files') return true
 
-  // 从模板页离开前询问子组件；保存失败或用户取消时中止导入。
-  const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('jump')
-  if (canLeave === false) return false
-
-  // 守卫通过后先切到文件页路由，后续 import/selectMidi 打开的详情才能直接显示给用户。
-  await router.push({ name: 'files-all', query: route.query })
-  return true
+  // 路由离开守卫会处理模板编辑页的未保存确认。
+  const failure = await router.push({ name: 'files-all', query: route.query })
+  return !isNavigationFailure(failure)
 }
 
 /**
@@ -332,30 +347,9 @@ async function handleMainNavigate(
 
   if (normalizedNextTab === activeTab.value && !targetRoute) return true
 
-  if (activeTab.value === 'templates') {
-    // 从模板页离开时统一检查抽屉 dirty 状态，避免用户通过左侧菜单绕过确认。
-    const canLeave = await templatesTabRef.value?.confirmLeaveIfNeeded('close')
-    if (canLeave === false) return false
-  }
-
-  // 守卫通过后再更新路由，防止 UI 先切走再被迫切回造成闪烁。
+  // 路由离开守卫会处理模板编辑页的未保存确认。
   await router.push(routeTarget)
   return true
-}
-
-/**
- * @description: 处理整页刷新前的模板草稿保护
- * @description beforeunload 无法使用自定义确认框，只能先落草稿并交给浏览器/Tauri WebView 提示。
- * @param {BeforeUnloadEvent} event - 浏览器刷新或关闭事件
- */
-function handleBeforeUnload(event: BeforeUnloadEvent): void {
-  // 只有模板抽屉存在真实未保存改动时才阻止刷新，避免普通刷新被无意义打断。
-  if (!templatesTabRef.value?.hasPendingChanges()) return
-
-  // 刷新会销毁 Vue 组件，必须先同步写入草稿，确保用户下次进入模板编辑仍可恢复。
-  templatesTabRef.value.writePendingDraft()
-  event.preventDefault()
-  event.returnValue = ''
 }
 
 /**
@@ -478,12 +472,11 @@ onMounted(async () => {
   playerStore.applyPlaylistPlaybackMode()
   // 如果用户在悬浮窗口中刷新页面，前端状态会重建；这里从 Rust 侧持久化快照恢复悬浮 UI。
   settingsStore.isOverlayMode = await invoke<boolean>('has_saved_overlay_window_state')
-  // 加载 MIDI 库
-  await playerStore.loadMidiLibrary()
+  // 加载歌单和 MIDI 库后恢复上次预览选中与播放作用域。
+  await Promise.all([songListStore.loadSongLists(), playerStore.loadMidiLibrary()])
+  await playerStore.restoreInitialPreviewSelection()
   // 绑定拖拽事件
   removeDomDragListeners = bindDomDragEvents()
-  // 绑定整页刷新保护，覆盖用户在模板编辑抽屉中直接刷新窗口的场景。
-  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 /** 组件卸载时清理 */
@@ -492,7 +485,6 @@ onUnmounted(() => {
     removeDomDragListeners()
     removeDomDragListeners = null
   }
-  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
 /**
@@ -509,7 +501,7 @@ async function selectFile() {
     await handleImportPaths(files)
     // 多个文件时关闭详情
     if (files.length > 1) {
-      playerStore.closeDetail()
+      await router.push({ name: 'files-all', query: route.query })
     }
   }
 }
@@ -533,9 +525,12 @@ async function selectFolder() {
  */
 async function enterOverlayMode() {
   try {
-    // 没有选中 MIDI 时自动选中第一首，仅用于悬浮列表展示与播放，不打开主界面详情抽屉
+    // 没有选中 MIDI 时自动选中第一首，仅用于悬浮列表展示与播放，不打开主界面详情页
     if (!playerStore.currentMidi && playerStore.midiLibrary.length > 0) {
-      await playerStore.selectMidi(playerStore.midiLibrary[0], { openDetail: false })
+      await playerStore.selectMidiInQueue(playerStore.midiLibrary[0], playerStore.midiLibrary, {
+        id: 'all',
+        title: t('songList.allSongs'),
+      })
     }
     // 停止预览播放
     void playerStore.stopPreviewPlayback()
@@ -561,7 +556,10 @@ provide(midiImportActionsKey, {
 })
 
 watch(activeTab, (tab) => {
-  if (tab !== 'files') mainWindowUiStore.clearBackToTop()
+  if (tab !== 'files') {
+    mainWindowUiStore.clearBackToTop()
+    mainWindowUiStore.clearLocateCurrent()
+  }
 })
 </script>
 
@@ -612,25 +610,26 @@ watch(activeTab, (tab) => {
           <SongListSidebar :request-navigate="handleMainNavigate" />
 
           <section class="route-content">
-            <section v-show="activeTab === 'files'" class="tab-content">
-              <FilesTab />
-            </section>
+            <RouterView v-slot="{ Component, route: pageRoute }">
+              <Transition name="main-page" mode="out-in">
+                <section :key="pageRoute.fullPath" class="route-page-host">
+                  <component :is="Component" />
+                </section>
+              </Transition>
+            </RouterView>
 
-            <section v-show="activeTab === 'templates'" class="tab-content">
-              <TemplatesTab ref="templatesTabRef" />
-            </section>
-
-            <section v-show="activeTab === 'online'" class="tab-content">
-              <OnlineLibraryTab />
-            </section>
+            <GlobalMusicPlayer />
           </section>
         </div>
 
         <FloatingActionGroup
           :show-back-to-top="mainWindowUiStore.canBackToTop"
+          :show-locate-current="mainWindowUiStore.canLocateCurrent"
           :back-to-top-title="t('actions.backToTop')"
+          :locate-current-title="t('overlay.locateCurrent')"
           :refresh-title="t('actions.refresh')"
           @back-to-top="mainWindowUiStore.triggerBackToTop"
+          @locate-current="mainWindowUiStore.triggerLocateCurrent"
           @refresh="refreshWindow"
         />
       </main>
@@ -736,27 +735,33 @@ watch(activeTab, (tab) => {
 }
 
 .main-content-shell {
-  @apply flex h-full min-h-0 gap-4 px-5 pb-5 pt-2;
+  @apply flex h-full min-h-0 gap-2 p-2;
 }
 
 .route-content {
-  @apply min-h-0 min-w-0 flex-1 overflow-hidden;
+  @apply flex min-h-0 min-w-0 flex-1 flex-col gap-2;
 }
 
-.tab-content {
-  @apply h-full min-h-0;
-  animation: fadeIn 0.2s ease-out;
+.route-page-host {
+  @apply flex-1 overflow-hidden rounded-2xl p-4;
+  background: var(--bg-white-95);
+  border: 1px solid var(--border-primary-15);
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
+.main-page-enter-active,
+.main-page-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.main-page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.main-page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

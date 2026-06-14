@@ -13,12 +13,12 @@ import type { PlaybackMode } from '@strawberrybear/player'
 /**
  * @description: 组件属性
  * @param {PlaybackMode} mode - 当前播放列表调度模式
- * @param {'default' | 'overlay'} [variant] - 控件视觉样式，悬浮窗使用 overlay
+ * @param {'default' | 'compact' | 'overlay'} [variant] - 控件视觉样式
  */
 const props = withDefaults(
   defineProps<{
     mode: PlaybackMode
-    variant?: 'default' | 'overlay'
+    variant?: 'default' | 'compact' | 'overlay'
   }>(),
   {
     variant: 'default',
@@ -60,15 +60,17 @@ const currentOption = computed(
 /** 当前模式的本地化名称，用于按钮无障碍标签。 */
 const currentModeLabel = computed(() => t(`overlay.playbackModes.${props.mode}`))
 
+const isCompact = computed(() => props.variant === 'compact' || props.variant === 'overlay')
+
 /** 悬浮窗靠左显示，避免 Popover 从按钮中心展开后被窗口 overflow 裁切。 */
-const popoverPlacement = computed(() => (props.variant === 'overlay' ? 'rightTop' : 'top'))
+const popoverPlacement = computed(() => (props.variant === 'overlay' ? 'right' : 'top'))
 
 /** Hover 提示只展示当前模式名称，悬浮窗从按钮右侧弹出。 */
 const tooltipPlacement = computed(() => (props.variant === 'overlay' ? 'right' : 'top'))
 
 /** Popover 全局 class；悬浮窗使用更紧凑的尺寸。 */
 const popoverClassName = computed(() =>
-  props.variant === 'overlay'
+  isCompact.value
     ? 'playback-mode-popover playback-mode-popover-compact'
     : 'playback-mode-popover'
 )
@@ -96,7 +98,7 @@ function selectPlaybackMode(mode: PlaybackMode) {
       :overlay-class-name="popoverClassName"
     >
       <template #content>
-        <div class="mode-menu" :class="{ compact: variant === 'overlay' }">
+        <div class="mode-menu" :class="{ compact: isCompact }">
           <button
             v-for="option in playbackModeOptions"
             :key="option.value"
@@ -140,9 +142,17 @@ function selectPlaybackMode(mode: PlaybackMode) {
   background: transparent;
 }
 
+.mode-trigger.compact {
+  @apply h-8 w-8 rounded-lg;
+}
+
 .mode-trigger-icon {
   @apply h-5 w-5;
   stroke-width: 2.25;
+}
+
+.mode-trigger.compact .mode-trigger-icon {
+  @apply h-4 w-4;
 }
 
 .mode-trigger.overlay .mode-trigger-icon {

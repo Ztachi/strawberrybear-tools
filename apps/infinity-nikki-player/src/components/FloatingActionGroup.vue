@@ -4,23 +4,28 @@
  * @description 统一提供返回顶部和刷新入口，具体滚动行为由调用方控制。
  */
 import { Button } from 'antdv-next'
-import { ArrowUp, RefreshCw } from 'lucide-vue-next'
+import { ArrowUp, Crosshair, RefreshCw } from 'lucide-vue-next'
 
 const props = withDefaults(
   defineProps<{
     showBackToTop?: boolean
+    showLocateCurrent?: boolean
     backToTopTitle: string
+    locateCurrentTitle?: string
     refreshTitle: string
     position?: 'absolute' | 'fixed'
   }>(),
   {
     showBackToTop: false,
+    showLocateCurrent: false,
+    locateCurrentTitle: '',
     position: 'absolute',
   }
 )
 
 const emit = defineEmits<{
   backToTop: []
+  locateCurrent: []
   refresh: []
 }>()
 </script>
@@ -43,6 +48,21 @@ const emit = defineEmits<{
     </Button>
 
     <Button
+      v-show="showLocateCurrent"
+      shape="square"
+      size="small"
+      color="primary"
+      variant="filled"
+      class="floating-action-btn"
+      :title="locateCurrentTitle"
+      @click="emit('locateCurrent')"
+    >
+      <template #icon>
+        <Crosshair :size="16" />
+      </template>
+    </Button>
+
+    <Button
       shape="square"
       size="small"
       color="primary"
@@ -61,9 +81,9 @@ const emit = defineEmits<{
 <style scoped>
 .floating-action-group {
   @apply pointer-events-none z-30 flex flex-col items-end;
-  gap: 10px;
-  right: 10px;
-  bottom: 10px;
+  gap: 5px;
+  right: 5px;
+  bottom: 20px;
 }
 
 .floating-action-group-absolute {

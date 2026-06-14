@@ -67,7 +67,7 @@ watch(
 </script>
 
 <template>
-  <Popover v-model:open="isOpen">
+  <Popover v-model:open="isOpen" placement="left">
     <template #content>
       <div class="keylog-content flex flex-col max-h-[400px]">
         <!-- 标题栏 -->
