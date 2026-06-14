@@ -5,6 +5,7 @@
  */
 import HeaderActions from './HeaderActions.vue'
 import AppUpdateButton from '@/components/AppUpdateButton.vue'
+import HeaderNavigation from '@/components/HeaderNavigation/index.vue'
 
 /**
  * @description: macOS Header 属性
@@ -46,6 +47,8 @@ const emit = defineEmits<{
         </h1>
         <!-- 更新入口跟随标题区展示，避免挤占右侧窗口操作按钮区域。 -->
         <AppUpdateButton />
+        <!-- 前进/后退/刷新按钮放在标题右侧，与 Windows Header 保持一致的导航交互。 -->
+        <HeaderNavigation />
       </div>
 
       <HeaderActions

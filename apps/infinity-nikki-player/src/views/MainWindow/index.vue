@@ -439,10 +439,6 @@ function switchLocale(targetLocale: string) {
   settingsStore.setLocale(targetLocale)
 }
 
-function refreshWindow(): void {
-  window.location.reload()
-}
-
 /**
  * @description: 打开帮助/关于对话框
  */
@@ -622,10 +618,8 @@ provide(midiImportActionsKey, {
           :show-locate-current="mainWindowUiStore.canLocateCurrent"
           :back-to-top-title="t('actions.backToTop')"
           :locate-current-title="t('overlay.locateCurrent')"
-          :refresh-title="t('actions.refresh')"
           @back-to-top="mainWindowUiStore.triggerBackToTop"
           @locate-current="mainWindowUiStore.triggerLocateCurrent"
-          @refresh="refreshWindow"
         />
       </main>
     </div>

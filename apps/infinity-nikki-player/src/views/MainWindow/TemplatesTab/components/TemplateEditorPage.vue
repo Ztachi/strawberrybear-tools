@@ -6,7 +6,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Button, Tag } from 'antdv-next'
-import { ArrowLeft, Save, X } from 'lucide-vue-next'
+import { Save, X } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
 import TemplateEditorForm from './TemplateEditorForm.vue'
 
@@ -116,12 +116,6 @@ defineExpose({
 <template>
   <section class="template-editor-page">
     <header class="template-editor-page-header">
-      <Button type="text" class="header-icon-btn" @click="navigateBack('close')">
-        <template #icon>
-          <ArrowLeft class="header-icon" />
-        </template>
-      </Button>
-
       <div class="min-w-0 flex-1">
         <h1 class="template-editor-page-title">
           {{ pageTitle }}
@@ -175,11 +169,6 @@ defineExpose({
   @apply flex shrink-0 items-center gap-2 border-b border-primary/10 p-3;
 }
 
-.header-icon-btn {
-  @apply h-9 w-9 rounded-lg;
-}
-
-.header-icon,
 .header-action-icon {
   width: 16px;
   height: 16px;

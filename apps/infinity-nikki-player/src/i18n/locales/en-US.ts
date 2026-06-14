@@ -33,6 +33,11 @@ export default {
     refresh: 'Refresh',
     backToTop: 'Back to top',
   },
+  headerNav: {
+    back: 'Back',
+    forward: 'Forward',
+    refresh: 'Refresh Page',
+  },
   player: {
     status: {
       idle: 'Idle',

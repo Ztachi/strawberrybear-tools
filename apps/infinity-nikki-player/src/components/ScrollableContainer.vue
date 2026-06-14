@@ -30,16 +30,10 @@ function handleScroll() {
 
 /**
  * @description: 平滑滚动到顶部
+ * @return {void}
  */
 function scrollToTop() {
   containerRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
-/**
- * @description: 刷新整个页面
- */
-function refreshPage() {
-  window.location.reload()
 }
 
 /** 组件挂载时绑定滚动事件 */
@@ -64,9 +58,7 @@ onUnmounted(() => {
       position="fixed"
       :show-back-to-top="showBackToTop"
       :back-to-top-title="t('actions.backToTop')"
-      :refresh-title="t('actions.refresh')"
       @back-to-top="scrollToTop"
-      @refresh="refreshPage"
     />
   </div>
 </template>

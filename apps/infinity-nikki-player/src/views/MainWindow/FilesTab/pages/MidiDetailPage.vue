@@ -6,7 +6,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, Popover, Switch, Tooltip } from 'antdv-next'
-import { ArrowLeft, Clock3, HelpCircle, Keyboard, Music2, Pause, Piano, Play } from 'lucide-vue-next'
+import { Clock3, HelpCircle, Keyboard, Music2, Pause, Piano, Play } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import PianoRoll from '@strawberrybear/piano-roll'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
@@ -140,6 +140,8 @@ function toggleTrack(trackIndex: number): void {
 }
 
 function navigateBack(): void {
+  // 页面级主动返回的兜底逻辑保留：当前自定义标题栏已经提供后退按钮（与浏览器历史栈同步），
+  // 但 missing-state 等异常分支仍需要主动跳转到文件页，因此函数不能删除。
   if (window.history.length > 1) {
     router.back()
     return
@@ -214,12 +216,6 @@ watch(
   <section class="midi-detail-page">
     <template v-if="detailMidi">
       <header class="detail-summary">
-        <Button type="text" class="back-btn" @click="navigateBack">
-          <template #icon>
-            <ArrowLeft class="back-icon" />
-          </template>
-        </Button>
-
         <button
           type="button"
           class="detail-cover group/detail-cover"
@@ -355,16 +351,6 @@ watch(
 .detail-summary {
   @apply flex shrink-0 items-center gap-4 rounded-2xl bg-white p-4;
   border: 1px solid var(--border-primary-15);
-}
-
-.back-btn {
-  @apply h-10 w-10 shrink-0 rounded-xl;
-}
-
-.back-icon {
-  width: 19px;
-  height: 19px;
-  stroke-width: 2.35;
 }
 
 .detail-cover {

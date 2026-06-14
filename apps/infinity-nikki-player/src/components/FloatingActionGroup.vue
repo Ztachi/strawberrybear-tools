@@ -1,18 +1,22 @@
 <script setup lang="ts">
 /**
  * @description: 右下角悬浮操作按钮组
- * @description 统一提供返回顶部和刷新入口，具体滚动行为由调用方控制。
+ * @description 提供返回顶部和定位入口；刷新功能已迁移到自定义标题栏 HeaderNavigation。
  */
 import { Button } from 'antdv-next'
-import { ArrowUp, Crosshair, RefreshCw } from 'lucide-vue-next'
+import { ArrowUp, Crosshair } from 'lucide-vue-next'
 
 const props = withDefaults(
   defineProps<{
+    /** 是否显示返回顶部按钮 */
     showBackToTop?: boolean
+    /** 是否显示定位当前播放项按钮 */
     showLocateCurrent?: boolean
+    /** 返回顶部 tooltip 文案 */
     backToTopTitle: string
+    /** 定位 tooltip 文案，可选 */
     locateCurrentTitle?: string
-    refreshTitle: string
+    /** 容器定位方式：absolute 跟随父容器，fixed 跟随视口 */
     position?: 'absolute' | 'fixed'
   }>(),
   {
@@ -26,7 +30,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   backToTop: []
   locateCurrent: []
-  refresh: []
 }>()
 </script>
 
@@ -59,20 +62,6 @@ const emit = defineEmits<{
     >
       <template #icon>
         <Crosshair :size="16" />
-      </template>
-    </Button>
-
-    <Button
-      shape="square"
-      size="small"
-      color="primary"
-      variant="filled"
-      class="floating-action-btn refresh-btn"
-      :title="refreshTitle"
-      @click="emit('refresh')"
-    >
-      <template #icon>
-        <RefreshCw :size="16" />
       </template>
     </Button>
   </div>
@@ -113,9 +102,5 @@ const emit = defineEmits<{
   border-color: transparent;
   color: #fff;
   box-shadow: var(--shadow-pink-sm);
-}
-
-.refresh-btn:hover {
-  transform: rotate(180deg);
 }
 </style>

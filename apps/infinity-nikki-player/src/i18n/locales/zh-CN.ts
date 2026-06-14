@@ -33,6 +33,11 @@ export default {
     refresh: '刷新',
     backToTop: '返回顶部',
   },
+  headerNav: {
+    back: '后退',
+    forward: '前进',
+    refresh: '刷新页面',
+  },
   player: {
     status: {
       idle: '空闲',
