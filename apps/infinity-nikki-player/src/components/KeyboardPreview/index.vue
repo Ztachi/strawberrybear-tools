@@ -4,6 +4,7 @@
  * @description 显示虚拟键盘布局，实时显示激活的按键状态，支持按键日志查看
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Tooltip } from 'antdv-next'
 import { KEYBOARD_LAYOUT } from './constants'
 import KeyLogPopover from './components/KeyLogPopover.vue'
 import type { KeyLogEntry, KeyLogChapter } from '@/lib/keyboardMapper'
@@ -216,32 +217,36 @@ watch(
           :class="getRowClass(rowIndex)"
         >
           <!-- 遍历每个按键 -->
-          <div
+          <Tooltip
             v-for="key in row"
             :key="key.code"
-            class="key"
-            :class="{
-              active: activeKeySet.has(key.code), // 是否激活
-              function: key.type === 'function', // 是否为功能键
-              control: key.type === 'control',
-              clickable: props.keyCodeToPitch?.has(key.code), // 是否可点击（有映射）
-              [`width-${key.width}`]: key.width,
-              [getKeyClass(key.key)]: getKeyClass(key.key),
-            }"
+            placement="top"
             :title="
               props.keyCodeToPitch?.has(key.code)
                 ? pitchToNoteName(props.keyCodeToPitch!.get(key.code)!)
                 : ''
             "
-            @click="handleKeyClick(key.code)"
           >
-            <!-- 按键标签 -->
-            <span class="key-label">{{ getKeyLabel(key.key) }}</span>
-            <!-- 音高标签（如果有映射） -->
-            <span v-if="props.keyCodeToPitch?.has(key.code)" class="pitch-label">
-              {{ pitchToNoteName(props.keyCodeToPitch!.get(key.code)!) }}
-            </span>
-          </div>
+            <div
+              class="key"
+              :class="{
+                active: activeKeySet.has(key.code), // 是否激活
+                function: key.type === 'function', // 是否为功能键
+                control: key.type === 'control',
+                clickable: props.keyCodeToPitch?.has(key.code), // 是否可点击（有映射）
+                [`width-${key.width}`]: key.width,
+                [getKeyClass(key.key)]: getKeyClass(key.key),
+              }"
+              @click="handleKeyClick(key.code)"
+            >
+              <!-- 按键标签 -->
+              <span class="key-label">{{ getKeyLabel(key.key) }}</span>
+              <!-- 音高标签（如果有映射） -->
+              <span v-if="props.keyCodeToPitch?.has(key.code)" class="pitch-label">
+                {{ pitchToNoteName(props.keyCodeToPitch!.get(key.code)!) }}
+              </span>
+            </div>
+          </Tooltip>
         </div>
       </div>
     </div>
@@ -336,7 +341,8 @@ watch(
   cursor: pointer;
 }
 
-.key.clickable:hover {
+/* 未激活的键 hover 时显示浅粉底色，提示可点击；active 状态的键单独处理 hover，不在此处覆盖 */
+.key.clickable:not(.active):hover {
   background: var(--bg-primary-10);
 }
 
@@ -355,11 +361,19 @@ watch(
   opacity: 0.7;
 }
 
+/* active 状态的键：实色品牌背景，模拟「按下」物理效果 */
 .key.active {
   background: var(--color-primary);
   border-color: var(--color-primary);
   box-shadow: 0 2px 8px var(--bg-primary-30);
   transform: translateY(1px);
+}
+
+/* active 状态键 hover 时保持按下视觉，并通过边框变化暗示已被按下，不应被通用 hover 规则覆盖 */
+.key.active:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18), 0 2px 8px var(--bg-primary-30);
 }
 
 .key.active .key-label,

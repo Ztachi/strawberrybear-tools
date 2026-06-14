@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { Tooltip } from 'antdv-next'
 import { Download, Play, RefreshCw, Search, Square } from 'lucide-vue-next'
 import { feedback as toast } from '@/lib/feedback'
 import { playMidi, stopPreview } from '@/lib/midiPlayer'
@@ -274,16 +275,17 @@ onUnmounted(() => {
         {{ t('actions.clear') }}
       </button>
 
-      <button
-        type="button"
-        class="icon-button"
-        :title="t('onlineLibrary.refresh')"
-        :aria-label="t('onlineLibrary.refresh')"
-        :disabled="isLoading"
-        @click="loadSongs"
-      >
-        <RefreshCw :class="{ spinning: isLoading }" />
-      </button>
+      <Tooltip :title="t('onlineLibrary.refresh')" placement="bottom">
+        <button
+          type="button"
+          class="icon-button"
+          :aria-label="t('onlineLibrary.refresh')"
+          :disabled="isLoading"
+          @click="loadSongs"
+        >
+          <RefreshCw :class="{ spinning: isLoading }" />
+        </button>
+      </Tooltip>
     </div>
 
     <div v-if="errorMessage" class="state-panel">
@@ -316,12 +318,12 @@ onUnmounted(() => {
         <article v-for="song in songs" :key="song.id" class="song-card">
           <div class="song-card-head">
             <div class="song-title-group">
-              <h3 :title="song.title">
-                {{ song.title }}
-              </h3>
-              <p :title="song.authorName || t('onlineLibrary.unknownAuthor')">
-                {{ song.authorName || t('onlineLibrary.unknownAuthor') }}
-              </p>
+              <Tooltip :title="song.title">
+                <h3>{{ song.title }}</h3>
+              </Tooltip>
+              <Tooltip :title="song.authorName || t('onlineLibrary.unknownAuthor')">
+                <p>{{ song.authorName || t('onlineLibrary.unknownAuthor') }}</p>
+              </Tooltip>
             </div>
             <span class="difficulty-chip">
               {{ labelFor('difficulty', song.difficultyType) }}
