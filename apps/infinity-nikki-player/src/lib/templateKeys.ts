@@ -15,32 +15,60 @@ export const LETTER_MAPPING_KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 export const NUMBER_MAPPING_KEYS = '0123456789'.split('')
 /** 支持映射的功能键范围，和 Rust 键盘模拟器支持范围保持一致 */
 export const FUNCTION_MAPPING_KEYS = Array.from({ length: 12 }, (_, index) => `F${index + 1}`)
-/** 支持映射的常用标点键，按物理键位保存为键帽字符。 */
-export const PUNCTUATION_MAPPING_KEYS = [
-  '`',
-  '-',
-  '=',
-  '[',
-  ']',
-  '\\',
-  ';',
-  "'",
-  ',',
-  '.',
-  '/',
-] as const
-/** 支持映射的非系统控制键。 */
-export const CONTROL_MAPPING_KEYS = [
+
+/**
+ * @description 非字母 / 非数字 / 非功能键 的「模板按键名 → KeyboardEvent.code」映射。
+ * @description 这是本文件唯一的非字母数字键真理源：
+ *  - 增删一项 → 同步影响 PUNCTUATION_MAPPING_KEYS / CONTROL_MAPPING_KEYS / SUPPORTED_MAPPING_KEYS / isSupportedMappingKey / normalizeMappingKeyFromEvent。
+ *  - 注意：BACKSPACE / DELETE 不在此表，因为它们在模板编辑器中被占用为
+ *  「清除当前琴键映射」的快捷键（见 templatePianoEditor.ts 的
+ *  Backspace/Delete 分支），与「作为演奏键」语义冲突。
+ * @description 同一个模板按键名可对应多个 code（如 ENTER 同时匹配主键盘 Enter 和数字键盘 NumpadEnter）。
+ */
+const NAMED_MAPPING_KEY_TO_CODE = {
+  '`': ['Backquote'],
+  '-': ['Minus'],
+  '=': ['Equal'],
+  '[': ['BracketLeft'],
+  ']': ['BracketRight'],
+  '\\': ['Backslash'],
+  ';': ['Semicolon'],
+  "'": ['Quote'],
+  ',': ['Comma'],
+  '.': ['Period'],
+  '/': ['Slash'],
+  SPACE: ['Space'],
+  TAB: ['Tab'],
+  ENTER: ['Enter', 'NumpadEnter'],
+  ARROWUP: ['ArrowUp'],
+  ARROWDOWN: ['ArrowDown'],
+  ARROWLEFT: ['ArrowLeft'],
+  ARROWRIGHT: ['ArrowRight'],
+} as const
+
+/**
+ * @description 大写字母单词风格的按键名属于「控制键」分组，
+ * @description 与「标点键」（单字符 ASCII 符号）一起覆盖 NAMED_MAPPING_KEY_TO_CODE 的全集。
+ */
+const CONTROL_KEY_NAMES = new Set<string>([
   'SPACE',
   'TAB',
   'ENTER',
-  'BACKSPACE',
-  'DELETE',
   'ARROWUP',
   'ARROWDOWN',
   'ARROWLEFT',
   'ARROWRIGHT',
-] as const
+])
+
+/** 支持映射的常用标点键（NAMED_MAPPING_KEY_TO_CODE 中非控制键的部分），按物理键位保存为键帽字符。 */
+export const PUNCTUATION_MAPPING_KEYS = Object.keys(NAMED_MAPPING_KEY_TO_CODE).filter(
+  (key) => !CONTROL_KEY_NAMES.has(key)
+) as Array<keyof typeof NAMED_MAPPING_KEY_TO_CODE>
+
+/** 支持映射的非系统控制键（NAMED_MAPPING_KEY_TO_CODE 中属于控制键分组的部分）。 */
+export const CONTROL_MAPPING_KEYS = Object.keys(NAMED_MAPPING_KEY_TO_CODE).filter((key) =>
+  CONTROL_KEY_NAMES.has(key)
+) as Array<keyof typeof NAMED_MAPPING_KEY_TO_CODE>
 
 /** 可保存到模板 JSON 的完整按键白名单 */
 export const SUPPORTED_MAPPING_KEYS = [
@@ -54,33 +82,11 @@ export const SUPPORTED_MAPPING_KEYS = [
 /** 可保存按键白名单 Set，用于编辑器和保存前校验 */
 export const SUPPORTED_MAPPING_KEY_SET = new Set<string>(SUPPORTED_MAPPING_KEYS)
 
-/** 模板按键名到 KeyboardEvent.code / 预览 code 的映射。 */
-const MAPPING_KEY_TO_CODE: Record<string, string> = {
-  '`': 'Backquote',
-  '-': 'Minus',
-  '=': 'Equal',
-  '[': 'BracketLeft',
-  ']': 'BracketRight',
-  '\\': 'Backslash',
-  ';': 'Semicolon',
-  "'": 'Quote',
-  ',': 'Comma',
-  '.': 'Period',
-  '/': 'Slash',
-  SPACE: 'Space',
-  TAB: 'Tab',
-  ENTER: 'Enter',
-  BACKSPACE: 'Backspace',
-  DELETE: 'Delete',
-  ARROWUP: 'ArrowUp',
-  ARROWDOWN: 'ArrowDown',
-  ARROWLEFT: 'ArrowLeft',
-  ARROWRIGHT: 'ArrowRight',
-}
-
-/** KeyboardEvent.code / 预览 code 到模板按键名的反向映射。 */
+/** KeyboardEvent.code / 预览 code 到模板按键名的反向映射（从 NAMED_MAPPING_KEY_TO_CODE 派生，每个 code 都映射到其模板按键名）。 */
 const CODE_TO_MAPPING_KEY = Object.fromEntries(
-  Object.entries(MAPPING_KEY_TO_CODE).map(([key, code]) => [code, key])
+  Object.entries(NAMED_MAPPING_KEY_TO_CODE).flatMap(([key, codes]) =>
+    codes.map((code) => [code, key])
+  )
 ) as Record<string, string>
 
 /**
@@ -164,29 +170,6 @@ export function normalizeMappingKeyFromEvent(event: KeyboardEvent): string | nul
   const key = event.key.trim()
   // code 表示物理键位，比 key 更适合识别字母和数字行。
   const code = event.code
-  const codeMapping: Record<string, string> = {
-    Backquote: '`',
-    Minus: '-',
-    Equal: '=',
-    BracketLeft: '[',
-    BracketRight: ']',
-    Backslash: '\\',
-    Semicolon: ';',
-    Quote: "'",
-    Comma: ',',
-    Period: '.',
-    Slash: '/',
-    Space: 'SPACE',
-    Tab: 'TAB',
-    Enter: 'ENTER',
-    NumpadEnter: 'ENTER',
-    Backspace: 'BACKSPACE',
-    Delete: 'DELETE',
-    ArrowUp: 'ARROWUP',
-    ArrowDown: 'ARROWDOWN',
-    ArrowLeft: 'ARROWLEFT',
-    ArrowRight: 'ARROWRIGHT',
-  }
 
   // 字母键优先按物理键位识别，避免非英文键盘布局导致 key 不是 A-Z。
   if (/^Key[A-Z]$/.test(code)) {
@@ -203,8 +186,8 @@ export function normalizeMappingKeyFromEvent(event: KeyboardEvent): string | nul
     return key.toUpperCase()
   }
 
-  if (codeMapping[code]) {
-    return codeMapping[code]
+  if (CODE_TO_MAPPING_KEY[code]) {
+    return CODE_TO_MAPPING_KEY[code]
   }
 
   // 浏览器环境下如果 code 不可用，仍允许单字母 key 回退。
@@ -235,7 +218,9 @@ export function mappingKeyToCode(key: string): string {
   if (/^[A-Z]$/.test(normalizedKey)) return `Key${normalizedKey}`
   if (/^[0-9]$/.test(normalizedKey)) return `Digit${normalizedKey}`
   if (/^F([1-9]|1[0-2])$/.test(normalizedKey)) return normalizedKey
-  return MAPPING_KEY_TO_CODE[normalizedKey] ?? key
+  // 返回主 code（数组首位），其他等价 code（如 NumpadEnter）仅用于反查
+  const codes = NAMED_MAPPING_KEY_TO_CODE[normalizedKey as keyof typeof NAMED_MAPPING_KEY_TO_CODE]
+  return codes?.[0] ?? key
 }
 
 /**

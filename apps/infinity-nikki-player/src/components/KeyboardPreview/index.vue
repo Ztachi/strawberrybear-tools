@@ -79,12 +79,11 @@ function handleKeyClick(code: string) {
 }
 
 function getKeyLabel(key: string): string {
+  // 虚拟键盘展示完整文字（Space / Tab / Enter / ↑等），不简写，方便用户识别
   const labels: Record<string, string> = {
     SPACE: 'Space',
     TAB: 'Tab',
     ENTER: 'Enter',
-    BACKSPACE: 'Backspace',
-    DELETE: 'Del',
     ARROWUP: '↑',
     ARROWDOWN: '↓',
     ARROWLEFT: '←',
@@ -103,7 +102,6 @@ function getRowClass(rowIndex: number) {
 function getKeyClass(key: string) {
   const classes: Record<string, string> = {
     SPACE: 'key-space',
-    DELETE: 'key-delete',
     ARROWLEFT: 'key-arrow-left',
     ARROWDOWN: 'key-arrow-down',
     ARROWRIGHT: 'key-arrow-right',

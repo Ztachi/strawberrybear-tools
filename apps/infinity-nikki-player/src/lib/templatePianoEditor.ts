@@ -119,6 +119,30 @@ const KEYBOARD_HOLD_PREVIEW_DURATION_SECONDS = 60 * 60
 /** 撤销历史上限，避免长期编辑占用过多内存。 */
 const MAX_HISTORY_SIZE = 100
 
+/**
+ * @description 模板按键名在虚拟钢琴 badge 上的展示简写（短文本，避免溢出窄琴键）。
+ * @description 该表是虚拟钢琴独有的展示配置，虚拟键盘保留完整文字（Space / Tab / Enter）方便识别。
+ * @description 规则：单词类控制键 → 2 字母简写；方向键 → 箭头符号；其他无简写则原样回退。
+ */
+const PIANO_MAPPING_KEY_DISPLAY: Record<string, string> = {
+  SPACE: 'SE',
+  TAB: 'TB',
+  ENTER: 'EN',
+  ARROWUP: '↑',
+  ARROWDOWN: '↓',
+  ARROWLEFT: '←',
+  ARROWRIGHT: '→',
+}
+
+/**
+ * @description 获取模板按键名在虚拟钢琴上的展示简写（取 PIANO_MAPPING_KEY_DISPLAY，回退原文字）。
+ * @param {string} key - 模板按键名，如 SPACE、ARROWUP
+ * @return {string} 展示文字，1-2 字符，绝不溢出窄琴键
+ */
+function getPianoMappingKeyDisplay(key: string): string {
+  return PIANO_MAPPING_KEY_DISPLAY[key] ?? key
+}
+
 /** 88 键钢琴覆盖的所有 MIDI 音高。 */
 const ALL_PITCHES = Array.from(
   { length: TEMPLATE_MAX_PITCH - TEMPLATE_MIN_PITCH + 1 },
@@ -713,37 +737,44 @@ export class TemplatePianoEditor {
     // 黑白键音名上下错开，密集预览时不会糊成一条直线。
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    const noteFontSize = this.mode === 'overview' ? 6 : 11
+    // 黑键高度比白键短约 40%，字号同步缩放避免遮挡。
+    const noteFontSize = this.mode === 'overview' ? 6 : rect.black ? 9 : 11
     ctx.font = `${noteFontSize}px sans-serif`
-    const mappingBadgeY = rect.black ? rect.height - 18 : rect.height - 24
-    const noteLabelY = rect.black
-      ? this.mode === 'overview'
-        ? rect.height - 22
-        : rect.height - 28
-      : this.mode === 'overview'
+    // 映射 badge 靠近琴键底部（黑键距底 14，白键距底 24，badge 实际高度 14-18）
+    const mappingBadgeY = rect.black ? rect.height - 14 : rect.height - 24
+    // 黑白键 note 都放在底部 badge 上方，与白键视觉一致；黑键略向上提一点防止与 badge 重叠
+    const noteLabelY =
+      this.mode === 'overview'
         ? mappingBadgeY - 22
-        : mappingBadgeY - 36
+        : rect.black
+          ? mappingBadgeY - 16
+          : mappingBadgeY - 36
     ctx.fillText(pitchToNoteName(rect.pitch), rect.x + rect.width / 2, noteLabelY)
 
     if (mappingKey) {
-      // 映射 badge 靠近琴键底部；黑键高度更短，需要单独调整 y 坐标。
-      // badge 宽度随 F10/F12 这类较长文本扩展，但不能超过琴键宽度。
-      const badgeWidth =
-        this.mode === 'overview'
-          ? Math.min(rect.width - 2, Math.max(12, mappingKey.length * 5 + 4))
-          : Math.min(rect.width - 6, Math.max(18, mappingKey.length * 8 + 8))
+      // 用虚拟钢琴独立的简写表展示（SE / EN / ↑ 等），避免长键名溢出琴键宽度
+      const displayKey = getPianoMappingKeyDisplay(mappingKey)
+      // 映射 badge 靠近琴键底部；黑键高度更短，badge 高度同步缩短。
+      // badge 宽度使用 measureText 实际测量 + padding，精确控制不溢出。
+      const badgeFontSize = this.mode === 'overview' ? 7 : rect.black ? 9 : 11
+      ctx.font = `${badgeFontSize}px sans-serif`
+      const textWidth = ctx.measureText(displayKey).width
+      const horizontalPadding = this.mode === 'overview' ? 4 : 6
+      const badgeWidth = Math.min(
+        rect.width - 4,
+        Math.max(this.mode === 'overview' ? 12 : 18, textWidth + horizontalPadding * 2)
+      )
       ctx.fillStyle = rect.black ? 'rgba(255,255,255,0.92)' : '#f7c0c1'
       this.fillRoundRect(
         ctx,
         rect.x + (rect.width - badgeWidth) / 2,
         mappingBadgeY - (this.mode === 'overview' ? 7 : 9),
         badgeWidth,
-        this.mode === 'overview' ? 14 : 18,
+        this.mode === 'overview' ? 14 : rect.black ? 14 : 18,
         9
       )
       ctx.fillStyle = '#4a3f3f'
-      ctx.font = `${this.mode === 'overview' ? 7 : 11}px sans-serif`
-      ctx.fillText(mappingKey, rect.x + rect.width / 2, mappingBadgeY)
+      ctx.fillText(displayKey, rect.x + rect.width / 2, mappingBadgeY)
     }
 
     if (mappingTarget) {
