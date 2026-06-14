@@ -215,7 +215,10 @@ pub async fn exit_overlay_mode(app: AppHandle) -> Result<(), String> {
             window
                 .set_max_size(None::<LogicalSize<f64>>)
                 .map_err(|e| format!("恢复最大尺寸失败: {}", e))?;
-            window.set_shadow(true).ok();
+            // 保持与 tauri.conf.json 一致：始终不开启系统阴影。
+            // Tauri 2.10.x 在 undecorated + shadow 时会限制窗口只能从顶部 4px 调整大小，
+            // 与本应用的全边可拖拽需求冲突。这里显式关闭即可。
+            window.set_shadow(false).ok();
             restore_main_window_chrome(&window).await?;
 
             // 2) 复用窗口状态机制：还原窗口化几何（尺寸 + 位置）
