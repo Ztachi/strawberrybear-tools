@@ -603,13 +603,15 @@ provide(midiImportActionsKey, {
           <SongListSidebar :request-navigate="handleMainNavigate" />
 
           <section class="route-content">
-            <RouterView v-slot="{ Component, route: pageRoute }">
-              <Transition name="main-page" mode="out-in">
-                <section :key="pageRoute.fullPath" class="route-page-host">
-                  <component :is="Component" />
-                </section>
-              </Transition>
-            </RouterView>
+            <section class="route-page-stage">
+              <RouterView v-slot="{ Component, route: pageRoute }">
+                <Transition name="main-page">
+                  <section :key="pageRoute.fullPath" class="route-page-host">
+                    <component :is="Component" />
+                  </section>
+                </Transition>
+              </RouterView>
+            </section>
 
             <GlobalMusicPlayer />
           </section>
@@ -735,8 +737,12 @@ provide(midiImportActionsKey, {
   @apply flex min-h-0 min-w-0 flex-1 flex-col gap-2;
 }
 
+.route-page-stage {
+  @apply relative min-h-0 flex-1 overflow-hidden;
+}
+
 .route-page-host {
-  @apply flex-1 overflow-hidden rounded-2xl p-4;
+  @apply absolute inset-0 overflow-hidden rounded-2xl p-4;
   background: var(--bg-white-50);
   border: 1px solid var(--border-primary-15);
 }
@@ -746,6 +752,15 @@ provide(midiImportActionsKey, {
   transition:
     opacity 0.18s ease,
     transform 0.18s ease;
+}
+
+.main-page-enter-active {
+  z-index: 2;
+}
+
+.main-page-leave-active {
+  z-index: 1;
+  pointer-events: none;
 }
 
 .main-page-enter-from {
