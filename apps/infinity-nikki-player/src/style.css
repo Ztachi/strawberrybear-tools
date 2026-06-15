@@ -275,3 +275,8 @@
 [data-tauri-drag-region] input {
   -webkit-app-region: no-drag;
 }
+
+.ant-dropdown-menu-submenu-title {
+  display: flex;
+  align-items: center;
+}

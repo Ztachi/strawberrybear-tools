@@ -241,18 +241,13 @@ function cancelRename(): void {
 
 function getPlaylistMenuItems(songList: SongList) {
   const songs = getSongListSongs(songList, playerStore.midiLibrary)
+  // 菜单顺序：播放在前，常用编辑操作居中，删除固定放最底部，避免误触。
   return [
     {
       key: 'play',
       label: t('player.play'),
       icon: Play,
       disabled: songs.length === 0,
-    },
-    {
-      key: 'delete',
-      label: t('actions.delete'),
-      icon: Trash2,
-      danger: true,
     },
     {
       key: 'rename',
@@ -263,6 +258,12 @@ function getPlaylistMenuItems(songList: SongList) {
       key: 'export',
       label: t('songList.actions.export'),
       icon: Download,
+    },
+    {
+      key: 'delete',
+      label: t('actions.delete'),
+      icon: Trash2,
+      danger: true,
     },
   ].map((item) => ({
     ...item,

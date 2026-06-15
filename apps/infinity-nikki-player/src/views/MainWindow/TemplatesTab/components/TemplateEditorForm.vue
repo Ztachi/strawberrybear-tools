@@ -454,7 +454,7 @@ async function saveEditingTemplate(): Promise<boolean> {
   }
 
   try {
-    // 保存成功后会刷新模板列表并自动选择该模板。
+    // 保存成功后只刷新模板列表，是否启用由用户在详情页/悬浮窗主动选择，避免自动换模板。
     await settingsStore.saveTemplate(template)
     toast.success(t('template.saved'), { richColors: true })
     if (previousDraftKey) clearTemplateDraft(previousDraftKey)

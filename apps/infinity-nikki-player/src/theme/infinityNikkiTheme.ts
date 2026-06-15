@@ -129,6 +129,12 @@ export const infinityNikkiTheme: ThemeConfig = {
       inkBarColor: NIKKI_PRIMARY_COLOR,
       algorithm: true,
     },
+    // 工具提示沿用品牌粉色系：背景使用主品牌按压态色，对比度足以承载白色文字，
+    // 箭头背景色会自动跟随 colorBgSpotlight，无需额外指定。
+    Tooltip: {
+      colorBgSpotlight: NIKKI_PRIMARY_ACTIVE_COLOR,
+      colorTextLightSolid: '#FFFFFF',
+    },
   },
 }
 

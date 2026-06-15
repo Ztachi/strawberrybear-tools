@@ -311,14 +311,13 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /**
    * @description: 保存模板到后端
+   * @description 仅刷新模板列表，不强制切换当前选中模板，由用户自行决定是否启用该模板
    * @param {KeyTemplate} template - 模板数据
    * @return Promise
    */
   async function saveTemplate(template: KeyTemplate) {
     await invoke('save_template', { template })
     await refreshTemplates()
-    currentTemplateId.value = template.id
-    await persistSettings()
   }
 
   /**
