@@ -96,6 +96,7 @@ export default {
     percussionTrack: '打击乐器',
   },
   onlineLibrary: {
+    disclaimer: '仅供学习交流，禁止商用',
     searchPlaceholder: '搜索曲名、作者、标签',
     refresh: '同步',
     sync: '同步',

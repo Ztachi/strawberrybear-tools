@@ -96,6 +96,7 @@ export default {
     percussionTrack: 'Percussion',
   },
   onlineLibrary: {
+    disclaimer: 'For learning and non-commercial use only',
     searchPlaceholder: 'Search title, author, or tags',
     refresh: 'Sync',
     sync: 'Sync',

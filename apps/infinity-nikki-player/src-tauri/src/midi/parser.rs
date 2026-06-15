@@ -2,6 +2,7 @@
 //!
 //! 提供 MIDI 文件解析和音符名称转换功能
 
+use crate::midi::melody::extract_melody;
 use crate::types::{MidiInfo, NoteEvent};
 use midly::{MetaMessage, MidiMessage, Smf, TrackEventKind};
 use std::path::Path;
@@ -115,15 +116,23 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
         }
     }
 
-    // 处理没有对应 NoteOff 的 NoteOn
+    // 处理没有对应 NoteOff 的 NoteOn：把 end_tick 兜底为 current_tick，
+    // 防止「音符在另一时间点的 NoteOn 中找到误匹配」的情况；下面用所有音符 end_tick
+    // 实际最大值算时长，比 current_tick 更精确。
     for event in &mut events {
         if event.end_tick == 0 {
             event.end_tick = current_tick;
         }
     }
 
-    // 计算总时长（毫秒）
-    let duration_ms = (current_tick as f64 / ticks_per_beat as f64) * (tempo as f64 / 1000.0);
+    // 计算总时长（毫秒）：以所有音符事件中实际最大的 end_tick 为准
+    // 旧实现用单轨累加的 current_tick，遇到多轨（如钢琴左/右手）会因轨道间相互取 max 而虚高（贝多芬月光会被算成 11 分钟）。
+    let last_event_tick = events.iter().map(|event| event.end_tick).max().unwrap_or(current_tick);
+    let effective_tick = last_event_tick.max(current_tick);
+    let duration_ms = (effective_tick as f64 / ticks_per_beat as f64) * (tempo as f64 / 1000.0);
+
+    // 计算旋律音符数（与前端详情页保持一致的提取规则）
+    let melody_note_count = extract_melody(&events, ticks_per_beat, tempo as u64).len();
 
     // 构建 MIDI 信息
     let info = MidiInfo {
@@ -136,6 +145,7 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
         online_sha256: None,
         duration_ms: duration_ms as u64,
         track_count,
+        melody_note_count,
         ticks_per_beat,
         tempo,
         events: events.clone(),

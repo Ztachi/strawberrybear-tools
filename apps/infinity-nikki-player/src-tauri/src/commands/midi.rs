@@ -531,7 +531,7 @@ pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Resu
 ///
 /// # Returns
 ///
-/// MIDI 配置，如果配置文件不存在返回默认值
+/// MIDI 配置；配置文件不存在时返回错误，提示前端触发首次计算。
 ///
 /// # Notes
 ///
@@ -541,17 +541,17 @@ pub fn load_midi_config(app: tauri::AppHandle, filename: String) -> Result<MidiC
     let library_dir = get_midi_library_dir(&app)?;
     let config_path = library_dir.join(format!("{}.midi-config", filename));
 
-    if config_path.exists() {
-        // 读取并解析配置文件
-        let content =
-            fs::read_to_string(&config_path).map_err(|e| format!("读取配置失败: {}", e))?;
-        let config: MidiConfig =
-            serde_json::from_str(&content).map_err(|e| format!("解析配置失败: {}", e))?;
-        Ok(config)
-    } else {
-        // 没有配置文件，返回默认值
-        Ok(MidiConfig::default())
+    if !config_path.exists() {
+        // 配置文件不存在时返回错误，让前端走「重新计算并写缓存」的分支，
+        // 避免误用 MidiConfig::default() 覆盖 Rust 端解析的 duration_ms / track_count。
+        return Err(format!("配置文件不存在: {}", config_path.display()));
     }
+
+    // 读取并解析配置文件
+    let content = fs::read_to_string(&config_path).map_err(|e| format!("读取配置失败: {}", e))?;
+    let config: MidiConfig =
+        serde_json::from_str(&content).map_err(|e| format!("解析配置失败: {}", e))?;
+    Ok(config)
 }
 
 /// 保存 MIDI 配置

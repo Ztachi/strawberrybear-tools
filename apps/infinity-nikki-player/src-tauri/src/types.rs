@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 /// * `file_path` - 文件完整路径
 /// * `duration_ms` - 时长（毫秒）
 /// * `track_count` - 音轨数量
+/// * `melody_note_count` - 旋律音符数
 /// * `ticks_per_beat` - 每拍的 tick 数
 /// * `tempo` - 速度（微秒每拍）
 /// * `events` - 音符事件列表
@@ -46,6 +47,9 @@ pub struct MidiInfo {
     pub duration_ms: u64,
     /// 音轨数量
     pub track_count: usize,
+    /// 旋律音符数（与 extract_melody 行为保持一致）
+    #[serde(default)]
+    pub melody_note_count: usize,
     /// 每拍的 tick 数
     pub ticks_per_beat: u16,
     /// 速度（微秒每拍）

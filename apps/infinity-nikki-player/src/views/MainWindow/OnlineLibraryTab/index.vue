@@ -6,7 +6,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { Button, Empty, Input, Spin, Tooltip } from 'antdv-next'
+import { Alert, Button, Empty, Input, Spin, Tooltip } from 'antdv-next'
 import { Check, Download, Info, Play, RefreshCw, Square } from 'lucide-vue-next'
 import { feedback as toast } from '@/lib/feedback'
 import {
@@ -327,6 +327,13 @@ onBeforeUnmount(() => {
       </span>
     </div>
 
+    <Alert
+      :title="t('onlineLibrary.disclaimer')"
+      type="warning"
+      show-icon
+      class="disclaimer-alert"
+    />
+
     <div v-if="onlineStore.errorMessage && songs.length > 0" class="inline-error">
       {{ onlineStore.errorMessage }}
     </div>
@@ -486,6 +493,10 @@ onBeforeUnmount(() => {
 .sync-time {
   @apply whitespace-nowrap text-xs;
   color: var(--color-muted-dark);
+}
+
+.disclaimer-alert {
+  @apply shrink-0;
 }
 
 .spinning {
