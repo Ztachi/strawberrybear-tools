@@ -220,7 +220,7 @@ jobs:
           name: infinity-nikki-player-windows-latest
           path: ./windows
 
-      - name: Generate latest.json
+      - name: Generate latest.json and latest-cn.json
         env:
           VERSION: ${{ needs.version.outputs.version }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -232,6 +232,9 @@ jobs:
           const version = process.env.VERSION
           const repository = process.env.GITHUB_REPOSITORY
           const tagName = `infinity-nikki-player@v${version}`
+          // 国内加速代理前缀：用于 latest-cn.json 中的下载 URL。
+          // gh-proxy.com 是国内公共 GitHub 加速服务（流式透传，签名校验仍然有效）。
+          const GH_PROXY_PREFIX = 'https://gh-proxy.com/'
 
           function walk(dir) {
             if (!fs.existsSync(dir)) return []
@@ -270,22 +273,37 @@ jobs:
 
           const assetName = path.basename(installerPath)
           const macosAssetName = path.basename(macosUpdaterPath)
-          const latestJson = {
-            version,
-            pub_date: new Date().toISOString(),
-            platforms: {
-              'darwin-aarch64': {
-                signature: fs.readFileSync(macosSignaturePath, 'utf8').trim(),
-                url: `https://github.com/${repository}/releases/download/${tagName}/${encodeURIComponent(macosAssetName)}`,
+          const githubBaseUrl = `https://github.com/${repository}/releases/download/${tagName}`
+
+          /**
+           * @description: 构造 updater latest.json 对象
+           * @param {(assetName: string) => string} urlBuilder - 根据 asset 名生成下载 URL
+           * @return {object} latest.json 结构
+           */
+          function buildLatestJson(urlBuilder) {
+            return {
+              version,
+              pub_date: new Date().toISOString(),
+              platforms: {
+                'darwin-aarch64': {
+                  signature: fs.readFileSync(macosSignaturePath, 'utf8').trim(),
+                  url: urlBuilder(macosAssetName),
+                },
+                'windows-x86_64': {
+                  signature: fs.readFileSync(signaturePath, 'utf8').trim(),
+                  url: urlBuilder(assetName),
+                },
               },
-              'windows-x86_64': {
-                signature: fs.readFileSync(signaturePath, 'utf8').trim(),
-                url: `https://github.com/${repository}/releases/download/${tagName}/${encodeURIComponent(assetName)}`,
-              },
-            },
+            }
           }
 
+          // 海外 / 兜底：URL 直接指向 GitHub Releases。
+          const latestJson = buildLatestJson((name) => `${githubBaseUrl}/${encodeURIComponent(name)}`)
+          // 国内加速：URL 走 gh-proxy.com 中转，签名不变，Tauri 校验仍然通过。
+          const latestCnJson = buildLatestJson((name) => `${GH_PROXY_PREFIX}${githubBaseUrl}/${encodeURIComponent(name)}`)
+
           fs.writeFileSync('latest.json', `${JSON.stringify(latestJson, null, 2)}\n`)
+          fs.writeFileSync('latest-cn.json', `${JSON.stringify(latestCnJson, null, 2)}\n`)
           NODE
 
       - name: List artifacts
@@ -293,6 +311,8 @@ jobs:
           find ./macos -maxdepth 4 -type f -print
           find ./windows -maxdepth 4 -type f -print
           cat ./latest.json
+          echo '--- latest-cn.json ---'
+          cat ./latest-cn.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -310,5 +330,6 @@ jobs:
             ./windows/**/*.exe
             ./windows/**/*.sig
             ./latest.json
+            ./latest-cn.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

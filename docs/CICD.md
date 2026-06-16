@@ -230,6 +230,47 @@ jobs:
 - Release 需要 `files` 字段附带构建产物
 - `upload-artifact` 必须设置 `retention-days: 3`
 
+#### 国内更新加速（双清单方案）
+
+Tauri updater 依赖 [tauri-plugin-updater](https://v2.tauri.app/plugin/updater/)，它通过请求 `endpoints` 数组里的 URL 拉取 `latest.json`，再根据 JSON 里的 `url` 字段下载安装包。**关键点**：endpoint 只能影响"检测更新"这一步；安装包的实际下载链接来自 JSON 内容本身。
+
+为解决国内用户访问 GitHub Releases 慢的问题，release workflow 会同时生成两份 manifest：
+
+| 文件名           | 用途            | url 字段指向                                          |
+| ---------------- | --------------- | ----------------------------------------------------- |
+| `latest.json`    | 海外用户 / 兜底 | GitHub Releases 原地址                                |
+| `latest-cn.json` | 国内用户        | `https://gh-proxy.com/` 前缀 + GitHub Releases 原地址 |
+
+**实现要点**：
+
+1. 在 release workflow 的 `Generate latest.json` 步骤中，把构造 URL 的逻辑抽成一个函数，调用两次分别生成两份 JSON。`latest-cn.json` 的 `platforms[*].url` 字段都加 `https://gh-proxy.com/` 前缀；签名字段保持原值，minisign 签名校验仍然有效。
+2. `softprops/action-gh-release` 的 `files` 列表里同时上传 `latest.json` 和 `latest-cn.json`，两者平铺在 GitHub Release 的 `latest/download/` 路径下。
+3. `tauri.conf.json` 的 `plugins.updater.endpoints` 数组里把 `latest-cn.json` 放第一位（原版 `latest.json` 留作 fallback）。Tauri 会按顺序请求，任一返回 2xx 即采用。
+4. 前端 `useAppUpdater.ts` 调用 `check()` 时显式传 `timeout`（如 8000ms），避免 endpoint 在国内跨境请求时长时间挂住。
+
+```jsonc
+// tauri.conf.json
+"updater": {
+  "endpoints": [
+    "https://gh-proxy.com/https://github.com/<owner>/<repo>/releases/latest/download/latest-cn.json",
+    "https://github.com/<owner>/<repo>/releases/latest/download/latest.json"
+  ]
+}
+```
+
+```ts
+// src/composables/useAppUpdater.ts
+import { check } from '@tauri-apps/plugin-updater'
+const CHECK_TIMEOUT_MS = 8_000
+const update = await check({ timeout: CHECK_TIMEOUT_MS })
+```
+
+**注意事项**：
+
+- `latest-cn.json` 内的 `url` 必须使用**固定 tag 名**（如 `infinity-nikki-player@v1.1.2`），不能用 `latest` —— gh-proxy 是流式代理，不会跟随 GitHub 的 `latest` 重定向链。
+- gh-proxy.com 是第三方公共服务，没有 SLA，存在被墙/限流/失效风险。任何时候都可以直接把 `endpoints` 数组的第一条换成自建镜像（Cloudflare Workers / 阿里云 OSS）而无需改动前端代码。
+- Tauri 的 fallback 仅在 endpoint 返回**非 2xx 状态码**时触发；若 endpoint 成功返回 JSON 但 JSON 内 url 下载失败，**不会**回退到下一个 endpoint。这是设计如此，不是 bug。
+
 ---
 
 ## Release 发布说明规范

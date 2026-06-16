@@ -11,6 +11,9 @@ import { i18n } from '@/i18n'
 /** GitHub Releases 页面地址，用于手动打开版本发布页。 */
 const GITHUB_RELEASES_URL = 'https://github.com/Ztachi/strawberrybear-tools/releases'
 
+/** updater endpoint 请求超时时间（毫秒）；超时后 Tauri 会自动尝试下一个 endpoint。 */
+const CHECK_TIMEOUT_MS = 8_000
+
 /** 是否正在向 Tauri updater 查询新版本。 */
 const isChecking = ref(false)
 /** 是否正在下载更新包。 */
@@ -171,7 +174,10 @@ export function useAppUpdater(mock = false) {
 
     try {
       // mock 模式不访问网络和 Tauri updater，直接生成可安装的模拟更新对象。
-      const update = isMockMode.value ? createMockUpdate() : await check()
+      // timeout 防止 endpoint 跨境请求长时间挂住，到点后 Tauri 会自动尝试下一个 endpoint。
+      const update = isMockMode.value
+        ? createMockUpdate()
+        : await check({ timeout: CHECK_TIMEOUT_MS })
       // Tauri Update 对象包含方法，使用 markRaw 避免 Vue 代理破坏插件实例行为。
       availableUpdate.value = update ? markRaw(update) : null
 
