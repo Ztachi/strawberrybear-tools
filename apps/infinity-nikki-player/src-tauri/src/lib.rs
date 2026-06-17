@@ -212,6 +212,23 @@ pub fn run() {
                                 None::<&str>,
                             )?],
                         )?,
+                        // 编辑菜单必须使用系统预定义项。macOS 的输入框快捷键
+                        // Command+A/C/V/X/Z 通过原生 selector 派发到当前 first responder；
+                        // 如果只手写应用/帮助菜单，WKWebView 里的 Input 会失去这些标准编辑命令。
+                        &tauri::menu::Submenu::with_items(
+                            app,
+                            "编辑",
+                            true,
+                            &[
+                                &tauri::menu::PredefinedMenuItem::undo(app, Some("撤销"))?,
+                                &tauri::menu::PredefinedMenuItem::redo(app, Some("重做"))?,
+                                &tauri::menu::PredefinedMenuItem::separator(app)?,
+                                &tauri::menu::PredefinedMenuItem::cut(app, Some("剪切"))?,
+                                &tauri::menu::PredefinedMenuItem::copy(app, Some("复制"))?,
+                                &tauri::menu::PredefinedMenuItem::paste(app, Some("粘贴"))?,
+                                &tauri::menu::PredefinedMenuItem::select_all(app, Some("全选"))?,
+                            ],
+                        )?,
                         // 帮助菜单
                         &tauri::menu::Submenu::with_items(
                             app,
@@ -243,6 +260,20 @@ pub fn run() {
                                 true,
                                 None::<&str>,
                             )?],
+                        )?,
+                        &tauri::menu::Submenu::with_items(
+                            app,
+                            "Edit",
+                            true,
+                            &[
+                                &tauri::menu::PredefinedMenuItem::undo(app, None)?,
+                                &tauri::menu::PredefinedMenuItem::redo(app, None)?,
+                                &tauri::menu::PredefinedMenuItem::separator(app)?,
+                                &tauri::menu::PredefinedMenuItem::cut(app, None)?,
+                                &tauri::menu::PredefinedMenuItem::copy(app, None)?,
+                                &tauri::menu::PredefinedMenuItem::paste(app, None)?,
+                                &tauri::menu::PredefinedMenuItem::select_all(app, None)?,
+                            ],
                         )?,
                         &tauri::menu::Submenu::with_items(
                             app,
