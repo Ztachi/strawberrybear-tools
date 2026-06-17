@@ -3,7 +3,7 @@
  * @description 使用 Pinia 管理的播放器状态，包含 MIDI 文件管理、试听播放、音轨控制等功能
  */
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { feedback as toast } from '@/lib/feedback'
 import {
@@ -182,6 +182,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 获取 settings store 实例（用于访问模板和设置） */
   const settingsStore = useSettingsStore()
+  /** 获取歌单 store 实例（用于按当前来源实时重算播放队列） */
+  const songListStore = useSongListStore()
 
   /** 是否处于加载中状态 */
   const isLoading = ref(false)
@@ -246,6 +248,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 当前队列来源 ID；用于持久化恢复。 */
   const previewQueueSourceId = computed(() => previewQueueContext.value?.id ?? null)
+
+  /** 当前是否正在处理“当前曲离开队列”的 fallback，避免 watcher 并发重入。 */
+  let isResolvingPreviewQueueFallback = false
 
   const temporaryPreviewSnapshot = ref<PreviewSnapshot | null>(null)
   const temporaryPreviewFilePath = ref<string | null>(null)
@@ -489,6 +494,7 @@ export const usePlayerStore = defineStore('player', () => {
         if (!currentMidi.value) {
           await selectMidi(midiLibrary.value[existingIndex])
         }
+        await syncActivePreviewQueue()
         return true
       }
 
@@ -516,6 +522,7 @@ export const usePlayerStore = defineStore('player', () => {
       if (!currentMidi.value) {
         await selectMidi(info)
       }
+      await syncActivePreviewQueue()
       return true
     } catch (e) {
       toast.error('导入 MIDI 失败', { description: String(e), richColors: true })
@@ -568,6 +575,7 @@ export const usePlayerStore = defineStore('player', () => {
         if (autoSelect && !currentMidi.value) {
           await selectMidi(midiLibrary.value[existingIndex])
         }
+        await syncActivePreviewQueue()
         return true
       }
 
@@ -593,6 +601,7 @@ export const usePlayerStore = defineStore('player', () => {
       if (autoSelect && !currentMidi.value) {
         await selectMidi(info)
       }
+      await syncActivePreviewQueue()
       return true
     } catch (e) {
       toast.error('导入 MIDI 失败', { description: String(e), richColors: true })
@@ -692,6 +701,20 @@ export const usePlayerStore = defineStore('player', () => {
     lastImportedMidi.value = null
   }
 
+  function isManagedPreviewSource(sourceId: string | null | undefined): boolean {
+    return sourceId === 'all' || sourceId?.startsWith('song-list:') === true
+  }
+
+  function getAllSongsQueueSource(): {
+    items: MidiInfo[]
+    context: MidiPreviewQueueContext
+  } {
+    return {
+      items: midiLibrary.value,
+      context: { id: 'all', title: '歌曲管理' },
+    }
+  }
+
   /**
    * @description: 获取当前有效试听队列
    * @return {MidiInfo[]} 当前队列为空时回退完整 MIDI 库
@@ -726,15 +749,12 @@ export const usePlayerStore = defineStore('player', () => {
     context: MidiPreviewQueueContext | null
   } | null {
     if (!sourceId || sourceId === 'all') {
-      return {
-        items: midiLibrary.value,
-        context: { id: 'all', title: '歌曲管理' },
-      }
+      return getAllSongsQueueSource()
     }
 
     if (!sourceId.startsWith('song-list:')) return null
     const songListId = sourceId.slice('song-list:'.length)
-    const songList = useSongListStore().getSongListById(songListId)
+    const songList = songListStore.getSongListById(songListId)
     if (!songList) return null
     const midiMap = new Map(midiLibrary.value.map((midi) => [midi.filename, midi]))
     const items = songList.song_filenames
@@ -744,6 +764,74 @@ export const usePlayerStore = defineStore('player', () => {
     return {
       items,
       context: { id: sourceId, title: songList.name },
+    }
+  }
+
+  /**
+   * @description: 按当前播放来源重新计算试听队列，并把最新队列同步给公共 Player。
+   * @description 当前曲仍在队列内时只刷新队列快照，保留播放/暂停状态和进度；
+   * 当前曲已离开队列时沿用现有 fallback 语义，播放中切到新队列第一首，非播放中只更新选择。
+   * @return {Promise<void>} 无返回值
+   */
+  async function syncActivePreviewQueue(): Promise<void> {
+    if (isResolvingPreviewQueueFallback) return
+    const sourceId = previewQueueContext.value?.id ?? null
+    if (!sourceId && previewQueueItems.value.length > 0) return
+    if (sourceId && !isManagedPreviewSource(sourceId)) return
+    if (!currentMidi.value && !previewQueueContext.value && previewQueueItems.value.length === 0)
+      return
+
+    const resolved = resolvePreviewSource(sourceId) ?? getAllSongsQueueSource()
+    if (resolved.items.length === 0) {
+      clearCurrentPreviewSelection()
+      await persistPreviewSelection(null)
+      return
+    }
+
+    const current = currentMidi.value
+    const currentStillInQueue = Boolean(
+      current && resolved.items.some((midi) => midi.filename === current.filename)
+    )
+    const nextCurrent = currentStillInQueue && current ? current : resolved.items[0]!
+    const shouldSwitchCurrent = !currentStillInQueue || current?.filename !== nextCurrent.filename
+    const wasPlaying = isPreviewPlaying.value && !isPreviewPaused.value
+    const previousStatus = previewState.value.status
+    const positionMs = previewCurrentTime.value
+    const durationMs = previewDuration.value
+
+    setPreviewQueueContext(resolved.items, resolved.context)
+
+    if (shouldSwitchCurrent) {
+      isResolvingPreviewQueueFallback = true
+      try {
+        if (current) await stopPreviewPlayback()
+        if (wasPlaying) {
+          await playMidiInQueue(nextCurrent, resolved.items, resolved.context)
+          return
+        }
+
+        await selectMidi(nextCurrent, {
+          queueItems: resolved.items,
+          queueContext: resolved.context,
+          resetPreviewProgress: true,
+        })
+        if (shouldPersistPreviewSelection(resolved.context)) {
+          await persistPreviewSelection(nextCurrent)
+        }
+      } finally {
+        isResolvingPreviewQueueFallback = false
+      }
+      return
+    }
+
+    midiPreview?.syncMidiQueue(resolved.items, nextCurrent, resolved.context)
+    previewPlayer?.updateProgress(positionMs / 1000, durationMs / 1000)
+    if (previousStatus === 'playing') {
+      previewPlayer?.handlePlaying()
+    } else if (previousStatus === 'paused') {
+      previewPlayer?.handlePaused()
+    } else if (previousStatus === 'loading') {
+      previewPlayer?.handleWaiting()
     }
   }
 
@@ -982,8 +1070,8 @@ export const usePlayerStore = defineStore('player', () => {
       // 调用后端删除文件
       await invoke('delete_midi_from_library', { filename })
       // 从本地库移除
-      removeFromLibrary(filename)
-      useSongListStore().removeSongFromLocalLists(filename)
+      await removeFromLibrary(filename)
+      songListStore.removeSongFromLocalLists(filename)
       return true
     } catch (e) {
       toast.error('删除 MIDI 失败', { description: String(e), richColors: true })
@@ -997,7 +1085,7 @@ export const usePlayerStore = defineStore('player', () => {
    * @param {string} filename - 要移除的文件名
    * @return 无
    */
-  function removeFromLibrary(filename: string) {
+  async function removeFromLibrary(filename: string): Promise<void> {
     const index = midiLibrary.value.findIndex((m) => m.filename === filename)
     if (index !== -1) {
       midiLibrary.value.splice(index, 1)
@@ -1012,7 +1100,8 @@ export const usePlayerStore = defineStore('player', () => {
       const fallbackQueue = getActivePreviewQueue()
       const fallback = fallbackQueue[0] ?? midiLibrary.value[0] ?? null
       if (fallback) {
-        void (async () => {
+        isResolvingPreviewQueueFallback = true
+        try {
           // 当前播放文件已经从库中移除，先释放旧 WebAudio 数据，再把队列落到仍存在的歌曲。
           // 如果删除前正在播放，则自动接着播放 fallback；暂停或空闲时只更新当前选择。
           await stopPreviewPlayback()
@@ -1025,15 +1114,17 @@ export const usePlayerStore = defineStore('player', () => {
             resetPreviewProgress: true,
           })
           await persistPreviewSelection(fallback)
-        })()
+        } finally {
+          isResolvingPreviewQueueFallback = false
+        }
       } else {
         clearCurrentPreviewSelection()
-        void persistPreviewSelection(null)
+        await persistPreviewSelection(null)
       }
       return
     }
-    // 删除非当前项时同步公共队列，避免后续上一曲/下一曲命中已不存在的文件。
-    previewPlayer?.removeFromQueue(filename)
+    // 删除非当前项时按当前来源整队同步，避免 playlist 元信息或歌单顺序与公共 Player 脱节。
+    await syncActivePreviewQueue()
   }
 
   // ============================================
@@ -1411,6 +1502,7 @@ export const usePlayerStore = defineStore('player', () => {
           }
         }
       }
+      await syncActivePreviewQueue()
     } catch (e) {
       toast.error('扫描文件夹失败', { description: String(e), richColors: true })
       console.error('扫描文件夹失败:', e)
@@ -1911,6 +2003,32 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  function buildMidiLibraryQueueSignature(): string {
+    return midiLibrary.value
+      .map((midi) =>
+        [
+          midi.filename,
+          midi.duration_ms,
+          midi.title ?? '',
+          midi.author_name ?? '',
+          midi.description ?? '',
+        ].join('\u0001')
+      )
+      .join('\u0002')
+  }
+
+  function buildSongListQueueSignature(): string {
+    return songListStore.songLists
+      .map((songList) =>
+        [songList.id, songList.name, songList.song_filenames.join('\u0001')].join('\u0001')
+      )
+      .join('\u0002')
+  }
+
+  watch([buildMidiLibraryQueueSignature, buildSongListQueueSignature], () => {
+    void syncActivePreviewQueue()
+  })
+
   // ============================================
   // 返回
   // ============================================
@@ -1964,6 +2082,7 @@ export const usePlayerStore = defineStore('player', () => {
     clearLastImportedMidi,
     deleteMidi,
     removeFromLibrary,
+    syncActivePreviewQueue,
     setPreviewQueueContext,
     getSongPlaybackState,
     selectMidiInQueue,

@@ -8,6 +8,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Button, Form, FormItem, Input, Modal, TextArea } from 'antdv-next'
 import type { FormInstance } from 'antdv-next'
 import { Camera, Save, X } from 'lucide-vue-next'
+import { usePlayerStore } from '@/stores/player'
 import { useSongListStore } from '@/stores/songLists'
 import type { SongList } from '@/types'
 import CoverCropperModal from '../components/CoverCropperModal.vue'
@@ -17,6 +18,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const songListStore = useSongListStore()
+const playerStore = usePlayerStore()
 
 const formRef = ref<FormInstance | null>(null)
 const cropperOpen = ref(false)
@@ -152,6 +154,7 @@ async function handleSave(): Promise<void> {
   })
   if (!saved) return
 
+  await playerStore.syncActivePreviewQueue()
   resetFormFromSongList(saved)
   await router.push({ name: 'files-song-list-detail', params: { id: saved.id } })
 }

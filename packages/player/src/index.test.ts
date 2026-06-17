@@ -68,8 +68,8 @@ describe('Player', () => {
     expect(player.getState()).toMatchObject({ current: null, currentIndex: -1, status: 'stopped' })
   })
 
-  it('wraps previous and next in repeat-all mode', async () => {
-    const player = new Player({ audio: createAudioMock(), initialState: { repeatMode: 'all' } })
+  it('wraps previous and next at queue boundaries in sequential mode', async () => {
+    const player = new Player({ audio: createAudioMock() })
     player.setQueue(tracks, 0)
 
     await player.previous()
@@ -79,26 +79,27 @@ describe('Player', () => {
     expect(player.getState().current?.id).toBe('a')
   })
 
-  it('stops at queue boundaries when repeat mode is none', async () => {
-    const audio = createAudioMock()
-    const player = new Player({ audio })
-    player.setQueue(tracks, 0)
+  it('keeps manual navigation looping with a single-item queue', async () => {
+    const player = new Player({ audio: createAudioMock() })
+    player.setQueue([tracks[0]], 0)
 
     await player.previous()
     expect(player.getState().current?.id).toBe('a')
-    expect(audio.load).not.toHaveBeenCalled()
+
+    await player.next()
+    expect(player.getState().current?.id).toBe('a')
   })
 
   it('uses repeat-one only for natural endings and keeps manual next available', async () => {
     const player = new Player({ audio: createAudioMock(), initialState: { repeatMode: 'one' } })
-    player.setQueue(tracks, 1)
+    player.setQueue(tracks, 2)
 
     await player.next()
-    expect(player.getState().current?.id).toBe('c')
+    expect(player.getState().current?.id).toBe('a')
 
     player.setPlaybackMode('repeat-one')
     await player.handleEnded()
-    expect(player.getState().current?.id).toBe('c')
+    expect(player.getState().current?.id).toBe('a')
     expect(player.getState().status).toBe('playing')
   })
 
@@ -180,7 +181,7 @@ describe('Player', () => {
     expect(player.getState().status).toBe('playing')
   })
 
-  it('stops at the end of a sequential queue', async () => {
+  it('loops to the first item at the end of a sequential queue', async () => {
     const player = new Player({ audio: createAudioMock() })
     player.setQueue(tracks, 2)
     await player.play()
@@ -188,9 +189,8 @@ describe('Player', () => {
     await player.handleEnded()
 
     expect(player.getState()).toMatchObject({
-      currentIndex: 2,
-      status: 'stopped',
-      positionSeconds: 0,
+      currentIndex: 0,
+      status: 'playing',
     })
   })
 

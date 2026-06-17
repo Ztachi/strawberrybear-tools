@@ -171,8 +171,24 @@ function setSelectedFilenames(nextSet: Set<string>): void {
 }
 
 function toggleBatchMode(): void {
+  if (batchMode.value) {
+    exitBatchMode()
+    return
+  }
   batchMode.value = !batchMode.value
   selectedFilenames.value = new Set()
+}
+
+function exitBatchMode(): void {
+  batchMode.value = false
+  selectedFilenames.value = new Set()
+  openMenuKey.value = null
+}
+
+function handleWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !batchMode.value || confirmDialog.value.open) return
+  event.preventDefault()
+  exitBatchMode()
 }
 
 function toggleSong(song: MidiInfo): void {
@@ -227,7 +243,10 @@ async function removeSelectedFromSongList(): Promise<void> {
     props.songListId,
     selectedSongs.value.map((song) => song.filename)
   )
-  if (removed) selectedFilenames.value = new Set()
+  if (removed) {
+    await playerStore.syncActivePreviewQueue()
+    selectedFilenames.value = new Set()
+  }
 }
 
 async function deleteSelectedFiles(): Promise<void> {
@@ -252,7 +271,8 @@ async function addSelectedToSongList(info: { key: string | number }): Promise<vo
   const missingFilenames = selectedSongs.value
     .map((song) => song.filename)
     .filter((filename) => !targetSongList.song_filenames.includes(filename))
-  await songListStore.addSongs(songListId, missingFilenames)
+  const songList = await songListStore.addSongs(songListId, missingFilenames)
+  if (songList) await playerStore.syncActivePreviewQueue()
 }
 
 function handleScroll(): void {
@@ -315,6 +335,7 @@ watch(
 )
 
 onMounted(() => {
+  window.addEventListener('keydown', handleWindowKeydown)
   backToTopRegistration = mainWindowUiStore.registerBackToTop(scrollToTop)
   locateCurrentRegistration = mainWindowUiStore.registerLocateCurrent(() => {
     void locateCurrentSong()
@@ -324,6 +345,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleWindowKeydown)
   backToTopRegistration?.()
   backToTopRegistration = null
   locateCurrentRegistration?.()

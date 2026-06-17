@@ -229,6 +229,7 @@ async function commitRename(songList: SongList): Promise<void> {
   }
   const renamed = await songListStore.renameSongList(songList.id, nextName)
   if (renamed) {
+    await playerStore.syncActivePreviewQueue()
     editingSongListId.value = null
     editingName.value = ''
   }
@@ -314,8 +315,11 @@ async function deleteSongList(songList: SongList): Promise<void> {
   const confirmed = await confirmDelete(songList)
   if (!confirmed) return
   const deleted = await songListStore.deleteSongList(songList.id)
-  if (deleted && activeSongListId.value === songList.id) {
-    await navigateMain('files', { name: 'files-all' })
+  if (deleted) {
+    await playerStore.syncActivePreviewQueue()
+    if (activeSongListId.value === songList.id) {
+      await navigateMain('files', { name: 'files-all' })
+    }
   }
 }
 
@@ -336,6 +340,7 @@ async function importSongLists(): Promise<void> {
   if (!selected || Array.isArray(selected)) return
   const imported = await songListStore.importArchive(selected)
   await playerStore.loadMidiLibrary()
+  await playerStore.syncActivePreviewQueue()
   if (imported[0]) {
     await navigateMain('files', { name: 'files-song-list-detail', params: { id: imported[0].id } })
   }

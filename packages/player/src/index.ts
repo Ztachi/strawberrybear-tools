@@ -869,7 +869,8 @@ export class Player {
 
     const nextIndex = this.state.currentIndex + 1
     if (nextIndex >= 0 && nextIndex < this.state.queue.length) return nextIndex
-    return this.state.playbackMode === 'repeat-all' ? 0 : -1
+    // 队列边界始终回环；播放模式只决定“如何取下一首”，不决定队列是否可继续切换。
+    return 0
   }
 
   /**
@@ -892,7 +893,8 @@ export class Player {
 
     const previousIndex = this.state.currentIndex - 1
     if (previousIndex >= 0) return previousIndex
-    return this.state.playbackMode === 'repeat-all' ? this.state.queue.length - 1 : -1
+    // 队列边界始终回环；播放模式只决定“如何取上一首”，不决定队列是否可继续切换。
+    return this.state.queue.length - 1
   }
 
   /**

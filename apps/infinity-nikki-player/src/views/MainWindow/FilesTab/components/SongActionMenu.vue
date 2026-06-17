@@ -118,7 +118,10 @@ async function removeFromSongList(): Promise<void> {
   )
   if (!confirmed) return
   const songList = await songListStore.removeSongs(props.sourceSongListId, [props.midi.filename])
-  if (songList) emit('removed', props.midi.filename)
+  if (songList) {
+    await playerStore.syncActivePreviewQueue()
+    emit('removed', props.midi.filename)
+  }
 }
 
 async function deleteFile(): Promise<void> {
@@ -134,7 +137,10 @@ async function deleteFile(): Promise<void> {
 
 async function addToSongList(songListId: string): Promise<void> {
   const songList = await songListStore.addSongs(songListId, [props.midi.filename])
-  if (songList) emit('added', songListId)
+  if (songList) {
+    await playerStore.syncActivePreviewQueue()
+    emit('added', songListId)
+  }
 }
 
 function handleMenuClick(info: { key: string | number }): void {
