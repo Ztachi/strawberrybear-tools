@@ -17,6 +17,21 @@ const settingsStore = useSettingsStore()
 const editorFormRef = ref<InstanceType<typeof TemplateEditorForm> | null>(null)
 const notFound = ref(false)
 
+/**
+ * @description: 不新增历史记录地离开模板编辑页。
+ * @return {Promise<void>} 无返回值
+ */
+async function leaveEditorWithoutNewHistory(): Promise<void> {
+  // vue-router 在 history.state.back 中记录上一条路由；存在时使用真实后退，
+  // 这样左上角后退不会再次回到刚关闭的模板编辑页。
+  if (window.history.state?.back != null) {
+    router.back()
+    return
+  }
+  // 直接打开编辑 URL 时没有可回退记录，用 replace 兜底回到模板列表，仍不追加历史。
+  await router.replace({ name: 'templates' })
+}
+
 const pageTitle = computed(() => {
   if (route.name === 'templates-edit') return t('template.editTemplate')
   if (route.query.from) return t('template.createFromTemplate')
@@ -57,7 +72,7 @@ async function openEditorFromRoute(): Promise<void> {
 async function navigateBack(context: 'close' | 'jump' = 'close'): Promise<void> {
   const canLeave = await editorFormRef.value?.confirmLeaveIfNeeded(context)
   if (canLeave === false) return
-  await router.push({ name: 'templates' })
+  await leaveEditorWithoutNewHistory()
 }
 
 async function saveAndStay(): Promise<void> {
@@ -73,7 +88,7 @@ async function saveAndExit(): Promise<void> {
   const saved = await editorFormRef.value?.saveEditingTemplate()
   if (!saved) return
   editorFormRef.value?.closeEditorWithoutPrompt()
-  await router.push({ name: 'templates' })
+  await leaveEditorWithoutNewHistory()
 }
 
 function hasEditorChanges(): boolean {
@@ -151,7 +166,7 @@ defineExpose({
 
     <section v-if="notFound" class="template-missing-state">
       <span>{{ t('template.notFound') }}</span>
-      <Button @click="router.push({ name: 'templates' })">
+      <Button @click="leaveEditorWithoutNewHistory">
         {{ t('template.templateList') }}
       </Button>
     </section>

@@ -6,7 +6,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Button, Tooltip } from 'antdv-next'
-import { Expand, ListMusic, Music2 } from 'lucide-vue-next'
+import { Expand, Keyboard, ListMusic, Music2 } from 'lucide-vue-next'
 import MarqueeText from '@/components/MarqueeText.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import { getMidiDisplayName } from '@/lib/midiDisplay'
@@ -20,6 +20,8 @@ const queueDrawerOpen = ref(false)
 const currentDisplayName = computed(() =>
   playerStore.currentMidi ? getMidiDisplayName(playerStore.currentMidi) : t('player.noMedia')
 )
+/** 当前曲目身份变化时重建跑马灯，让长标题从开头重新播放。 */
+const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'no-media')
 
 function openCurrentSongDetail(): void {
   const midi = playerStore.currentMidi
@@ -29,6 +31,11 @@ function openCurrentSongDetail(): void {
     return
   }
   void router.push({ name: 'files-midi-detail', params: { filename: midi.filename } })
+}
+
+/** 打开全局虚拟键盘页面，统一管理模板发音和键盘模拟。 */
+function openVirtualKeyboard(): void {
+  void router.push({ name: 'keyboard' })
 }
 </script>
 
@@ -53,7 +60,7 @@ function openCurrentSongDetail(): void {
       </Tooltip>
       <div class="current-main">
         <Tooltip :title="currentDisplayName">
-          <MarqueeText class="current-title" :text="currentDisplayName" />
+          <MarqueeText :key="currentMarqueeKey" class="current-title" :text="currentDisplayName" />
         </Tooltip>
       </div>
     </div>
@@ -66,6 +73,13 @@ function openCurrentSongDetail(): void {
     />
 
     <div class="player-actions">
+      <Tooltip :title="t('player.openVirtualKeyboard')">
+        <Button type="text" class="queue-btn" @click="openVirtualKeyboard">
+          <template #icon>
+            <Keyboard class="queue-btn-icon" />
+          </template>
+        </Button>
+      </Tooltip>
       <Tooltip :title="t('player.openQueue')">
         <Button type="text" class="queue-btn" @click="queueDrawerOpen = true">
           <template #icon>

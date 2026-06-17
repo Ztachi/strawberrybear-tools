@@ -23,6 +23,7 @@ const props = defineProps<{
   getKeyLogByChapters?: () => KeyLogChapter[]
   clearKeyLog?: () => void
   keyCodeToPitch?: Map<string, number>
+  verticalAlign?: 'center' | 'top'
 }>()
 
 const activeKeySet = computed(() => props.activeKeys ?? new Set<string>())
@@ -33,6 +34,7 @@ const slots = defineSlots<{
   toolbarLeft?: () => unknown
 }>()
 const showToolbar = computed(() => showKeyLog.value || Boolean(slots.toolbarLeft))
+const isTopAligned = computed(() => props.verticalAlign === 'top')
 const keyboardPreviewRef = ref<HTMLDivElement | null>(null)
 const toolbarRef = ref<HTMLDivElement | null>(null)
 const scaleShellRef = ref<HTMLDivElement | null>(null)
@@ -211,7 +213,12 @@ watch(
       <div
         ref="keyboardAreaRef"
         class="keyboard-area"
-        :style="{ transform: `translate(-50%, -50%) scale(${keyboardScale})` }"
+        :class="{ 'align-top': isTopAligned }"
+        :style="{
+          transform: isTopAligned
+            ? `translateX(-50%) scale(${keyboardScale})`
+            : `translate(-50%, -50%) scale(${keyboardScale})`,
+        }"
       >
         <!-- 遍历每一行键盘布局 -->
         <div
@@ -261,7 +268,7 @@ watch(
 
 <style scoped>
 .keyboard-preview {
-  @apply flex h-full min-h-0 min-w-0 flex-col gap-1.5 overflow-hidden rounded-lg p-1.5;
+  @apply flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden rounded-lg p-1.5;
   background: var(--bg-primary-05);
   border: 1px solid var(--border-primary-15);
   width: 100%;
@@ -286,6 +293,11 @@ watch(
   gap: 1px;
   transform-origin: center center;
   width: max-content;
+}
+
+.keyboard-area.align-top {
+  top: 0;
+  transform-origin: top center;
 }
 
 .keyboard-row {

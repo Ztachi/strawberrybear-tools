@@ -66,6 +66,7 @@ export default {
     queue: 'Play Queue',
     currentQueue: 'Current Queue',
     openQueue: 'Open Play Queue',
+    openVirtualKeyboard: 'Open Virtual Keyboard',
     openSongDetail: 'Open Song Details',
     noQueue: 'No queued songs',
     playSong: 'Play Song',
@@ -94,6 +95,9 @@ export default {
     clickToDisable: 'Click to disable',
     trackIndex: 'Track {n}',
     percussionTrack: 'Percussion',
+  },
+  keyboardPage: {
+    title: 'Virtual Keyboard',
   },
   onlineLibrary: {
     disclaimer: 'For learning and non-commercial use only',

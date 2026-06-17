@@ -412,6 +412,8 @@ function formatDuration(ms: number): string {
 const currentMidiName = computed(() =>
   playerStore.currentMidi ? getMidiDisplayName(playerStore.currentMidi) : t('overlay.noFile')
 )
+// 当前曲目身份变化时重建跑马灯，悬浮条里长标题会从开头重新播放。
+const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'no-file')
 </script>
 
 <template>
@@ -424,7 +426,12 @@ const currentMidiName = computed(() =>
         <!-- 曲目名称（走马灯效果）- 悬停显示全名 -->
         <Tooltip :title="currentMidiName">
           <div class="track-info">
-            <MarqueeText class="overlay-marquee-text" :text="currentMidiName" :speed="26" />
+            <MarqueeText
+              :key="currentMarqueeKey"
+              class="overlay-marquee-text"
+              :text="currentMidiName"
+              :speed="26"
+            />
           </div>
         </Tooltip>
       </div>

@@ -66,6 +66,7 @@ export default {
     queue: '播放队列',
     currentQueue: '当前队列',
     openQueue: '打开播放队列',
+    openVirtualKeyboard: '打开虚拟键盘',
     openSongDetail: '展开歌曲详情页',
     noQueue: '暂无播放队列',
     playSong: '播放歌曲',
@@ -94,6 +95,9 @@ export default {
     clickToDisable: '点击屏蔽',
     trackIndex: '音轨 {n}',
     percussionTrack: '打击乐器',
+  },
+  keyboardPage: {
+    title: '虚拟键盘',
   },
   onlineLibrary: {
     disclaimer: '仅供学习交流，禁止商用',

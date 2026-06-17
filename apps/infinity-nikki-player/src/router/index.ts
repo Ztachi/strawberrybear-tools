@@ -11,6 +11,7 @@ import OnlineLibraryTab from '@/views/MainWindow/OnlineLibraryTab/index.vue'
 import OnlineSongDetailPage from '@/views/MainWindow/OnlineLibraryTab/pages/OnlineSongDetailPage.vue'
 import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
 import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
+import KeyboardPage from '@/views/MainWindow/KeyboardPage/index.vue'
 
 /** Infinity Nikki Player 主窗口路由实例。 */
 export const router = createRouter({
@@ -59,6 +60,11 @@ export const router = createRouter({
       path: '/templates/:id/edit',
       name: 'templates-edit',
       component: TemplateEditorPage,
+    },
+    {
+      path: '/keyboard',
+      name: 'keyboard',
+      component: KeyboardPage,
     },
     {
       path: '/online-library',
