@@ -18,6 +18,7 @@
 - [公共库规范](packages/README.md) - `@packages` 公共库开发标准
 - [代码注释规范](CODE_COMMENTARY.md) - 所有代码的注释标准（JSDoc 格式、函数注释、类型注释等）
 - [CI/CD 规范](CICD.md) - Workflow 设计原则、新增 App 的 CICD 配置步骤
+- [Git 分支策略](BRANCH_STRATEGY.md) - main / develop 双层分支模型，feature/fix/hotfix 命名与生命周期约定
 
 ## 国际化规范
 
