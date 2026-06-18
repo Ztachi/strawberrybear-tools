@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+
+:root {
+  --color-primary: #f7b7be;
+  --color-primary-light: #fff1f4;
+  --color-primary-hover: #ee8fa1;
+  --color-primary-active: #e36f86;
+  --color-secondary: #f3a1ae;
+  --color-foreground: #4a3f3f;
+  --color-muted: #a89a9a;
+  --color-muted-dark: #6b5a5a;
+  --color-gold: #b58a45;
+  --color-blue: #31558f;
+  --bg-white-90: rgba(255, 255, 255, 0.9);
+  --bg-primary-10: rgba(247, 183, 190, 0.1);
+  --border-primary-20: rgba(247, 183, 190, 0.2);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@theme {
+  --color-background: #fff7fa;
+  --color-primary: #f7b7be;
+  --color-primary-hover: #ee8fa1;
+  --color-primary-active: #e36f86;
+  --color-foreground: #4a3f3f;
+  --color-muted-dark: #6b5a5a;
+  --color-gold: #b58a45;
+  --color-certificate-blue: #31558f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--color-foreground);
+  background: #fff7fa;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-primary);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.office-page-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 960px) {
+  .office-page-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    align-items: start;
+  }
+}
+
+.certificate-aspect-box {
+  aspect-ratio: 16 / 9;
+  min-height: 180px;
+  border: 1px solid rgba(181, 138, 69, 0.35);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 241, 244, 0.72)),
+    radial-gradient(circle at 78% 42%, rgba(49, 85, 143, 0.14), transparent 32%);
+}
