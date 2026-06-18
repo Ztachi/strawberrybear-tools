@@ -1,6 +1,6 @@
 /**
  * @fileOverview 国际化初始化
- * @description 配置 Vue I18n 四语言 UI 文案；证书内容语言由草稿 certificateLocale 单独控制。
+ * @description 配置 Vue I18n 四语言 UI 文案；模板文案由独立语言模块维护。
  * @author strawberrybear
  * @date 2026-06-18
  */
@@ -43,8 +43,8 @@ export const i18n = createI18n({
 })
 
 /**
- * @description: 切换 UI 语言
- * @description 这里只改变界面语言，不修改草稿中的证书语言，避免用户切 UI 时触发证书重绘。
+ * @description: 切换顶部统一语言
+ * @description Vue I18n 负责 UI 即时刷新，当前草稿语言由顶部组件同步写入 Dexie。
  * @param {LocaleCode} locale - 目标 UI 语言
  * @return {void} 无返回值
  */

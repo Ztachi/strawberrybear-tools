@@ -46,8 +46,18 @@ const tabs = computed<Array<{ value: ProfileTab; label: string }>>(() => [
 
 <style scoped>
 .profile-card {
-  border: 1px solid var(--border-primary-20);
-  background: var(--bg-white-90);
+  overflow: hidden;
+  border: 1px solid rgba(239, 95, 143, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 246, 250, 0.9)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(239, 95, 143, 0.05) 0,
+      rgba(239, 95, 143, 0.05) 1px,
+      transparent 1px,
+      transparent 18px
+    );
+  box-shadow: var(--shadow-card);
 }
 
 .profile-card__content {

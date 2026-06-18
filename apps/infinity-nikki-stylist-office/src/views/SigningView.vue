@@ -19,7 +19,8 @@ const { t } = useI18n()
 
 <style scoped>
 .placeholder-card {
-  border: 1px solid var(--border-primary-20);
-  background: var(--bg-white-90);
+  border: 1px solid rgba(239, 95, 143, 0.24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 234, 242, 0.72));
+  box-shadow: var(--shadow-card);
 }
 </style>

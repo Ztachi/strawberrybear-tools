@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * @description: LanguageSwitcher - 顶部语言切换下拉菜单
- * @description 只切换 UI 语言，不改变当前草稿的证书语言，避免界面操作触发证书重绘。
+ * @description 顶部统一控制 UI 和当前草稿的模板语言。
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { updateActiveDraft } from '@/db/repositories/draftRepository'
 import { UI_LOCALE_OPTIONS, setUiLocale } from '@/i18n'
 import { useUiStore } from '@/stores/ui'
 import type { LocaleCode } from '@/domain/catalog/types'
@@ -18,14 +19,15 @@ const currentOption = computed(() => {
 })
 
 /**
- * @description: 切换 UI 语言
- * @description UI store 负责持久化，vue-i18n 负责即时刷新界面文案。
+ * @description: 切换顶部统一语言
+ * @description UI store 负责持久化，当前草稿同步保存证书语言，保证刷新后仍保持一致。
  * @param {LocaleCode} locale - 目标 UI 语言
  * @return {void} 无返回值
  */
 function handleSelect(locale: LocaleCode): void {
   uiStore.setUiLocale(locale)
   setUiLocale(locale)
+  void updateActiveDraft({ certificateLocale: locale })
 }
 </script>
 
@@ -37,6 +39,7 @@ function handleSelect(locale: LocaleCode): void {
         :aria-label="t('common.language.label')"
         variant="text"
         class="language-switcher"
+        data-sound="open"
       >
         <v-icon :icon="currentOption.icon" size="18" />
         <span class="language-switcher__label">{{ t(currentOption.labelKey) }}</span>
@@ -50,6 +53,7 @@ function handleSelect(locale: LocaleCode): void {
         :key="option.value"
         :active="option.value === uiStore.uiLocale"
         color="primary"
+        data-sound="select"
         @click="handleSelect(option.value)"
       >
         <template #prepend>

@@ -8,10 +8,12 @@
  * @description: 底部操作栏属性
  * @param {string} primaryLabel - 主操作按钮文案
  * @param {string} [secondaryLabel] - 次操作按钮文案
+ * @param {boolean} [primaryDisabled] - 主操作是否禁用
  */
 defineProps<{
   primaryLabel: string
   secondaryLabel?: string
+  primaryDisabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +29,7 @@ const emit = defineEmits<{
       variant="outlined"
       color="primary"
       class="bottom-action-bar__button"
+      data-sound="back"
       @click="emit('secondary')"
     >
       {{ secondaryLabel }}
@@ -35,6 +38,8 @@ const emit = defineEmits<{
       color="primary"
       variant="flat"
       class="bottom-action-bar__button"
+      :disabled="primaryDisabled"
+      data-sound="primary"
       @click="emit('primary')"
     >
       {{ primaryLabel }}

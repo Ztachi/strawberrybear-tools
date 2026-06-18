@@ -5,7 +5,12 @@
  * @date 2026-06-18
  */
 import { stylistOfficeDb } from '@/db/database'
+import { DEFAULT_UI_LOCALE } from '@/i18n'
+import { normalizeDraft } from '@/domain/draft/factory'
 import type { CertificateDraft } from '@/domain/draft/types'
+
+/** 页面局部保存时允许修改的草稿字段。 */
+export type ActiveDraftPatch = Partial<Omit<CertificateDraft, 'id' | 'createdAt'>>
 
 /**
  * @description: 获取当前唯一办理草稿
@@ -14,7 +19,10 @@ import type { CertificateDraft } from '@/domain/draft/types'
  */
 export async function getActiveDraft(): Promise<CertificateDraft | undefined> {
   const drafts = await stylistOfficeDb.activeDraft.orderBy('updatedAt').reverse().toArray()
-  return drafts[0]
+  const activeDraft = drafts[0]
+
+  // 兼容开发阶段旧结构草稿，避免新增字段后页面刷新出现空值。
+  return activeDraft ? normalizeDraft(activeDraft, DEFAULT_UI_LOCALE) : undefined
 }
 
 /**
@@ -29,6 +37,31 @@ export async function replaceActiveDraft(draft: CertificateDraft): Promise<void>
     await stylistOfficeDb.activeDraft.clear()
     await stylistOfficeDb.activeDraft.put(draft)
   })
+}
+
+/**
+ * @description: 局部更新当前办理草稿
+ * @description 每次用户确认性操作后直接写入 Dexie，并返回最新草稿给页面同步。
+ * @param {ActiveDraftPatch} patch - 要覆盖的草稿字段
+ * @return {Promise<CertificateDraft | undefined>} 更新后的草稿，不存在草稿时返回 undefined
+ */
+export async function updateActiveDraft(
+  patch: ActiveDraftPatch
+): Promise<CertificateDraft | undefined> {
+  const activeDraft = await getActiveDraft()
+
+  if (!activeDraft) {
+    return undefined
+  }
+
+  const updatedDraft: CertificateDraft = {
+    ...activeDraft,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await replaceActiveDraft(updatedDraft)
+  return updatedDraft
 }
 
 /**

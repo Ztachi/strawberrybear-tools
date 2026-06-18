@@ -7,21 +7,36 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import BottomActionBar from '@/components/BottomActionBar.vue'
 import ResponsivePageShell from '@/components/ResponsivePageShell.vue'
+import certificateBg from '@/assets/images/bg.png'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
+import { getActiveDraft, replaceActiveDraft } from '@/db/repositories/draftRepository'
+import { createDefaultDraft } from '@/domain/draft/factory'
 import { useDraftSessionStore } from '@/stores/draftSession'
+import { useUiStore } from '@/stores/ui'
 
 const { t } = useI18n()
 const router = useRouter()
 const draftSession = useDraftSessionStore()
+const uiStore = useUiStore()
 
 /**
  * @description: 进入登记流程
- * @description 项目骨架阶段只记录轻量阶段线索，完整草稿创建会在业务服务阶段接入 Dexie。
- * @return {void} 无返回值
+ * @description 已有草稿时继续原阶段；没有草稿时才创建唯一办理档案。
+ * @return {Promise<void>} 无返回值
  */
-function startRegistration(): void {
-  draftSession.setLastKnownStage('registration')
-  void router.push({ name: 'registration' })
+async function startRegistration(): Promise<void> {
+  const activeDraft = await getActiveDraft()
+
+  if (activeDraft) {
+    draftSession.setLastKnownStage(activeDraft.stage)
+    await router.push({ name: activeDraft.stage })
+    return
+  }
+
+  const draft = createDefaultDraft(uiStore.uiLocale)
+  await replaceActiveDraft(draft)
+  draftSession.setLastKnownStage(draft.stage)
+  await router.push({ name: 'registration' })
 }
 
 /**
@@ -51,6 +66,7 @@ function openProfile(): void {
             {{ t('home.profile') }}
           </v-btn>
         </div>
+        <img :src="certificateBg" alt="" class="home-hero__preview" />
       </section>
 
       <aside class="home-status">
@@ -60,15 +76,15 @@ function openProfile(): void {
             <p>{{ t('home.catalogStatus') }}</p>
             <dl class="home-status__meta">
               <div>
-                <dt>Catalog</dt>
+                <dt>{{ t('home.catalogVersion') }}</dt>
                 <dd>{{ associationCatalogSeed.catalogVersion }}</dd>
               </div>
               <div>
-                <dt>Titles</dt>
+                <dt>{{ t('home.titleCount') }}</dt>
                 <dd>{{ associationCatalogSeed.titleOptions.length }}</dd>
               </div>
               <div>
-                <dt>Templates</dt>
+                <dt>{{ t('home.templateCount') }}</dt>
                 <dd>{{ associationCatalogSeed.templates.length }}</dd>
               </div>
             </dl>
@@ -89,25 +105,54 @@ function openProfile(): void {
 }
 
 .home-hero {
+  position: relative;
+  overflow: hidden;
   min-height: 420px;
   padding: clamp(24px, 5vw, 54px);
   border: 1px solid rgba(181, 138, 69, 0.24);
-  border-radius: 18px;
+  border-radius: 16px;
   background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.92), rgba(255, 241, 244, 0.84)),
-    radial-gradient(circle at 82% 35%, rgba(49, 85, 143, 0.16), transparent 34%);
+    linear-gradient(120deg, rgba(255, 255, 255, 0.95), rgba(255, 234, 242, 0.86)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(239, 95, 143, 0.08) 0,
+      rgba(239, 95, 143, 0.08) 2px,
+      transparent 2px,
+      transparent 18px
+    );
   box-shadow: var(--shadow-card);
 }
 
+.home-hero::before {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--color-primary),
+    var(--color-lemon),
+    var(--color-mint),
+    var(--color-lavender)
+  );
+  content: '';
+}
+
 .home-hero__office {
+  position: relative;
+  z-index: 1;
+  max-width: 660px;
   margin: 0;
-  color: var(--color-gold);
+  color: var(--color-primary-active);
   font-size: clamp(30px, 6vw, 58px);
-  font-weight: 780;
+  font-weight: 820;
   letter-spacing: 0;
 }
 
 .home-hero__flow {
+  position: relative;
+  z-index: 1;
   margin: 22px 0 0;
   color: var(--color-muted-dark);
   font-size: 17px;
@@ -115,15 +160,30 @@ function openProfile(): void {
 }
 
 .home-hero__actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 34px;
 }
 
+.home-hero__preview {
+  position: absolute;
+  right: clamp(-70px, -4vw, -24px);
+  bottom: 34px;
+  width: min(46%, 520px);
+  border: 1px solid rgba(196, 138, 44, 0.24);
+  border-radius: 10px;
+  box-shadow: 0 18px 42px rgba(122, 78, 98, 0.18);
+  opacity: 0.92;
+  transform: rotate(-2deg);
+}
+
 .home-status__card {
-  border: 1px solid var(--border-primary-20);
-  background: var(--bg-white-90);
+  border: 1px solid rgba(239, 95, 143, 0.24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 234, 242, 0.72));
+  box-shadow: var(--shadow-card);
 }
 
 .home-status__meta {
@@ -151,6 +211,18 @@ function openProfile(): void {
 @media (min-width: 900px) {
   .home-layout {
     grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+@media (max-width: 820px) {
+  .home-hero {
+    min-height: 360px;
+  }
+
+  .home-hero__preview {
+    right: -80px;
+    width: 320px;
+    opacity: 0.28;
   }
 }
 </style>

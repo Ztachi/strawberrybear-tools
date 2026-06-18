@@ -1,32 +1,24 @@
-@import 'tailwindcss';
-
 :root {
-  --color-primary: #f7b7be;
-  --color-primary-light: #fff1f4;
-  --color-primary-hover: #ee8fa1;
-  --color-primary-active: #e36f86;
-  --color-secondary: #f3a1ae;
-  --color-foreground: #4a3f3f;
-  --color-muted: #a89a9a;
-  --color-muted-dark: #6b5a5a;
-  --color-gold: #b58a45;
-  --color-blue: #31558f;
+  --color-primary: #ef5f8f;
+  --color-primary-light: #ffeaf2;
+  --color-primary-hover: #e84c82;
+  --color-primary-active: #d93670;
+  --color-secondary: #9b7bff;
+  --color-foreground: #4a3240;
+  --color-muted: #ac8b9a;
+  --color-muted-dark: #765463;
+  --color-gold: #c48a2c;
+  --color-blue: #5587e8;
+  --color-mint: #55bca9;
+  --color-lavender: #9b7bff;
+  --color-lemon: #ffd66d;
   --bg-white-90: rgba(255, 255, 255, 0.9);
-  --bg-primary-10: rgba(247, 183, 190, 0.1);
-  --border-primary-20: rgba(247, 183, 190, 0.2);
-  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --bg-primary-10: rgba(239, 95, 143, 0.12);
+  --bg-primary-18: rgba(239, 95, 143, 0.18);
+  --border-primary-20: rgba(239, 95, 143, 0.24);
+  --shadow-card: 0 12px 34px rgba(201, 85, 126, 0.12);
+  --shadow-primary: 0 10px 22px rgba(239, 95, 143, 0.28);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-@theme {
-  --color-background: #fff7fa;
-  --color-primary: #f7b7be;
-  --color-primary-hover: #ee8fa1;
-  --color-primary-active: #e36f86;
-  --color-foreground: #4a3f3f;
-  --color-muted-dark: #6b5a5a;
-  --color-gold: #b58a45;
-  --color-certificate-blue: #31558f;
 }
 
 * {
@@ -42,9 +34,73 @@ body,
 
 body {
   color: var(--color-foreground);
-  background: #fff7fa;
+  background:
+    linear-gradient(180deg, rgba(255, 243, 248, 0.98), rgba(255, 251, 253, 0.98)),
+    repeating-linear-gradient(
+      135deg,
+      rgba(239, 95, 143, 0.07) 0,
+      rgba(239, 95, 143, 0.07) 1px,
+      transparent 1px,
+      transparent 18px
+    );
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.v-main {
+  padding-top: 64px;
+}
+
+.v-field {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.v-field--variant-outlined .v-field__outline {
+  color: rgba(var(--v-theme-primary), 0.46);
+}
+
+.v-field--focused .v-field__outline {
+  color: rgb(var(--v-theme-primary));
+}
+
+.v-field-label,
+.v-label {
+  color: var(--color-muted-dark);
+}
+
+.v-btn {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.v-btn.bg-primary,
+.v-btn.bg-secondary {
+  color: #ffffff;
+  box-shadow: var(--shadow-primary);
+}
+
+.v-btn.bg-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-active));
+}
+
+.v-btn.bg-secondary {
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-blue));
+}
+
+.v-btn.bg-primary:hover,
+.v-btn.bg-secondary:hover {
+  filter: saturate(1.06) brightness(1.02);
+}
+
+.v-btn.v-btn--variant-outlined.text-primary {
+  border-color: rgba(239, 95, 143, 0.46);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--color-primary-active);
+}
+
+.v-btn.v-btn--variant-text.text-primary {
+  color: var(--color-primary-active);
 }
 
 button,
@@ -90,6 +146,12 @@ select {
   min-height: 180px;
   border: 1px solid rgba(181, 138, 69, 0.35);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 241, 244, 0.72)),
-    radial-gradient(circle at 78% 42%, rgba(49, 85, 143, 0.14), transparent 32%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 234, 242, 0.78)),
+    repeating-linear-gradient(
+      45deg,
+      rgba(85, 135, 232, 0.08) 0,
+      rgba(85, 135, 232, 0.08) 2px,
+      transparent 2px,
+      transparent 16px
+    );
 }

@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+
+@source inline('bg-primary');
+@source inline('bg-secondary');
+@source inline('bg-surface');
+@source inline('bg-background');
+@source inline('text-primary');
+@source inline('border-primary');
+@source inline('rounded-lg');
+
+@theme {
+  --color-background: rgb(var(--v-theme-background));
+  --color-surface: rgb(var(--v-theme-surface));
+  --color-primary: rgb(var(--v-theme-primary));
+  --color-primary-hover: #ee8fa1;
+  --color-primary-active: #e36f86;
+  --color-foreground: #4a3f3f;
+  --color-muted-dark: #6b5a5a;
+  --color-gold: #b58a45;
+  --color-certificate-blue: #31558f;
+  --radius-lg: var(--v-border-radius-root);
+}
