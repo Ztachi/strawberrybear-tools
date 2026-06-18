@@ -223,12 +223,31 @@ chore(deps): 升级 vite 到 5.4
 6. ❌ **绕过 PR 直接推到 main 或 develop**(即使只有自己一个开发者)
 7. ❌ **merge --no-ff 到 main/develop**(用 Squash and merge 保持线性)
 
+## CI 触发范围
+
+`ci.yml` 同时监听 `main` 和 `develop` 两个分支的 push 与 pull_request 事件:
+
+| 触发事件     | 触发对象                                 | 跑 CI? | 跑 release?         |
+| ------------ | ---------------------------------------- | ------ | ------------------- |
+| push         | `main`                                   | ✅     | ✅ (changelog 触发) |
+| push         | `develop`                                | ✅     | ❌                  |
+| push         | `feature/*` / `fix/*` / `hotfix/*`       | ❌     | ❌                  |
+| pull_request | `main` (任何源分支)                      | ✅     | ❌                  |
+| pull_request | `develop` (任何源分支,主要是 feature/\*) | ✅     | ❌                  |
+
+**关键点**:
+
+- **PR 阶段就跑 CI**:任何 PR 提出来(包括 `feature/xxx → develop`),CI 立即跑在 PR 源分支的代码上。无需等合入 develop。
+- **push 到 feature 不跑 CI**:节省 CI 资源。本地写代码时跑 lint/type-check 即可。
+- **release 永远只在 main 触发**:`release-*.yml` 不监听 develop,避免合入 develop 时误发版。
+- **changelog / version bump 只在 main 发生**:changeset 在 main 上被 release workflow 消费,生成 CHANGELOG.md 和 version bump;develop 上堆的 changeset 文件不会被消费,只是"积压"。
+
 ## CI/CD 配套
 
 分支保护(在 GitHub Repository Settings → Branches 设置):
 
 - `main`:必须 PR 合入、必须 1 人 Review、必须 CI 全绿、禁止 force push、禁止直接 push
-- `develop`:必须 PR 合入、必须 CI 全绿、禁止 force push、禁止直接 push
+- `develop`:必须 PR 合入、必须 CI 全绿、禁止 force push、禁止直接 push(单人开发可不勾选 Require approvals,避免自己卡自己)
 
 ## 常见问题
 
@@ -251,6 +270,29 @@ A: 本文档生效后,所有不符合新规范的分支应:
 1. 提 PR 合到对应目标分支(develop 或 main)
 2. 合并后立即删除
 3. 不要保留任何"长期 feature 分支"
+
+### Q: develop 上集成多个 feature 后出问题,怎么修?
+
+A: **不要**在 develop 上直接 commit。**应该**走 PR 流程的两种方式:
+
+1. **退回对应 feature 分支改**(标准做法,适合"feature 之间的 API/类型不兼容"):
+   - 找到引入问题的 feature 分支
+   - 在该 feature 分支上修复
+   - 重新提 PR 到 develop
+
+2. **拉一个 `fix/integration-issues` 分支改**(集成问题属于"多 feature 互相影响"而非单个 feature 的问题):
+   ```bash
+   git checkout develop
+   git pull origin develop
+   git checkout -b fix/integration-issues
+   # 在这个分支上修复集成问题
+   git commit -m "fix: 修复 develop 上 A+B feature 集成冲突"
+   git push -u origin fix/integration-issues
+   # 提 PR: fix/integration-issues → develop
+   ```
+   这样既走 PR 流程保留 review,又避免退回某个 feature 改"不属于自己范畴"的问题。
+
+**禁止行为**:`git commit` 直接在 develop 上,即使只是"修一行小问题"。develop 必须保持"通过 CI 的稳定集成环境"。
 
 ## 历史背景
 
