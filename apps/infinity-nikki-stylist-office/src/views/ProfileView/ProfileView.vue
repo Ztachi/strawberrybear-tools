@@ -5,8 +5,9 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import ResponsivePageShell from '@/components/ResponsivePageShell.vue'
+import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 import { useUiStore, type ProfileTab } from '@/stores/ui'
+import ProfileCatalogPanel from './components/ProfileCatalogPanel/ProfileCatalogPanel.vue'
 
 const { t } = useI18n()
 const uiStore = useUiStore()
@@ -38,7 +39,10 @@ const tabs = computed<Array<{ value: ProfileTab; label: string }>>(() => [
       <v-divider />
 
       <v-card-text class="profile-card__content">
-        <p>{{ t('profile.noDraft') }}</p>
+        <ProfileCatalogPanel v-if="uiStore.profileTab === 'catalog'" />
+        <p v-else>
+          {{ t('profile.noDraft') }}
+        </p>
       </v-card-text>
     </v-card>
   </ResponsivePageShell>

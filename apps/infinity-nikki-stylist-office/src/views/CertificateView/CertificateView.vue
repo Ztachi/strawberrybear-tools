@@ -4,7 +4,7 @@
  * @description 预留 16:9 正本与 A4 彩印版的页面结构。
  */
 import { useI18n } from 'vue-i18n'
-import ResponsivePageShell from '@/components/ResponsivePageShell.vue'
+import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 
 const { t } = useI18n()
 </script>

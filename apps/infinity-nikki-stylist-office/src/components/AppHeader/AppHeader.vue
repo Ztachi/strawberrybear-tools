@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import appLogo from '@/assets/images/logo.png'
 import { getActiveDraft } from '@/db/repositories/draftRepository'
-import LanguageSwitcher from './LanguageSwitcher.vue'
+import LanguageSwitcher from './components/LanguageSwitcher/LanguageSwitcher.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -47,24 +47,28 @@ function openProfile(): void {
 
 <template>
   <v-app-bar flat border="b" color="surface" class="app-header px-2">
-    <v-app-bar-title>
-      <div class="app-header__brand">
+    <v-app-bar-title class="min-w-0 flex-1">
+      <div class="flex min-w-0 items-center gap-2.5">
         <button
           type="button"
-          class="app-header__logo-link"
+          class="inline-flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-[10px] border-0 bg-[#fff0f5] p-0"
           data-sound="nav"
           :aria-label="t('common.action.backHome')"
           @click="openHome"
         >
-          <img :src="appLogo" alt="ZTachi" class="app-header__logo" />
+          <img :src="appLogo" alt="ZTachi" class="block h-7 w-7 object-contain" />
         </button>
-        <span class="app-header__title">{{ t('app.fullTitle') }}</span>
+        <span
+          class="min-w-0 max-w-[min(48vw,460px)] overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold text-[var(--color-foreground)] max-[720px]:max-w-[52vw] max-[720px]:text-[14px] max-[420px]:max-w-[56vw]"
+        >
+          {{ t('app.fullTitle') }}
+        </span>
       </div>
     </v-app-bar-title>
 
     <template #append>
-      <div class="app-header__actions">
-        <nav class="app-header__nav">
+      <div class="flex min-w-0 items-center gap-1">
+        <nav class="flex items-center gap-0.5 max-[520px]:hidden">
           <v-btn
             color="primary"
             variant="text"
@@ -113,78 +117,13 @@ function openProfile(): void {
   backdrop-filter: blur(18px);
 }
 
-.app-header__brand {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-header__logo-link {
-  padding: 0;
-  border: 0;
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: #fff0f5;
-  cursor: pointer;
-}
-
-.app-header__logo {
-  display: block;
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
-}
-
-.app-header__title {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-foreground);
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-header__actions {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
-}
-
-.app-header__nav {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.app-header__nav .v-btn {
+nav .v-btn {
   color: var(--color-primary-active);
 }
 
 @media (max-width: 960px) {
-  .app-header__nav .v-btn span {
+  nav .v-btn span {
     display: none;
-  }
-}
-
-@media (max-width: 720px) {
-  .app-header__title {
-    max-width: 34vw;
-    font-size: 14px;
-  }
-}
-
-@media (max-width: 420px) {
-  .app-header__title {
-    max-width: 24vw;
   }
 }
 </style>

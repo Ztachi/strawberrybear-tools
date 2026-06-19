@@ -11,42 +11,42 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'home',
-    component: () => import('@/views/HomeView.vue'),
+    component: () => import('@/views/HomeView/HomeView.vue'),
   },
   {
     path: '/registration',
     name: 'registration',
-    component: () => import('@/views/RegistrationView.vue'),
+    component: () => import('@/views/RegistrationView/RegistrationView.vue'),
   },
   {
     path: '/proofing',
     name: 'proofing',
-    component: () => import('@/views/ProofingView.vue'),
+    component: () => import('@/views/ProofingView/ProofingView.vue'),
   },
   {
     path: '/signing',
     name: 'signing',
-    component: () => import('@/views/SigningView.vue'),
+    component: () => import('@/views/SigningView/SigningView.vue'),
   },
   {
     path: '/certificate',
     name: 'certificate',
-    component: () => import('@/views/CertificateView.vue'),
+    component: () => import('@/views/CertificateView/CertificateView.vue'),
   },
   {
     path: '/profile',
     name: 'profile',
-    component: () => import('@/views/ProfileView.vue'),
+    component: () => import('@/views/ProfileView/ProfileView.vue'),
   },
   {
     path: '/assets/avatars',
     name: 'avatar-library',
-    component: () => import('@/views/AvatarLibraryView.vue'),
+    component: () => import('@/views/AvatarLibraryView/AvatarLibraryView.vue'),
   },
   {
     path: '/assets/backgrounds',
     name: 'background-library',
-    component: () => import('@/views/BackgroundLibraryView.vue'),
+    component: () => import('@/views/BackgroundLibraryView/BackgroundLibraryView.vue'),
   },
 ]
 

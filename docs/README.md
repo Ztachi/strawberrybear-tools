@@ -15,6 +15,8 @@
 
 - [Agent 规范](AGENT.md) - Agent 开发规范
 - [UI 交互规范](UI.md) - UI 组件使用与交互规范
+- [项目结构规范](PROJECT_STRUCTURE.md) - Vue 组件层级、composables 边界与共享 tsconfig 规范
+- [Tailwind CSS 规范](TAILWINDCSS.md) - Tailwind 原子 class 优先与响应式使用规范
 - [公共库规范](packages/README.md) - `@packages` 公共库开发标准
 - [代码注释规范](CODE_COMMENTARY.md) - 所有代码的注释标准（JSDoc 格式、函数注释、类型注释等）
 - [CI/CD 规范](CICD.md) - Workflow 设计原则、新增 App 的 CICD 配置步骤

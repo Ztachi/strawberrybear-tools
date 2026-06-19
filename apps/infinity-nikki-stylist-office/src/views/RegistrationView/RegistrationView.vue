@@ -6,9 +6,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import AssetPickerDialog from '@/components/AssetPickerDialog.vue'
-import BottomActionBar from '@/components/BottomActionBar.vue'
-import ResponsivePageShell from '@/components/ResponsivePageShell.vue'
+import AssetPickerDialog from '@/components/AssetPickerDialog/AssetPickerDialog.vue'
+import BottomActionBar from '@/components/BottomActionBar/BottomActionBar.vue'
+import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import {
   getActiveDraft,

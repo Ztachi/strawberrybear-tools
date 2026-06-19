@@ -41,14 +41,28 @@ export default {
     agency: 'Miracle Continent Stylist Association',
     office: 'Certificate Office',
     description: 'Handles stylist identity registration, archive review, and certificate issuance.',
-    flow: 'Registration → Proof Review → Official Issuance',
+    kicker: 'MIRACLE CONTINENT STYLIST ASSOCIATION',
+    intro:
+      'Submit your stylist archive, complete the association review, and receive an official Miracle Continent identity certificate.',
+    flowLabel: 'Issuance Flow',
+    stepRegister: 'Identity Registration',
+    stepReview: 'Archive Review',
+    stepIssue: 'Official Issuance',
     primary: 'Register',
-    profile: 'Open Profile',
-    catalogStatus:
-      'Association catalog is loaded from the local seed. Remote updates are reserved.',
-    catalogVersion: 'Catalog Version',
-    titleCount: 'Title Count',
-    templateCount: 'Template Count',
+    assurance:
+      'Every archive receives a proof for review before the association proceeds to official issuance.',
+    demoAlt: 'Example of an issued stylist identity certificate',
+    demoCaption: 'Official certificate sample · Final content follows issuance',
+    serviceLabel: 'Certificate Services',
+    serviceRegisterTitle: 'Register Identity',
+    serviceRegisterText:
+      'Enter your stylist name, certified title, and certificate language to create an archive.',
+    serviceReviewTitle: 'Review Proof',
+    serviceReviewText:
+      'Confirm avatar, background, region, and association comment while edits are still available.',
+    serviceIssueTitle: 'Receive Original',
+    serviceIssueText:
+      'After issuance, the certificate is archived with originals ready to save and share.',
   },
   registration: {
     title: 'Identity Registration · Step One',
@@ -122,6 +136,13 @@ export default {
     localData: 'Local Data',
     catalog: 'Association Catalog',
     noDraft: 'No active stylist archive.',
+    catalogEyebrow: 'ASSOCIATION CATALOG',
+    catalogTitle: 'Association Catalog Overview',
+    catalogDescription:
+      'This area summarizes the base association catalog. Future remote updates, import/export, and catalog maintenance belong here.',
+    catalogVersion: 'Catalog Version',
+    titleCount: 'Title Count',
+    templateCount: 'Template Count',
   },
   assets: {
     avatarTitle: 'Custom Avatar Library',

@@ -4,7 +4,7 @@
  * @description 后续接入全屏签发动画和事务式正本生成。
  */
 import { useI18n } from 'vue-i18n'
-import ResponsivePageShell from '@/components/ResponsivePageShell.vue'
+import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 
 const { t } = useI18n()
 </script>

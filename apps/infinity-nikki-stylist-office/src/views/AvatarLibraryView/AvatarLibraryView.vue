@@ -5,8 +5,8 @@
  */
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import AssetLibraryEmptyState from '@/components/AssetLibraryEmptyState.vue'
-import ResponsivePageShell from '@/components/ResponsivePageShell.vue'
+import AssetLibraryEmptyState from '@/components/AssetLibraryEmptyState/AssetLibraryEmptyState.vue'
+import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 import { getActiveDraft } from '@/db/repositories/draftRepository'
 
 const { t } = useI18n()
