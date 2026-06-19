@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * @description: CertificateView - 证书正本页骨架
+ * @description: CertificateStep - 证书正本步骤骨架
  * @description 预留 16:9 正本与 A4 彩印版的页面结构。
  */
 import { useI18n } from 'vue-i18n'
@@ -10,7 +10,11 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <ResponsivePageShell :title="t('certificate.title')" :subtitle="t('certificate.subtitle')">
+  <ResponsivePageShell
+    :title="t('certificate.title')"
+    :subtitle="t('certificate.subtitle')"
+    hide-header
+  >
     <div class="certificate-aspect-box certificate-placeholder">
       <span>{{ t('common.status.notReady') }}</span>
     </div>

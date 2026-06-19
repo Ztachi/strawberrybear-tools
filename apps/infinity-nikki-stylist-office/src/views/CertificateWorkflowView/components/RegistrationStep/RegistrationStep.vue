@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * @description: RegistrationView - 登记资料页
+ * @description: RegistrationStep - 身份登记步骤
  * @description 读取唯一办理草稿，完成姓名、称号和地区登记，并提供资料确认层。
  */
 import { computed, onMounted, ref, watch } from 'vue'
@@ -303,7 +303,7 @@ async function buildProof(): Promise<void> {
   await saveDraftPatch({ stage: 'proofing', stylistName: draft.value.stylistName.trim() })
   draftSession.setLastKnownStage('proofing')
   isConfirming.value = false
-  await router.push('/proofing')
+  await router.push({ name: 'proofing' })
 }
 
 watch(
@@ -321,7 +321,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <ResponsivePageShell :title="t('registration.title')" :subtitle="t('registration.subtitle')">
+  <ResponsivePageShell
+    :title="t('registration.title')"
+    :subtitle="t('registration.subtitle')"
+    hide-header
+  >
     <v-progress-linear v-if="isLoading" indeterminate color="primary" rounded />
 
     <v-alert v-else-if="isDraftMissing" type="info" variant="tonal">

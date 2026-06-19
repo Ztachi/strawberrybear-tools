@@ -7,6 +7,7 @@
 
 export default {
   app: {
+    agency: '奇跡大陸スタイリスト協会本部',
     title: '証書発行所',
     fullTitle: '奇跡大陸スタイリスト協会本部 · 証書発行所',
   },
@@ -24,6 +25,7 @@ export default {
       reset: 'リセット',
       home: '受付ホーム',
       currentDraft: '手続きを続ける',
+      backTop: 'トップへ戻る',
     },
     language: {
       label: '言語',
@@ -46,9 +48,22 @@ export default {
       'スタイリストとして資料を提出し、協会の確認と正式証書の発行を経て、奇跡大陸の身分証明を受け取ります。',
     flowLabel: '手続きの流れ',
     stepRegister: '身分登録',
+    stepRegisterDescription: '資料作成',
     stepReview: '資料確認',
+    stepReviewDescription: '校正確認',
     stepIssue: '正式発行',
+    stepIssueDescription: '証書受領',
     primary: '登録する',
+    resumeDraftTitle: '未完了の資料があります',
+    resumeDraftDescription:
+      '進行中のスタイリスト資料があります。現在の手続きを続けるか、新しい資料として再登録できます。',
+    resumeDraftRestart: '再登録',
+    resumeDraftContinue: '手続きを続ける',
+    restartConfirmTitle: '再登録しますか？',
+    restartConfirmDescription:
+      '再登録すると、未完了のスタイリスト資料、入力内容、校正調整が削除されます。確認後は第一步からやり直します。',
+    restartConfirmCancel: 'キャンセル',
+    restartConfirmConfirm: '再登録する',
     assurance: '協会は各資料の校正を作成し、確認後に正式発行へ進みます。',
     demoAlt: '発行済みスタイリスト身分証書の完成例',
     demoCaption: '協会正本サンプル · 最終内容は発行結果に準じます',
@@ -60,6 +75,18 @@ export default {
     serviceReviewText: 'アバター、背景、地域、協会評語を確認し、必要な調整を行えます。',
     serviceIssueTitle: '正本受領',
     serviceIssueText: '正式発行後、証書を保存し、保管や共有に使える正本画像を受け取れます。',
+  },
+  workflow: {
+    label: '証書手続きの流れ',
+    contentLabel: '現在の手続き内容',
+    registration: '身分登録',
+    registrationDescription: '資料作成',
+    proofing: '資料確認',
+    proofingDescription: '校正確認',
+    signing: '正式発行',
+    signingDescription: '発行式',
+    certificate: '証書受領',
+    certificateDescription: '正本保存',
   },
   registration: {
     title: '身分登録 · 第一步',

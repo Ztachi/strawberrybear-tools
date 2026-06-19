@@ -1,12 +1,11 @@
 <script setup lang="ts">
 /**
  * @description: AppHeader - 应用顶部导航
- * @description 对齐 sensitive-word-checker 的结构：左侧品牌与标题，右侧语言下拉和个人中心入口。
+ * @description 左侧品牌区整体回到首页，右侧只保留语言和个人中心等高频入口。
  */
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import appLogo from '@/assets/images/logo.png'
-import { getActiveDraft } from '@/db/repositories/draftRepository'
 import LanguageSwitcher from './components/LanguageSwitcher/LanguageSwitcher.vue'
 
 const { t } = useI18n()
@@ -21,22 +20,6 @@ function openHome(): void {
 }
 
 /**
- * @description: 继续当前办理流程
- * @description 顶部导航不创建新草稿，只有已有办理档案时才直接回到对应阶段。
- * @return {Promise<void>} 无返回值
- */
-async function openCurrentDraft(): Promise<void> {
-  const activeDraft = await getActiveDraft()
-
-  if (!activeDraft) {
-    await router.push({ name: 'home' })
-    return
-  }
-
-  await router.push({ name: activeDraft.stage })
-}
-
-/**
  * @description: 打开个人中心
  * @return {void} 无返回值
  */
@@ -48,46 +31,39 @@ function openProfile(): void {
 <template>
   <v-app-bar flat border="b" color="surface" class="app-header px-2">
     <v-app-bar-title class="min-w-0 flex-1">
-      <div class="flex min-w-0 items-center gap-2.5">
-        <button
-          type="button"
-          class="inline-flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-[10px] border-0 bg-[#fff0f5] p-0"
-          data-sound="nav"
-          :aria-label="t('common.action.backHome')"
-          @click="openHome"
-        >
-          <img :src="appLogo" alt="ZTachi" class="block h-7 w-7 object-contain" />
-        </button>
+      <button
+        type="button"
+        class="flex max-w-[min(62vw,520px)] min-w-0 cursor-pointer items-center gap-2.5 border-0 bg-transparent p-0 text-left max-[520px]:max-w-[54vw]"
+        data-sound="nav"
+        :aria-label="t('common.action.backHome')"
+        @click="openHome"
+      >
         <span
-          class="min-w-0 max-w-[min(48vw,460px)] overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold text-[var(--color-foreground)] max-[720px]:max-w-[52vw] max-[720px]:text-[14px] max-[420px]:max-w-[56vw]"
+          class="inline-flex h-10 w-10 flex-none items-center justify-center rounded-[12px] bg-[#fff0f5] shadow-[0_8px_18px_rgba(239,95,143,0.14)] max-[520px]:h-9 max-[520px]:w-9"
         >
-          {{ t('app.fullTitle') }}
+          <img
+            :src="appLogo"
+            alt="ZTachi"
+            class="block h-9 w-9 object-contain max-[520px]:h-8 max-[520px]:w-8"
+          />
         </span>
-      </div>
+        <span class="grid min-w-0 gap-0.5">
+          <span
+            class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-[780] leading-tight text-[var(--color-foreground)] max-[520px]:text-[14px]"
+          >
+            {{ t('app.agency') }}
+          </span>
+          <span
+            class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold leading-tight text-[var(--color-primary-active)] max-[520px]:text-[11px]"
+          >
+            {{ t('app.title') }}
+          </span>
+        </span>
+      </button>
     </v-app-bar-title>
 
     <template #append>
       <div class="flex min-w-0 items-center gap-1">
-        <nav class="flex items-center gap-0.5 max-[520px]:hidden">
-          <v-btn
-            color="primary"
-            variant="text"
-            prepend-icon="mdi-home-heart"
-            data-sound="nav"
-            @click="openHome"
-          >
-            <span>{{ t('common.action.home') }}</span>
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="text"
-            prepend-icon="mdi-file-document-edit-outline"
-            data-sound="nav"
-            @click="openCurrentDraft"
-          >
-            <span>{{ t('common.action.currentDraft') }}</span>
-          </v-btn>
-        </nav>
         <LanguageSwitcher />
         <v-btn
           :aria-label="t('common.action.openProfile')"
@@ -115,15 +91,5 @@ function openProfile(): void {
       transparent 18px
     );
   backdrop-filter: blur(18px);
-}
-
-nav .v-btn {
-  color: var(--color-primary-active);
-}
-
-@media (max-width: 960px) {
-  nav .v-btn span {
-    display: none;
-  }
 }
 </style>

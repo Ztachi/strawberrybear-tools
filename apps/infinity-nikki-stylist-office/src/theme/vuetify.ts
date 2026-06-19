@@ -15,7 +15,20 @@ const OFFICE_THEME_COLORS = {
   background: '#fff3f8',
   surface: '#fff9fc',
   surfaceVariant: '#ffeaf2',
+  tooltip: '#fff7fb',
+  onTooltip: '#4a3240',
 }
+
+/** Tooltip 是全局提示能力，优先通过 Vuetify defaults 统一注入内容层 props。 */
+const TOOLTIP_CONTENT_PROPS = {
+  class: 'nikki-tooltip',
+  style: {
+    border: '1px solid rgba(196, 138, 44, 0.24)',
+    borderRadius: '14px',
+    boxShadow: '0 14px 34px rgba(201, 85, 126, 0.18)',
+    fontWeight: 700,
+  },
+} as const
 
 /** 应用 Vuetify 实例。 */
 export const vuetify = createVuetify({
@@ -39,6 +52,9 @@ export const vuetify = createVuetify({
           surface: OFFICE_THEME_COLORS.surface,
           'on-surface': '#4a3240',
           'surface-variant': OFFICE_THEME_COLORS.surfaceVariant,
+          'on-surface-variant': OFFICE_THEME_COLORS.onTooltip,
+          tooltip: OFFICE_THEME_COLORS.tooltip,
+          'on-tooltip': OFFICE_THEME_COLORS.onTooltip,
           success: NIKKI_STATE_COLORS.success,
           warning: NIKKI_STATE_COLORS.warning,
           error: NIKKI_STATE_COLORS.danger,
@@ -55,6 +71,11 @@ export const vuetify = createVuetify({
     },
     VCard: {
       rounded: 'lg',
+    },
+    VTooltip: {
+      color: 'tooltip',
+      contentProps: TOOLTIP_CONTENT_PROPS,
+      location: 'bottom',
     },
   },
 })

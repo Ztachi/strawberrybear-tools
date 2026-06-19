@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * @description: ProofingView - 签发前校样页
+ * @description: ProofingStep - 签发前校样步骤
  * @description 使用临时 bg.png 底图展示证书校样，支持档案内容和模板文字层定位调整。
  */
 import { computed, onMounted, ref, watch } from 'vue'
@@ -360,12 +360,13 @@ async function backToRegistration(): Promise<void> {
 }
 
 /**
- * @description: 占位正式签发入口
- * @description 正式签发事务和 PNG 生成下一阶段接入，当前只保持按钮行为稳定。
+ * @description: 进入正式签发页
+ * @description 正式签发事务和 PNG 生成下一阶段接入，当前先进入独立签发页面。
  * @return {void} 无返回值
  */
 function requestSigning(): void {
   draftSession.setLastKnownStage('proofing')
+  void router.push({ name: 'signing' })
 }
 
 watch(
@@ -389,7 +390,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <ResponsivePageShell :title="t('proofing.title')" :subtitle="t('proofing.subtitle')" wide>
+  <ResponsivePageShell
+    :title="t('proofing.title')"
+    :subtitle="t('proofing.subtitle')"
+    hide-header
+    wide
+  >
     <v-progress-linear v-if="isLoading" indeterminate color="primary" rounded />
 
     <v-alert v-else-if="isDraftMissing" type="info" variant="tonal">

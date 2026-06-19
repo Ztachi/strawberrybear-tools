@@ -7,6 +7,7 @@
 
 export default {
   app: {
+    agency: '奇蹟大陸搭配師協會總部',
     title: '證書簽發處',
     fullTitle: '奇蹟大陸搭配師協會總部 · 證書簽發處',
   },
@@ -24,6 +25,7 @@ export default {
       reset: '恢復預設',
       home: '辦事首頁',
       currentDraft: '繼續辦理',
+      backTop: '返回頂部',
     },
     language: {
       label: '語言',
@@ -45,9 +47,22 @@ export default {
     intro: '以搭配師身份遞交檔案，完成協會核驗與證書正本簽發，領取屬於你的奇蹟大陸身份憑證。',
     flowLabel: '辦理流程',
     stepRegister: '身份登記',
+    stepRegisterDescription: '建立檔案',
     stepReview: '檔案核對',
+    stepReviewDescription: '確認校樣',
     stepIssue: '正本簽發',
+    stepIssueDescription: '領取證書',
     primary: '登記資料',
+    resumeDraftTitle: '檢測到未完成檔案',
+    resumeDraftDescription:
+      '你已經有一份正在辦理的搭配師檔案。可以繼續目前進度，也可以重新登記一份新檔案。',
+    resumeDraftRestart: '重新登記',
+    resumeDraftContinue: '繼續辦理',
+    restartConfirmTitle: '確認重新登記？',
+    restartConfirmDescription:
+      '重新登記會刪除目前未完成的搭配師檔案，已填寫的資料和校樣調整都不會保留。確認後將從第一步重新開始。',
+    restartConfirmCancel: '取消',
+    restartConfirmConfirm: '確認重新登記',
     assurance: '協會將為每份檔案生成校樣，確認無誤後再進入正式簽發。',
     demoAlt: '已簽發的搭配師身份證書成品示例',
     demoCaption: '協會正本示例 · 以最終簽發內容為準',
@@ -58,6 +73,18 @@ export default {
     serviceReviewText: '逐項確認頭像、背景、地區和協會評語，保留修改空間。',
     serviceIssueTitle: '領取正本',
     serviceIssueText: '正式簽發後歸檔證書，並保存可收藏、可分享的正本圖片。',
+  },
+  workflow: {
+    label: '證書辦理流程',
+    contentLabel: '目前辦理步驟內容',
+    registration: '身份登記',
+    registrationDescription: '建立檔案',
+    proofing: '檔案核對',
+    proofingDescription: '確認校樣',
+    signing: '正本簽發',
+    signingDescription: '簽發儀式',
+    certificate: '領取證書',
+    certificateDescription: '歸檔正本',
   },
   registration: {
     title: '身份登記 · 第一步',

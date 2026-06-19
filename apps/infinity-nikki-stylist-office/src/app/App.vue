@@ -5,6 +5,20 @@
  */
 import { RouterView } from 'vue-router'
 import AppHeader from '@/components/AppHeader/AppHeader.vue'
+import AppScrollFab from '@/components/AppScrollFab/AppScrollFab.vue'
+import { useScrollTopControl } from '@/composables/useScrollTopControl'
+
+useScrollTopControl({ scopeId: 'app-window', threshold: 260 })
+
+/**
+ * @description: 获取页面过渡 key
+ * @description 证书办理流程共用稳定 shell，步骤切换只在流程页底部内容区过渡。
+ * @param {{ fullPath: string; meta: Record<string, unknown> }} route - 当前路由对象
+ * @return {string} 过渡 key
+ */
+function getRouteViewKey(route: { fullPath: string; meta: Record<string, unknown> }): string {
+  return String(route.meta.shellKey ?? route.fullPath)
+}
 </script>
 
 <template>
@@ -13,10 +27,11 @@ import AppHeader from '@/components/AppHeader/AppHeader.vue'
     <v-main class="bg-background">
       <RouterView v-slot="{ Component, route }">
         <Transition name="office-route" mode="out-in" appear>
-          <component :is="Component" :key="route.fullPath" />
+          <component :is="Component" :key="getRouteViewKey(route)" />
         </Transition>
       </RouterView>
     </v-main>
+    <AppScrollFab />
   </v-app>
 </template>
 

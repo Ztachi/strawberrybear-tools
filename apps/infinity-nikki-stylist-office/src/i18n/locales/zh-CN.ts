@@ -7,6 +7,7 @@
 
 export default {
   app: {
+    agency: '奇迹大陆搭配师协会总部',
     title: '证书签发处',
     fullTitle: '奇迹大陆搭配师协会总部 · 证书签发处',
   },
@@ -24,6 +25,7 @@ export default {
       reset: '恢复默认',
       home: '办事首页',
       currentDraft: '继续办理',
+      backTop: '返回顶部',
     },
     language: {
       label: '语言',
@@ -45,9 +47,22 @@ export default {
     intro: '以搭配师身份递交档案，完成协会核验与证书正本签发，领取属于你的奇迹大陆身份凭证。',
     flowLabel: '办理流程',
     stepRegister: '身份登记',
+    stepRegisterDescription: '创建档案',
     stepReview: '档案核对',
+    stepReviewDescription: '确认校样',
     stepIssue: '正本签发',
+    stepIssueDescription: '领取证书',
     primary: '登记资料',
+    resumeDraftTitle: '检测到未完成档案',
+    resumeDraftDescription:
+      '你已经有一份正在办理的搭配师档案。可以继续当前进度，也可以重新登记一份新档案。',
+    resumeDraftRestart: '重新登记',
+    resumeDraftContinue: '继续办理',
+    restartConfirmTitle: '确认重新登记？',
+    restartConfirmDescription:
+      '重新登记会删除当前未完成的搭配师档案，已填写的资料和校样调整都不会保留。确认后将从第一步重新开始。',
+    restartConfirmCancel: '取消',
+    restartConfirmConfirm: '确认重新登记',
     assurance: '协会将为每份档案生成校样，确认无误后再进入正式签发。',
     demoAlt: '已签发的搭配师身份证书成品示例',
     demoCaption: '协会正本示例 · 以最终签发内容为准',
@@ -58,6 +73,18 @@ export default {
     serviceReviewText: '逐项确认头像、背景、地区和协会评语，保留修改空间。',
     serviceIssueTitle: '领取正本',
     serviceIssueText: '正式签发后归档证书，并保存可收藏、可分享的正本图片。',
+  },
+  workflow: {
+    label: '证书办理流程',
+    contentLabel: '当前办理步骤内容',
+    registration: '身份登记',
+    registrationDescription: '建立档案',
+    proofing: '档案核对',
+    proofingDescription: '确认校样',
+    signing: '正本签发',
+    signingDescription: '签发仪式',
+    certificate: '领取证书',
+    certificateDescription: '归档正本',
   },
   registration: {
     title: '身份登记 · 第一步',

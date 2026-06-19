@@ -12,13 +12,14 @@
 defineProps<{
   title: string
   subtitle?: string
+  hideHeader?: boolean
   wide?: boolean
 }>()
 </script>
 
 <template>
   <section :class="['page-shell', { 'page-shell--wide': wide }]">
-    <header class="page-shell__header">
+    <header v-if="!hideHeader" class="page-shell__header">
       <h1 class="page-shell__title">
         {{ title }}
       </h1>

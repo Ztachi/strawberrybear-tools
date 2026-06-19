@@ -7,6 +7,8 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 
+const certificateWorkflowMeta = { shellKey: 'certificate-workflow' }
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -16,22 +18,26 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/registration',
     name: 'registration',
-    component: () => import('@/views/RegistrationView/RegistrationView.vue'),
+    component: () => import('@/views/CertificateWorkflowView/CertificateWorkflowView.vue'),
+    meta: certificateWorkflowMeta,
   },
   {
     path: '/proofing',
     name: 'proofing',
-    component: () => import('@/views/ProofingView/ProofingView.vue'),
+    component: () => import('@/views/CertificateWorkflowView/CertificateWorkflowView.vue'),
+    meta: certificateWorkflowMeta,
   },
   {
     path: '/signing',
     name: 'signing',
-    component: () => import('@/views/SigningView/SigningView.vue'),
+    component: () => import('@/views/CertificateWorkflowView/CertificateWorkflowView.vue'),
+    meta: certificateWorkflowMeta,
   },
   {
     path: '/certificate',
     name: 'certificate',
-    component: () => import('@/views/CertificateView/CertificateView.vue'),
+    component: () => import('@/views/CertificateWorkflowView/CertificateWorkflowView.vue'),
+    meta: certificateWorkflowMeta,
   },
   {
     path: '/profile',

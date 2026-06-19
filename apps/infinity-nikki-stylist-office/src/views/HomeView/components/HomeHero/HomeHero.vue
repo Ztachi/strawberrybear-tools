@@ -53,11 +53,11 @@ const emit = defineEmits<{
           {{ intro }}
         </p>
 
-        <div class="mt-7 flex flex-wrap gap-2.5 max-[760px]:gap-2" :aria-label="flowLabel">
+        <div class="mt-7 flex flex-wrap gap-2.5" :aria-label="flowLabel">
           <span
             v-for="step in steps"
             :key="step"
-            class="inline-flex min-h-[34px] items-center rounded-full border border-[#5587e8]/20 bg-white/60 px-3.5 text-[13px] font-bold text-[#4b6597] shadow-[0_8px_22px_rgba(85,135,232,0.10)] max-[760px]:min-h-[31px] max-[760px]:px-2.5 max-[760px]:text-[12px]"
+            class="inline-flex min-h-9 items-center rounded-full border border-[#5587e8]/20 bg-white/65 px-4 text-[13px] font-[780] text-[#3d527e] shadow-[0_10px_24px_rgba(85,135,232,0.10)] backdrop-blur max-[760px]:min-h-8 max-[760px]:px-3 max-[760px]:text-[12px]"
           >
             {{ step }}
           </span>

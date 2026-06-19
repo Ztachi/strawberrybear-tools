@@ -7,6 +7,7 @@
 
 export default {
   app: {
+    agency: 'Miracle Continent Stylist Association',
     title: 'Certificate Office',
     fullTitle: 'Miracle Continent Stylist Association · Certificate Office',
   },
@@ -24,6 +25,7 @@ export default {
       reset: 'Reset',
       home: 'Office Home',
       currentDraft: 'Continue Draft',
+      backTop: 'Back to Top',
     },
     language: {
       label: 'Language',
@@ -46,9 +48,22 @@ export default {
       'Submit your stylist archive, complete the association review, and receive an official Miracle Continent identity certificate.',
     flowLabel: 'Issuance Flow',
     stepRegister: 'Identity Registration',
+    stepRegisterDescription: 'Create archive',
     stepReview: 'Archive Review',
+    stepReviewDescription: 'Review proof',
     stepIssue: 'Official Issuance',
+    stepIssueDescription: 'Receive certificate',
     primary: 'Register',
+    resumeDraftTitle: 'Unfinished Archive Found',
+    resumeDraftDescription:
+      'You already have a stylist archive in progress. Continue from the current step, or restart with a new archive.',
+    resumeDraftRestart: 'Restart Registration',
+    resumeDraftContinue: 'Continue Draft',
+    restartConfirmTitle: 'Restart registration?',
+    restartConfirmDescription:
+      'Restarting will delete the unfinished stylist archive, including entered details and proofing adjustments. After confirmation, you will begin again from step one.',
+    restartConfirmCancel: 'Cancel',
+    restartConfirmConfirm: 'Restart',
     assurance:
       'Every archive receives a proof for review before the association proceeds to official issuance.',
     demoAlt: 'Example of an issued stylist identity certificate',
@@ -63,6 +78,18 @@ export default {
     serviceIssueTitle: 'Receive Original',
     serviceIssueText:
       'After issuance, the certificate is archived with originals ready to save and share.',
+  },
+  workflow: {
+    label: 'Certificate Workflow',
+    contentLabel: 'Current workflow step content',
+    registration: 'Identity Registration',
+    registrationDescription: 'Create archive',
+    proofing: 'Archive Review',
+    proofingDescription: 'Review proof',
+    signing: 'Official Issuance',
+    signingDescription: 'Ceremony',
+    certificate: 'Receive Certificate',
+    certificateDescription: 'Archive original',
   },
   registration: {
     title: 'Identity Registration · Step One',
