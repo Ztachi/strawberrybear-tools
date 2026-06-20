@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "2026-06-20",
+  "templateId": "template-miracle-continent-classic-001",
+  "name": {
+    "zh-CN": "奇迹大陆协会经典证书",
+    "zh-TW": "奇蹟大陸協會經典證書",
+    "en-US": "Miracle Continent Association Classic Certificate",
+    "ja-JP": "奇跡大陸協会クラシック証書"
+  },
+  "baseSize": {
+    "width": 1672,
+    "height": 941
+  },
+  "localeImages": {
+    "zh-CN": "zh-CN.png",
+    "zh-TW": "zh-TW.png",
+    "en-US": "en-US.png",
+    "ja-JP": "ja-JP.png"
+  },
+  "fields": [
+    {
+      "id": "avatar",
+      "kind": "image",
+      "source": "avatar",
+      "editable": true,
+      "editor": "avatar",
+      "position": [115, 390],
+      "size": {
+        "width": 320,
+        "height": 320
+      },
+      "imageMask": {
+        "shape": "roundedArch",
+        "borderRadius": "50% 50% 0 0"
+      },
+      "customImageScale": 0.84,
+      "hitArea": {
+        "x": 105,
+        "y": 360,
+        "width": 350,
+        "height": 370
+      }
+    },
+    {
+      "id": "name",
+      "kind": "text",
+      "source": "stylistName",
+      "editable": true,
+      "editor": "name",
+      "position": [565, 410],
+      "hitArea": {
+        "x": 560,
+        "y": 405,
+        "width": 440,
+        "height": 40
+      },
+      "textStyle": {
+        "fontSize": 30,
+        "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
+        "fontWeight": 760,
+        "color": "#354a84",
+        "align": "left",
+        "lineHeight": 1.1
+      }
+    },
+    {
+      "id": "certificateNo",
+      "kind": "text",
+      "source": "certificateNo",
+      "editable": true,
+      "editor": "region",
+      "position": [650, 466],
+      "hitArea": {
+        "x": 640,
+        "y": 455,
+        "width": 390,
+        "height": 40
+      },
+      "textStyle": {
+        "fontSize": 22,
+        "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
+        "fontWeight": 620,
+        "color": "#5c4639",
+        "align": "left",
+        "lineHeight": 1.1
+      }
+    },
+    {
+      "id": "title",
+      "kind": "text",
+      "source": "selectedTitleName",
+      "editable": true,
+      "editor": "title",
+      "position": [435, 785],
+      "contentWidth": 250,
+      "hitArea": {
+        "x": 342,
+        "y": 780,
+        "width": 370,
+        "height": 52
+      },
+      "textStyle": {
+        "fontSize": 28,
+        "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
+        "fontWeight": 650,
+        "color": "#7a5135",
+        "align": "left",
+        "lineHeight": 1.1
+      }
+    },
+    {
+      "id": "issuedDate",
+      "kind": "text",
+      "source": "today",
+      "editable": false,
+      "position": [1098, 890],
+      "hitArea": {
+        "x": 1072,
+        "y": 858,
+        "width": 180,
+        "height": 36
+      },
+      "textStyle": {
+        "fontSize": 24,
+        "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
+        "fontWeight": 560,
+        "color": "#5c4639",
+        "align": "left",
+        "lineHeight": 1.1
+      }
+    }
+  ]
+}

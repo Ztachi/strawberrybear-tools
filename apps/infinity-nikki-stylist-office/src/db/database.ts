@@ -74,6 +74,16 @@ class StylistOfficeDatabase extends Dexie {
       certificateImages: '&id, certificateId, kind',
       settings: '&key',
     })
+
+    // v2 记录自定义头像裁剪状态扩展；新增字段不建索引，表结构保持兼容。
+    this.version(2).stores({
+      activeDraft: '&id, stage, updatedAt, catalogVersion',
+      issuedCertificates: '&id, certificateNo, issuedAt, catalogVersion',
+      customAssets: '&id, kind, sha256, createdAt',
+      catalogVersions: '&catalogVersion, cachedAt',
+      certificateImages: '&id, certificateId, kind',
+      settings: '&key',
+    })
   }
 }
 

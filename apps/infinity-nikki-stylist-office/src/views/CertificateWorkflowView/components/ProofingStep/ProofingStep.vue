@@ -1,40 +1,42 @@
 <script setup lang="ts">
 /**
  * @description: ProofingStep - 签发前校样步骤
- * @description 使用临时 bg.png 底图展示证书校样，支持档案内容和模板文字层定位调整。
+ * @description 使用模板 manifest 渲染证书图，用户直接点击图上动态区域修改档案。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AssetPickerDialog from '@/components/AssetPickerDialog/AssetPickerDialog.vue'
 import BottomActionBar from '@/components/BottomActionBar/BottomActionBar.vue'
-import CertificateTemplatePreview from '@/components/certificate/CertificateTemplatePreview/CertificateTemplatePreview.vue'
 import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
+import { getCustomAsset } from '@/db/repositories/customAssetRepository'
 import {
   getActiveDraft,
   updateActiveDraft,
   type ActiveDraftPatch,
 } from '@/db/repositories/draftRepository'
+import { getOfficialAssetImageSource } from '@/domain/assets/officialAssets'
 import { resolveLocalizedText } from '@/domain/catalog/text'
+import { formatCertificateDate, formatPendingCertificateNo } from '@/domain/certificate/format'
 import {
-  DEFAULT_TEMPLATE_TEXT_POSITIONS,
-  TEMPLATE_TEXT_LAYER_IDS,
-  resolveTemplateTextPosition,
-} from '@/domain/draft/templatePositions'
+  getTemplateImageSource,
+  loadBuiltinTemplatePackage,
+} from '@/domain/template/registry'
 import { getTemplateLocaleMessages } from '@/i18n/template'
 import { useDraftSessionStore } from '@/stores/draftSession'
 import { useUiStore } from '@/stores/ui'
+import CertificateProofCanvas from './components/CertificateProofCanvas/CertificateProofCanvas.vue'
+import TitlePickerBody from '../RegistrationStep/components/ProfileOptionSelector/components/TitlePickerBody/TitlePickerBody.vue'
+import type { CertificateDraft } from '@/domain/draft/types'
 import type {
-  CertificateDraft,
-  TemplateTextLayerId,
-  TemplateTextPosition,
-} from '@/domain/draft/types'
-
-/** 校样页当前只开放头像选择；背景底层能力保留，页面暂不引用。 */
-type AssetPickerKind = 'avatar'
+  BuiltinCertificateTemplatePackage,
+  CertificateTemplateEditorKind,
+} from '@/domain/template/types'
+import type { TitlePickerOption } from '../RegistrationStep/components/ProfileOptionSelector/types'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const uiStore = useUiStore()
 const draftSession = useDraftSessionStore()
@@ -43,118 +45,127 @@ const draftSession = useDraftSessionStore()
 const draft = ref<CertificateDraft | null>(null)
 /** 首次读取草稿时的加载状态。 */
 const isLoading = ref(true)
+/** 模板包读取状态。 */
+const isTemplateLoading = ref(true)
 /** 缺少草稿时展示提示，不自动创建新办理。 */
 const isDraftMissing = ref(false)
-/** 当前正在调整位置的模板文字层。 */
-const selectedLayerId = ref<TemplateTextLayerId>('name')
-/** 当前打开的头像/背景选择层类型。 */
-const activeAssetPicker = ref<AssetPickerKind | null>(null)
+/** 姓名编辑弹窗开关。 */
+const isNameDialogOpen = ref(false)
+/** 称号选择弹窗开关。 */
+const isTitleDialogOpen = ref(false)
+/** 地区选择弹窗开关。 */
+const isRegionDialogOpen = ref(false)
+/** 头像选择弹窗开关。 */
+const isAvatarPickerOpen = ref(false)
+/** 姓名弹窗中的临时输入值，确认后才写入草稿。 */
+const draftNameInput = ref('')
+/** 当前头像图片 URL，可能来自协会内置资源或自定义 Blob。 */
+const avatarImageSrc = ref('')
+/** 当前头像是否来自用户自定义素材。 */
+const isCustomAvatar = ref(false)
+/** 自定义头像 Blob 生成的临时 URL，草稿切换头像时释放。 */
+const customAvatarObjectUrl = ref('')
+/** 当前模板包，找不到模板时由注册表回退默认模板。 */
+const templatePackage = ref<BuiltinCertificateTemplatePackage | null>(null)
+
+/** 当前模板 manifest。 */
+const templateManifest = computed(() => templatePackage.value?.manifest ?? null)
+
+/** 当前语言证书底图。 */
+const templateImageSrc = computed(() => {
+  if (!templatePackage.value) {
+    return ''
+  }
+
+  return getTemplateImageSource(
+    templatePackage.value.manifest,
+    templatePackage.value.imageSources,
+    draft.value?.certificateLocale ?? uiStore.uiLocale
+  )
+})
 
 /** 当前证书语言下的模板固定文案。 */
 const templateCopy = computed(() =>
   getTemplateLocaleMessages(draft.value?.certificateLocale ?? uiStore.uiLocale)
 )
 
-/** 称号下拉项，显示语言跟随顶部语言。 */
-const titleSelectItems = computed(() => {
+/** 称号列表显示文案跟随当前证书语言。 */
+const titleItems = computed<TitlePickerOption[]>(() => {
   const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
 
   return associationCatalogSeed.titleOptions.map((option) => ({
-    title: resolveLocalizedText(option.name, locale),
-    value: option.id,
+    id: option.id,
+    symbol: option.symbol,
+    displayName: resolveLocalizedText(option.name, locale),
+    displayDescription: resolveLocalizedText(option.description, locale),
   }))
 })
 
-/** 地区下拉项，显示语言跟随顶部语言。 */
+/** 当前选中的称号资料。 */
+const selectedTitle = computed(
+  () => titleItems.value.find((option) => option.id === draft.value?.titleId) ?? null
+)
+
+/** 模板中使用的当前称号 ID，给弹窗模板提供空值兜底。 */
+const selectedTitleId = computed(() => draft.value?.titleId ?? '')
+
+/** 模板中使用的当前地区 ID，给弹窗模板提供空值兜底。 */
+const selectedRegionId = computed(() => draft.value?.regionId ?? '')
+
+/** 模板中使用的当前头像 ID，给素材弹窗提供空值兜底。 */
+const selectedAvatarId = computed(() => draft.value?.avatarId ?? '')
+
+/** 当前证书语言，草稿未加载时回退顶部语言。 */
+const currentCertificateLocale = computed(() => draft.value?.certificateLocale ?? uiStore.uiLocale)
+
+/** 当前登记地区资料。 */
+const selectedRegion = computed(() =>
+  associationCatalogSeed.regions.find((option) => option.id === draft.value?.regionId)
+)
+
+/** 地区选择弹窗列表，显示语言跟随证书语言。 */
 const regionItems = computed(() => {
   const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
 
   return associationCatalogSeed.regions.map((region) => ({
-    title: resolveLocalizedText(region.name, locale),
-    value: region.id,
+    id: region.id,
+    code: region.code,
+    displayName: resolveLocalizedText(region.name, locale),
   }))
 })
 
-/** 当前官方头像名称，校样阶段允许重新选择素材。 */
-const selectedAvatarName = computed(() => {
-  const avatar = associationCatalogSeed.officialAvatars.find((item) => item.id === draft.value?.avatarId)
-  return avatar ? resolveLocalizedText(avatar.name, draft.value?.certificateLocale ?? uiStore.uiLocale) : ''
-})
+/** 证书动态字段值，key 对应模板 manifest fields.id。 */
+const fieldValues = computed<Record<string, string>>(() => ({
+  avatar: '',
+  name: draft.value?.stylistName || templateCopy.value.namePlaceholder,
+  certificateNo: formatPendingCertificateNo(selectedRegion.value, templateCopy.value.pendingCertificateNo),
+  title: selectedTitle.value?.displayName ?? templateCopy.value.fieldPlaceholder,
+  issuedDate: formatCertificateDate(new Date()),
+}))
 
-/** 素材选择层开关代理，关闭时清空当前类型。 */
-const isAssetPickerOpen = computed({
-  get: () => activeAssetPicker.value !== null,
-  set: (value: boolean) => {
-    if (!value) {
-      activeAssetPicker.value = null
-    }
-  },
-})
+/** 可编辑热区的常驻提示文案。 */
+const fieldLabels = computed<Record<string, string>>(() => ({
+  avatar: t('proofing.editableAvatarLabel'),
+  name: t('proofing.editableNameLabel'),
+  certificateNo: t('proofing.editableCertificateNoLabel'),
+  title: t('proofing.editableTitleLabel'),
+}))
 
-/** 当前头像选择层需要高亮的草稿素材 ID。 */
-const selectedAssetIdForPicker = computed(() => {
-  if (!draft.value || !activeAssetPicker.value) {
-    return ''
+/**
+ * @description: 释放自定义头像 URL
+ * @description 头像来源切换时避免 Blob URL 泄漏。
+ * @return {void} 无返回值
+ */
+function revokeCustomAvatarObjectUrl(): void {
+  if (customAvatarObjectUrl.value) {
+    URL.revokeObjectURL(customAvatarObjectUrl.value)
+    customAvatarObjectUrl.value = ''
   }
-
-  return draft.value.avatarId
-})
-
-/** 模板定位项目下拉项，标签来自模板语言包而不是 UI 语言包。 */
-const layerItems = computed<Array<{ title: string; value: TemplateTextLayerId }>>(() => [
-  { title: templateCopy.value.certificateTitle, value: 'certificateTitle' },
-  { title: templateCopy.value.nameLabel, value: 'name' },
-  { title: templateCopy.value.stylistTitleLabel, value: 'stylistTitle' },
-  { title: templateCopy.value.regionLabel, value: 'region' },
-  { title: templateCopy.value.commentLabel, value: 'comment' },
-  { title: templateCopy.value.certificateNoLabel, value: 'certificateNo' },
-  { title: templateCopy.value.presidentLabel, value: 'president' },
-])
-
-/** 姓名输入代理，校样阶段仍允许最终调整姓名。 */
-const stylistName = computed({
-  get: () => draft.value?.stylistName ?? '',
-  set: (value: string) => {
-    const nextValue = value.replace(/[\r\n]/g, '').slice(0, 14)
-    void saveDraftPatch({ stylistName: nextValue })
-  },
-})
-
-/** 称号选择代理，切换后立即写入当前草稿。 */
-const selectedTitleId = computed({
-  get: () => draft.value?.titleId ?? '',
-  set: (value: string) => {
-    void saveDraftPatch({ titleId: value })
-  },
-})
-
-/** 地区选择代理，切换后编号前缀与模板文字立即刷新。 */
-const selectedRegionId = computed({
-  get: () => draft.value?.regionId ?? '',
-  set: (value: string) => {
-    void saveDraftPatch({ regionId: value })
-  },
-})
-
-/** 当前文字层横向位置滑杆。 */
-const selectedLayerX = computed({
-  get: () => getSelectedLayerPosition().x,
-  set: (value: number) => {
-    void saveSelectedLayerPosition({ x: value })
-  },
-})
-
-/** 当前文字层纵向位置滑杆。 */
-const selectedLayerY = computed({
-  get: () => getSelectedLayerPosition().y,
-  set: (value: number) => {
-    void saveSelectedLayerPosition({ y: value })
-  },
-})
+}
 
 /**
  * @description: 保存草稿局部字段
- * @description 先乐观更新页面，再写入 Dexie，让校样预览在拖动滑杆时即时响应。
+ * @description 先乐观更新页面，再写入 Dexie，让证书画面即时响应。
  * @param {ActiveDraftPatch} patch - 草稿字段补丁
  * @return {Promise<void>} 无返回值
  */
@@ -204,122 +215,131 @@ async function loadDraft(): Promise<void> {
   if (activeDraft.certificateLocale !== uiStore.uiLocale) {
     void updateActiveDraft({ certificateLocale: uiStore.uiLocale })
   }
-}
 
-/**
- * @description: 获取当前选中文字层位置
- * @description 草稿未保存该层位置时回退 bg.png 默认坐标。
- * @return {TemplateTextPosition} 当前文字层位置
- */
-function getSelectedLayerPosition(): TemplateTextPosition {
-  if (!draft.value) {
-    return DEFAULT_TEMPLATE_TEXT_POSITIONS[selectedLayerId.value]
+  if (route.query.avatarPicker === '1') {
+    isAvatarPickerOpen.value = true
   }
-
-  return resolveTemplateTextPosition(selectedLayerId.value, draft.value.templateTextPositions)
 }
 
 /**
- * @description: 保存当前选中文字层位置
- * @description 只覆盖当前层的 x/y，其他文字层位置保持不变。
- * @param {Partial<TemplateTextPosition>} patch - 位置补丁
+ * @description: 读取当前草稿使用的模板包
+ * @description 模板包只通过入口目录加载，manifest 和底图均相对入口解析。
  * @return {Promise<void>} 无返回值
  */
-async function saveSelectedLayerPosition(patch: Partial<TemplateTextPosition>): Promise<void> {
-  if (!draft.value) {
+async function loadCurrentTemplatePackage(): Promise<void> {
+  const templateId = draft.value?.templateId ?? associationCatalogSeed.defaultTemplateId
+  isTemplateLoading.value = true
+
+  try {
+    const nextPackage = await loadBuiltinTemplatePackage(templateId)
+
+    if ((draft.value?.templateId ?? associationCatalogSeed.defaultTemplateId) === templateId) {
+      templatePackage.value = nextPackage
+    }
+  } finally {
+    isTemplateLoading.value = false
+  }
+}
+
+/**
+ * @description: 解析当前头像 URL
+ * @description 官方头像从构建资源取 URL，自定义头像从 IndexedDB Blob 生成临时 URL。
+ * @return {Promise<void>} 无返回值
+ */
+async function resolveAvatarImage(): Promise<void> {
+  revokeCustomAvatarObjectUrl()
+
+  const avatarId = draft.value?.avatarId
+
+  if (!avatarId) {
+    avatarImageSrc.value = ''
+    isCustomAvatar.value = false
     return
   }
 
-  const currentPosition = getSelectedLayerPosition()
-  const nextPosition = {
-    ...currentPosition,
-    ...patch,
+  const officialAvatar = associationCatalogSeed.officialAvatars.find((item) => item.id === avatarId)
+
+  if (officialAvatar) {
+    avatarImageSrc.value = getOfficialAssetImageSource(officialAvatar.assetId)
+    isCustomAvatar.value = false
+    return
   }
 
-  await saveDraftPatch({
-    templateTextPositions: {
-      ...draft.value.templateTextPositions,
-      [selectedLayerId.value]: nextPosition,
-    },
-  })
+  const customAvatar = await getCustomAsset(avatarId)
+
+  if (!customAvatar) {
+    avatarImageSrc.value = ''
+    isCustomAvatar.value = false
+    return
+  }
+
+  const objectUrl = URL.createObjectURL(customAvatar.blob)
+  customAvatarObjectUrl.value = objectUrl
+  avatarImageSrc.value = objectUrl
+  isCustomAvatar.value = true
 }
 
 /**
- * @description: 应用画布拖动中的文字层位置
- * @description 拖动过程中只更新本地草稿对象，避免每一帧都写 IndexedDB。
- * @param {TemplateTextLayerId} layerId - 文字层 ID
- * @param {TemplateTextPosition} position - 新位置
+ * @description: 打开图上字段编辑器
+ * @param {CertificateTemplateEditorKind} editor - 模板字段声明的编辑器类型
  * @return {void} 无返回值
  */
-function applyPreviewLayerPosition(
-  layerId: TemplateTextLayerId,
-  position: TemplateTextPosition
-): void {
-  if (!draft.value) {
+function openEditor(editor: CertificateTemplateEditorKind): void {
+  if (editor === 'name') {
+    draftNameInput.value = draft.value?.stylistName ?? ''
+    isNameDialogOpen.value = true
     return
   }
 
-  draft.value = {
-    ...draft.value,
-    templateTextPositions: {
-      ...draft.value.templateTextPositions,
-      [layerId]: position,
-    },
+  if (editor === 'title') {
+    isTitleDialogOpen.value = true
+    return
+  }
+
+  if (editor === 'region') {
+    isRegionDialogOpen.value = true
+    return
+  }
+
+  if (editor === 'avatar') {
+    isAvatarPickerOpen.value = true
   }
 }
 
 /**
- * @description: 提交画布拖动后的文字层位置
- * @description 松开指针后保存最终位置，刷新页面后仍能恢复。
- * @param {TemplateTextLayerId} layerId - 文字层 ID
- * @param {TemplateTextPosition} position - 最终位置
+ * @description: 保存姓名编辑结果
+ * @description 姓名只去除换行和首尾空格，不随模板语言翻译。
  * @return {Promise<void>} 无返回值
  */
-async function commitPreviewLayerPosition(
-  layerId: TemplateTextLayerId,
-  position: TemplateTextPosition
-): Promise<void> {
-  if (!draft.value) {
-    return
-  }
-
-  await saveDraftPatch({
-    templateTextPositions: {
-      ...draft.value.templateTextPositions,
-      [layerId]: position,
-    },
-  })
+async function saveName(): Promise<void> {
+  const nextName = draftNameInput.value.replace(/[\r\n]/g, '').trim().slice(0, 14)
+  await saveDraftPatch({ stylistName: nextName })
+  isNameDialogOpen.value = false
 }
 
 /**
- * @description: 恢复当前文字层默认定位
- * @description 只删除当前层自定义坐标，预览会重新读取默认位置。
- * @return {Promise<void>} 无返回值
- */
-async function resetSelectedLayerPosition(): Promise<void> {
-  if (!draft.value) {
-    return
-  }
-
-  const nextPositions = { ...draft.value.templateTextPositions }
-  delete nextPositions[selectedLayerId.value]
-  await saveDraftPatch({ templateTextPositions: nextPositions })
-}
-
-/**
- * @description: 打开头像选择层
- * @description 校样阶段更换头像后，预览和草稿立即使用新素材 ID。
- * @param {AssetPickerKind} kind - 素材类型
+ * @description: 选择称号
+ * @param {string} titleId - 称号 ID
  * @return {void} 无返回值
  */
-function openAssetPicker(kind: AssetPickerKind): void {
-  activeAssetPicker.value = kind
+function selectTitle(titleId: string): void {
+  void saveDraftPatch({ titleId })
+  isTitleDialogOpen.value = false
 }
 
 /**
- * @description: 保存校样阶段的头像选择
- * @description 旧弹窗组件仍保留背景类型能力，这里只接受并保存头像选择。
- * @param {{ kind: 'avatar' | 'background'; id: string }} payload - 选择结果
+ * @description: 选择登记地区
+ * @param {string} regionId - 地区 ID
+ * @return {void} 无返回值
+ */
+function selectRegion(regionId: string): void {
+  void saveDraftPatch({ regionId })
+  isRegionDialogOpen.value = false
+}
+
+/**
+ * @description: 保存头像选择
+ * @param {{ kind: 'avatar' | 'background'; id: string }} payload - 素材选择结果
  * @return {void} 无返回值
  */
 function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string }): void {
@@ -332,16 +352,24 @@ function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string 
 
 /**
  * @description: 进入自定义头像管理
- * @description 管理页仍为骨架，路由切换不删除当前校样草稿。
+ * @description 携带 returnTo 和 reopen 标识，保存新头像后回到核对页并打开头像选择层。
  * @return {void} 无返回值
  */
 function openAssetLibrary(): void {
-  void router.push({ name: 'avatar-library', query: { returnTo: 'proofing' } })
+  void router.push({
+    name: 'profile',
+    query: {
+      tab: 'customAssets',
+      assetKind: 'avatar',
+      returnTo: 'proofing',
+      reopen: 'avatarPicker',
+      templateId: draft.value?.templateId,
+    },
+  })
 }
 
 /**
  * @description: 返回登记资料
- * @description 校样阶段仍允许回到登记页修改基础资料，草稿阶段保持 proofing。
  * @return {Promise<void>} 无返回值
  */
 async function backToRegistration(): Promise<void> {
@@ -350,7 +378,6 @@ async function backToRegistration(): Promise<void> {
 
 /**
  * @description: 进入正式签发页
- * @description 正式签发事务和 PNG 生成下一阶段接入，当前先进入独立签发页面。
  * @return {void} 无返回值
  */
 function requestSigning(): void {
@@ -367,14 +394,27 @@ watch(
   }
 )
 
-watch(selectedLayerId, (layerId) => {
-  if (!TEMPLATE_TEXT_LAYER_IDS.includes(layerId)) {
-    selectedLayerId.value = 'name'
+watch(
+  () => draft.value?.avatarId,
+  () => {
+    void resolveAvatarImage()
   }
-})
+)
+
+watch(
+  () => draft.value?.templateId,
+  () => {
+    void loadCurrentTemplatePackage()
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   void loadDraft()
+})
+
+onBeforeUnmount(() => {
+  revokeCustomAvatarObjectUrl()
 })
 </script>
 
@@ -385,264 +425,154 @@ onMounted(() => {
     hide-header
     wide
   >
-    <v-progress-linear v-if="isLoading" indeterminate color="primary" rounded />
+    <v-progress-linear
+      v-if="isLoading || (draft && isTemplateLoading)"
+      indeterminate
+      color="primary"
+      rounded
+    />
 
     <v-alert v-else-if="isDraftMissing" type="info" variant="tonal">
       {{ t('registration.draftMissing') }}
     </v-alert>
 
-    <div v-else-if="draft" class="proofing-layout">
-      <section class="proofing-preview">
-        <div class="proofing-preview__header">
-          <h2>{{ t('proofing.previewTitle') }}</h2>
-          <span>{{ t('proofing.saveHint') }}</span>
+    <div v-else-if="draft && templateManifest" class="grid gap-4">
+      <section class="grid gap-3">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div class="grid gap-1">
+            <h2 class="m-0 text-[18px] font-[740] text-[var(--color-foreground)]">
+              {{ t('proofing.previewTitle') }}
+            </h2>
+            <p class="m-0 text-[13px] leading-relaxed text-[var(--color-muted-dark)]">
+              {{ t('proofing.saveHint') }}
+            </p>
+          </div>
+          <div class="hidden gap-2 min-[760px]:flex">
+            <v-btn variant="outlined" color="primary" data-sound="back" @click="backToRegistration">
+              {{ t('proofing.backRegistration') }}
+            </v-btn>
+            <v-btn color="primary" variant="flat" data-sound="primary" @click="requestSigning">
+              {{ t('proofing.apply') }}
+            </v-btn>
+          </div>
         </div>
-        <CertificateTemplatePreview
-          :draft="draft"
-          :selected-layer-id="selectedLayerId"
-          editable
-          @select-layer="selectedLayerId = $event"
-          @position-change="applyPreviewLayerPosition"
-          @position-commit="commitPreviewLayerPosition"
+
+        <CertificateProofCanvas
+          :manifest="templateManifest"
+          :image-src="templateImageSrc"
+          :avatar-src="avatarImageSrc"
+          :avatar-is-custom="isCustomAvatar"
+          :field-values="fieldValues"
+          :field-labels="fieldLabels"
+          :watermark="templateCopy.proofWatermark"
+          @edit="openEditor"
         />
       </section>
-
-      <aside class="proofing-panel">
-        <v-card variant="flat" class="proofing-card">
-          <v-card-title>{{ t('proofing.fieldEditor') }}</v-card-title>
-          <v-card-text class="proofing-card__body">
-            <v-text-field
-              v-model="stylistName"
-              :label="t('registration.stylistName')"
-              :hint="t('registration.stylistNameHint')"
-              maxlength="14"
-              counter="14"
-              variant="outlined"
-              color="primary"
-            />
-
-            <v-select
-              v-model="selectedTitleId"
-              :items="titleSelectItems"
-              :label="t('registration.titleOption')"
-              variant="outlined"
-              color="primary"
-            />
-
-            <v-select
-              v-model="selectedRegionId"
-              :items="regionItems"
-              :label="t('registration.region')"
-              variant="outlined"
-              color="primary"
-            />
-
-            <div class="proofing-asset-grid">
-              <button
-                type="button"
-                class="proofing-asset-button"
-                data-sound="open"
-                @click="openAssetPicker('avatar')"
-              >
-                <span>{{ t('registration.avatar') }}</span>
-                <strong>{{ selectedAvatarName }}</strong>
-                <v-icon icon="mdi-chevron-right" size="20" />
-              </button>
-            </div>
-          </v-card-text>
-        </v-card>
-
-        <v-card variant="flat" class="proofing-card">
-          <v-card-title>{{ t('proofing.templatePosition') }}</v-card-title>
-          <v-card-text class="proofing-card__body">
-            <v-select
-              v-model="selectedLayerId"
-              :items="layerItems"
-              :label="t('proofing.positionTarget')"
-              variant="outlined"
-              color="primary"
-            />
-
-            <v-slider
-              v-model="selectedLayerX"
-              :label="t('proofing.positionX')"
-              :min="0"
-              :max="100"
-              :step="0.5"
-              color="primary"
-              thumb-label
-            />
-
-            <v-slider
-              v-model="selectedLayerY"
-              :label="t('proofing.positionY')"
-              :min="0"
-              :max="100"
-              :step="0.5"
-              color="primary"
-              thumb-label
-            />
-
-            <div class="proofing-actions">
-              <v-btn
-                variant="outlined"
-                color="primary"
-                data-sound="back"
-                @click="resetSelectedLayerPosition"
-              >
-                {{ t('proofing.resetPosition') }}
-              </v-btn>
-              <v-btn variant="text" color="primary" data-sound="back" @click="backToRegistration">
-                {{ t('proofing.backRegistration') }}
-              </v-btn>
-            </div>
-          </v-card-text>
-        </v-card>
-      </aside>
     </div>
 
     <BottomActionBar
       :primary-label="t('proofing.apply')"
-      :primary-disabled="!draft"
+      :secondary-label="t('proofing.backRegistration')"
+      :primary-disabled="!draft || !templateManifest"
       @primary="requestSigning"
+      @secondary="backToRegistration"
     />
+
+    <v-dialog v-model="isNameDialogOpen" max-width="520">
+      <v-card class="rounded-[22px] border border-[#ef5f8f]/25 bg-[#fff9fc]">
+        <v-card-title class="text-[20px] font-[820] text-[var(--color-foreground)]">
+          {{ t('proofing.editNameTitle') }}
+        </v-card-title>
+        <v-card-subtitle class="whitespace-normal text-[var(--color-muted-dark)]">
+          {{ t('proofing.editNameIntro') }}
+        </v-card-subtitle>
+        <v-card-text>
+          <v-text-field
+            v-model="draftNameInput"
+            :label="t('proofing.nameInputLabel')"
+            maxlength="14"
+            counter="14"
+            variant="outlined"
+            color="primary"
+            @keyup.enter="saveName"
+          />
+        </v-card-text>
+        <v-card-actions class="justify-end gap-2">
+          <v-btn variant="text" data-sound="back" @click="isNameDialogOpen = false">
+            {{ t('common.action.cancel') }}
+          </v-btn>
+          <v-btn color="primary" variant="flat" data-sound="primary" @click="saveName">
+            {{ t('common.action.confirm') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="isTitleDialogOpen" max-width="620" scrollable>
+      <v-card class="rounded-[24px] border border-[#ef5f8f]/25 bg-[#fff9fc]">
+        <v-card-title class="text-[20px] font-[820] text-[var(--color-foreground)]">
+          {{ t('registration.titlePickerTitle') }}
+        </v-card-title>
+        <v-card-subtitle class="whitespace-normal text-[var(--color-muted-dark)]">
+          {{ t('registration.titlePickerIntro') }}
+        </v-card-subtitle>
+        <v-card-text>
+          <TitlePickerBody
+            :items="titleItems"
+            :selected-id="selectedTitleId"
+            @select="selectTitle"
+          />
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="isRegionDialogOpen" max-width="620" scrollable>
+      <v-card class="rounded-[24px] border border-[#ef5f8f]/25 bg-[#fff9fc]">
+        <v-card-title class="text-[20px] font-[820] text-[var(--color-foreground)]">
+          {{ t('proofing.chooseRegionTitle') }}
+        </v-card-title>
+        <v-card-subtitle class="whitespace-normal text-[var(--color-muted-dark)]">
+          {{ t('proofing.chooseRegionIntro') }}
+        </v-card-subtitle>
+        <v-card-text>
+          <div class="grid gap-2">
+            <button
+              v-for="region in regionItems"
+              :key="region.id"
+              type="button"
+              :class="[
+                'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] border bg-white/75 px-3 py-2 text-left text-[var(--color-foreground)] transition hover:border-[#ef5f8f]/55 hover:bg-[#fff4f8]',
+                region.id === selectedRegionId ? 'border-[#ef5f8f]' : 'border-[#ef5f8f]/20',
+              ]"
+              data-sound="select"
+              @click="selectRegion(region.id)"
+            >
+              <span class="grid min-w-0 gap-1">
+                <strong class="truncate text-[15px] font-[780]">{{ region.displayName }}</strong>
+                <small class="text-[12px] text-[var(--color-muted-dark)]">
+                  MC-{{ region.code }}-{{ templateCopy.pendingCertificateNo }}
+                </small>
+              </span>
+              <v-icon
+                v-if="region.id === selectedRegionId"
+                icon="mdi-check-circle"
+                color="primary"
+                size="22"
+              />
+            </button>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
 
     <AssetPickerDialog
       v-if="draft"
-      v-model="isAssetPickerOpen"
-      :kind="activeAssetPicker"
-      :locale="draft.certificateLocale"
-      :selected-id="selectedAssetIdForPicker"
+      v-model="isAvatarPickerOpen"
+      kind="avatar"
+      :locale="currentCertificateLocale"
+      :selected-id="selectedAvatarId"
       @select="handleAssetSelect"
       @manage="openAssetLibrary"
     />
   </ResponsivePageShell>
 </template>
-
-<style scoped>
-.proofing-layout {
-  display: grid;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.proofing-preview {
-  display: grid;
-  gap: 12px;
-}
-
-.proofing-preview__header {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.proofing-preview__header h2 {
-  margin: 0;
-  color: var(--color-foreground);
-  font-size: 18px;
-  font-weight: 740;
-  letter-spacing: 0;
-}
-
-.proofing-preview__header span {
-  color: var(--color-muted-dark);
-  font-size: 13px;
-}
-
-.proofing-panel {
-  display: grid;
-  gap: 14px;
-}
-
-.proofing-card {
-  border: 1px solid rgba(239, 95, 143, 0.24);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 246, 250, 0.88)),
-    repeating-linear-gradient(
-      135deg,
-      rgba(155, 123, 255, 0.05) 0,
-      rgba(155, 123, 255, 0.05) 1px,
-      transparent 1px,
-      transparent 18px
-    );
-  box-shadow: var(--shadow-card);
-}
-
-.proofing-card__body {
-  display: grid;
-  gap: 14px;
-}
-
-.proofing-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.proofing-asset-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.proofing-asset-button {
-  display: grid;
-  min-height: 58px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px 10px;
-  padding: 12px;
-  border: 1px solid var(--border-primary-20);
-  border-radius: 8px;
-  color: var(--color-foreground);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 234, 242, 0.64));
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease;
-}
-
-.proofing-asset-button:hover {
-  border-color: var(--color-primary-active);
-  background: var(--bg-primary-10);
-}
-
-.proofing-asset-button span {
-  color: var(--color-muted-dark);
-  font-size: 12px;
-}
-
-.proofing-asset-button strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-foreground);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.proofing-asset-button .v-icon {
-  grid-column: 2 / 3;
-  grid-row: 1 / 3;
-  color: var(--color-primary-active);
-}
-
-@media (min-width: 1080px) {
-  .proofing-layout {
-    grid-template-columns: minmax(0, 1fr) 360px;
-    align-items: start;
-  }
-}
-
-@media (max-width: 720px) {
-  .proofing-preview__header {
-    display: grid;
-  }
-
-  .proofing-actions {
-    display: grid;
-  }
-}
-</style>

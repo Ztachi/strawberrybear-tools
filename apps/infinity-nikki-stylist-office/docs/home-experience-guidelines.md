@@ -49,7 +49,7 @@
 ## Vuetify 主题与默认配置
 
 - 颜色、前景色、圆角变量和组件默认 prop 优先放在 `src/theme/vuetify.ts`，参考 Vuetify Theme 与 Defaults 能力统一配置。
-- 组件已经提供的能力优先使用框架实现，例如 `v-fab`、`v-tooltip`、`v-icon`、主题色和组件默认值；只有业务交互或布局表达确实不匹配时才自定义组件。
+- 组件已经提供的能力优先使用框架实现，例如 `v-data-table`、`v-table`、`v-dialog`、`v-menu`、`v-tooltip`、`v-fab`、`v-icon`、表单控件、主题色和组件默认值；只有业务交互或布局表达确实不匹配时才自定义组件，不为基础控件重复造轮子。
 - 全局 CSS 只负责页面基础背景、品牌纹理、复杂渐变、动画和项目自有 class；不要为了改一个 Vuetify prop 能解决的问题去覆盖内部 DOM。
 - 如果必须覆盖第三方组件内部结构，先确认没有 theme、defaults、props、slots 或 exposed class 能表达，再写窄范围注释说明原因。
 

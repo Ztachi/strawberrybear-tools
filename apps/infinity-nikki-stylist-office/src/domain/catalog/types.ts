@@ -12,7 +12,7 @@ export type LocaleCode = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP'
 export type LocalizedText = Partial<Record<LocaleCode, string>>
 
 /** 资料库支持的图片资源类型。 */
-export type CatalogImageKind = 'template-overlay' | 'seal' | 'avatar' | 'background' | 'ornament'
+export type CatalogImageKind = 'template-base' | 'seal' | 'avatar' | 'background' | 'ornament'
 
 /** 证书模板中的图层类型。 */
 export type TemplateLayerType = 'image' | 'background' | 'avatar'
@@ -44,16 +44,16 @@ export interface CatalogImageAsset {
 
 /**
  * @description: 模板文字槽
- * @description 后续证书渲染器会根据这些坐标和样式把用户资料写入 Canvas。
+ * @description 旧版资料库字段，当前模板坐标以模板目录 manifest 为准，保留用于兼容远程草稿。
  */
 export interface CertificateTextSlot {
   /** 字段 ID，例如 name、certificateNo、stylistTitle */
   id: string
   /** 后台可视化编辑器中的字段名称 */
   label: string
-  /** 设计稿坐标 x，基准尺寸为 3840x2160 */
+  /** 设计稿坐标 x，基准尺寸由对应模板声明 */
   x: number
-  /** 设计稿坐标 y，基准尺寸为 3840x2160 */
+  /** 设计稿坐标 y，基准尺寸由对应模板声明 */
   y: number
   /** 文本绘制区域宽度 */
   width: number
@@ -77,7 +77,7 @@ export interface CertificateTextSlot {
 
 /**
  * @description: 证书模板定义
- * @description 模板只描述布局和资源引用，不直接保存用户资料。
+ * @description 模板只描述模板包入口和基础信息，不直接保存用户资料。
  */
 export interface CertificateTemplate {
   /** 稳定模板 ID */
@@ -89,9 +89,9 @@ export interface CertificateTemplate {
     width: number
     height: number
   }
-  /** 模板覆盖层资源 ID */
-  overlayAssetId: string
-  /** 文字槽位配置 */
+  /** 模板目录 manifest 路径，用于远程同步或本地内置模板定位 */
+  manifestPath: string
+  /** 兼容旧版资料库的文字槽位配置，新模板以 manifest 为准 */
   textSlots: CertificateTextSlot[]
 }
 

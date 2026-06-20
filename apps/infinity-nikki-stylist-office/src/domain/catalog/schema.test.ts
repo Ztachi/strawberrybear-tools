@@ -20,7 +20,10 @@ describe('association catalog seed', () => {
       code: 'FLW',
       name: { 'zh-CN': '花愿镇' },
     })
-    expect(associationCatalogSeed.templates[0]?.baseSize).toEqual({ width: 3840, height: 2160 })
+    expect(associationCatalogSeed.templates[0]).toMatchObject({
+      baseSize: { width: 1672, height: 941 },
+      manifestPath: 'templates/1/manifest.json',
+    })
   })
 
   it('keeps region identifiers, numbers, codes, and Chinese names unique', () => {

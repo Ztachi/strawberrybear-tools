@@ -15,7 +15,7 @@ const localizedTextSchema = z.partialRecord(localeCodeSchema, z.string().min(1))
 /** 图片资源校验，尺寸必须为正数，避免无效素材进入 Canvas 渲染链路。 */
 const imageAssetSchema = z.object({
   id: z.string().min(1),
-  kind: z.enum(['template-overlay', 'seal', 'avatar', 'background', 'ornament']),
+  kind: z.enum(['template-base', 'seal', 'avatar', 'background', 'ornament']),
   url: z.string().min(1),
   mimeType: z.string().min(1),
   width: z.number().positive(),
@@ -50,7 +50,7 @@ const templateSchema = z.object({
     width: z.number().positive(),
     height: z.number().positive(),
   }),
-  overlayAssetId: z.string().min(1),
+  manifestPath: z.string().min(1),
   textSlots: z.array(textSlotSchema),
 })
 

@@ -5,11 +5,13 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import AssetPickerDialog from '@/components/AssetPickerDialog/AssetPickerDialog.vue'
 import BottomActionBar from '@/components/BottomActionBar/BottomActionBar.vue'
 import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 import ProfileOptionSelector from './components/ProfileOptionSelector/ProfileOptionSelector.vue'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
+import { getCustomAsset } from '@/db/repositories/customAssetRepository'
 import {
   getActiveDraft,
   updateActiveDraft,
@@ -19,12 +21,10 @@ import { resolveLocalizedText } from '@/domain/catalog/text'
 import { useDraftSessionStore } from '@/stores/draftSession'
 import { useUiStore } from '@/stores/ui'
 import type { CertificateDraft } from '@/domain/draft/types'
-import type {
-  AvatarPickerOption,
-  TitlePickerOption,
-} from './components/ProfileOptionSelector/types'
+import type { TitlePickerOption } from './components/ProfileOptionSelector/types'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const uiStore = useUiStore()
 const draftSession = useDraftSessionStore()
@@ -37,6 +37,10 @@ const isLoading = ref(true)
 const isDraftMissing = ref(false)
 /** 资料确认层开关，确认层不改变路由。 */
 const isConfirming = ref(false)
+/** 头像选择层开关，登记页复用公共素材选择器。 */
+const isAvatarPickerOpen = ref(false)
+/** 当前选中自定义头像名称，官方头像仍从资料库解析。 */
+const selectedCustomAvatarName = ref('')
 
 /** 称号列表显示文案跟随当前草稿语言，缺失时由资料库工具回退。 */
 const titleItems = computed<TitlePickerOption[]>(() => {
@@ -47,16 +51,6 @@ const titleItems = computed<TitlePickerOption[]>(() => {
     symbol: option.symbol,
     displayName: resolveLocalizedText(option.name, locale),
     displayDescription: resolveLocalizedText(option.description, locale),
-  }))
-})
-
-/** 头像列表显示文案跟随当前草稿语言，真实图片接入前只提供占位头像。 */
-const avatarItems = computed<AvatarPickerOption[]>(() => {
-  const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
-
-  return associationCatalogSeed.officialAvatars.map((avatar) => ({
-    id: avatar.id,
-    displayName: resolveLocalizedText(avatar.name, locale),
   }))
 })
 
@@ -82,7 +76,16 @@ const selectedRegion = computed(() =>
 
 /** 当前官方头像名称，素材管理接入前先展示草稿默认选项。 */
 const selectedAvatarName = computed(() => {
-  return avatarItems.value.find((item) => item.id === draft.value?.avatarId)?.displayName ?? ''
+  const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
+  const officialAvatar = associationCatalogSeed.officialAvatars.find(
+    (item) => item.id === draft.value?.avatarId
+  )
+
+  if (officialAvatar) {
+    return resolveLocalizedText(officialAvatar.name, locale)
+  }
+
+  return selectedCustomAvatarName.value || t('assets.customAvatarFallbackName')
 })
 
 /** 姓名输入代理，去掉换行并限制 14 个可见字符。 */
@@ -173,6 +176,10 @@ async function loadDraft(): Promise<void> {
   if (activeDraft.certificateLocale !== uiStore.uiLocale) {
     void updateActiveDraft({ certificateLocale: uiStore.uiLocale })
   }
+
+  if (route.query.avatarPicker === '1') {
+    isAvatarPickerOpen.value = true
+  }
 }
 
 /**
@@ -196,12 +203,35 @@ function selectAvatar(avatarId: string): void {
 }
 
 /**
+ * @description: 处理公共头像选择层选择结果
+ * @description 选择官方或自定义头像后立即保存到当前草稿。
+ * @param {{ kind: 'avatar' | 'background'; id: string }} payload - 素材选择结果
+ * @return {void} 无返回值
+ */
+function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string }): void {
+  if (payload.kind !== 'avatar') {
+    return
+  }
+
+  selectAvatar(payload.id)
+}
+
+/**
  * @description: 进入自定义头像管理
- * @description 当前管理页仍是骨架，但从登记流程进入时保留已有草稿。
+ * @description 从登记流程进入个人中心自定义资料页，保存后可返回并重新打开头像选择层。
  * @return {void} 无返回值
  */
 function openAvatarLibrary(): void {
-  void router.push({ name: 'avatar-library', query: { returnTo: 'registration' } })
+  void router.push({
+    name: 'profile',
+    query: {
+      tab: 'customAssets',
+      assetKind: 'avatar',
+      returnTo: 'registration',
+      reopen: 'avatarPicker',
+      templateId: draft.value?.templateId,
+    },
+  })
 }
 
 /**
@@ -251,6 +281,29 @@ watch(
 onMounted(() => {
   void loadDraft()
 })
+
+watch(
+  () => draft.value?.avatarId,
+  async (avatarId) => {
+    selectedCustomAvatarName.value = ''
+
+    if (!avatarId) {
+      return
+    }
+
+    const isOfficialAvatar = associationCatalogSeed.officialAvatars.some(
+      (avatar) => avatar.id === avatarId
+    )
+
+    if (isOfficialAvatar) {
+      return
+    }
+
+    selectedCustomAvatarName.value =
+      (await getCustomAsset(avatarId))?.name ?? t('assets.customAvatarFallbackName')
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -290,20 +343,32 @@ onMounted(() => {
             </div>
 
             <div class="registration-selector-grid">
-              <ProfileOptionSelector
-                type="avatar"
-                :label="t('registration.avatar')"
-                :dialog-title="t('registration.avatarPickerTitle')"
-                :dialog-intro="t('registration.assetPickerIntro')"
-                :empty-text="t('registration.noCustomAssets')"
-                :manage-label="t('registration.manageCustomAvatar')"
-                :official-label="t('registration.officialAsset')"
-                :avatar-options="avatarItems"
-                :selected-avatar-name="selectedAvatarName"
-                :selected-id="draft.avatarId"
-                @manage="openAvatarLibrary"
-                @select="selectAvatar"
-              />
+              <section class="grid gap-2">
+                <span class="text-[13px] font-[720] text-[var(--color-muted-dark)]">
+                  {{ t('registration.avatar') }}
+                </span>
+                <button
+                  type="button"
+                  class="grid min-h-[76px] w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[20px] border border-[#ef5f8f]/24 bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(255,234,242,0.66))] px-4 py-3 text-left text-[var(--color-foreground)] shadow-[0_12px_28px_rgba(201,85,126,0.1)] transition hover:-translate-y-0.5 hover:border-[#ef5f8f]/55 hover:bg-[#fff4f8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ef5f8f]/45"
+                  data-sound="open"
+                  @click="isAvatarPickerOpen = true"
+                >
+                  <v-avatar color="primary" variant="tonal" size="48">
+                    <v-icon icon="mdi-account-circle-outline" size="30" />
+                  </v-avatar>
+                  <span class="grid min-w-0 gap-1">
+                    <strong class="truncate text-[16px] font-[820] leading-tight">
+                      {{ selectedAvatarName }}
+                    </strong>
+                    <small
+                      class="truncate text-[13px] leading-tight text-[var(--color-muted-dark)]"
+                    >
+                      {{ t('registration.selectedAsset') }}
+                    </small>
+                  </span>
+                  <v-icon icon="mdi-chevron-right" color="primary" size="22" />
+                </button>
+              </section>
               <ProfileOptionSelector
                 type="title"
                 :label="t('registration.titleOption')"
@@ -376,6 +441,16 @@ onMounted(() => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <AssetPickerDialog
+      v-if="draft"
+      v-model="isAvatarPickerOpen"
+      kind="avatar"
+      :locale="draft.certificateLocale"
+      :selected-id="draft.avatarId"
+      @select="handleAssetSelect"
+      @manage="openAvatarLibrary"
+    />
   </ResponsivePageShell>
 </template>
 

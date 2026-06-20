@@ -9,7 +9,7 @@ import type { LocaleCode } from '@/domain/catalog/types'
 /** 办理草稿当前阶段。 */
 export type DraftStage = 'registration' | 'proofing'
 
-/** 模板文字层 ID，后续正式模板坐标编辑器也沿用这一组稳定键。 */
+/** 旧版模板文字层 ID，仅用于兼容开发阶段历史草稿。 */
 export type TemplateTextLayerId =
   | 'certificateTitle'
   | 'name'
@@ -19,7 +19,7 @@ export type TemplateTextLayerId =
   | 'certificateNo'
   | 'president'
 
-/** 模板文字层位置，单位为证书画布百分比，便于预览按比例缩放。 */
+/** 旧版模板文字层位置，单位为证书画布百分比。 */
 export interface TemplateTextPosition {
   /** 横向位置百分比 */
   x: number
@@ -27,7 +27,7 @@ export interface TemplateTextPosition {
   y: number
 }
 
-/** 当前草稿内可调整的模板文字层位置。 */
+/** 当前草稿内遗留的模板文字层位置，新核对页以模板 manifest 坐标为准。 */
 export type TemplateTextPositions = Partial<Record<TemplateTextLayerId, TemplateTextPosition>>
 
 /** 图片取景参数，后续头像与背景裁切会复用。 */
@@ -69,7 +69,7 @@ export interface CertificateDraft {
   avatarTransform: DraftImageTransform
   /** 背景取景参数，素材细调阶段会接入实际背景图层 */
   backgroundTransform: DraftImageTransform
-  /** 模板文字层位置调整，当前阶段用于 bg.png 底图上的简单定位 */
+  /** 兼容旧草稿的模板文字层位置调整，新模板渲染不再读取该字段 */
   templateTextPositions: TemplateTextPositions
   /** 草稿绑定的资料库版本 */
   catalogVersion: string

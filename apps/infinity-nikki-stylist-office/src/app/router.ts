@@ -46,8 +46,14 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/assets/avatars',
-    name: 'avatar-library',
-    component: () => import('@/views/AvatarLibraryView/AvatarLibraryView.vue'),
+    redirect: (to) => ({
+      name: 'profile',
+      query: {
+        ...to.query,
+        tab: 'customAssets',
+        assetKind: 'avatar',
+      },
+    }),
   },
   {
     path: '/assets/backgrounds',

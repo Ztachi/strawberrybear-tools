@@ -3,13 +3,16 @@
  * @description: ProfileView - 个人中心页骨架
  * @description 统一管理正在办理、我的证书、自定义资料、本地数据和协会资料库入口。
  */
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
 import { useUiStore, type ProfileTab } from '@/stores/ui'
 import ProfileCatalogPanel from './components/ProfileCatalogPanel/ProfileCatalogPanel.vue'
+import ProfileCustomAssetsPanel from './components/ProfileCustomAssetsPanel/ProfileCustomAssetsPanel.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const uiStore = useUiStore()
 
 /** tab 数据统一集中，避免模板复制标题和 value。 */
@@ -20,6 +23,23 @@ const tabs = computed<Array<{ value: ProfileTab; label: string }>>(() => [
   { value: 'localData', label: t('profile.localData') },
   { value: 'catalog', label: t('profile.catalog') },
 ])
+
+/** 支持外部入口用 query 直接打开个人中心指定页签。 */
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (
+      tab === 'activeDraft' ||
+      tab === 'certificates' ||
+      tab === 'customAssets' ||
+      tab === 'localData' ||
+      tab === 'catalog'
+    ) {
+      uiStore.setProfileTab(tab)
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -40,6 +60,7 @@ const tabs = computed<Array<{ value: ProfileTab; label: string }>>(() => [
 
       <v-card-text class="profile-card__content">
         <ProfileCatalogPanel v-if="uiStore.profileTab === 'catalog'" />
+        <ProfileCustomAssetsPanel v-else-if="uiStore.profileTab === 'customAssets'" />
         <p v-else>
           {{ t('profile.noDraft') }}
         </p>

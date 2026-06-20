@@ -3,10 +3,13 @@
  * @description: AssetPickerDialog - 头像/背景选择层
  * @description 登记页和校样页共用同一个选择入口，当前先接入协会内置素材与自定义管理入口。
  */
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
+import { listCustomAssets } from '@/db/repositories/customAssetRepository'
+import { getOfficialAssetImageSource } from '@/domain/assets/officialAssets'
 import { resolveLocalizedText } from '@/domain/catalog/text'
+import type { CustomAssetRecord } from '@/domain/assets/types'
 import type { LocaleCode, OfficialAssetOption } from '@/domain/catalog/types'
 
 /** 素材选择层当前处理的业务类型。 */
@@ -33,6 +36,11 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/** 当前弹层读取到的自定义素材。 */
+const customAssets = ref<CustomAssetRecord[]>([])
+/** 自定义素材 Blob 对应的临时 URL，弹层关闭或卸载时释放。 */
+const customAssetUrls = ref<Record<string, string>>({})
 
 /** v-dialog 的双向绑定代理，关闭弹层时不隐式改动草稿。 */
 const isOpen = computed({
@@ -85,8 +93,52 @@ const assetItems = computed(() =>
   officialAssets.value.map((asset) => ({
     ...asset,
     displayName: resolveLocalizedText(asset.name, props.locale),
+    imageSrc: getOfficialAssetImageSource(asset.assetId),
   }))
 )
+
+/** 自定义素材展示项，名称来自用户输入，不跟随语言翻译。 */
+const customAssetItems = computed(() =>
+  customAssets.value.map((asset) => ({
+    id: asset.id,
+    displayName: asset.name,
+    imageSrc: customAssetUrls.value[asset.id] ?? '',
+  }))
+)
+
+/**
+ * @description: 释放自定义素材预览 URL
+ * @description 防止用户频繁打开选择层时 Blob URL 泄漏。
+ * @return {void} 无返回值
+ */
+function revokeCustomAssetUrls(): void {
+  Object.values(customAssetUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  customAssetUrls.value = {}
+}
+
+/**
+ * @description: 读取当前类型的自定义素材
+ * @description 弹层每次打开时刷新列表，保证从素材管理页返回后立即看到新头像。
+ * @return {Promise<void>} 无返回值
+ */
+async function loadCustomAssets(): Promise<void> {
+  revokeCustomAssetUrls()
+
+  if (!props.kind) {
+    customAssets.value = []
+    return
+  }
+
+  const assets = await listCustomAssets(props.kind)
+  const nextUrls: Record<string, string> = {}
+
+  assets.forEach((asset) => {
+    nextUrls[asset.id] = URL.createObjectURL(asset.blob)
+  })
+
+  customAssets.value = assets
+  customAssetUrls.value = nextUrls
+}
 
 /**
  * @description: 选择指定素材
@@ -109,7 +161,7 @@ function selectAsset(id: string): void {
  * @return {void} 无返回值
  */
 function randomizeAsset(): void {
-  const candidates = assetItems.value
+  const candidates = [...assetItems.value, ...customAssetItems.value]
 
   if (candidates.length === 0) {
     return
@@ -132,6 +184,20 @@ function openCustomManager(): void {
   emit('manage', props.kind)
   emit('update:modelValue', false)
 }
+
+watch(
+  () => [props.modelValue, props.kind] as const,
+  ([isOpen]) => {
+    if (isOpen) {
+      void loadCustomAssets()
+    }
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  revokeCustomAssetUrls()
+})
 </script>
 
 <template>
@@ -163,7 +229,14 @@ function openCustomManager(): void {
               @click="selectAsset(asset.id)"
             >
               <span class="asset-picker-option__icon">
+                <img
+                  v-if="asset.imageSrc"
+                  :src="asset.imageSrc"
+                  alt=""
+                  class="asset-picker-option__image"
+                />
                 <v-icon
+                  v-else
                   :icon="kind === 'avatar' ? 'mdi-account-circle-outline' : 'mdi-image-outline'"
                   size="22"
                 />
@@ -187,9 +260,49 @@ function openCustomManager(): void {
             {{ t('registration.customAssetGroup') }}
           </div>
 
+          <div v-if="customAssetItems.length > 0" class="asset-picker-card__list">
+            <button
+              v-for="asset in customAssetItems"
+              :key="asset.id"
+              type="button"
+              :class="[
+                'asset-picker-option',
+                { 'asset-picker-option--active': asset.id === selectedId },
+              ]"
+              data-sound="select"
+              @click="selectAsset(asset.id)"
+            >
+              <span class="asset-picker-option__icon">
+                <img
+                  v-if="asset.imageSrc"
+                  :src="asset.imageSrc"
+                  alt=""
+                  class="asset-picker-option__image"
+                />
+                <v-icon
+                  v-else
+                  :icon="kind === 'avatar' ? 'mdi-account-circle-outline' : 'mdi-image-outline'"
+                  size="22"
+                />
+              </span>
+              <span class="asset-picker-option__text">
+                <strong>{{ asset.displayName }}</strong>
+                <small>{{ t('registration.customAssetGroup') }}</small>
+              </span>
+              <v-icon
+                v-if="asset.id === selectedId"
+                icon="mdi-check-circle"
+                color="primary"
+                size="20"
+              />
+            </button>
+          </div>
+
           <div class="asset-picker-card__empty">
             <v-icon icon="mdi-folder-image" size="22" />
-            <span>{{ t('registration.noCustomAssets') }}</span>
+            <span>
+              {{ customAssetItems.length > 0 ? manageLabel : t('registration.noCustomAssets') }}
+            </span>
             <v-btn variant="text" color="primary" data-sound="nav" @click="openCustomManager">
               {{ manageLabel }}
             </v-btn>
@@ -281,6 +394,13 @@ function openCustomManager(): void {
   border-radius: 999px;
   color: var(--color-gold);
   background: #fff3f6;
+  overflow: hidden;
+}
+
+.asset-picker-option__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .asset-picker-option__text {
