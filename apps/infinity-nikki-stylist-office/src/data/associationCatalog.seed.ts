@@ -4,6 +4,7 @@
  * @author strawberrybear
  * @date 2026-06-18
  */
+import { MIRALAND_REGION_OPTIONS } from '@/const'
 import { associationCatalogSchema } from '@/domain/catalog/schema'
 
 /** 当前 MVP 内置的协会资料库 seed，后续远程 JSON 必须保持同构。 */
@@ -187,38 +188,7 @@ const rawAssociationCatalog = {
       symbol: '☼',
     },
   ],
-  regions: [
-    {
-      id: 'florawish',
-      code: 'FLW',
-      name: {
-        'zh-CN': '花愿镇',
-        'zh-TW': '花願鎮',
-        'en-US': 'Florawish',
-        'ja-JP': 'フローラウィッシュ',
-      },
-    },
-    {
-      id: 'stoneville',
-      code: 'STV',
-      name: {
-        'zh-CN': '石树田无人区',
-        'zh-TW': '石樹田無人區',
-        'en-US': 'Stoneville Outlands',
-        'ja-JP': 'ストーンヴィル外縁地',
-      },
-    },
-    {
-      id: 'breezy-meadow',
-      code: 'BRM',
-      name: {
-        'zh-CN': '微风绿野',
-        'zh-TW': '微風綠野',
-        'en-US': 'Breezy Meadow',
-        'ja-JP': 'そよ風の緑野',
-      },
-    },
-  ],
+  regions: MIRALAND_REGION_OPTIONS,
   comments: [
     {
       id: 'comment-graceful-creation',

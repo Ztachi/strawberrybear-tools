@@ -64,6 +64,7 @@ const titleOptionSchema = z.object({
 
 const regionSchema = z.object({
   id: z.string().min(1),
+  number: z.string().regex(/^\d{3}$/),
   code: z.string().min(1),
   name: localizedTextSchema,
 })

@@ -22,6 +22,14 @@
 - 页面私有逻辑如果不会被复用，优先保留在页面或页面私有组件中；只有当它显著降低组件复杂度或表达稳定业务概念时，再考虑抽成 composable。
 - composable 文件必须以 `use` 开头，返回响应式状态和语义化 action；对有业务约束的副作用补充简短注释。
 
+## 常量
+
+- 应用内共享常量放在 `src/const/`，按模块拆分，并由 `src/const/index.ts` 统一导出。
+- 常量只承载跨页面、跨组件、跨 store/domain 的稳定业务事实；单组件私有配置默认留在组件内部。
+- 面向持久化、接口、编号或国际化的常量需要同时考虑机器字段与展示字段，例如 `id`、`code`、`number`、多语言 `name`。
+- 关键业务常量需要测试兜底，至少校验数量、唯一性和关键默认值。
+- 更完整规则见 [常量管理规范](CONSTANTS.md)。
+
 ## 共享 TypeScript 配置
 
 - 单仓库内应用应通过 workspace package 使用共享配置：在 app 的 `devDependencies` 中添加 `"@strawberrybear/tsconfig": "workspace:*"`。

@@ -28,12 +28,14 @@ function pickRandom<T>(items: readonly T[]): T | undefined {
 
 /**
  * @description: 创建默认办理草稿
- * @description 只在用户主动开始办理时调用，称号和姓名保持空值等待用户填写。
+ * @description 只在用户主动开始办理时调用，姓名保持空值，称号随机预选一个方便首屏回显。
  * @param {LocaleCode} locale - 顶部语言当前值，同时作为证书语言
  * @return {CertificateDraft} 可直接写入 Dexie 的草稿
  */
 export function createDefaultDraft(locale: LocaleCode): CertificateDraft {
   const now = new Date().toISOString()
+  const title =
+    pickRandom(associationCatalogSeed.titleOptions) ?? associationCatalogSeed.titleOptions[0]
   const region = pickRandom(associationCatalogSeed.regions) ?? associationCatalogSeed.regions[0]
   const comment = pickRandom(associationCatalogSeed.comments) ?? associationCatalogSeed.comments[0]
   const avatar =
@@ -46,7 +48,7 @@ export function createDefaultDraft(locale: LocaleCode): CertificateDraft {
     id: nanoid(),
     stage: 'registration',
     stylistName: '',
-    titleId: null,
+    titleId: title?.id ?? null,
     certificateLocale: locale,
     regionId: region?.id ?? '',
     commentId: comment?.id ?? '',
@@ -79,6 +81,7 @@ export function normalizeDraft(
     ...defaultDraft,
     ...draft,
     certificateLocale: draft.certificateLocale ?? fallbackLocale,
+    titleId: draft.titleId ?? defaultDraft.titleId,
     regionId: draft.regionId ?? defaultDraft.regionId,
     commentId: draft.commentId ?? defaultDraft.commentId,
     avatarId: draft.avatarId ?? defaultDraft.avatarId,

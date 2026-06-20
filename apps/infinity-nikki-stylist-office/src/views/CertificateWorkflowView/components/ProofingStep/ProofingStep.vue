@@ -31,8 +31,8 @@ import type {
   TemplateTextPosition,
 } from '@/domain/draft/types'
 
-/** 校样页素材选择层当前处理的业务类型。 */
-type AssetPickerKind = 'avatar' | 'background'
+/** 校样页当前只开放头像选择；背景底层能力保留，页面暂不引用。 */
+type AssetPickerKind = 'avatar'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -81,16 +81,6 @@ const selectedAvatarName = computed(() => {
   return avatar ? resolveLocalizedText(avatar.name, draft.value?.certificateLocale ?? uiStore.uiLocale) : ''
 })
 
-/** 当前官方背景名称，校样阶段允许重新选择素材。 */
-const selectedBackgroundName = computed(() => {
-  const background = associationCatalogSeed.officialBackgrounds.find(
-    (item) => item.id === draft.value?.backgroundId
-  )
-  return background
-    ? resolveLocalizedText(background.name, draft.value?.certificateLocale ?? uiStore.uiLocale)
-    : ''
-})
-
 /** 素材选择层开关代理，关闭时清空当前类型。 */
 const isAssetPickerOpen = computed({
   get: () => activeAssetPicker.value !== null,
@@ -101,13 +91,13 @@ const isAssetPickerOpen = computed({
   },
 })
 
-/** 当前素材选择层需要高亮的草稿素材 ID。 */
+/** 当前头像选择层需要高亮的草稿素材 ID。 */
 const selectedAssetIdForPicker = computed(() => {
   if (!draft.value || !activeAssetPicker.value) {
     return ''
   }
 
-  return activeAssetPicker.value === 'avatar' ? draft.value.avatarId : draft.value.backgroundId
+  return draft.value.avatarId
 })
 
 /** 模板定位项目下拉项，标签来自模板语言包而不是 UI 语言包。 */
@@ -317,8 +307,8 @@ async function resetSelectedLayerPosition(): Promise<void> {
 }
 
 /**
- * @description: 打开头像或背景选择层
- * @description 校样阶段更换素材后，预览和草稿立即使用新素材 ID。
+ * @description: 打开头像选择层
+ * @description 校样阶段更换头像后，预览和草稿立即使用新素材 ID。
  * @param {AssetPickerKind} kind - 素材类型
  * @return {void} 无返回值
  */
@@ -327,27 +317,26 @@ function openAssetPicker(kind: AssetPickerKind): void {
 }
 
 /**
- * @description: 保存校样阶段的素材选择
- * @description 只更新当前素材字段，不影响已调整的模板文字定位。
- * @param {{ kind: AssetPickerKind; id: string }} payload - 选择结果
+ * @description: 保存校样阶段的头像选择
+ * @description 旧弹窗组件仍保留背景类型能力，这里只接受并保存头像选择。
+ * @param {{ kind: 'avatar' | 'background'; id: string }} payload - 选择结果
  * @return {void} 无返回值
  */
-function handleAssetSelect(payload: { kind: AssetPickerKind; id: string }): void {
-  const patch: ActiveDraftPatch =
-    payload.kind === 'avatar' ? { avatarId: payload.id } : { backgroundId: payload.id }
+function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string }): void {
+  if (payload.kind !== 'avatar') {
+    return
+  }
 
-  void saveDraftPatch(patch)
+  void saveDraftPatch({ avatarId: payload.id })
 }
 
 /**
- * @description: 进入自定义素材管理
+ * @description: 进入自定义头像管理
  * @description 管理页仍为骨架，路由切换不删除当前校样草稿。
- * @param {AssetPickerKind} kind - 素材类型
  * @return {void} 无返回值
  */
-function openAssetLibrary(kind: AssetPickerKind): void {
-  const routeName = kind === 'avatar' ? 'avatar-library' : 'background-library'
-  void router.push({ name: routeName, query: { returnTo: 'proofing' } })
+function openAssetLibrary(): void {
+  void router.push({ name: 'avatar-library', query: { returnTo: 'proofing' } })
 }
 
 /**
@@ -457,16 +446,6 @@ onMounted(() => {
               >
                 <span>{{ t('registration.avatar') }}</span>
                 <strong>{{ selectedAvatarName }}</strong>
-                <v-icon icon="mdi-chevron-right" size="20" />
-              </button>
-              <button
-                type="button"
-                class="proofing-asset-button"
-                data-sound="open"
-                @click="openAssetPicker('background')"
-              >
-                <span>{{ t('registration.background') }}</span>
-                <strong>{{ selectedBackgroundName }}</strong>
                 <v-icon icon="mdi-chevron-right" size="20" />
               </button>
             </div>

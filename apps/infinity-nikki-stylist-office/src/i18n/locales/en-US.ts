@@ -107,6 +107,10 @@ export default {
     president: 'President Seal',
     certificateNoPrefix: 'Certificate Number Prefix',
     selectedAsset: 'Selected',
+    titlePickerTitle: 'Choose Stylist Title',
+    titlePickerIntro:
+      'The title appears in the certificate rank area. One has been preselected for you, and you can change it here.',
+    titlePickerGroup: 'Association Certified Titles',
     avatarPickerTitle: 'Choose Avatar',
     backgroundPickerTitle: 'Choose Background',
     assetPickerIntro: 'Choose the asset for this certificate. Custom asset management is reserved.',

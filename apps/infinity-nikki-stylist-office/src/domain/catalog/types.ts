@@ -111,6 +111,8 @@ export interface TitleOption {
 export interface RegionOption {
   /** 稳定地区 ID */
   id: string
+  /** 三位数字地区编号，用于正式证书编号或后台排序 */
+  number: string
   /** 地区编号代码，例如 FLW */
   code: string
   /** 多语言地区名称 */

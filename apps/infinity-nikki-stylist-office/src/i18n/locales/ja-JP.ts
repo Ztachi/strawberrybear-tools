@@ -104,6 +104,10 @@ export default {
     president: '会長署名',
     certificateNoPrefix: '証書番号プレフィックス',
     selectedAsset: '選択中',
+    titlePickerTitle: 'スタイリスト称号を選択',
+    titlePickerIntro:
+      '称号は証書の等級欄に表示されます。ランダムに事前選択されていますが、ここで変更できます。',
+    titlePickerGroup: '協会認定称号',
     avatarPickerTitle: 'アバターを選択',
     backgroundPickerTitle: '背景を選択',
     assetPickerIntro: 'この証書で使用する素材を選択します。カスタム素材管理入口は予約済みです。',

@@ -6,9 +6,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import AssetPickerDialog from '@/components/AssetPickerDialog/AssetPickerDialog.vue'
 import BottomActionBar from '@/components/BottomActionBar/BottomActionBar.vue'
 import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
+import ProfileOptionSelector from './components/ProfileOptionSelector/ProfileOptionSelector.vue'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import {
   getActiveDraft,
@@ -16,14 +16,13 @@ import {
   type ActiveDraftPatch,
 } from '@/db/repositories/draftRepository'
 import { resolveLocalizedText } from '@/domain/catalog/text'
-import { getTemplateLocaleMessages } from '@/i18n/template'
-import { UI_LOCALE_OPTIONS } from '@/i18n'
 import { useDraftSessionStore } from '@/stores/draftSession'
 import { useUiStore } from '@/stores/ui'
 import type { CertificateDraft } from '@/domain/draft/types'
-
-/** 登记页素材选择层当前处理的业务类型。 */
-type AssetPickerKind = 'avatar' | 'background'
+import type {
+  AvatarPickerOption,
+  TitlePickerOption,
+} from './components/ProfileOptionSelector/types'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -38,29 +37,26 @@ const isLoading = ref(true)
 const isDraftMissing = ref(false)
 /** 资料确认层开关，确认层不改变路由。 */
 const isConfirming = ref(false)
-/** 当前打开的头像/背景选择层类型。 */
-const activeAssetPicker = ref<AssetPickerKind | null>(null)
-
-/** 当前证书语言下的模板固定文案，用于资料确认字段。 */
-const templateCopy = computed(() =>
-  getTemplateLocaleMessages(draft.value?.certificateLocale ?? uiStore.uiLocale)
-)
-
-/** 顶部语言当前显示名称。 */
-const currentLanguageLabel = computed(() => {
-  const option =
-    UI_LOCALE_OPTIONS.find((item) => item.value === uiStore.uiLocale) ?? UI_LOCALE_OPTIONS[0]
-  return t(option.labelKey)
-})
 
 /** 称号列表显示文案跟随当前草稿语言，缺失时由资料库工具回退。 */
-const titleItems = computed(() => {
+const titleItems = computed<TitlePickerOption[]>(() => {
   const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
 
   return associationCatalogSeed.titleOptions.map((option) => ({
-    ...option,
+    id: option.id,
+    symbol: option.symbol,
     displayName: resolveLocalizedText(option.name, locale),
     displayDescription: resolveLocalizedText(option.description, locale),
+  }))
+})
+
+/** 头像列表显示文案跟随当前草稿语言，真实图片接入前只提供占位头像。 */
+const avatarItems = computed<AvatarPickerOption[]>(() => {
+  const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
+
+  return associationCatalogSeed.officialAvatars.map((avatar) => ({
+    id: avatar.id,
+    displayName: resolveLocalizedText(avatar.name, locale),
   }))
 })
 
@@ -75,8 +71,8 @@ const regionItems = computed(() => {
 })
 
 /** 当前选中的称号，用于确认层和预览。 */
-const selectedTitle = computed(() =>
-  associationCatalogSeed.titleOptions.find((option) => option.id === draft.value?.titleId)
+const selectedTitle = computed(
+  () => titleItems.value.find((option) => option.id === draft.value?.titleId) ?? null
 )
 
 /** 当前选中的登记地区，用于确认层和编号前缀。 */
@@ -84,44 +80,9 @@ const selectedRegion = computed(() =>
   associationCatalogSeed.regions.find((region) => region.id === draft.value?.regionId)
 )
 
-/** 当前草稿固定的协会评语，切语言只切换同一 ID 的文案。 */
-const selectedComment = computed(() =>
-  associationCatalogSeed.comments.find((comment) => comment.id === draft.value?.commentId)
-)
-
 /** 当前官方头像名称，素材管理接入前先展示草稿默认选项。 */
 const selectedAvatarName = computed(() => {
-  const avatar = associationCatalogSeed.officialAvatars.find((item) => item.id === draft.value?.avatarId)
-  return avatar ? resolveLocalizedText(avatar.name, draft.value?.certificateLocale ?? uiStore.uiLocale) : ''
-})
-
-/** 当前官方背景名称，素材管理接入前先展示草稿默认选项。 */
-const selectedBackgroundName = computed(() => {
-  const background = associationCatalogSeed.officialBackgrounds.find(
-    (item) => item.id === draft.value?.backgroundId
-  )
-  return background
-    ? resolveLocalizedText(background.name, draft.value?.certificateLocale ?? uiStore.uiLocale)
-    : ''
-})
-
-/** 素材选择层开关代理，关闭时清空当前类型。 */
-const isAssetPickerOpen = computed({
-  get: () => activeAssetPicker.value !== null,
-  set: (value: boolean) => {
-    if (!value) {
-      activeAssetPicker.value = null
-    }
-  },
-})
-
-/** 当前素材选择层需要高亮的草稿素材 ID。 */
-const selectedAssetIdForPicker = computed(() => {
-  if (!draft.value || !activeAssetPicker.value) {
-    return ''
-  }
-
-  return activeAssetPicker.value === 'avatar' ? draft.value.avatarId : draft.value.backgroundId
+  return avatarItems.value.find((item) => item.id === draft.value?.avatarId)?.displayName ?? ''
 })
 
 /** 姓名输入代理，去掉换行并限制 14 个可见字符。 */
@@ -153,29 +114,16 @@ const confirmationRows = computed(() => {
     return []
   }
 
-  const titleName = selectedTitle.value
-    ? resolveLocalizedText(selectedTitle.value.name, draft.value.certificateLocale)
-    : ''
+  const titleName = selectedTitle.value?.displayName ?? ''
   const regionName = selectedRegion.value
     ? resolveLocalizedText(selectedRegion.value.name, draft.value.certificateLocale)
     : ''
-  const commentText = selectedComment.value
-    ? resolveLocalizedText(selectedComment.value.text, draft.value.certificateLocale)
-    : ''
-  const certificatePrefix = `MC-${selectedRegion.value?.code ?? '---'}-${
-    templateCopy.value.pendingCertificateNo
-  }`
 
   return [
     { label: t('registration.stylistName'), value: draft.value.stylistName.trim() },
     { label: t('registration.titleOption'), value: titleName },
     { label: t('registration.region'), value: regionName },
-    { label: t('common.language.label'), value: currentLanguageLabel.value },
     { label: t('registration.avatar'), value: selectedAvatarName.value },
-    { label: t('registration.background'), value: selectedBackgroundName.value },
-    { label: t('registration.comment'), value: commentText },
-    { label: t('registration.president'), value: templateCopy.value.presidentName },
-    { label: t('registration.certificateNoPrefix'), value: certificatePrefix },
   ]
 })
 
@@ -229,7 +177,7 @@ async function loadDraft(): Promise<void> {
 
 /**
  * @description: 选择搭配师称号
- * @description 称号是进入资料确认的必要条件，点击卡片后立即保存。
+ * @description 称号由统一选择器弹窗选中后立即保存。
  * @param {string} titleId - 称号 ID
  * @return {void} 无返回值
  */
@@ -238,37 +186,22 @@ function selectTitle(titleId: string): void {
 }
 
 /**
- * @description: 打开头像或背景选择层
- * @description 选择层覆盖在登记页上，不改变当前表单状态和滚动位置。
- * @param {AssetPickerKind} kind - 素材类型
+ * @description: 保存头像选择
+ * @description 背景代码仍保留在资料库和草稿结构中，当前页面流程暂不引用背景选择。
+ * @param {string} avatarId - 头像 ID
  * @return {void} 无返回值
  */
-function openAssetPicker(kind: AssetPickerKind): void {
-  activeAssetPicker.value = kind
+function selectAvatar(avatarId: string): void {
+  void saveDraftPatch({ avatarId })
 }
 
 /**
- * @description: 保存素材选择
- * @description 头像和背景是独立字段，更换其中一个不会影响称号、地区、评语或语言。
- * @param {{ kind: AssetPickerKind; id: string }} payload - 选择结果
- * @return {void} 无返回值
- */
-function handleAssetSelect(payload: { kind: AssetPickerKind; id: string }): void {
-  const patch: ActiveDraftPatch =
-    payload.kind === 'avatar' ? { avatarId: payload.id } : { backgroundId: payload.id }
-
-  void saveDraftPatch(patch)
-}
-
-/**
- * @description: 进入自定义素材管理
+ * @description: 进入自定义头像管理
  * @description 当前管理页仍是骨架，但从登记流程进入时保留已有草稿。
- * @param {AssetPickerKind} kind - 素材类型
  * @return {void} 无返回值
  */
-function openAssetLibrary(kind: AssetPickerKind): void {
-  const routeName = kind === 'avatar' ? 'avatar-library' : 'background-library'
-  void router.push({ name: routeName, query: { returnTo: 'registration' } })
+function openAvatarLibrary(): void {
+  void router.push({ name: 'avatar-library', query: { returnTo: 'registration' } })
 }
 
 /**
@@ -336,68 +269,52 @@ onMounted(() => {
       <section>
         <v-card variant="flat" class="registration-card">
           <v-card-text class="registration-card__body">
-            <v-text-field
-              v-model="stylistName"
-              :label="t('registration.stylistName')"
-              :hint="t('registration.stylistNameHint')"
-              maxlength="14"
-              counter="14"
-              variant="outlined"
-              color="primary"
-            />
+            <div class="registration-basic-grid">
+              <v-text-field
+                v-model="stylistName"
+                :label="t('registration.stylistName')"
+                :hint="t('registration.stylistNameHint')"
+                maxlength="14"
+                counter="14"
+                variant="outlined"
+                color="primary"
+              />
 
-            <v-select
-              v-model="selectedRegionId"
-              :items="regionItems"
-              :label="t('registration.region')"
-              variant="outlined"
-              color="primary"
-            />
+              <v-select
+                v-model="selectedRegionId"
+                :items="regionItems"
+                :label="t('registration.region')"
+                variant="outlined"
+                color="primary"
+              />
+            </div>
 
-            <section class="registration-section" :aria-label="t('registration.titleOption')">
-              <div class="registration-section__header">
-                <h2>{{ t('registration.titleOption') }}</h2>
-                <span v-if="!draft.titleId">{{ t('registration.chooseTitle') }}</span>
-              </div>
-
-              <div class="title-grid">
-                <button
-                  v-for="option in titleItems"
-                  :key="option.id"
-                  type="button"
-                  :class="['title-option', { 'title-option--active': option.id === draft.titleId }]"
-                  :aria-pressed="option.id === draft.titleId"
-                  data-sound="select"
-                  @click="selectTitle(option.id)"
-                >
-                  <span class="title-option__symbol">{{ option.symbol }}</span>
-                  <strong>{{ option.displayName }}</strong>
-                  <span>{{ option.displayDescription }}</span>
-                </button>
-              </div>
-            </section>
-
-            <div class="asset-summary">
-              <button
-                type="button"
-                class="asset-summary__item"
-                data-sound="open"
-                @click="openAssetPicker('avatar')"
-              >
-                <span>{{ t('registration.avatar') }}</span>
-                <strong>{{ selectedAvatarName }}</strong>
-                <v-icon icon="mdi-chevron-right" size="20" />
-              </button>
-              <button
-                type="button"
-                class="asset-summary__item"
-                data-sound="open"
-                @click="openAssetPicker('background')"
-              >
-                <span>{{ t('registration.background') }}</span>
-                <strong>{{ selectedBackgroundName }}</strong>
-                <v-icon icon="mdi-chevron-right" size="20" />
-              </button>
+            <div class="registration-selector-grid">
+              <ProfileOptionSelector
+                type="avatar"
+                :label="t('registration.avatar')"
+                :dialog-title="t('registration.avatarPickerTitle')"
+                :dialog-intro="t('registration.assetPickerIntro')"
+                :empty-text="t('registration.noCustomAssets')"
+                :manage-label="t('registration.manageCustomAvatar')"
+                :official-label="t('registration.officialAsset')"
+                :avatar-options="avatarItems"
+                :selected-avatar-name="selectedAvatarName"
+                :selected-id="draft.avatarId"
+                @manage="openAvatarLibrary"
+                @select="selectAvatar"
+              />
+              <ProfileOptionSelector
+                type="title"
+                :label="t('registration.titleOption')"
+                :dialog-title="t('registration.titlePickerTitle')"
+                :dialog-intro="t('registration.titlePickerIntro')"
+                :group-label="t('registration.titlePickerGroup')"
+                :selected-id="draft.titleId ?? ''"
+                :selected-title="selectedTitle"
+                :title-options="titleItems"
+                @select="selectTitle"
+              />
             </div>
 
             <v-btn
@@ -422,19 +339,13 @@ onMounted(() => {
       @primary="openConfirmation"
     />
 
-    <AssetPickerDialog
-      v-if="draft"
-      v-model="isAssetPickerOpen"
-      :kind="activeAssetPicker"
-      :locale="draft.certificateLocale"
-      :selected-id="selectedAssetIdForPicker"
-      @select="handleAssetSelect"
-      @manage="openAssetLibrary"
-    />
-
-    <v-dialog v-model="isConfirming" fullscreen scrollable>
+    <v-dialog v-model="isConfirming" max-width="620" scrollable>
       <v-card class="confirmation-dialog">
-        <v-toolbar color="surface">
+        <div class="confirmation-dialog__header">
+          <div>
+            <h2>{{ t('registration.confirmTitle') }}</h2>
+            <p>{{ t('registration.confirmIntro') }}</p>
+          </div>
           <v-btn
             :aria-label="t('common.action.cancel')"
             icon="mdi-close"
@@ -442,14 +353,9 @@ onMounted(() => {
             data-sound="back"
             @click="isConfirming = false"
           />
-          <v-toolbar-title>{{ t('registration.confirmTitle') }}</v-toolbar-title>
-        </v-toolbar>
+        </div>
 
         <v-card-text class="confirmation-dialog__body">
-          <p class="confirmation-dialog__intro">
-            {{ t('registration.confirmIntro') }}
-          </p>
-
           <div v-if="draft">
             <dl class="confirmation-list">
               <div v-for="row in confirmationRows" :key="row.label">
@@ -502,170 +408,50 @@ onMounted(() => {
   justify-self: start;
 }
 
-.registration-section {
+.registration-basic-grid {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.registration-section__header {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.registration-section__header h2 {
-  margin: 0;
-  color: var(--color-foreground);
-  font-size: 16px;
-  font-weight: 720;
-  letter-spacing: 0;
-}
-
-.registration-section__header span {
-  color: var(--color-primary-active);
-  font-size: 13px;
-}
-
-.title-grid {
+.registration-selector-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-}
-
-.title-option {
-  --title-accent: var(--color-primary);
-  --title-tint: rgba(239, 95, 143, 0.08);
-
-  display: grid;
-  min-height: 128px;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--border-primary-20);
-  border-radius: 8px;
-  color: var(--color-foreground);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), var(--title-tint));
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
-    transform 0.18s ease;
-}
-
-.title-option:nth-child(2n) {
-  --title-accent: var(--color-gold);
-  --title-tint: rgba(255, 214, 109, 0.16);
-}
-
-.title-option:nth-child(3n) {
-  --title-accent: var(--color-blue);
-  --title-tint: rgba(85, 135, 232, 0.12);
-}
-
-.title-option:nth-child(4n) {
-  --title-accent: var(--color-mint);
-  --title-tint: rgba(85, 188, 169, 0.13);
-}
-
-.title-option:nth-child(5n) {
-  --title-accent: var(--color-lavender);
-  --title-tint: rgba(155, 123, 255, 0.12);
-}
-
-.title-option:hover {
-  transform: translateY(-1px);
-}
-
-.title-option--active {
-  border-color: var(--title-accent);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), var(--title-tint));
-  box-shadow: 0 10px 22px rgba(239, 95, 143, 0.16);
-}
-
-.title-option__symbol {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  color: #ffffff;
-  background: var(--title-accent);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.title-option span:last-child {
-  color: var(--color-muted-dark);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.asset-summary {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.asset-summary__item {
-  display: grid;
-  width: 100%;
-  gap: 4px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 12px;
-  border: 1px solid var(--border-primary-20);
-  border-radius: 8px;
-  color: var(--color-foreground);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 234, 242, 0.64));
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease;
-}
-
-.asset-summary__item:hover {
-  border-color: var(--color-primary-active);
-  background: var(--bg-primary-10);
-}
-
-.asset-summary__item span {
-  grid-column: 1 / 2;
-  color: var(--color-muted-dark);
-  font-size: 12px;
-}
-
-.asset-summary__item strong {
-  grid-column: 1 / 2;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-foreground);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.asset-summary__item .v-icon {
-  grid-column: 2 / 3;
-  grid-row: 1 / 3;
-  align-self: center;
-  color: var(--color-primary-active);
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .confirmation-dialog {
+  overflow: hidden;
+  border: 1px solid rgba(239, 95, 143, 0.24);
+  border-radius: 26px;
   background: #fff7fa;
 }
 
-.confirmation-dialog__body {
-  width: min(100%, 1180px);
-  margin: 0 auto;
+.confirmation-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 24px 10px;
 }
 
-.confirmation-dialog__intro {
-  margin: 0 0 18px;
+.confirmation-dialog__header h2 {
+  margin: 0;
+  color: var(--color-foreground);
+  font-size: 20px;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+
+.confirmation-dialog__header p {
+  margin: 6px 0 0;
   color: var(--color-muted-dark);
+  font-size: 13px;
   line-height: 1.7;
+}
+
+.confirmation-dialog__body {
+  padding: 10px 24px 18px;
 }
 
 .confirmation-list {
@@ -696,7 +482,7 @@ onMounted(() => {
 .confirmation-dialog__actions {
   justify-content: flex-end;
   gap: 10px;
-  padding: 12px max(18px, calc((100% - 1180px) / 2)) calc(12px + var(--safe-bottom));
+  padding: 14px 24px calc(16px + var(--safe-bottom));
   border-top: 1px solid var(--border-primary-20);
   background: rgba(255, 249, 252, 0.96);
 }
@@ -706,24 +492,18 @@ onMounted(() => {
     display: none;
   }
 
-  .title-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .registration-basic-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .title-option {
-    min-height: 142px;
-    padding: 12px;
+  .confirmation-dialog__header {
+    padding-right: 18px;
+    padding-left: 18px;
   }
 
-  .title-option span:last-child {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .registration-section__header {
-    display: grid;
+  .confirmation-dialog__body {
+    padding-right: 18px;
+    padding-left: 18px;
   }
 
   .confirmation-dialog__actions {
