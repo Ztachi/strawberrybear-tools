@@ -1,5 +1,11 @@
 # @strawberrybear/infinity-nikki-stylist-office
 
+## 1.0.3
+
+### Patch Changes
+
+- Add a header action that returns visitors to the Infinity Nikki certificate tool page on the main site.
+
 ## 1.0.2
 
 ### Patch Changes

@@ -10,6 +10,7 @@ import LanguageSwitcher from './components/LanguageSwitcher/LanguageSwitcher.vue
 
 const { t } = useI18n()
 const router = useRouter()
+const mainSiteUrl = 'https://ztachi.com/tools/infinity-nikki-cert'
 const headerAvatarSrc = `${import.meta.env.BASE_URL || '/'}ui/nikki/header-avatar.png`
 
 /**
@@ -65,6 +66,21 @@ function openProfile(): void {
 
     <template #append>
       <div class="flex min-w-0 items-center gap-1">
+        <v-btn
+          :href="mainSiteUrl"
+          :aria-label="t('common.action.backMainSite')"
+          prepend-icon="mdi-home-export-outline"
+          variant="flat"
+          rounded="lg"
+          size="small"
+          color="primary"
+          class="app-header__main-site-button"
+          data-sound="nav"
+        >
+          <span class="app-header__main-site-label">
+            {{ t('common.action.backMainSite') }}
+          </span>
+        </v-btn>
         <LanguageSwitcher />
         <v-btn
           :aria-label="t('common.action.openProfile')"
@@ -103,6 +119,17 @@ function openProfile(): void {
   border-radius: 999px;
 }
 
+.app-header__main-site-button {
+  color: #ffffff !important;
+}
+
+.app-header__main-site-button :deep(.v-btn__content),
+.app-header__main-site-button :deep(.v-btn__prepend),
+.app-header__main-site-button :deep(.v-btn__append),
+.app-header__main-site-button :deep(.v-icon) {
+  color: #ffffff !important;
+}
+
 .app-header__profile-avatar {
   overflow: hidden;
   border: 1px solid rgba(239, 95, 143, 0.24);
@@ -115,5 +142,16 @@ function openProfile(): void {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+@media (max-width: 640px) {
+  .app-header__main-site-button {
+    min-width: 34px;
+    padding-inline: 8px;
+  }
+
+  .app-header__main-site-label {
+    display: none;
+  }
 }
 </style>
