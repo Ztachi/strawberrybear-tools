@@ -3,15 +3,16 @@
  * @description: RegistrationStep - 身份登记步骤
  * @description 读取唯一办理草稿，完成姓名、称号和地区登记，并提供资料确认层。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AssetPickerDialog from '@/components/AssetPickerDialog/AssetPickerDialog.vue'
 import BottomActionBar from '@/components/BottomActionBar/BottomActionBar.vue'
 import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
+import WorkflowEmptyState from '../WorkflowEmptyState/WorkflowEmptyState.vue'
 import ProfileOptionSelector from './components/ProfileOptionSelector/ProfileOptionSelector.vue'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
-import { getCustomAsset } from '@/db/repositories/customAssetRepository'
+import { resolveAvatarDisplaySource } from '@/db/repositories/avatarDisplayRepository'
 import {
   getActiveDraft,
   updateActiveDraft,
@@ -19,7 +20,9 @@ import {
 } from '@/db/repositories/draftRepository'
 import { resolveLocalizedText } from '@/domain/catalog/text'
 import { useDraftSessionStore } from '@/stores/draftSession'
+import { useNavigationIntentStore } from '@/stores/navigationIntent'
 import { useUiStore } from '@/stores/ui'
+import { useWorkflowRecoveryActions } from '../../composables/useWorkflowRecoveryActions'
 import type { CertificateDraft } from '@/domain/draft/types'
 import type { TitlePickerOption } from './components/ProfileOptionSelector/types'
 
@@ -28,6 +31,8 @@ const route = useRoute()
 const router = useRouter()
 const uiStore = useUiStore()
 const draftSession = useDraftSessionStore()
+const navigationIntent = useNavigationIntentStore()
+const { restartRegistration, openRegistrationHistory } = useWorkflowRecoveryActions()
 
 /** 当前登记页绑定的办理草稿，完整业务字段来自 Dexie。 */
 const draft = ref<CertificateDraft | null>(null)
@@ -41,6 +46,10 @@ const isConfirming = ref(false)
 const isAvatarPickerOpen = ref(false)
 /** 当前选中自定义头像名称，官方头像仍从资料库解析。 */
 const selectedCustomAvatarName = ref('')
+/** 当前头像预览图。 */
+const selectedAvatarImageSrc = ref('')
+/** 当前头像预览 URL 清理函数。 */
+let cleanupSelectedAvatarImage: () => void = () => {}
 
 /** 称号列表显示文案跟随当前草稿语言，缺失时由资料库工具回退。 */
 const titleItems = computed<TitlePickerOption[]>(() => {
@@ -126,7 +135,6 @@ const confirmationRows = computed(() => {
     { label: t('registration.stylistName'), value: draft.value.stylistName.trim() },
     { label: t('registration.titleOption'), value: titleName },
     { label: t('registration.region'), value: regionName },
-    { label: t('registration.avatar'), value: selectedAvatarName.value },
   ]
 })
 
@@ -177,8 +185,43 @@ async function loadDraft(): Promise<void> {
     void updateActiveDraft({ certificateLocale: uiStore.uiLocale })
   }
 
-  if (route.query.avatarPicker === '1') {
+  if (navigationIntent.consumeAvatarPicker('registration')) {
     isAvatarPickerOpen.value = true
+  } else if (route.query.avatarPicker === '1') {
+    isAvatarPickerOpen.value = true
+    void router.replace({ name: 'registration' })
+  }
+}
+
+/**
+ * @description: 清理头像预览 URL
+ * @return {void} 无返回值
+ */
+function cleanupAvatarPreview(): void {
+  cleanupSelectedAvatarImage()
+  cleanupSelectedAvatarImage = () => {}
+  selectedAvatarImageSrc.value = ''
+}
+
+/**
+ * @description: 解析当前头像预览
+ * @description 外层选择入口和资料确认层都直接展示实际头像图片。
+ * @return {Promise<void>} 无返回值
+ */
+async function resolveSelectedAvatarPreview(): Promise<void> {
+  cleanupAvatarPreview()
+  selectedCustomAvatarName.value = ''
+
+  if (!draft.value?.avatarId) {
+    return
+  }
+
+  const source = await resolveAvatarDisplaySource(draft.value.avatarId, draft.value.certificateLocale)
+  selectedAvatarImageSrc.value = source.imageSrc
+  cleanupSelectedAvatarImage = source.cleanup
+
+  if (source.isCustom) {
+    selectedCustomAvatarName.value = source.name
   }
 }
 
@@ -222,14 +265,11 @@ function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string 
  * @return {void} 无返回值
  */
 function openAvatarLibrary(): void {
+  navigationIntent.requestCustomAssetFlow('registration', 'avatar', draft.value?.templateId)
   void router.push({
     name: 'profile',
     query: {
       tab: 'customAssets',
-      assetKind: 'avatar',
-      returnTo: 'registration',
-      reopen: 'avatarPicker',
-      templateId: draft.value?.templateId,
     },
   })
 }
@@ -283,27 +323,16 @@ onMounted(() => {
 })
 
 watch(
-  () => draft.value?.avatarId,
-  async (avatarId) => {
-    selectedCustomAvatarName.value = ''
-
-    if (!avatarId) {
-      return
-    }
-
-    const isOfficialAvatar = associationCatalogSeed.officialAvatars.some(
-      (avatar) => avatar.id === avatarId
-    )
-
-    if (isOfficialAvatar) {
-      return
-    }
-
-    selectedCustomAvatarName.value =
-      (await getCustomAsset(avatarId))?.name ?? t('assets.customAvatarFallbackName')
+  [() => draft.value?.avatarId, () => draft.value?.certificateLocale],
+  () => {
+    void resolveSelectedAvatarPreview()
   },
   { immediate: true }
 )
+
+onBeforeUnmount(() => {
+  cleanupAvatarPreview()
+})
 </script>
 
 <template>
@@ -314,9 +343,13 @@ watch(
   >
     <v-progress-linear v-if="isLoading" indeterminate color="primary" rounded />
 
-    <v-alert v-else-if="isDraftMissing" type="info" variant="tonal">
-      {{ t('registration.draftMissing') }}
-    </v-alert>
+    <WorkflowEmptyState
+      v-else-if="isDraftMissing"
+      :title="t('workflow.noActiveDraftTitle')"
+      :description="t('registration.draftMissing')"
+      @restart="restartRegistration"
+      @history="openRegistrationHistory"
+    />
 
     <div v-else-if="draft" class="registration-layout">
       <section>
@@ -354,7 +387,13 @@ watch(
                   @click="isAvatarPickerOpen = true"
                 >
                   <v-avatar color="primary" variant="tonal" size="48">
-                    <v-icon icon="mdi-account-circle-outline" size="30" />
+                    <img
+                      v-if="selectedAvatarImageSrc"
+                      :src="selectedAvatarImageSrc"
+                      alt=""
+                      class="registration-avatar-image"
+                    />
+                    <v-icon v-else icon="mdi-account-circle-outline" size="30" />
                   </v-avatar>
                   <span class="grid min-w-0 gap-1">
                     <strong class="truncate text-[16px] font-[820] leading-tight">
@@ -399,6 +438,7 @@ watch(
     </div>
 
     <BottomActionBar
+      v-if="draft && !isDraftMissing"
       :primary-label="t('registration.confirm')"
       :primary-disabled="!canConfirm"
       @primary="openConfirmation"
@@ -422,6 +462,16 @@ watch(
 
         <v-card-text class="confirmation-dialog__body">
           <div v-if="draft">
+            <div class="confirmation-avatar">
+              <v-avatar color="primary" variant="tonal" size="64">
+                <img v-if="selectedAvatarImageSrc" :src="selectedAvatarImageSrc" alt="" />
+                <v-icon v-else icon="mdi-account-circle-outline" size="34" />
+              </v-avatar>
+              <div class="min-w-0">
+                <strong>{{ selectedAvatarName }}</strong>
+                <small>{{ t('registration.avatar') }}</small>
+              </div>
+            </div>
             <dl class="confirmation-list">
               <div v-for="row in confirmationRows" :key="row.label">
                 <dt>{{ row.label }}</dt>
@@ -527,6 +577,44 @@ watch(
 
 .confirmation-dialog__body {
   padding: 10px 24px 18px;
+}
+
+.registration-avatar-image,
+.confirmation-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.confirmation-avatar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(239, 95, 143, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.confirmation-avatar strong,
+.confirmation-avatar small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirmation-avatar strong {
+  color: var(--color-foreground);
+  font-size: 16px;
+  font-weight: 820;
+}
+
+.confirmation-avatar small {
+  color: var(--color-muted-dark);
+  font-size: 12px;
 }
 
 .confirmation-list {

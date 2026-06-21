@@ -8,7 +8,9 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AssetPickerDialog from '@/components/AssetPickerDialog/AssetPickerDialog.vue'
 import BottomActionBar from '@/components/BottomActionBar/BottomActionBar.vue'
+import PickerDialogFrame from '@/components/PickerDialogFrame/PickerDialogFrame.vue'
 import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
+import WorkflowEmptyState from '../WorkflowEmptyState/WorkflowEmptyState.vue'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import { getCustomAsset } from '@/db/repositories/customAssetRepository'
 import {
@@ -25,7 +27,9 @@ import {
 } from '@/domain/template/registry'
 import { getTemplateLocaleMessages } from '@/i18n/template'
 import { useDraftSessionStore } from '@/stores/draftSession'
+import { useNavigationIntentStore } from '@/stores/navigationIntent'
 import { useUiStore } from '@/stores/ui'
+import { useWorkflowRecoveryActions } from '../../composables/useWorkflowRecoveryActions'
 import CertificateProofCanvas from './components/CertificateProofCanvas/CertificateProofCanvas.vue'
 import TitlePickerBody from '../RegistrationStep/components/ProfileOptionSelector/components/TitlePickerBody/TitlePickerBody.vue'
 import type { CertificateDraft } from '@/domain/draft/types'
@@ -40,6 +44,8 @@ const route = useRoute()
 const router = useRouter()
 const uiStore = useUiStore()
 const draftSession = useDraftSessionStore()
+const navigationIntent = useNavigationIntentStore()
+const { restartRegistration, openRegistrationHistory } = useWorkflowRecoveryActions()
 
 /** 当前校样页绑定的办理草稿。 */
 const draft = ref<CertificateDraft | null>(null)
@@ -216,8 +222,11 @@ async function loadDraft(): Promise<void> {
     void updateActiveDraft({ certificateLocale: uiStore.uiLocale })
   }
 
-  if (route.query.avatarPicker === '1') {
+  if (navigationIntent.consumeAvatarPicker('proofing')) {
     isAvatarPickerOpen.value = true
+  } else if (route.query.avatarPicker === '1') {
+    isAvatarPickerOpen.value = true
+    void router.replace({ name: 'proofing' })
   }
 }
 
@@ -356,14 +365,11 @@ function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string 
  * @return {void} 无返回值
  */
 function openAssetLibrary(): void {
+  navigationIntent.requestCustomAssetFlow('proofing', 'avatar', draft.value?.templateId)
   void router.push({
     name: 'profile',
     query: {
       tab: 'customAssets',
-      assetKind: 'avatar',
-      returnTo: 'proofing',
-      reopen: 'avatarPicker',
-      templateId: draft.value?.templateId,
     },
   })
 }
@@ -432,9 +438,13 @@ onBeforeUnmount(() => {
       rounded
     />
 
-    <v-alert v-else-if="isDraftMissing" type="info" variant="tonal">
-      {{ t('registration.draftMissing') }}
-    </v-alert>
+    <WorkflowEmptyState
+      v-else-if="isDraftMissing"
+      :title="t('workflow.noActiveDraftTitle')"
+      :description="t('proofing.noDraftDescription')"
+      @restart="restartRegistration"
+      @history="openRegistrationHistory"
+    />
 
     <div v-else-if="draft && templateManifest" class="grid gap-4">
       <section class="grid gap-3">
@@ -471,6 +481,7 @@ onBeforeUnmount(() => {
     </div>
 
     <BottomActionBar
+      v-if="draft && templateManifest && !isDraftMissing"
       :primary-label="t('proofing.apply')"
       :secondary-label="t('proofing.backRegistration')"
       :primary-disabled="!draft || !templateManifest"
@@ -478,92 +489,72 @@ onBeforeUnmount(() => {
       @secondary="backToRegistration"
     />
 
-    <v-dialog v-model="isNameDialogOpen" max-width="520">
-      <v-card class="rounded-[22px] border border-[#ef5f8f]/25 bg-[#fff9fc]">
-        <v-card-title class="text-[20px] font-[820] text-[var(--color-foreground)]">
-          {{ t('proofing.editNameTitle') }}
-        </v-card-title>
-        <v-card-subtitle class="whitespace-normal text-[var(--color-muted-dark)]">
-          {{ t('proofing.editNameIntro') }}
-        </v-card-subtitle>
-        <v-card-text>
-          <v-text-field
-            v-model="draftNameInput"
-            :label="t('proofing.nameInputLabel')"
-            maxlength="14"
-            counter="14"
-            variant="outlined"
+    <PickerDialogFrame
+      v-model="isNameDialogOpen"
+      :title="t('proofing.editNameTitle')"
+      :intro="t('proofing.editNameIntro')"
+      :max-width="520"
+    >
+      <v-text-field
+        v-model="draftNameInput"
+        :label="t('proofing.nameInputLabel')"
+        maxlength="14"
+        counter="14"
+        variant="outlined"
+        color="primary"
+        @keyup.enter="saveName"
+      />
+
+      <template #actions>
+        <v-btn variant="text" data-sound="back" @click="isNameDialogOpen = false">
+          {{ t('common.action.cancel') }}
+        </v-btn>
+        <v-btn color="primary" variant="flat" data-sound="primary" @click="saveName">
+          {{ t('common.action.confirm') }}
+        </v-btn>
+      </template>
+    </PickerDialogFrame>
+
+    <PickerDialogFrame
+      v-model="isTitleDialogOpen"
+      :title="t('registration.titlePickerTitle')"
+      :intro="t('registration.titlePickerIntro')"
+    >
+      <TitlePickerBody :items="titleItems" :selected-id="selectedTitleId" @select="selectTitle" />
+    </PickerDialogFrame>
+
+    <PickerDialogFrame
+      v-model="isRegionDialogOpen"
+      :title="t('proofing.chooseRegionTitle')"
+      :intro="t('proofing.chooseRegionIntro')"
+    >
+      <div class="grid gap-2">
+        <button
+          v-for="region in regionItems"
+          :key="region.id"
+          type="button"
+          :class="[
+            'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] border bg-white/75 px-3 py-2 text-left text-[var(--color-foreground)] transition hover:border-[#ef5f8f]/55 hover:bg-[#fff4f8]',
+            region.id === selectedRegionId ? 'border-[#ef5f8f]' : 'border-[#ef5f8f]/20',
+          ]"
+          data-sound="select"
+          @click="selectRegion(region.id)"
+        >
+          <span class="grid min-w-0 gap-1">
+            <strong class="truncate text-[15px] font-[780]">{{ region.displayName }}</strong>
+            <small class="text-[12px] text-[var(--color-muted-dark)]">
+              MC-{{ region.code }}-{{ templateCopy.pendingCertificateNo }}
+            </small>
+          </span>
+          <v-icon
+            v-if="region.id === selectedRegionId"
+            icon="mdi-check-circle"
             color="primary"
-            @keyup.enter="saveName"
+            size="22"
           />
-        </v-card-text>
-        <v-card-actions class="justify-end gap-2">
-          <v-btn variant="text" data-sound="back" @click="isNameDialogOpen = false">
-            {{ t('common.action.cancel') }}
-          </v-btn>
-          <v-btn color="primary" variant="flat" data-sound="primary" @click="saveName">
-            {{ t('common.action.confirm') }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <v-dialog v-model="isTitleDialogOpen" max-width="620" scrollable>
-      <v-card class="rounded-[24px] border border-[#ef5f8f]/25 bg-[#fff9fc]">
-        <v-card-title class="text-[20px] font-[820] text-[var(--color-foreground)]">
-          {{ t('registration.titlePickerTitle') }}
-        </v-card-title>
-        <v-card-subtitle class="whitespace-normal text-[var(--color-muted-dark)]">
-          {{ t('registration.titlePickerIntro') }}
-        </v-card-subtitle>
-        <v-card-text>
-          <TitlePickerBody
-            :items="titleItems"
-            :selected-id="selectedTitleId"
-            @select="selectTitle"
-          />
-        </v-card-text>
-      </v-card>
-    </v-dialog>
-
-    <v-dialog v-model="isRegionDialogOpen" max-width="620" scrollable>
-      <v-card class="rounded-[24px] border border-[#ef5f8f]/25 bg-[#fff9fc]">
-        <v-card-title class="text-[20px] font-[820] text-[var(--color-foreground)]">
-          {{ t('proofing.chooseRegionTitle') }}
-        </v-card-title>
-        <v-card-subtitle class="whitespace-normal text-[var(--color-muted-dark)]">
-          {{ t('proofing.chooseRegionIntro') }}
-        </v-card-subtitle>
-        <v-card-text>
-          <div class="grid gap-2">
-            <button
-              v-for="region in regionItems"
-              :key="region.id"
-              type="button"
-              :class="[
-                'grid min-h-[58px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] border bg-white/75 px-3 py-2 text-left text-[var(--color-foreground)] transition hover:border-[#ef5f8f]/55 hover:bg-[#fff4f8]',
-                region.id === selectedRegionId ? 'border-[#ef5f8f]' : 'border-[#ef5f8f]/20',
-              ]"
-              data-sound="select"
-              @click="selectRegion(region.id)"
-            >
-              <span class="grid min-w-0 gap-1">
-                <strong class="truncate text-[15px] font-[780]">{{ region.displayName }}</strong>
-                <small class="text-[12px] text-[var(--color-muted-dark)]">
-                  MC-{{ region.code }}-{{ templateCopy.pendingCertificateNo }}
-                </small>
-              </span>
-              <v-icon
-                v-if="region.id === selectedRegionId"
-                icon="mdi-check-circle"
-                color="primary"
-                size="22"
-              />
-            </button>
-          </div>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+        </button>
+      </div>
+    </PickerDialogFrame>
 
     <AssetPickerDialog
       v-if="draft"

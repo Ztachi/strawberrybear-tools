@@ -84,7 +84,13 @@ async function updateScale(): Promise<void> {
 }
 
 watch(
-  () => [props.text, props.maxFontSize, props.minScale, props.lineHeight, props.fitSafety],
+  [
+    () => props.text,
+    () => props.maxFontSize,
+    () => props.minScale,
+    () => props.lineHeight,
+    () => props.fitSafety,
+  ],
   () => {
     void updateScale()
   }

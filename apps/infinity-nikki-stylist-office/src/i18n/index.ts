@@ -29,6 +29,20 @@ export const UI_LOCALE_OPTIONS: Array<{
   { value: 'ja-JP', labelKey: 'common.language.jaJP', icon: 'mdi-syllabary-hiragana' },
 ]
 
+/** 浏览器语言前缀到 UI 语言的映射。 */
+const BROWSER_LOCALE_MAP: Record<string, LocaleCode> = {
+  zh: 'zh-CN',
+  'zh-cn': 'zh-CN',
+  'zh-hans': 'zh-CN',
+  'zh-sg': 'zh-CN',
+  'zh-tw': 'zh-TW',
+  'zh-hant': 'zh-TW',
+  'zh-hk': 'zh-TW',
+  'zh-mo': 'zh-TW',
+  en: 'en-US',
+  ja: 'ja-JP',
+}
+
 /** Vue I18n 实例，legacy=false 便于组合式 API 使用。 */
 export const i18n = createI18n({
   legacy: false,
@@ -50,4 +64,30 @@ export const i18n = createI18n({
  */
 export function setUiLocale(locale: LocaleCode): void {
   i18n.global.locale.value = locale
+}
+
+/**
+ * @description: 根据浏览器语言推断初始 UI 语言
+ * @description 只用于首次访问；用户手动切换后以本地偏好为准，英语作为非中日语言兜底。
+ * @param {readonly string[]} languages - navigator.languages
+ * @return {LocaleCode} 应用支持的语言
+ */
+export function detectBrowserUiLocale(languages: readonly string[]): LocaleCode {
+  for (const language of languages) {
+    const normalizedLanguage = language.toLowerCase()
+    const exactLocale = BROWSER_LOCALE_MAP[normalizedLanguage]
+
+    if (exactLocale) {
+      return exactLocale
+    }
+
+    const primarySubtag = normalizedLanguage.split('-')[0]
+    const primaryLocale = BROWSER_LOCALE_MAP[primarySubtag]
+
+    if (primaryLocale) {
+      return primaryLocale
+    }
+  }
+
+  return 'en-US'
 }

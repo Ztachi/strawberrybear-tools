@@ -186,7 +186,7 @@ function openCustomManager(): void {
 }
 
 watch(
-  () => [props.modelValue, props.kind] as const,
+  [() => props.modelValue, () => props.kind],
   ([isOpen]) => {
     if (isOpen) {
       void loadCustomAssets()

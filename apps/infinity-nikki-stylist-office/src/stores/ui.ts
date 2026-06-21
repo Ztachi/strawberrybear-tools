@@ -9,14 +9,14 @@ import { DEFAULT_UI_LOCALE } from '@/i18n'
 import type { LocaleCode } from '@/domain/catalog/types'
 
 /** 个人中心支持的主分区。 */
-export type ProfileTab = 'activeDraft' | 'certificates' | 'customAssets' | 'localData' | 'catalog'
+export type ProfileTab = 'certificates' | 'customAssets' | 'localData' | 'catalog'
 
 export const useUiStore = defineStore('ui', {
   state: () => ({
     /** 顶部菜单控制的统一语言，同时驱动 UI 文案和模板文案。 */
     uiLocale: DEFAULT_UI_LOCALE as LocaleCode,
     /** 个人中心最近打开的 tab。 */
-    profileTab: 'activeDraft' as ProfileTab,
+    profileTab: 'certificates' as ProfileTab,
   }),
   actions: {
     /**

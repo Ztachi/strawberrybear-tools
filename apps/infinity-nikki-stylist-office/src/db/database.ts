@@ -84,6 +84,16 @@ class StylistOfficeDatabase extends Dexie {
       certificateImages: '&id, certificateId, kind',
       settings: '&key',
     })
+
+    // v3 扩展已签发证书快照字段；索引保持不变，旧正本可继续读取。
+    this.version(3).stores({
+      activeDraft: '&id, stage, updatedAt, catalogVersion',
+      issuedCertificates: '&id, certificateNo, issuedAt, catalogVersion',
+      customAssets: '&id, kind, sha256, createdAt',
+      catalogVersions: '&catalogVersion, cachedAt',
+      certificateImages: '&id, certificateId, kind',
+      settings: '&key',
+    })
   }
 }
 

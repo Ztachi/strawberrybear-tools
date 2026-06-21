@@ -64,7 +64,7 @@ const emit = defineEmits<{
 .resume-dialog {
   background:
     radial-gradient(circle at 88% 12%, rgba(155, 123, 255, 0.2), transparent 28%),
-    linear-gradient(140deg, rgba(255, 255, 255, 0.98), rgba(255, 238, 246, 0.95));
+    linear-gradient(140deg, #ffffff, #ffeef6);
   box-shadow: 0 26px 70px rgba(201, 85, 126, 0.18);
 }
 </style>

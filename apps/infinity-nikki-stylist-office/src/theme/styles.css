@@ -18,6 +18,7 @@
   --border-primary-20: rgba(239, 95, 143, 0.24);
   --shadow-card: 0 12px 34px rgba(201, 85, 126, 0.12);
   --shadow-primary: 0 10px 22px rgba(239, 95, 143, 0.28);
+  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -101,6 +102,15 @@ body {
 
 .v-btn.v-btn--variant-text.text-primary {
   color: var(--color-primary-active);
+}
+
+.v-dialog > .v-overlay__content > .v-card,
+.v-dialog > .v-overlay__content > form > .v-card {
+  background: #fff9fc;
+}
+
+.v-overlay__scrim {
+  opacity: 0.46;
 }
 
 button,

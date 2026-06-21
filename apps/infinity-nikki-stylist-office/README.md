@@ -42,6 +42,25 @@ public/template/
 
 模板素材放在 `public/template` 下，是为了避免证书底图被构建图片压缩插件处理，保持导出与预览清晰度。
 
+## 离线缓存与资源更新
+
+生产构建会启用 Service Worker 和 Cache API，让内置模板、协会头像、签发页素材和资料库种子在首次加载后可离线使用。`pnpm dev` 开发环境会主动注销 Service Worker 并清理本应用离线缓存，避免旧缓存接管 Vite HMR；因此本地开发时“离线资源缓存”可能显示为 0B 或开发模式禁用，这是正常现象。
+
+线上缓存策略：
+
+- 应用入口页、`public/template/` 模板包、`public/association-data/` 资料库走 network-first：在线时优先拿最新文件，离线时回退缓存。
+- 其他同源静态资源走 stale-while-revalidate：先展示已有缓存，同时在后台更新下一次可用的缓存。
+- 关键资源清单集中在 `src/domain/offline/resources.ts`，Service Worker 预缓存清单在 `public/sw.js`，两边的缓存名版本需要保持一致。
+- 用户业务数据不放进资源缓存；草稿、签发记录和自定义头像仍在 IndexedDB，由“本地数据”页导入导出。
+
+更新模板、头像、签发背景、资料库种子等同路径 public 资源时，需要同步做三件事：
+
+1. 修改对应资源文件或 manifest。
+2. 如果新增关键资源，把路径加入 `IMPORTANT_OFFLINE_RESOURCE_PATHS` 和 `CORE_RESOURCES`。
+3. 递增 `OFFLINE_RESOURCE_CACHE_NAME` 与 `CACHE_NAME` 的版本号，例如从 `resources-v2` 到 `resources-v3`。
+
+部署新版本后，浏览器会发现新的 Service Worker。应用会显示“证书资源包已更新”的提示，用户点击“立即更新”后应用新缓存并刷新页面；如果用户暂时不更新，当前页面不会被强制打断。
+
 ## 技术栈
 
 - Vue 3 + Vite 8 + TypeScript

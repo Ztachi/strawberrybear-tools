@@ -33,7 +33,7 @@
         "shape": "roundedArch",
         "borderRadius": "50% 50% 0 0"
       },
-      "customImageScale": 0.84,
+      "customImageScale": 0.86,
       "hitArea": {
         "x": 105,
         "y": 360,

@@ -10,6 +10,7 @@ import LanguageSwitcher from './components/LanguageSwitcher/LanguageSwitcher.vue
 
 const { t } = useI18n()
 const router = useRouter()
+const headerAvatarSrc = `${import.meta.env.BASE_URL || '/'}ui/nikki/header-avatar.png`
 
 /**
  * @description: 返回应用首页
@@ -67,12 +68,17 @@ function openProfile(): void {
         <LanguageSwitcher />
         <v-btn
           :aria-label="t('common.action.openProfile')"
-          icon="mdi-account-circle-outline"
+          icon
           variant="text"
           size="small"
+          class="app-header__profile-button"
           data-sound="nav"
           @click="openProfile"
-        />
+        >
+          <v-avatar size="31" class="app-header__profile-avatar">
+            <img :src="headerAvatarSrc" alt="" />
+          </v-avatar>
+        </v-btn>
       </div>
     </template>
   </v-app-bar>
@@ -89,7 +95,25 @@ function openProfile(): void {
       rgba(239, 95, 143, 0.06) 1px,
       transparent 1px,
       transparent 18px
-    );
+  );
   backdrop-filter: blur(18px);
+}
+
+.app-header__profile-button {
+  border-radius: 999px;
+}
+
+.app-header__profile-avatar {
+  overflow: hidden;
+  border: 1px solid rgba(239, 95, 143, 0.24);
+  background: #fff0f5;
+  box-shadow: 0 4px 10px rgba(122, 78, 98, 0.12);
+}
+
+.app-header__profile-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 </style>

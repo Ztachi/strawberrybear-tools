@@ -49,15 +49,67 @@ export interface UpdateCustomAvatarInput {
 
 /**
  * @description: 计算 Blob SHA-256
- * @description 用裁剪版内容做查重键，避免同一头像重复进入素材库。
+ * @description 优先使用 Web Crypto；移动端通过局域网 http 访问时可能不是安全上下文，需要降级哈希保证保存可用。
  * @param {Blob} blob - 待计算的图片 Blob
  * @return {Promise<string>} 十六进制 SHA-256
  */
 export async function calculateBlobSha256(blob: Blob): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
-  const hashBytes = Array.from(new Uint8Array(hashBuffer))
+  const buffer = await blob.arrayBuffer()
 
-  return hashBytes.map((item) => item.toString(16).padStart(2, '0')).join('')
+  if (globalThis.crypto?.subtle) {
+    const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', buffer)
+    const hashBytes = Array.from(new Uint8Array(hashBuffer))
+
+    return hashBytes.map((item) => item.toString(16).padStart(2, '0')).join('')
+  }
+
+  const bytes = new Uint8Array(buffer)
+  let firstHash = 0x811c9dc5
+  let secondHash = 0x27d4eb2d
+
+  bytes.forEach((byte) => {
+    firstHash = Math.imul(firstHash ^ byte, 16777619)
+    secondHash = Math.imul(secondHash ^ byte, 1597334677)
+  })
+
+  return [
+    'fallback',
+    blob.size.toString(16),
+    (firstHash >>> 0).toString(16).padStart(8, '0'),
+    (secondHash >>> 0).toString(16).padStart(8, '0'),
+  ].join('-')
+}
+
+/**
+ * @description: 用 HTMLImageElement 读取图片尺寸
+ * @description iOS WebKit 对 createImageBitmap 支持不稳定，头像保存需要这个兜底。
+ * @param {Blob} blob - 图片 Blob
+ * @return {Promise<{ width: number; height: number }>} 图片尺寸
+ */
+function readImageBlobSizeWithImage(blob: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const imageUrl = URL.createObjectURL(blob)
+    const image = new Image()
+
+    image.onload = () => {
+      URL.revokeObjectURL(imageUrl)
+
+      if (!image.naturalWidth || !image.naturalHeight) {
+        reject(new Error('Invalid image size'))
+        return
+      }
+
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      })
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(imageUrl)
+      reject(new Error('Failed to read image size'))
+    }
+    image.src = imageUrl
+  })
 }
 
 /**
@@ -67,16 +119,24 @@ export async function calculateBlobSha256(blob: Blob): Promise<string> {
  * @return {Promise<{ width: number; height: number }>} 图片尺寸
  */
 export async function readImageBlobSize(blob: Blob): Promise<{ width: number; height: number }> {
-  const bitmap = await createImageBitmap(blob)
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(blob)
 
-  try {
-    return {
-      width: bitmap.width,
-      height: bitmap.height,
+      try {
+        return {
+          width: bitmap.width,
+          height: bitmap.height,
+        }
+      } finally {
+        bitmap.close()
+      }
+    } catch {
+      // iOS WebKit 或特殊图片格式可能无法走 createImageBitmap，继续使用 img 兜底。
     }
-  } finally {
-    bitmap.close()
   }
+
+  return readImageBlobSizeWithImage(blob)
 }
 
 /**

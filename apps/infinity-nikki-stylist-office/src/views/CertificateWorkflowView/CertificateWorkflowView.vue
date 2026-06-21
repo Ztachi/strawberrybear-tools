@@ -69,6 +69,8 @@ const currentStep = computed(() => {
 })
 
 const maxReachableStep = ref(currentStep.value)
+/** 子步骤请求沉浸展示时隐藏流程步骤条。 */
+const isImmersive = ref(false)
 
 const currentStepComponent = computed(() => stepComponents[currentRouteName.value])
 
@@ -76,6 +78,7 @@ watch(
   currentStep,
   (step) => {
     maxReachableStep.value = Math.max(maxReachableStep.value, step)
+    isImmersive.value = false
   },
   { immediate: true }
 )
@@ -118,7 +121,11 @@ async function navigateStep(routeName: WorkflowRouteName): Promise<void> {
 
 <template>
   <div class="certificate-workflow">
-    <section class="certificate-workflow__stepper-shell" :aria-label="t('workflow.label')">
+    <section
+      v-show="!isImmersive"
+      class="certificate-workflow__stepper-shell"
+      :aria-label="t('workflow.label')"
+    >
       <WorkflowStepper
         :current-step="currentStep"
         :max-reachable-step="maxReachableStep"
@@ -129,7 +136,11 @@ async function navigateStep(routeName: WorkflowRouteName): Promise<void> {
 
     <section class="certificate-workflow__content" :aria-label="t('workflow.contentLabel')">
       <Transition name="workflow-step" mode="out-in" appear>
-        <component :is="currentStepComponent" :key="currentRouteName" />
+        <component
+          :is="currentStepComponent"
+          :key="currentRouteName"
+          @immersive-change="isImmersive = $event"
+        />
       </Transition>
     </section>
   </div>

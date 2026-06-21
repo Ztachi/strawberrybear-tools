@@ -4,6 +4,7 @@
  * @description 提供一行回显入口和对应弹窗，具体列表由子组件按类型维护。
  */
 import { computed, ref } from 'vue'
+import PickerDialogFrame from '@/components/PickerDialogFrame/PickerDialogFrame.vue'
 import AvatarPickerBody from './components/AvatarPickerBody/AvatarPickerBody.vue'
 import TitlePickerBody from './components/TitlePickerBody/TitlePickerBody.vue'
 import type {
@@ -118,61 +119,26 @@ function openManage(): void {
       <v-icon icon="mdi-chevron-right" color="primary" size="22" />
     </button>
 
-    <v-dialog v-model="isOpen" max-width="620" scrollable>
-      <v-card
-        class="flex max-h-[min(620px,72dvh)] flex-col overflow-hidden rounded-[26px] border border-[#ef5f8f]/25 bg-[#fff9fc]"
-      >
-        <div
-          class="flex shrink-0 items-start justify-between gap-4 px-6 pb-3 pt-6 max-[520px]:px-5 max-[520px]:pt-5"
-        >
-          <div class="grid gap-1">
-            <h2
-              class="m-0 text-[20px] font-[820] leading-tight text-[var(--color-foreground)] max-[520px]:text-[18px]"
-            >
-              {{ dialogTitle }}
-            </h2>
-            <p
-              class="m-0 text-[13px] leading-relaxed text-[var(--color-muted-dark)] max-[520px]:line-clamp-2"
-            >
-              {{ dialogIntro }}
-            </p>
-          </div>
-          <v-btn
-            icon="mdi-close"
-            variant="text"
-            size="small"
-            data-sound="back"
-            @click="isOpen = false"
-          />
-        </div>
-
-        <v-card-text
-          class="min-h-0 overflow-y-auto px-6 pb-6 pt-2 max-[520px]:px-5 max-[520px]:pb-5"
-        >
-          <p
-            v-if="groupLabel"
-            class="mb-3 mt-0 text-[13px] font-[720] text-[var(--color-muted-dark)]"
-          >
-            {{ groupLabel }}
-          </p>
-          <TitlePickerBody
-            v-if="type === 'title'"
-            :items="titleOptions"
-            :selected-id="selectedId"
-            @select="selectOption"
-          />
-          <AvatarPickerBody
-            v-else
-            :empty-text="emptyText"
-            :items="avatarOptions"
-            :manage-label="manageLabel"
-            :official-label="officialLabel"
-            :selected-id="selectedId"
-            @manage="openManage"
-            @select="selectOption"
-          />
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+    <PickerDialogFrame v-model="isOpen" :title="dialogTitle" :intro="dialogIntro">
+      <p v-if="groupLabel" class="mb-3 mt-0 text-[13px] font-[720] text-[var(--color-muted-dark)]">
+        {{ groupLabel }}
+      </p>
+      <TitlePickerBody
+        v-if="type === 'title'"
+        :items="titleOptions"
+        :selected-id="selectedId"
+        @select="selectOption"
+      />
+      <AvatarPickerBody
+        v-else
+        :empty-text="emptyText"
+        :items="avatarOptions"
+        :manage-label="manageLabel"
+        :official-label="officialLabel"
+        :selected-id="selectedId"
+        @manage="openManage"
+        @select="selectOption"
+      />
+    </PickerDialogFrame>
   </section>
 </template>

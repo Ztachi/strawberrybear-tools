@@ -16,6 +16,10 @@ import {
 } from '@/db/repositories/customAssetRepository'
 import { updateActiveDraft } from '@/db/repositories/draftRepository'
 import { getTemplateField, loadBuiltinTemplatePackage } from '@/domain/template/registry'
+import {
+  useNavigationIntentStore,
+  type WorkflowRouteName,
+} from '@/stores/navigationIntent'
 import { useUiStore } from '@/stores/ui'
 import type {
   CustomAssetCropSelection,
@@ -29,6 +33,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const uiStore = useUiStore()
+const navigationIntent = useNavigationIntentStore()
 
 /** 表格搜索关键字。 */
 const searchText = ref('')
@@ -66,8 +71,12 @@ const avatarName = ref('')
 const isSaving = ref(false)
 /** 删除中状态。 */
 const isDeleting = ref(false)
+/** 编辑弹窗错误提示。 */
+const editorErrorMessage = ref('')
 /** CropperJS 实例。 */
 const cropper = ref<Cropper | null>(null)
+/** 裁剪器是否已经可以导出画布。 */
+const isCropperReady = ref(false)
 /** 当前裁剪器初始化序号，用来取消过期的异步初始化。 */
 const cropperInitVersion = ref(0)
 /** 当前原图是否来自已保存素材；替换新图时不复用旧裁剪状态。 */
@@ -75,8 +84,14 @@ const shouldRestoreCropState = ref(false)
 /** 当前证书模板头像裁剪比例，跟随来源流程带来的 templateId。 */
 const avatarCropAspectRatio = ref(1)
 
-/** 从办理流程进入时携带 returnTo，保存后需要回到对应流程页。 */
-const returnTo = computed(() => (typeof route.query.returnTo === 'string' ? route.query.returnTo : ''))
+/** 从办理流程进入时保存后需要回到对应流程页。 */
+const returnTo = computed<WorkflowRouteName | ''>(() => {
+  if (navigationIntent.customAssetReturnTo) {
+    return navigationIntent.customAssetReturnTo
+  }
+
+  return normalizeWorkflowRouteName(route.query.returnTo)
+})
 
 /** 是否从登记页或核对页进入自定义资料。 */
 const shouldReturnToDraft = computed(() => returnTo.value === 'registration' || returnTo.value === 'proofing')
@@ -84,6 +99,10 @@ const shouldReturnToDraft = computed(() => returnTo.value === 'registration' || 
 /** 当前来源流程携带的模板 ID。 */
 const activeTemplateId = computed(() => {
   const fallbackTemplateId = 'template-miracle-continent-classic-001'
+
+  if (navigationIntent.customAssetTemplateId) {
+    return navigationIntent.customAssetTemplateId
+  }
 
   return typeof route.query.templateId === 'string' ? route.query.templateId : fallbackTemplateId
 })
@@ -169,7 +188,7 @@ const canSaveEditor = computed(() => {
     return true
   }
 
-  return Boolean(selectedOriginalBlob.value && sourceImageUrl.value)
+  return Boolean(selectedOriginalBlob.value && sourceImageUrl.value && isCropperReady.value)
 })
 
 /** 表格空状态标题。 */
@@ -181,6 +200,15 @@ const emptyTitle = computed(() =>
 const emptyDescription = computed(() =>
   searchText.value.trim() ? t('assets.emptySearchDescription') : t('assets.emptyDescription')
 )
+
+/**
+ * @description: 规范化流程路由名
+ * @param {unknown} value - 待判断路由名
+ * @return {WorkflowRouteName | ''} 可返回的流程路由名
+ */
+function normalizeWorkflowRouteName(value: unknown): WorkflowRouteName | '' {
+  return value === 'registration' || value === 'proofing' ? value : ''
+}
 
 /**
  * @description: 格式化素材时间
@@ -199,6 +227,47 @@ function formatAssetDate(value: string | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+/**
+ * @description: 消费旧版 URL 跳转参数
+ * @description 新流程使用 Pinia 临时意图；这里仅兼容已打开的旧链接，并立刻移除 query 避免重复触发。
+ * @return {Promise<void>} 无返回值
+ */
+async function consumeLegacyNavigationQuery(): Promise<void> {
+  const legacyReturnTo = normalizeWorkflowRouteName(route.query.returnTo)
+
+  if (legacyReturnTo && !navigationIntent.customAssetReturnTo) {
+    navigationIntent.requestCustomAssetFlow(
+      legacyReturnTo,
+      'avatar',
+      typeof route.query.templateId === 'string' ? route.query.templateId : undefined
+    )
+  }
+
+  if (route.query.assetKind === 'avatar') {
+    assetKindFilter.value = 'avatar'
+  }
+
+  if (route.query.returnTo || route.query.templateId || route.query.assetKind || route.query.reopen) {
+    await router.replace({
+      name: 'profile',
+      query: {
+        tab: 'customAssets',
+      },
+    })
+  }
+}
+
+/**
+ * @description: 返回流程页并重新打开头像选择层
+ * @param {WorkflowRouteName} targetRouteName - 目标流程页
+ * @return {Promise<void>} 无返回值
+ */
+async function returnToDraftWithAvatarPicker(targetRouteName: WorkflowRouteName): Promise<void> {
+  navigationIntent.requestAvatarPicker(targetRouteName)
+  navigationIntent.clearCustomAssetFlow()
+  await router.push({ name: targetRouteName })
 }
 
 /**
@@ -229,6 +298,7 @@ function destroyCropper(): void {
   cropperInitVersion.value += 1
   cropper.value?.destroy()
   cropper.value = null
+  isCropperReady.value = false
 }
 
 /**
@@ -274,6 +344,7 @@ async function loadAvatarCropAspectRatio(templateId: string): Promise<void> {
 function openCreateDialog(): void {
   editingAsset.value = null
   avatarName.value = ''
+  editorErrorMessage.value = ''
   selectedOriginalBlob.value = null
   shouldRestoreCropState.value = false
   destroyCropper()
@@ -291,6 +362,7 @@ async function openEditDialog(asset: CustomAssetRecord): Promise<void> {
 
   editingAsset.value = latestAsset
   avatarName.value = latestAsset.name
+  editorErrorMessage.value = ''
   destroyCropper()
   revokeSourceImageUrl()
   shouldRestoreCropState.value = true
@@ -319,6 +391,7 @@ function closeEditorDialog(): void {
   editingAsset.value = null
   selectedOriginalBlob.value = null
   avatarName.value = ''
+  editorErrorMessage.value = ''
   shouldRestoreCropState.value = false
   destroyCropper()
   revokeSourceImageUrl()
@@ -372,6 +445,7 @@ async function initializeCropper(): Promise<void> {
   const initVersion = cropperInitVersion.value + 1
 
   cropperInitVersion.value = initVersion
+  isCropperReady.value = false
   await nextTick()
 
   const imageElement = cropperImage.value
@@ -403,6 +477,10 @@ async function initializeCropper(): Promise<void> {
   })
 
   await restoreCropState(initVersion)
+
+  if (initVersion === cropperInitVersion.value) {
+    isCropperReady.value = true
+  }
 }
 
 /**
@@ -554,6 +632,7 @@ async function handleFileChange(event: Event): Promise<void> {
 
   destroyCropper()
   revokeSourceImageUrl()
+  editorErrorMessage.value = ''
   selectedOriginalBlob.value = file
   shouldRestoreCropState.value = false
 
@@ -567,6 +646,16 @@ async function handleFileChange(event: Event): Promise<void> {
   if (cropperImage.value?.complete) {
     await initializeCropper()
   }
+}
+
+/**
+ * @description: 处理裁剪原图加载失败
+ * @description 移动端选择 HEIC 等浏览器无法解码格式时给出明确反馈。
+ * @return {void} 无返回值
+ */
+function handleCropperImageError(): void {
+  destroyCropper()
+  editorErrorMessage.value = t('assets.cropperImageLoadFailed')
 }
 
 /**
@@ -598,7 +687,7 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
-        reject(new Error('Failed to create avatar blob'))
+        reject(new Error(t('assets.saveAvatarFailed')))
         return
       }
 
@@ -647,6 +736,7 @@ async function saveEditor(): Promise<void> {
   }
 
   isSaving.value = true
+  editorErrorMessage.value = ''
 
   try {
     let savedAsset: CustomAssetRecord
@@ -655,7 +745,7 @@ async function saveEditor(): Promise<void> {
       const selection = cropper.value?.getCropperSelection()
 
       if (!selection) {
-        return
+        throw new Error(t('assets.cropperNotReady'))
       }
 
       const canvas = await selection.$toCanvas(getAvatarOutputSize())
@@ -695,12 +785,22 @@ async function saveEditor(): Promise<void> {
 
     if (shouldReturnToDraft.value) {
       await updateActiveDraft({ avatarId: savedAsset.id })
-      await router.push({ name: returnTo.value, query: { avatarPicker: '1' } })
+      await returnToDraftWithAvatarPicker(returnTo.value as WorkflowRouteName)
       return
     }
 
     closeEditorDialog()
     await loadCustomAvatars()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+
+    editorErrorMessage.value = [
+      t('assets.cropperNotReady'),
+      t('assets.cropperImageLoadFailed'),
+      t('assets.saveAvatarFailed'),
+    ].includes(message)
+      ? message
+      : t('assets.saveAvatarFailed')
   } finally {
     isSaving.value = false
   }
@@ -756,10 +856,15 @@ async function backToDraft(): Promise<void> {
     return
   }
 
-  await router.push({ name: returnTo.value, query: { avatarPicker: '1' } })
+  await returnToDraftWithAvatarPicker(returnTo.value as WorkflowRouteName)
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (navigationIntent.customAssetKind === 'avatar') {
+    assetKindFilter.value = 'avatar'
+  }
+
+  await consumeLegacyNavigationQuery()
   void loadCustomAvatars()
 })
 
@@ -891,13 +996,21 @@ onBeforeUnmount(() => {
             />
           </template>
           <v-list density="compact" min-width="148" class="profile-custom-assets__menu">
-            <v-list-item data-sound="open" @click="openEditDialog(item)">
+            <v-list-item
+              class="profile-custom-assets__menu-item"
+              data-sound="open"
+              @click="openEditDialog(item)"
+            >
               <template #prepend>
                 <v-icon icon="mdi-pencil-outline" size="18" />
               </template>
               <v-list-item-title>{{ t('assets.menuEdit') }}</v-list-item-title>
             </v-list-item>
-            <v-list-item data-sound="danger" @click="requestDelete(item)">
+            <v-list-item
+              class="profile-custom-assets__menu-item profile-custom-assets__menu-item--danger"
+              data-sound="danger"
+              @click="requestDelete(item)"
+            >
               <template #prepend>
                 <v-icon icon="mdi-delete-outline" size="18" />
               </template>
@@ -938,6 +1051,10 @@ onBeforeUnmount(() => {
             hide-details
           />
 
+          <v-alert v-if="editorErrorMessage" type="error" variant="tonal" density="comfortable">
+            {{ editorErrorMessage }}
+          </v-alert>
+
           <div class="profile-custom-assets__editor-grid">
             <div
               v-if="sourceImageUrl"
@@ -950,6 +1067,7 @@ onBeforeUnmount(() => {
                 alt=""
                 class="profile-custom-assets__source-image"
                 @load="initializeCropper"
+                @error="handleCropperImageError"
               />
             </div>
 
@@ -1053,23 +1171,21 @@ onBeforeUnmount(() => {
 }
 
 .profile-custom-assets__toolbar {
-  display: flex;
+  display: grid;
   align-items: center;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
 }
 
 .profile-custom-assets__filters {
   display: grid;
   min-width: 0;
-  flex: 1 1 auto;
-  grid-template-columns: minmax(220px, 360px) minmax(160px, 220px);
+  grid-template-columns: minmax(240px, 1fr) minmax(170px, 220px);
   gap: 12px;
 }
 
 .profile-custom-assets__actions {
   display: flex;
-  flex: 0 0 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
@@ -1130,6 +1246,28 @@ onBeforeUnmount(() => {
 
 .profile-custom-assets__menu {
   border: 1px solid rgba(239, 95, 143, 0.18);
+}
+
+.profile-custom-assets__menu :deep(.v-list-item) {
+  min-height: 34px;
+  padding-inline: 10px 12px;
+}
+
+.profile-custom-assets__menu :deep(.v-list-item__prepend) {
+  width: auto;
+  margin-inline-end: 0;
+}
+
+.profile-custom-assets__menu :deep(.v-list-item__spacer) {
+  width: 6px;
+}
+
+.profile-custom-assets__menu-item--danger {
+  color: #d93670;
+}
+
+.profile-custom-assets__menu-item--danger :deep(.v-icon) {
+  color: #d93670;
 }
 
 .profile-custom-assets__preview-popover {
@@ -1247,11 +1385,12 @@ onBeforeUnmount(() => {
 
 @media (max-width: 760px) {
   .profile-custom-assets__toolbar {
-    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .profile-custom-assets__filters {
     grid-template-columns: 1fr;
+    max-width: none;
   }
 
   .profile-custom-assets__actions {

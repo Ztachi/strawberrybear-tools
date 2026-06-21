@@ -15,7 +15,11 @@ import { pinia } from './pinia'
 import { queryClient } from './queryClient'
 import { router } from './router'
 import { vuetify } from '@/theme/vuetify'
-import { i18n, setUiLocale } from '@/i18n'
+import { detectBrowserUiLocale, i18n, setUiLocale } from '@/i18n'
+import {
+  cleanupDevelopmentOfflineCache,
+  registerOfflineServiceWorker,
+} from '@/plugins/offlineCache'
 import { installInteractionSound } from '@/plugins/interactionSound'
 import { useUiStore } from '@/stores/ui'
 
@@ -24,7 +28,13 @@ const app = createApp(App)
 
 app.use(pinia)
 
-const uiStore = useUiStore()
+const uiStore = useUiStore(pinia)
+const hasPersistedUiPreference = Boolean(localStorage.getItem('stylist-office-ui'))
+
+if (!hasPersistedUiPreference) {
+  uiStore.setUiLocale(detectBrowserUiLocale(navigator.languages))
+}
+
 // Pinia persisted state 会在 store 创建时恢复，挂载 i18n 前同步一次，避免首屏语言闪烁。
 setUiLocale(uiStore.uiLocale)
 
@@ -33,5 +43,7 @@ app.use(vuetify)
 app.use(VueQueryPlugin, { queryClient })
 app.use(router)
 installInteractionSound()
+cleanupDevelopmentOfflineCache()
+registerOfflineServiceWorker()
 
 app.mount('#app')

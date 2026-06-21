@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * @description: CertificateProofCanvas - 证书核对图上交互画布
- * @description 根据模板 manifest 渲染语言底图、动态字段、可编辑热区，并处理移动端查看手势。
+ * @description 根据模板 manifest 渲染语言底图、动态字段和可编辑热区。
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import AutoFitText from '@/components/AutoFitText/AutoFitText.vue'
 import type {
   CertificateTemplateEditorKind,
@@ -33,39 +33,10 @@ const emit = defineEmits<{
   edit: [editor: CertificateTemplateEditorKind]
 }>()
 
-/** 画布缩放倍率，移动端双指缩放和桌面触控板都复用这份状态。 */
-const scale = ref(1)
-/** 画布横向平移，单位为视口 CSS 像素。 */
-const translateX = ref(0)
-/** 画布纵向平移，单位为视口 CSS 像素。 */
-const translateY = ref(0)
-/** 当前按下指针集合，用于区分单指拖拽和双指缩放。 */
-const activePointers = new Map<number, PointerEvent>()
-/** 单指拖拽起点。 */
-const dragStart = ref<{ x: number; y: number; translateX: number; translateY: number } | null>(
-  null
-)
-/** 双指缩放起点。 */
-const pinchStart = ref<{
-  distance: number
-  scale: number
-  centerX: number
-  centerY: number
-  translateX: number
-  translateY: number
-} | null>(null)
-/** 本次指针操作是否已经移动，点击热区时用它避免误触。 */
-const hasGestureMoved = ref(false)
-
 /** 模板动态字段按渲染类型拆分，避免模板里写复杂判断。 */
 const imageFields = computed(() => props.manifest.fields.filter((field) => field.kind === 'image'))
 const textFields = computed(() => props.manifest.fields.filter((field) => field.kind === 'text'))
 const editableFields = computed(() => props.manifest.fields.filter((field) => field.editable))
-
-/** 画布变换样式。 */
-const stageStyle = computed(() => ({
-  transform: `translate3d(${translateX.value}px, ${translateY.value}px, 0) scale(${scale.value})`,
-}))
 
 /**
  * @description: 将横向模板像素换算成百分比
@@ -188,160 +159,12 @@ function getFieldValue(field: CertificateTemplateField): string {
 }
 
 /**
- * @description: 限制缩放倍率
- * @param {number} value - 原始缩放倍率
- * @return {number} 限制后的缩放倍率
- */
-function clampScale(value: number): number {
-  return Math.min(2.8, Math.max(1, value))
-}
-
-/**
- * @description: 计算两指距离
- * @return {number} 两指距离
- */
-function getPointerDistance(): number {
-  const pointers = Array.from(activePointers.values())
-
-  if (pointers.length < 2) {
-    return 0
-  }
-
-  return Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY)
-}
-
-/**
- * @description: 计算两指中心
- * @return {{ x: number; y: number }} 两指中心
- */
-function getPointerCenter(): { x: number; y: number } {
-  const pointers = Array.from(activePointers.values())
-
-  if (pointers.length < 2) {
-    return { x: 0, y: 0 }
-  }
-
-  return {
-    x: (pointers[0].clientX + pointers[1].clientX) / 2,
-    y: (pointers[0].clientY + pointers[1].clientY) / 2,
-  }
-}
-
-/**
- * @description: 指针按下
- * @description 单指准备拖拽，两指准备缩放，暂不阻止后续热区 click。
- * @param {PointerEvent} event - 指针事件
- * @return {void} 无返回值
- */
-function handlePointerDown(event: PointerEvent): void {
-  activePointers.set(event.pointerId, event)
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  hasGestureMoved.value = false
-
-  if (activePointers.size === 1) {
-    dragStart.value = {
-      x: event.clientX,
-      y: event.clientY,
-      translateX: translateX.value,
-      translateY: translateY.value,
-    }
-    return
-  }
-
-  if (activePointers.size === 2) {
-    const center = getPointerCenter()
-    pinchStart.value = {
-      distance: getPointerDistance(),
-      scale: scale.value,
-      centerX: center.x,
-      centerY: center.y,
-      translateX: translateX.value,
-      translateY: translateY.value,
-    }
-  }
-}
-
-/**
- * @description: 指针移动
- * @description 移动超过阈值后视为查看手势，不再触发热区点击。
- * @param {PointerEvent} event - 指针事件
- * @return {void} 无返回值
- */
-function handlePointerMove(event: PointerEvent): void {
-  if (!activePointers.has(event.pointerId)) {
-    return
-  }
-
-  activePointers.set(event.pointerId, event)
-
-  if (activePointers.size >= 2 && pinchStart.value) {
-    const nextDistance = getPointerDistance()
-
-    if (nextDistance <= 0) {
-      return
-    }
-
-    const nextScale = clampScale((nextDistance / pinchStart.value.distance) * pinchStart.value.scale)
-    const scaleDelta = nextScale / pinchStart.value.scale
-    translateX.value =
-      pinchStart.value.centerX - (pinchStart.value.centerX - pinchStart.value.translateX) * scaleDelta
-    translateY.value =
-      pinchStart.value.centerY - (pinchStart.value.centerY - pinchStart.value.translateY) * scaleDelta
-    scale.value = nextScale
-    hasGestureMoved.value = true
-    return
-  }
-
-  if (!dragStart.value) {
-    return
-  }
-
-  const deltaX = event.clientX - dragStart.value.x
-  const deltaY = event.clientY - dragStart.value.y
-
-  if (Math.hypot(deltaX, deltaY) > 6) {
-    hasGestureMoved.value = true
-  }
-
-  if (scale.value <= 1) {
-    return
-  }
-
-  translateX.value = dragStart.value.translateX + deltaX
-  translateY.value = dragStart.value.translateY + deltaY
-}
-
-/**
- * @description: 指针结束
- * @param {PointerEvent} event - 指针事件
- * @return {void} 无返回值
- */
-function handlePointerEnd(event: PointerEvent): void {
-  activePointers.delete(event.pointerId)
-
-  if (activePointers.size === 0) {
-    dragStart.value = null
-    pinchStart.value = null
-  }
-}
-
-/**
- * @description: 热区点击准备
- * @description 热区会截断画布拖拽事件，因此这里单独清理上一次查看手势留下的误触标记。
- * @return {void} 无返回值
- */
-function prepareHotspotClick(): void {
-  hasGestureMoved.value = false
-}
-
-/**
  * @description: 触发字段编辑
- * @description 如果本次操作已被判定为拖拽或缩放，则吃掉点击，防止误开弹窗。
  * @param {CertificateTemplateField} field - 被点击字段
  * @return {void} 无返回值
  */
 function requestEdit(field: CertificateTemplateField): void {
-  if (hasGestureMoved.value || !field.editor) {
+  if (!field.editor) {
     return
   }
 
@@ -350,14 +173,8 @@ function requestEdit(field: CertificateTemplateField): void {
 </script>
 
 <template>
-  <div
-    class="certificate-proof-canvas"
-    @pointerdown="handlePointerDown"
-    @pointermove="handlePointerMove"
-    @pointerup="handlePointerEnd"
-    @pointercancel="handlePointerEnd"
-  >
-    <div class="certificate-proof-canvas__stage" :style="stageStyle">
+  <div class="certificate-proof-canvas">
+    <div class="certificate-proof-canvas__stage">
       <img :src="imageSrc" alt="" class="certificate-proof-canvas__base" draggable="false" />
 
       <div
@@ -402,10 +219,6 @@ function requestEdit(field: CertificateTemplateField): void {
         :aria-label="fieldLabels[field.id]"
         data-proof-hotspot="true"
         data-sound="open"
-        @pointerdown.stop="prepareHotspotClick"
-        @pointermove.stop
-        @pointerup.stop
-        @pointercancel.stop
         @click.stop="requestEdit(field)"
       >
         <span>{{ fieldLabels[field.id] }}</span>
@@ -428,15 +241,13 @@ function requestEdit(field: CertificateTemplateField): void {
   border-radius: 10px;
   background: #fffafc;
   box-shadow: 0 16px 38px rgba(122, 78, 98, 0.16);
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .certificate-proof-canvas__stage {
   position: absolute;
   inset: 0;
   container-type: inline-size;
-  transform-origin: 0 0;
-  transition: transform 120ms ease;
 }
 
 .certificate-proof-canvas__base {

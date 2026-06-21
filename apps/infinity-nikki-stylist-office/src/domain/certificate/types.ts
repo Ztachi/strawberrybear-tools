@@ -17,12 +17,24 @@ export interface IssuedCertificate {
   certificateNo: string
   /** 搭配师姓名快照 */
   stylistName: string
+  /** 认证称号 ID 快照 */
+  titleId: string
+  /** 认证称号显示文案快照 */
+  titleName: string
+  /** 登记地区 ID 快照 */
+  regionId: string
+  /** 登记地区三位代码快照 */
+  regionCode: string
+  /** 头像 ID 快照，可能是协会头像或自定义头像 */
+  avatarId: string
   /** 证书语言快照 */
   certificateLocale: LocaleCode
   /** 模板 ID 快照 */
   templateId: string
   /** 资料库版本快照 */
   catalogVersion: string
+  /** 证书图上展示的签发日期 */
+  issuedDateText: string
   /** 签发时间 ISO 字符串 */
   issuedAt: string
 }
