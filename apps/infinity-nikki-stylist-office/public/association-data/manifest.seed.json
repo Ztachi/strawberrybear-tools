@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "2026-06-18",
+  "catalogId": "miraland-stylist-office",
+  "catalogVersion": "2026.06.18-001",
+  "defaultTemplateId": "template-miracle-continent-classic-001",
+  "locales": ["zh-CN", "zh-TW", "en-US", "ja-JP"],
+  "templates": [],
+  "titleOptions": [],
+  "regions": [],
+  "comments": [],
+  "officialAvatars": [],
+  "officialBackgrounds": [],
+  "imageAssets": [],
+  "fontAssets": []
+}
