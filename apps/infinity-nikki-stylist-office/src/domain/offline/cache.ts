@@ -37,7 +37,8 @@ export async function cacheOfflineResources(
   urls: string[],
   onProgress: (progress: OfflineCacheProgress) => void = () => {}
 ): Promise<void> {
-  const total = urls.length
+  const uniqueUrls = [...new Set(urls)]
+  const total = uniqueUrls.length
 
   if (!supportsCacheApi() || total === 0) {
     onProgress({ completed: total, total, percent: 100, url: '' })
@@ -46,12 +47,18 @@ export async function cacheOfflineResources(
 
   const cache = await caches.open(OFFLINE_RESOURCE_CACHE_NAME)
 
-  for (const [index, url] of urls.entries()) {
+  for (const [index, url] of uniqueUrls.entries()) {
     try {
-      const response = await fetch(url, { cache: 'reload' })
+      const cachedResponse = await cache.match(url)
+
+      if (cachedResponse) {
+        continue
+      }
+
+      const response = await fetch(url)
 
       if (response.ok) {
-        await cache.put(url, response)
+        await cache.put(url, response.clone())
       }
     } catch {
       // 缓存失败不阻塞办理流程，Service Worker 后续仍可按网络状态补齐。

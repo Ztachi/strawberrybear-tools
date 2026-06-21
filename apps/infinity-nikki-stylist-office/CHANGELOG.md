@@ -1,5 +1,13 @@
 # @strawberrybear/infinity-nikki-stylist-office
 
+## 1.0.2
+
+### Patch Changes
+
+- Fix production CSS layer ordering so Tailwind reset styles do not override Vuetify component spacing.
+- Stop blocking app entry on a full offline resource preload; cache page resources in the background when their route uses them.
+- Fix offline image cache reuse so template and UI PNGs are served from Cache Storage instead of being re-fetched on every visit.
+
 ## 1.0.0
 
 ### Major Changes

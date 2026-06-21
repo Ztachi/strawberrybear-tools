@@ -6,26 +6,33 @@
  */
 
 /** 当前离线资源缓存名，修改清单结构时递增版本。 */
-export const OFFLINE_RESOURCE_CACHE_NAME = 'infinity-nikki-stylist-office-resources-v2'
+export const OFFLINE_RESOURCE_CACHE_NAME = 'infinity-nikki-stylist-office-resources-v3'
 
-/** 进入应用前优先缓存的资源。 */
-export const IMPORTANT_OFFLINE_RESOURCE_PATHS = [
+/** 应用外壳资源；进入页面后空闲时轻量预热。 */
+export const APP_SHELL_OFFLINE_RESOURCE_PATHS = [
   '/',
   '/favicon.ico',
   '/association-data/manifest.seed.json',
+  '/ui/nikki/header-avatar.png',
+] as const
+
+/** 登记页会用到的内置头像资源。 */
+export const REGISTRATION_OFFLINE_RESOURCE_PATHS = ['/template/avatars/1.png'] as const
+
+/** 核对和证书页会用到的模板资源。 */
+export const TEMPLATE_OFFLINE_RESOURCE_PATHS = [
   '/template/templates/1/manifest.json',
   '/template/templates/1/zh-CN.png',
   '/template/templates/1/zh-TW.png',
   '/template/templates/1/en-US.png',
   '/template/templates/1/ja-JP.png',
-  '/template/avatars/1.png',
-  '/ui/nikki/header-avatar.png',
+] as const
+
+/** 签发仪式页会用到的视觉资源。 */
+export const SIGNING_OFFLINE_RESOURCE_PATHS = [
   '/ui/nikki/signing-bg.png',
   '/ui/nikki/signing-witness.png',
 ] as const
-
-/** 首屏之后后台继续缓存的资源；未来模板同步可追加到这里。 */
-export const DEFERRED_OFFLINE_RESOURCE_PATHS = [] as const
 
 /**
  * @description: 解析 public 资源 URL
