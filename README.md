@@ -270,3 +270,14 @@ cd apps/web-vue && pnpm dev
 - [开发规范](docs/AGENT.md)
 - [国际化规范](docs/I18N.md)
 - [项目搭建计划](docs/PLAN.md)
+
+## Agent Skills 索引
+
+仓库级 skill 放在 [`.cursor/skills`](.cursor/skills)，用于沉淀可复用的单仓库操作流程。
+
+| Skill                                                                                | 说明                                                                                                   |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| [`create-app`](.cursor/skills/create-app/SKILL.md)                                   | 创建普通 app 的基础流程，覆盖目录、package、CI/CD 和内部规范                                           |
+| [`launch-cloudflare-pages-app`](.cursor/skills/launch-cloudflare-pages-app/SKILL.md) | 从 feature 分支到 Cloudflare Pages 项目、情形三 CI/CD、develop 集成、main 发版和线上验证的完整上线流程 |
+| [`vue-1.0.1`](.cursor/skills/vue-1.0.1/SKILL.md)                                     | Vue 3 Composition API、组件、composables、性能与响应式实践                                             |
+| [`rust-1.0.1`](.cursor/skills/rust-1.0.1/SKILL.md)                                   | Rust 所有权、类型、错误处理、并发和高级陷阱参考                                                        |
