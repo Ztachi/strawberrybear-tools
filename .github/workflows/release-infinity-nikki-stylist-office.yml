@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'apps/infinity-nikki-stylist-office/**'
+      - '.changeset/**'
+      - '.github/workflows/release-infinity-nikki-stylist-office.yml'
       - '!apps/infinity-nikki-stylist-office/**/*.md'
   workflow_dispatch:
 
