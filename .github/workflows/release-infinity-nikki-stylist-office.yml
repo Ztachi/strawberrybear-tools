@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - 'apps/infinity-nikki-stylist-office/**'
-      - '.changeset/**'
-      - '.github/workflows/release-infinity-nikki-stylist-office.yml'
       - '!apps/infinity-nikki-stylist-office/**/*.md'
   workflow_dispatch:
 
@@ -37,23 +35,6 @@ jobs:
 
       - name: Build
         run: pnpm --filter @strawberrybear/infinity-nikki-stylist-office build
-
-      - name: Ensure Cloudflare Pages project exists
-        # wrangler pages deploy 要求 project 必须先存在；如果不存在则幂等创建。
-        run: |
-          set -e
-          PROJECT_NAME=infinity-nikki-stylist-office
-          if npx wrangler pages project list 2>/dev/null | grep -q "^${PROJECT_NAME}$"; then
-            echo "Pages project '${PROJECT_NAME}' already exists, skip create."
-          else
-            echo "Creating Pages project '${PROJECT_NAME}' ..."
-            npx wrangler pages project create "${PROJECT_NAME}" \
-              --production-branch production \
-              --compatibility-date 2026-06-21
-          fi
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy to Cloudflare Pages
         run: |
