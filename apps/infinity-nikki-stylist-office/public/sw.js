@@ -1,22 +1,10 @@
 const CACHE_PREFIX = 'infinity-nikki-stylist-office'
-const CACHE_NAME = 'infinity-nikki-stylist-office-resources-v2'
+const CACHE_NAME = 'infinity-nikki-stylist-office-resources-v3'
 const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 const IS_LOCAL_DEV_HOST = LOCAL_DEV_HOSTS.has(self.location.hostname)
-const NETWORK_FIRST_PATH_PREFIXES = ['/association-data/', '/template/']
-const CORE_RESOURCES = [
-  '/',
-  '/favicon.ico',
-  '/association-data/manifest.seed.json',
-  '/template/templates/1/manifest.json',
-  '/template/templates/1/zh-CN.png',
-  '/template/templates/1/zh-TW.png',
-  '/template/templates/1/en-US.png',
-  '/template/templates/1/ja-JP.png',
-  '/template/avatars/1.png',
-  '/ui/nikki/header-avatar.png',
-  '/ui/nikki/signing-bg.png',
-  '/ui/nikki/signing-witness.png',
-]
+const NETWORK_FIRST_PATH_PREFIXES = ['/association-data/']
+const CACHE_FIRST_PATH_PREFIXES = ['/template/', '/ui/nikki/']
+const CORE_RESOURCES = ['/', '/favicon.ico', '/association-data/manifest.seed.json']
 
 function deleteAppCaches() {
   return caches
@@ -60,6 +48,10 @@ function shouldUseNetworkFirst(request, requestUrl) {
   )
 }
 
+function shouldUseCacheFirst(requestUrl) {
+  return CACHE_FIRST_PATH_PREFIXES.some((prefix) => requestUrl.pathname.startsWith(prefix))
+}
+
 function networkFirst(request) {
   return fetch(request)
     .then((response) => {
@@ -69,6 +61,22 @@ function networkFirst(request) {
     .catch(() =>
       caches.match(request).then((response) => response || createOfflineResponse(request))
     )
+}
+
+function cacheFirst(request) {
+  return caches
+    .match(request)
+    .then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse
+      }
+
+      return fetch(request).then((response) => {
+        putResponseInCache(request, response)
+        return response
+      })
+    })
+    .catch(() => createOfflineResponse(request))
 }
 
 function staleWhileRevalidate(request) {
@@ -135,11 +143,17 @@ if (IS_LOCAL_DEV_HOST) {
       return
     }
 
-    event.respondWith(
-      shouldUseNetworkFirst(request, requestUrl)
-        ? networkFirst(request)
-        : staleWhileRevalidate(request)
-    )
+    if (shouldUseCacheFirst(requestUrl)) {
+      event.respondWith(cacheFirst(request))
+      return
+    }
+
+    if (shouldUseNetworkFirst(request, requestUrl)) {
+      event.respondWith(networkFirst(request))
+      return
+    }
+
+    event.respondWith(staleWhileRevalidate(request))
   })
 
   self.addEventListener('message', (event) => {

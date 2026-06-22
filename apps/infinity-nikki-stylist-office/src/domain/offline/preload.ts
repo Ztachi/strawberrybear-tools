@@ -1,65 +1,82 @@
 /**
  * @fileOverview 离线资源预加载
- * @description 应用入口优先缓存证书模板和关键 UI 素材，后台再补齐扩展资源。
+ * @description 按页面需要在浏览器空闲时缓存资源，不阻塞首屏和用户操作。
  * @author strawberrybear
  * @date 2026-06-21
  */
-import { cacheOfflineResources, type OfflineCacheProgress } from './cache'
+import { cacheOfflineResources } from './cache'
 import {
-  DEFERRED_OFFLINE_RESOURCE_PATHS,
-  IMPORTANT_OFFLINE_RESOURCE_PATHS,
+  APP_SHELL_OFFLINE_RESOURCE_PATHS,
+  REGISTRATION_OFFLINE_RESOURCE_PATHS,
+  SIGNING_OFFLINE_RESOURCE_PATHS,
+  TEMPLATE_OFFLINE_RESOURCE_PATHS,
   resolveOfflineResourceUrls,
 } from './resources'
 
-/** 入口预加载进度。 */
-export interface AppPreloadProgress {
-  /** 当前百分比 */
-  percent: number
-  /** 已处理资源数 */
-  completed: number
-  /** 资源总数 */
-  total: number
+/** 已经安排过后台预热的资源组。 */
+const scheduledResourceKeys = new Set<string>()
+
+/**
+ * @description: 在浏览器空闲时运行任务
+ * @param {() => void} task - 后台任务
+ * @return {void} 无返回值
+ */
+function runWhenIdle(task: () => void): void {
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(task, { timeout: 3000 })
+    return
+  }
+
+  globalThis.setTimeout(task, 800)
 }
 
 /**
- * @description: 预加载关键离线资源
- * @param {(progress: AppPreloadProgress) => void} onProgress - 进度回调
- * @return {Promise<void>} 无返回值
+ * @description: 安排指定资源路径后台预热
+ * @param {string} key - 资源组唯一键
+ * @param {readonly string[]} paths - public 资源路径
+ * @return {void} 无返回值
  */
-export async function preloadImportantOfflineResources(
-  onProgress: (progress: AppPreloadProgress) => void
-): Promise<void> {
-  const urls = resolveOfflineResourceUrls(IMPORTANT_OFFLINE_RESOURCE_PATHS)
+function scheduleOfflineResources(key: string, paths: readonly string[]): void {
+  if (scheduledResourceKeys.has(key) || paths.length === 0) {
+    return
+  }
 
-  await cacheOfflineResources(urls, (progress: OfflineCacheProgress) => {
-    onProgress({
-      percent: progress.percent,
-      completed: progress.completed,
-      total: progress.total,
-    })
+  scheduledResourceKeys.add(key)
+  const urls = resolveOfflineResourceUrls(paths)
+
+  runWhenIdle(() => {
+    void cacheOfflineResources(urls)
   })
 }
 
 /**
- * @description: 后台预热非关键资源
- * @description 使用浏览器空闲时间启动，避免抢占签发流程交互。
+ * @description: 按当前路由后台预热页面资源
+ * @description 首屏只轻量预热应用外壳；模板大图在核对、签发、证书等用到时再后台缓存。
+ * @param {unknown} routeName - 当前路由名
  * @return {void} 无返回值
  */
-export function preloadDeferredOfflineResources(): void {
-  const urls = resolveOfflineResourceUrls(DEFERRED_OFFLINE_RESOURCE_PATHS)
+export function preloadOfflineResourcesForRoute(routeName: unknown): void {
+  scheduleOfflineResources('app-shell', APP_SHELL_OFFLINE_RESOURCE_PATHS)
 
-  if (urls.length === 0) {
-    return
+  switch (routeName) {
+    case 'registration':
+      scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      break
+    case 'proofing':
+    case 'certificate':
+      scheduleOfflineResources('template', TEMPLATE_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      break
+    case 'signing':
+      scheduleOfflineResources('template', TEMPLATE_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('signing', SIGNING_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      break
+    case 'profile':
+      scheduleOfflineResources('template', TEMPLATE_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      break
+    default:
+      break
   }
-
-  const run = (): void => {
-    void cacheOfflineResources(urls)
-  }
-
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(run, { timeout: 3000 })
-    return
-  }
-
-  globalThis.setTimeout(run, 1200)
 }

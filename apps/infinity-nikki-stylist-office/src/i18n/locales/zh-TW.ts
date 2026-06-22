@@ -14,6 +14,7 @@ export default {
   common: {
     action: {
       backHome: '返回首頁',
+      backMainSite: '返回主站',
       continue: '繼續',
       start: '登記資料',
       openProfile: '個人中心',

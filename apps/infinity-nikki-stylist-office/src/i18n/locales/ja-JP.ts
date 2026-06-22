@@ -14,6 +14,7 @@ export default {
   common: {
     action: {
       backHome: 'ホームへ戻る',
+      backMainSite: 'メインサイト',
       continue: '続ける',
       start: '登録する',
       openProfile: '個人センター',

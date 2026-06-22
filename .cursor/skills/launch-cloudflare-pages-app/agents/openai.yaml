@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Launch Cloudflare Pages App'
+  short_description: '从 0 到 1 上线 Cloudflare Pages Web 应用'
+  default_prompt: 'Use $launch-cloudflare-pages-app to scaffold and release a new Cloudflare Pages web app in this monorepo.'

@@ -14,6 +14,7 @@ export default {
   common: {
     action: {
       backHome: 'Back Home',
+      backMainSite: 'Main Site',
       continue: 'Continue',
       start: 'Register',
       openProfile: 'Profile',

@@ -7,8 +7,6 @@ on:
     paths:
       - 'apps/infinity-nikki-player/**'
       - '!apps/infinity-nikki-player/**/*.md'
-      - '.changeset/**'
-      - '.github/workflows/release-infinity-nikki-player.yml'
   workflow_dispatch:
 
 env:
@@ -45,6 +43,7 @@ jobs:
       - name: Run changeset version and sync Tauri versions
         id: changeset
         run: |
+          BEFORE_VERSION=$(node -p "require('./apps/infinity-nikki-player/package.json').version")
           pnpm ci:version
           node <<'NODE'
           const fs = require('fs')
@@ -66,8 +65,8 @@ jobs:
             )
           )
           NODE
-          CHANGESET_SUMMARY=$(git status --porcelain)
-          if [ -n "$CHANGESET_SUMMARY" ]; then
+          AFTER_VERSION=$(node -p "require('./apps/infinity-nikki-player/package.json').version")
+          if [ "$BEFORE_VERSION" != "$AFTER_VERSION" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
