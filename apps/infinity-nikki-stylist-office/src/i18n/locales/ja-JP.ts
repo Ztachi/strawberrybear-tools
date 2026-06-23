@@ -158,6 +158,7 @@ export default {
     positionX: '横位置',
     positionY: '縦位置',
     resetPosition: 'この項目を既定位置へ戻す',
+    resetAvatarTransform: 'リセット',
     backRegistration: '登録資料へ戻る',
     saveHint:
       'マーク付きの証書領域をクリックして編集します。スマートフォンでは横向き表示がおすすめです。',
@@ -171,6 +172,18 @@ export default {
     editableNameLabel: '名前を修正',
     editableCertificateNoLabel: '登録地域を修正',
     editableTitleLabel: '称号を修正',
+    guideOpenLabel: '校正ガイドを表示',
+    guideTitle: '発行前校正ガイド',
+    guideIntro: '正式発行の前に、証書の文字、地域コード、称号、アバターの切り抜きを確認できます。',
+    guideFieldTitle: '証書の項目',
+    guideFieldBody:
+      '証書上でマークされた名前、番号、称号の領域をクリックすると、対応する資料を編集できます。',
+    guideAvatarTitle: 'アバター領域',
+    guideAvatarBody:
+      'アバターはドラッグで位置を調整できます。PC ではホイールで拡大縮小、スマートフォンやタブレットでは二本指で拡大縮小できます。指を離すと現在の切り抜きが保存されます。',
+    guideAvatarButtonsTitle: 'アバターボタン',
+    guideAvatarButtonsBody:
+      '右上の鉛筆はアバターの再選択です。左上のリセットボタンは位置や拡大率を調整した後だけ表示され、既定の切り抜きに戻します。',
   },
   signing: {
     title: '正式発行 · 第三段階',
@@ -234,6 +247,7 @@ export default {
     catalogTitle: '協会資料庫概要',
     catalogDescription:
       'ここでは協会資料庫の基本内容をまとめて表示します。今後の遠隔更新、インポート/エクスポート、資料管理もここに集約します。',
+    associationDossierNo: '協会記録番号',
     catalogVersion: '資料庫バージョン',
     titleCount: '称号数',
     templateCount: 'テンプレート数',

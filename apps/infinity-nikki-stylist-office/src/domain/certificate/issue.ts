@@ -10,6 +10,7 @@ import { formatCertificateDate } from './format'
 import type { LocaleCode, RegionOption, TitleOption } from '@/domain/catalog/types'
 import type { IssuedCertificate } from './types'
 import type { CertificateDraft } from '@/domain/draft/types'
+import { normalizeDraftImageTransform } from '@/domain/draft/imageTransform'
 
 /** 正式证书短码字符集，避开容易混淆的 I/O/1/0。 */
 export const CERTIFICATE_RANDOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -123,6 +124,7 @@ export function buildIssuedCertificateSnapshot(
     regionId: input.context.region.id,
     regionCode: input.context.region.code,
     avatarId: input.draft.avatarId,
+    avatarTransform: normalizeDraftImageTransform(input.draft.avatarTransform),
     certificateLocale: locale,
     templateId: input.draft.templateId,
     catalogVersion: input.draft.catalogVersion,

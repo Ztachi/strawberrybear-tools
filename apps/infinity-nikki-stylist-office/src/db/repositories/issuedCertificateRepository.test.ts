@@ -63,6 +63,11 @@ function createProofingDraft(): CertificateDraft {
     titleId: 'windtime-collector',
     regionId: 'florawish',
     avatarId: 'avatar-default-nikki',
+    avatarTransform: {
+      x: 14,
+      y: -6,
+      scale: 1.18,
+    },
   }
 }
 
@@ -114,6 +119,11 @@ describe('issued certificate repository', () => {
       regionId: 'florawish',
       regionCode: 'FLW',
       avatarId: 'avatar-default-nikki',
+      avatarTransform: {
+        x: 0,
+        y: 0,
+        scale: 1,
+      },
       certificateLocale: 'zh-CN',
       templateId: draft.templateId,
       catalogVersion: draft.catalogVersion,
@@ -159,6 +169,11 @@ describe('issued certificate repository', () => {
     expect(preparedInput.input).toMatchObject({
       templateImageSrc: '/template/templates/1/zh-CN.png',
       avatarIsCustom: false,
+      avatarTransform: {
+        x: 14,
+        y: -6,
+        scale: 1.18,
+      },
       fieldValues: {
         avatar: '',
         name: '冰沙',

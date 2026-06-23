@@ -11,6 +11,7 @@ const { t } = useI18n()
 
 /** 当前资料库来源仍是本地 seed；只在个人中心展示管理信息。 */
 const catalogRows = computed(() => [
+  { label: t('profile.associationDossierNo'), value: import.meta.env.VITE_APP_VERSION },
   { label: t('profile.catalogVersion'), value: associationCatalogSeed.catalogVersion },
   { label: t('profile.titleCount'), value: String(associationCatalogSeed.titleOptions.length) },
   { label: t('profile.templateCount'), value: String(associationCatalogSeed.templates.length) },
@@ -31,7 +32,7 @@ const catalogRows = computed(() => [
       </p>
     </div>
 
-    <dl class="m-0 grid grid-cols-3 gap-3 max-[760px]:grid-cols-1">
+    <dl class="m-0 grid grid-cols-4 gap-3 max-[980px]:grid-cols-2 max-[760px]:grid-cols-1">
       <div
         v-for="row in catalogRows"
         :key="row.label"

@@ -5,6 +5,7 @@
  * @date 2026-06-18
  */
 import type { LocaleCode } from '@/domain/catalog/types'
+import type { DraftImageTransform } from '@/domain/draft/types'
 
 /**
  * @description: 已正式签发证书
@@ -27,6 +28,8 @@ export interface IssuedCertificate {
   regionCode: string
   /** 头像 ID 快照，可能是协会头像或自定义头像 */
   avatarId: string
+  /** 头像在证书框内的取景参数快照 */
+  avatarTransform?: DraftImageTransform
   /** 证书语言快照 */
   certificateLocale: LocaleCode
   /** 模板 ID 快照 */

@@ -7,6 +7,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useScrollTopControl } from '@/composables/useScrollTopControl'
+import { useDraftSessionStore } from '@/stores/draftSession'
 import WorkflowStepper from './components/WorkflowStepper/WorkflowStepper.vue'
 import RegistrationStep from './components/RegistrationStep/RegistrationStep.vue'
 import ProofingStep from './components/ProofingStep/ProofingStep.vue'
@@ -18,6 +19,7 @@ type WorkflowRouteName = 'registration' | 'proofing' | 'signing' | 'certificate'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const draftSession = useDraftSessionStore()
 
 useScrollTopControl({ scopeId: 'certificate-workflow-window', threshold: 180 })
 
@@ -73,6 +75,9 @@ const maxReachableStep = ref(currentStep.value)
 const isImmersive = ref(false)
 
 const currentStepComponent = computed(() => stepComponents[currentRouteName.value])
+const currentStepComponentKey = computed(
+  () => `${currentRouteName.value}-${draftSession.resetVersion}`
+)
 
 watch(
   currentStep,
@@ -81,6 +86,14 @@ watch(
     isImmersive.value = false
   },
   { immediate: true }
+)
+
+watch(
+  () => draftSession.resetVersion,
+  () => {
+    maxReachableStep.value = 1
+    isImmersive.value = false
+  }
 )
 
 /**
@@ -138,7 +151,7 @@ async function navigateStep(routeName: WorkflowRouteName): Promise<void> {
       <Transition name="workflow-step" mode="out-in" appear>
         <component
           :is="currentStepComponent"
-          :key="currentRouteName"
+          :key="currentStepComponentKey"
           @immersive-change="isImmersive = $event"
         />
       </Transition>
