@@ -24,10 +24,10 @@
       "source": "avatar",
       "editable": true,
       "editor": "avatar",
-      "position": [115, 390],
+      "position": [138, 396],
       "size": {
-        "width": 320,
-        "height": 320
+        "width": 286,
+        "height": 308
       },
       "imageMask": {
         "shape": "roundedArch",
@@ -35,10 +35,10 @@
       },
       "customImageScale": 0.86,
       "hitArea": {
-        "x": 105,
-        "y": 360,
-        "width": 350,
-        "height": 370
+        "x": 124,
+        "y": 364,
+        "width": 326,
+        "height": 366
       }
     },
     {
@@ -92,6 +92,14 @@
       "editable": true,
       "editor": "title",
       "position": [435, 785],
+      "localePositionOffset": {
+        "en-US": {
+          "y": 5
+        },
+        "ja-JP": {
+          "y": 5
+        }
+      },
       "contentWidth": 250,
       "hitArea": {
         "x": 342,
@@ -105,7 +113,8 @@
         "fontWeight": 650,
         "color": "#7a5135",
         "align": "left",
-        "lineHeight": 1.1
+        "lineHeight": 1.1,
+        "verticalAlign": "middle"
       }
     },
     {

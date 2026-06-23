@@ -11,6 +11,8 @@ export const useDraftSessionStore = defineStore('draftSession', {
   state: () => ({
     /** 最近一次已知草稿阶段，只用于首页按钮文案和跳转提示。 */
     lastKnownStage: null as DraftStage | null,
+    /** 本次页面会话内的流程重置版本，用于通知流程壳重置可达步骤和重挂载子页。 */
+    resetVersion: 0,
   }),
   actions: {
     /**
@@ -27,6 +29,14 @@ export const useDraftSessionStore = defineStore('draftSession', {
      */
     clearSession(): void {
       this.lastKnownStage = null
+    },
+    /**
+     * @description: 标记办理流程已重新开始
+     * @description 不持久化版本号，只用于当前页面会话内刷新流程壳状态。
+     * @return {void} 无返回值
+     */
+    markWorkflowReset(): void {
+      this.resetVersion += 1
     },
   },
   persist: {

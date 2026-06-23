@@ -161,6 +161,7 @@ export default {
     positionX: 'Horizontal Position',
     positionY: 'Vertical Position',
     resetPosition: 'Reset target position',
+    resetAvatarTransform: 'Reset',
     backRegistration: 'Back to Registration',
     saveHint:
       'Click marked certificate regions to edit. On phones, landscape view is recommended for certificate details.',
@@ -175,6 +176,19 @@ export default {
     editableNameLabel: 'Edit Name',
     editableCertificateNoLabel: 'Edit Registration Region',
     editableTitleLabel: 'Edit Title',
+    guideOpenLabel: 'View proof guide',
+    guideTitle: 'Pre-Issuance Proof Guide',
+    guideIntro:
+      'Before official issuance, review the certificate text, region code, title, and avatar framing here.',
+    guideFieldTitle: 'Certificate Fields',
+    guideFieldBody:
+      'Click the marked name, number, or title areas on the certificate to edit the matching archive details.',
+    guideAvatarTitle: 'Avatar Area',
+    guideAvatarBody:
+      'Drag the avatar to reposition it. On desktop, use the mouse wheel to zoom; on phones and tablets, pinch with two fingers. The framing is saved after you release.',
+    guideAvatarButtonsTitle: 'Avatar Buttons',
+    guideAvatarButtonsBody:
+      'The pencil in the upper right reselects the avatar. The reset button in the upper left appears after repositioning or zooming and restores the default framing.',
   },
   signing: {
     title: 'Official Issuance · Step Three',
@@ -240,6 +254,7 @@ export default {
     catalogTitle: 'Association Catalog Overview',
     catalogDescription:
       'This area summarizes the base association catalog. Future remote updates, import/export, and catalog maintenance belong here.',
+    associationDossierNo: 'Association Dossier No.',
     catalogVersion: 'Catalog Version',
     titleCount: 'Title Count',
     templateCount: 'Template Count',

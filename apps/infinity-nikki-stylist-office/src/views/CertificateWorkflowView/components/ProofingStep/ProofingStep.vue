@@ -21,6 +21,7 @@ import {
 import { getOfficialAssetImageSource } from '@/domain/assets/officialAssets'
 import { resolveLocalizedText } from '@/domain/catalog/text'
 import { formatCertificateDate, formatPendingCertificateNo } from '@/domain/certificate/format'
+import { DEFAULT_DRAFT_IMAGE_TRANSFORM } from '@/domain/draft/imageTransform'
 import {
   getTemplateImageSource,
   loadBuiltinTemplatePackage,
@@ -33,6 +34,7 @@ import { useWorkflowRecoveryActions } from '../../composables/useWorkflowRecover
 import CertificateProofCanvas from './components/CertificateProofCanvas/CertificateProofCanvas.vue'
 import TitlePickerBody from '../RegistrationStep/components/ProfileOptionSelector/components/TitlePickerBody/TitlePickerBody.vue'
 import type { CertificateDraft } from '@/domain/draft/types'
+import type { DraftImageTransform } from '@/domain/draft/types'
 import type {
   BuiltinCertificateTemplatePackage,
   CertificateTemplateEditorKind,
@@ -61,6 +63,8 @@ const isNameDialogOpen = ref(false)
 const isTitleDialogOpen = ref(false)
 /** 地区选择弹窗开关。 */
 const isRegionDialogOpen = ref(false)
+/** 校样说明弹窗开关。 */
+const isGuideOpen = ref(false)
 /** 头像选择弹窗开关。 */
 const isAvatarPickerOpen = ref(false)
 /** 姓名弹窗中的临时输入值，确认后才写入草稿。 */
@@ -73,6 +77,8 @@ const isCustomAvatar = ref(false)
 const customAvatarObjectUrl = ref('')
 /** 当前模板包，找不到模板时由注册表回退默认模板。 */
 const templatePackage = ref<BuiltinCertificateTemplatePackage | null>(null)
+/** 拖拽头像时的即时预览取景参数，松手后再持久化进草稿。 */
+const avatarTransformPreview = ref<DraftImageTransform | null>(null)
 
 /** 当前模板 manifest。 */
 const templateManifest = computed(() => templatePackage.value?.manifest ?? null)
@@ -123,6 +129,13 @@ const selectedAvatarId = computed(() => draft.value?.avatarId ?? '')
 
 /** 当前证书语言，草稿未加载时回退顶部语言。 */
 const currentCertificateLocale = computed(() => draft.value?.certificateLocale ?? uiStore.uiLocale)
+
+/** 当前画布使用的头像取景参数。 */
+const currentAvatarTransform = computed(
+  () =>
+    avatarTransformPreview.value ??
+    draft.value?.avatarTransform ?? { ...DEFAULT_DRAFT_IMAGE_TRANSFORM }
+)
 
 /** 当前登记地区资料。 */
 const selectedRegion = computed(() =>
@@ -356,7 +369,31 @@ function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string 
     return
   }
 
-  void saveDraftPatch({ avatarId: payload.id })
+  avatarTransformPreview.value = null
+  void saveDraftPatch({
+    avatarId: payload.id,
+    avatarTransform: { ...DEFAULT_DRAFT_IMAGE_TRANSFORM },
+  })
+}
+
+/**
+ * @description: 即时预览头像取景
+ * @param {DraftImageTransform} transform - 当前手势生成的取景参数
+ * @return {void} 无返回值
+ */
+function previewAvatarTransform(transform: DraftImageTransform): void {
+  avatarTransformPreview.value = transform
+}
+
+/**
+ * @description: 持久化头像取景
+ * @param {DraftImageTransform} transform - 最终头像取景参数
+ * @return {Promise<void>} 无返回值
+ */
+async function commitAvatarTransform(transform: DraftImageTransform): Promise<void> {
+  avatarTransformPreview.value = transform
+  await saveDraftPatch({ avatarTransform: transform })
+  avatarTransformPreview.value = null
 }
 
 /**
@@ -450,8 +487,21 @@ onBeforeUnmount(() => {
       <section class="grid gap-3">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div class="grid gap-1">
-            <h2 class="m-0 text-[18px] font-[740] text-[var(--color-foreground)]">
-              {{ t('proofing.previewTitle') }}
+            <h2
+              class="m-0 inline-flex min-w-0 items-center gap-1.5 text-[18px] font-[740] text-[var(--color-foreground)]"
+            >
+              <span class="min-w-0 truncate">{{ t('proofing.previewTitle') }}</span>
+              <v-btn
+                :aria-label="t('proofing.guideOpenLabel')"
+                :title="t('proofing.guideOpenLabel')"
+                icon="mdi-alert-circle"
+                variant="text"
+                color="primary"
+                density="comfortable"
+                size="small"
+                data-sound="open"
+                @click="isGuideOpen = true"
+              />
             </h2>
             <p class="m-0 text-[13px] leading-relaxed text-[var(--color-muted-dark)]">
               {{ t('proofing.saveHint') }}
@@ -469,16 +519,55 @@ onBeforeUnmount(() => {
 
         <CertificateProofCanvas
           :manifest="templateManifest"
+          :locale="currentCertificateLocale"
           :image-src="templateImageSrc"
           :avatar-src="avatarImageSrc"
           :avatar-is-custom="isCustomAvatar"
+          :avatar-transform="currentAvatarTransform"
           :field-values="fieldValues"
           :field-labels="fieldLabels"
+          :avatar-reset-label="t('proofing.resetAvatarTransform')"
           :watermark="templateCopy.proofWatermark"
           @edit="openEditor"
+          @avatar-transform-preview="previewAvatarTransform"
+          @avatar-transform-commit="commitAvatarTransform"
         />
       </section>
     </div>
+
+    <PickerDialogFrame
+      v-model="isGuideOpen"
+      :title="t('proofing.guideTitle')"
+      :intro="t('proofing.guideIntro')"
+      :max-width="560"
+    >
+      <div class="grid gap-3">
+        <section class="grid gap-1 rounded-[14px] border border-[#ef5f8f]/15 bg-white/70 p-3">
+          <h3 class="m-0 text-[15px] font-[780] text-[var(--color-foreground)]">
+            {{ t('proofing.guideFieldTitle') }}
+          </h3>
+          <p class="m-0 text-[13px] leading-relaxed text-[var(--color-muted-dark)]">
+            {{ t('proofing.guideFieldBody') }}
+          </p>
+        </section>
+        <section class="grid gap-1 rounded-[14px] border border-[#ef5f8f]/15 bg-white/70 p-3">
+          <h3 class="m-0 text-[15px] font-[780] text-[var(--color-foreground)]">
+            {{ t('proofing.guideAvatarTitle') }}
+          </h3>
+          <p class="m-0 text-[13px] leading-relaxed text-[var(--color-muted-dark)]">
+            {{ t('proofing.guideAvatarBody') }}
+          </p>
+        </section>
+        <section class="grid gap-1 rounded-[14px] border border-[#ef5f8f]/15 bg-white/70 p-3">
+          <h3 class="m-0 text-[15px] font-[780] text-[var(--color-foreground)]">
+            {{ t('proofing.guideAvatarButtonsTitle') }}
+          </h3>
+          <p class="m-0 text-[13px] leading-relaxed text-[var(--color-muted-dark)]">
+            {{ t('proofing.guideAvatarButtonsBody') }}
+          </p>
+        </section>
+      </div>
+    </PickerDialogFrame>
 
     <BottomActionBar
       v-if="draft && templateManifest && !isDraftMissing"

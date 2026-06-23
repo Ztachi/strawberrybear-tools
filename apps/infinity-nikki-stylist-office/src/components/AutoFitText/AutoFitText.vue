@@ -13,6 +13,8 @@ const props = withDefaults(
     maxFontSize: string
     /** 最大字号对应的行高，用来保留稳定的垂直占位 */
     lineHeight?: number
+    /** 外层行盒高度；不传时按最大字号行高生成 */
+    boxHeight?: string
     /** 缩小后在最大行盒内的垂直对齐方式 */
     verticalAlign?: 'center' | 'bottom'
     /** 宽度安全系数，避免临界文本因小数像素或字形渲染被裁掉末尾 */
@@ -22,6 +24,7 @@ const props = withDefaults(
   }>(),
   {
     lineHeight: 1.1,
+    boxHeight: '',
     verticalAlign: 'bottom',
     fitSafety: 0.96,
     minScale: 0.55,
@@ -32,30 +35,86 @@ const props = withDefaults(
 const rootElement = ref<HTMLElement | null>(null)
 /** 隐藏测量文本引用，始终使用最大字号测量原始宽度。 */
 const measureElement = ref<HTMLElement | null>(null)
-/** 当前字号缩放比例。 */
-const scale = ref(1)
+/** 可见文字像素字号，用于 SVG 基线计算。 */
+const fontSizePx = ref(0)
+/** SVG 文本 baseline，单位为当前容器 CSS 像素。 */
+const baselineY = ref(0)
+/** SVG viewBox 宽度，单位为当前容器 CSS 像素。 */
+const svgWidth = ref(1)
+/** SVG viewBox 高度，单位为当前容器 CSS 像素。 */
+const svgHeight = ref(1)
 /** 容器尺寸监听器。 */
 let resizeObserver: ResizeObserver | null = null
 
-/** 实际应用到可见文字上的字号。 */
-const fittedFontSize = computed(() => `calc(${props.maxFontSize} * ${scale.value})`)
 /** 外层保留最大字号行盒高度，避免缩小字号后文字上浮。 */
 const lineBoxStyle = computed(() => ({
-  height: `calc(${props.maxFontSize} * ${props.lineHeight})`,
+  height: props.boxHeight || `calc(${props.maxFontSize} * ${props.lineHeight})`,
 }))
-/** 可见文字样式；缩放后在最大行盒内垂直居中。 */
+/** 可见文字样式；SVG baseline 由真实字形边界计算。 */
 const visibleTextStyle = computed(() => ({
-  top: props.verticalAlign === 'center' ? '50%' : 'auto',
-  bottom: props.verticalAlign === 'bottom' ? '0' : 'auto',
-  fontSize: fittedFontSize.value,
+  fontSize: `${fontSizePx.value}px`,
   lineHeight: `${props.lineHeight}`,
-  transform: props.verticalAlign === 'center' ? 'translateY(-50%)' : 'none',
 }))
 /** 测量文字始终使用最大字号，保证宽度计算不受当前缩放影响。 */
 const measureTextStyle = computed(() => ({
   fontSize: props.maxFontSize,
   lineHeight: `${props.lineHeight}`,
 }))
+/** SVG 坐标系与实际 CSS 像素保持一致。 */
+const svgViewBox = computed(() => `0 0 ${svgWidth.value} ${svgHeight.value}`)
+
+interface TextVerticalMetrics {
+  /** 字体上边界到 alphabetic baseline 的距离。 */
+  ascent: number
+  /** 字体下边界到 alphabetic baseline 的距离。 */
+  descent: number
+}
+
+/**
+ * @description: 创建文字测量上下文
+ * @return {CanvasRenderingContext2D | null} Canvas 2D 上下文
+ */
+function createMeasureContext(): CanvasRenderingContext2D | null {
+  const canvas = document.createElement('canvas')
+
+  return canvas.getContext('2d')
+}
+
+/**
+ * @description: 根据 TextMetrics 解析字体垂直边界
+ * @description fontBoundingBox 以字体包围盒为准，比单个字形 bbox 更适合中英日统一基线。
+ * @param {HTMLElement} element - 字体样式来源元素
+ * @param {number} nextFontSizePx - 实际字号
+ * @return {TextVerticalMetrics} 字体垂直边界
+ */
+function measureFontBounds(element: HTMLElement, nextFontSizePx: number): TextVerticalMetrics {
+  const context = createMeasureContext()
+
+  if (!context) {
+    return {
+      ascent: nextFontSizePx * 0.82,
+      descent: nextFontSizePx * 0.18,
+    }
+  }
+
+  const style = getComputedStyle(element)
+
+  context.font = [
+    style.fontStyle,
+    style.fontVariant,
+    style.fontWeight,
+    `${nextFontSizePx}px`,
+    style.fontFamily,
+  ].join(' ')
+
+  const metrics = context.measureText(props.text || ' ')
+
+  return {
+    ascent: metrics.fontBoundingBoxAscent || metrics.actualBoundingBoxAscent || nextFontSizePx * 0.82,
+    descent:
+      metrics.fontBoundingBoxDescent || metrics.actualBoundingBoxDescent || nextFontSizePx * 0.18,
+  }
+}
 
 /**
  * @description: 更新字号缩放比例
@@ -73,14 +132,28 @@ async function updateScale(): Promise<void> {
   }
 
   const availableWidth = root.getBoundingClientRect().width
+  const availableHeight = root.getBoundingClientRect().height
   const measuredWidth = measure.getBoundingClientRect().width
+  const maxFontSizePx = parseFloat(getComputedStyle(measure).fontSize)
 
-  if (availableWidth <= 0 || measuredWidth <= 0) {
-    scale.value = 1
+  if (availableWidth <= 0 || availableHeight <= 0 || measuredWidth <= 0 || maxFontSizePx <= 0) {
     return
   }
 
-  scale.value = Math.max(props.minScale, Math.min(1, (availableWidth / measuredWidth) * props.fitSafety))
+  const nextScale = Math.max(
+    props.minScale,
+    Math.min(1, (availableWidth / measuredWidth) * props.fitSafety)
+  )
+
+  fontSizePx.value = maxFontSizePx * nextScale
+  svgWidth.value = Math.max(availableWidth, 1)
+  svgHeight.value = Math.max(availableHeight, 1)
+  const { ascent, descent } = measureFontBounds(measure, fontSizePx.value)
+
+  baselineY.value =
+    props.verticalAlign === 'center'
+      ? availableHeight / 2 + (ascent - descent) / 2
+      : availableHeight - descent
 }
 
 watch(
@@ -90,6 +163,8 @@ watch(
     () => props.minScale,
     () => props.lineHeight,
     () => props.fitSafety,
+    () => props.verticalAlign,
+    () => props.boxHeight,
   ],
   () => {
     void updateScale()
@@ -119,9 +194,11 @@ onBeforeUnmount(() => {
 
 <template>
   <span ref="rootElement" class="auto-fit-text" :style="lineBoxStyle">
-    <span class="auto-fit-text__visible" :style="visibleTextStyle">
-      {{ text }}
-    </span>
+    <svg class="auto-fit-text__visible" :viewBox="svgViewBox" preserveAspectRatio="none">
+      <text class="auto-fit-text__svg-text" x="0" :y="baselineY" :style="visibleTextStyle">
+        {{ text }}
+      </text>
+    </svg>
     <span ref="measureElement" class="auto-fit-text__measure" :style="measureTextStyle">
       {{ text }}
     </span>
@@ -138,12 +215,19 @@ onBeforeUnmount(() => {
 }
 
 .auto-fit-text__visible {
-  position: absolute;
-  top: 50%;
-  left: 0;
   display: block;
+  width: 100%;
+  height: 100%;
   overflow: visible;
   white-space: nowrap;
+  pointer-events: none;
+}
+
+.auto-fit-text__svg-text {
+  fill: currentColor;
+  font-family: inherit;
+  font-weight: inherit;
+  letter-spacing: 0;
 }
 
 .auto-fit-text__measure {

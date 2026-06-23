@@ -7,14 +7,8 @@
 import { nanoid } from 'nanoid'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import type { LocaleCode } from '@/domain/catalog/types'
-import type { CertificateDraft, DraftImageTransform } from './types'
-
-/** 默认图片取景参数，后续素材编辑会在此基础上保存用户调整。 */
-const DEFAULT_IMAGE_TRANSFORM: DraftImageTransform = {
-  x: 0,
-  y: 0,
-  scale: 1,
-}
+import { DEFAULT_DRAFT_IMAGE_TRANSFORM, normalizeDraftImageTransform } from './imageTransform'
+import type { CertificateDraft } from './types'
 
 /**
  * @description: 从数组中随机选择一项
@@ -55,8 +49,8 @@ export function createDefaultDraft(locale: LocaleCode): CertificateDraft {
     avatarId: avatar?.id ?? '',
     backgroundId: background?.id ?? '',
     templateId: associationCatalogSeed.defaultTemplateId,
-    avatarTransform: { ...DEFAULT_IMAGE_TRANSFORM },
-    backgroundTransform: { ...DEFAULT_IMAGE_TRANSFORM },
+    avatarTransform: { ...DEFAULT_DRAFT_IMAGE_TRANSFORM },
+    backgroundTransform: { ...DEFAULT_DRAFT_IMAGE_TRANSFORM },
     templateTextPositions: {},
     catalogVersion: associationCatalogSeed.catalogVersion,
     createdAt: now,
@@ -87,14 +81,8 @@ export function normalizeDraft(
     avatarId: draft.avatarId ?? defaultDraft.avatarId,
     backgroundId: draft.backgroundId ?? defaultDraft.backgroundId,
     templateId: draft.templateId ?? defaultDraft.templateId,
-    avatarTransform: {
-      ...DEFAULT_IMAGE_TRANSFORM,
-      ...(draft.avatarTransform ?? {}),
-    },
-    backgroundTransform: {
-      ...DEFAULT_IMAGE_TRANSFORM,
-      ...(draft.backgroundTransform ?? {}),
-    },
+    avatarTransform: normalizeDraftImageTransform(draft.avatarTransform),
+    backgroundTransform: normalizeDraftImageTransform(draft.backgroundTransform),
     templateTextPositions: draft.templateTextPositions ?? {},
   }
 }

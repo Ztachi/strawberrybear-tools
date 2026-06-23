@@ -149,6 +149,7 @@ export default {
     positionX: '橫向位置',
     positionY: '縱向位置',
     resetPosition: '恢復目前項目預設位置',
+    resetAvatarTransform: '還原',
     backRegistration: '返回登記資料',
     saveHint: '點擊帶標記的證書區域即可修改；手機上建議橫屏查看證書細節。',
     apply: '確認校樣，進入簽發',
@@ -161,6 +162,17 @@ export default {
     editableNameLabel: '修改姓名',
     editableCertificateNoLabel: '修改登記地區',
     editableTitleLabel: '修改稱號',
+    guideOpenLabel: '查看校樣說明',
+    guideTitle: '簽發前校樣說明',
+    guideIntro: '確認正本簽發前，可以在這裡核對證書文字、地區編號、稱號和頭像取景。',
+    guideFieldTitle: '證書欄位',
+    guideFieldBody: '點擊證書上帶標記的姓名、編號或稱號區域，可以直接修改對應資料。',
+    guideAvatarTitle: '頭像區域',
+    guideAvatarBody:
+      '頭像支援拖曳調整位置；電腦可用滾輪縮放，手機和平板可用雙指縮放。放開後會自動保存目前取景。',
+    guideAvatarButtonsTitle: '頭像按鈕',
+    guideAvatarButtonsBody:
+      '右上角鉛筆用於重新選擇頭像；左上角還原按鈕只會在調整過位置或縮放後出現，可恢復預設取景。',
   },
   signing: {
     title: '正本簽發 · 第三步',
@@ -224,6 +236,7 @@ export default {
     catalogTitle: '協會資料庫概覽',
     catalogDescription:
       '這裡集中展示協會資料庫的基礎內容。後續遠端更新、匯入匯出和資料維護也會歸入此處。',
+    associationDossierNo: '協會卷宗號',
     catalogVersion: '資料庫版本',
     titleCount: '稱號數量',
     templateCount: '模板數量',
