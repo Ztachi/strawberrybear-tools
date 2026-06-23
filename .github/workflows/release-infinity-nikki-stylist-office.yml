@@ -67,56 +67,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run changeset version
-        id: changeset
-        run: |
-          pnpm ci:version
-          CHANGESET_SUMMARY=$(git status --porcelain)
-          if [ -n "$CHANGESET_SUMMARY" ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Skip release (no changeset)
-        if: steps.changeset.outputs.has_changes != 'true'
-        run: 'echo "Skip release: no changeset version change detected"'
-
       - name: Build
-        if: steps.changeset.outputs.has_changes == 'true'
         run: pnpm --filter @strawberrybear/infinity-nikki-stylist-office build
-
-      - name: Package dist
-        if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          cd apps/infinity-nikki-stylist-office
-          zip -r "$RUNNER_TEMP/infinity-nikki-stylist-office-dist.zip" dist/
-
-      - name: Commit and push version bump
-        if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/ .changeset/
-          git commit -m "chore: version bump"
-          git push
-
-      - name: Fetch latest commit
-        if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          git fetch origin main
-          git checkout origin/main
 
       - name: Get app version
         id: version
-        if: steps.changeset.outputs.has_changes == 'true'
         run: |
           VERSION=$(node -p "require('./apps/infinity-nikki-stylist-office/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Check release tag
+        id: release_tag
+        run: |
+          TAG_NAME="infinity-nikki-stylist-office@v${{ steps.version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "$TAG_NAME" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip release (tag exists)
+        if: steps.release_tag.outputs.exists == 'true'
+        run: 'echo "Skip release: tag already exists"'
+
+      - name: Package dist
+        if: steps.release_tag.outputs.exists != 'true'
+        run: |
+          cd apps/infinity-nikki-stylist-office
+          zip -r "$RUNNER_TEMP/infinity-nikki-stylist-office-dist.zip" dist/
+
       - name: Get changelog entry
         id: changelog
-        if: steps.changeset.outputs.has_changes == 'true'
+        if: steps.release_tag.outputs.exists != 'true'
         run: |
           VERSION=${{ steps.version.outputs.version }}
           CONTENT=$(awk "/^## ${VERSION}/{flag=1; next} /^## [0-9]/{if(flag) exit} flag" apps/infinity-nikki-stylist-office/CHANGELOG.md)
@@ -125,7 +107,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        if: steps.changeset.outputs.has_changes == 'true'
+        if: steps.release_tag.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
           draft: false
