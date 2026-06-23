@@ -101,10 +101,17 @@ git pull origin main
 git tag -a v1.2.0 -m "Release 1.2.0"
 git push origin v1.2.0
 
-# 3. (如有 release/ 分支) 同步回 develop:
+# 3. 发版完成后,必须把 main 的发版历史同步回 develop:
 git checkout develop
+git pull origin develop
+git checkout -b fix/sync-main-after-release
 git merge --no-ff main
-git push origin develop
+git push -u origin fix/sync-main-after-release
+
+# 4. 在 GitHub 上提 PR: fix/sync-main-after-release → develop
+#    该 PR 必须使用 Create a merge commit,禁止 Squash and merge。
+#    目的:让 develop 真正包含 main 的发版提交历史,避免 GitHub 显示 behind main,
+#    也避免下一次 develop → main 发版时反复出现重复 diff 或冲突。
 ```
 
 ### 场景 3:线上紧急修复(hotfix)
@@ -121,7 +128,10 @@ git push -u origin hotfix/urgent-fix
 
 # 3. 同时提两个 PR:
 #    - hotfix/urgent-fix → main(立刻合并并发版)
-#    - hotfix/urgent-fix → develop(同步修复)
+#    - hotfix/urgent-fix → develop(仅当 main 尚未产生额外发版提交时)
+#
+# 若 hotfix 合入 main 后已经产生发版提交,后续以 main → develop 的历史同步 PR 为准,
+# 不要再把同一个 hotfix 分支 Squash 到 develop,否则 develop 会出现内容等价但历史分叉。
 ```
 
 ## rebase 同步策略
@@ -209,7 +219,9 @@ chore(deps): 升级 vite 到 5.4
 - CI 必须全绿(lint / type-check / test / build)
 - 与目标分支无冲突
 - 标题符合 Conventional Commits
-- **必须使用 Squash and merge** 合并(保持 main/develop 历史的线性)
+- **默认使用 Squash and merge** 合并(保持 main/develop 日常开发历史简洁)
+- **例外**:`main → develop` 的发版后历史同步 PR 必须使用 **Create a merge commit**,
+  不得 Squash。该 PR 的目的不是改代码,而是保留 main 的发版提交历史,让 develop 不再落后 main。
 
 ## 禁止行为
 
@@ -221,7 +233,7 @@ chore(deps): 升级 vite 到 5.4
 4. ❌ **用 `git push --force` 覆盖已经多人协作的分支**(个人分支可以 force-with-lease)
 5. ❌ **在 PR 合并前删除目标分支**(会丢失提交)
 6. ❌ **绕过 PR 直接推到 main 或 develop**(即使只有自己一个开发者)
-7. ❌ **merge --no-ff 到 main/develop**(用 Squash and merge 保持线性)
+7. ❌ **普通 feature/fix PR 使用 merge --no-ff 到 main/develop**(日常改动用 Squash and merge 保持线性；仅 `main → develop` 发版后历史同步 PR 允许 merge commit)
 
 ## CI 触发范围
 
