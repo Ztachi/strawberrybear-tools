@@ -26,6 +26,15 @@ const rectSchema = z.object({
   height: z.number().positive(),
 })
 
+/** 按语言微调字段坐标，适配不同底图文字标签的视觉基线。 */
+const localePositionOffsetSchema = z.partialRecord(
+  localeCodeSchema,
+  z.object({
+    x: z.number().optional(),
+    y: z.number().optional(),
+  })
+)
+
 /** 文字样式校验，当前只保留证书动态值需要的最小样式集。 */
 const textStyleSchema = z.object({
   fontSize: z.number().positive(),
@@ -34,6 +43,7 @@ const textStyleSchema = z.object({
   color: z.string().min(1),
   align: z.enum(['left', 'center', 'right']),
   lineHeight: z.number().positive(),
+  verticalAlign: z.enum(['baseline', 'middle']).optional(),
 })
 
 /** 图片字段遮罩校验，当前用于头像圆顶拱门形状。 */
@@ -51,6 +61,7 @@ const templateFieldSchema = z
     editable: z.boolean(),
     editor: z.enum(['avatar', 'name', 'region', 'title']).optional(),
     position: pointSchema,
+    localePositionOffset: localePositionOffsetSchema.optional(),
     contentWidth: z.number().positive().optional(),
     size: z
       .object({

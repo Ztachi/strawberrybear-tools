@@ -18,6 +18,7 @@ import {
 } from '@/domain/certificate/issue'
 import type { CertificateRenderInput } from '@/domain/certificate/render'
 import { getTemplateImageSource, loadBuiltinTemplatePackage } from '@/domain/template/registry'
+import { DEFAULT_DRAFT_IMAGE_TRANSFORM } from '@/domain/draft/imageTransform'
 import type { CertificateDraft } from '@/domain/draft/types'
 import type { IssuedCertificate } from '@/domain/certificate/types'
 
@@ -237,6 +238,7 @@ export async function prepareIssuedCertificateRenderInput(
   return {
     input: {
       manifest: templatePackage.manifest,
+      locale: certificate.certificateLocale,
       templateImageSrc: getTemplateImageSource(
         templatePackage.manifest,
         templatePackage.imageSources,
@@ -244,6 +246,7 @@ export async function prepareIssuedCertificateRenderInput(
       ),
       avatarSrc: avatarSource.src,
       avatarIsCustom: avatarSource.isCustom,
+      avatarTransform: certificate.avatarTransform ?? DEFAULT_DRAFT_IMAGE_TRANSFORM,
       fieldValues: buildCertificateRenderFieldValues(certificate),
     },
     cleanup: () => avatarSource.revoke?.(),

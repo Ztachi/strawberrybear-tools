@@ -68,7 +68,7 @@ const regionItems = computed(() => {
   const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
 
   return associationCatalogSeed.regions.map((region) => ({
-    title: resolveLocalizedText(region.name, locale),
+    title: `${resolveLocalizedText(region.name, locale)}（${region.code}）`,
     value: region.id,
   }))
 })
@@ -128,7 +128,7 @@ const confirmationRows = computed(() => {
 
   const titleName = selectedTitle.value?.displayName ?? ''
   const regionName = selectedRegion.value
-    ? resolveLocalizedText(selectedRegion.value.name, draft.value.certificateLocale)
+    ? `${resolveLocalizedText(selectedRegion.value.name, draft.value.certificateLocale)}（${selectedRegion.value.code}）`
     : ''
 
   return [

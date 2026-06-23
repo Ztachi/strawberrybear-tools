@@ -29,7 +29,13 @@ export function useWorkflowRecoveryActions(): {
     const draft = createDefaultDraft(uiStore.uiLocale)
     await replaceActiveDraft(draft)
     draftSession.setLastKnownStage('registration')
-    await router.push({ name: 'registration' })
+
+    const currentRoute = router.currentRoute.value
+    if (currentRoute.name !== 'registration' || Object.keys(currentRoute.query).length > 0) {
+      await router.replace({ name: 'registration' })
+    }
+
+    draftSession.markWorkflowReset()
   }
 
   /**

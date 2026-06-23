@@ -5,6 +5,12 @@
  * @date 2026-06-21
  */
 import type { CertificateRenderFieldValues } from './issue'
+import {
+  clampAvatarImageTransform,
+  DEFAULT_DRAFT_IMAGE_TRANSFORM,
+} from '@/domain/draft/imageTransform'
+import type { DraftImageTransform } from '@/domain/draft/types'
+import type { LocaleCode } from '@/domain/catalog/types'
 import type { CertificateTemplateField, CertificateTemplateManifest } from '@/domain/template/types'
 
 /** 横版收藏正本规格。 */
@@ -19,15 +25,22 @@ export const A4_CERTIFICATE_SIZE = {
   height: 2480,
 } as const
 
+/** 导出头像羽化强度，按头像框短边比例计算；越大边缘越柔。 */
+const AVATAR_FEATHER_BLUR_RATIO = 0.045
+
 export interface CertificateRenderInput {
   /** 当前模板 manifest */
   manifest: CertificateTemplateManifest
+  /** 当前证书语言 */
+  locale?: LocaleCode
   /** 当前证书语言对应的底图 URL */
   templateImageSrc: string
   /** 头像 URL，支持 public、blob 和 data URL */
   avatarSrc: string
   /** 头像是否来自用户自定义素材 */
   avatarIsCustom: boolean
+  /** 头像在证书框内的取景参数 */
+  avatarTransform?: DraftImageTransform
   /** 动态字段值 */
   fieldValues: CertificateRenderFieldValues
 }
@@ -127,6 +140,65 @@ function addRoundedArchPath(
 }
 
 /**
+ * @description: 创建头像框形状羽化遮罩
+ * @description 使用多层内缩的圆顶拱门路径叠出透明到不透明的边缘，不依赖 Canvas filter 支持。
+ * @param {number} width - 遮罩宽度
+ * @param {number} height - 遮罩高度
+ * @return {HTMLCanvasElement | null} 羽化遮罩画布
+ */
+function createAvatarFeatherMask(width: number, height: number): HTMLCanvasElement | null {
+  const featherMask = createCanvas(width, height)
+  const featherMaskContext = featherMask.getContext('2d')
+
+  if (!featherMaskContext) {
+    return null
+  }
+
+  const featherWidth = Math.max(12, Math.min(width, height) * AVATAR_FEATHER_BLUR_RATIO)
+  const steps = 24
+
+  for (let step = 0; step < steps; step += 1) {
+    const progress = step / steps
+    const inset = featherWidth * progress
+    const insetWidth = Math.max(1, width - inset * 2)
+    const insetHeight = Math.max(1, height - inset * 2)
+    const alpha = 0.035 + progress * progress * 0.12
+
+    featherMaskContext.save()
+    featherMaskContext.globalAlpha = alpha
+    addRoundedArchPath(featherMaskContext, inset, inset, insetWidth, insetHeight)
+    featherMaskContext.fillStyle = '#000'
+    featherMaskContext.fill()
+    featherMaskContext.restore()
+  }
+
+  addRoundedArchPath(
+    featherMaskContext,
+    featherWidth,
+    featherWidth,
+    Math.max(1, width - featherWidth * 2),
+    Math.max(1, height - featherWidth * 2)
+  )
+  featherMaskContext.fillStyle = '#000'
+  featherMaskContext.fill()
+
+  return featherMask
+}
+
+/**
+ * @description: 获取字段在当前语言底图上的实际坐标
+ * @param {CertificateTemplateField} field - 模板字段
+ * @param {LocaleCode} [locale] - 当前证书语言
+ * @return {[number, number]} 语言微调后的坐标
+ */
+function getFieldPosition(field: CertificateTemplateField, locale?: LocaleCode): [number, number] {
+  const [x, y] = field.position
+  const offset = locale ? field.localePositionOffset?.[locale] : undefined
+
+  return [x + (offset?.x ?? 0), y + (offset?.y ?? 0)]
+}
+
+/**
  * @description: 绘制 cover 模式图片
  * @param {CanvasRenderingContext2D} context - 画布上下文
  * @param {HTMLImageElement | HTMLCanvasElement} image - 图片
@@ -135,6 +207,7 @@ function addRoundedArchPath(
  * @param {number} width - 目标宽度
  * @param {number} height - 目标高度
  * @param {number} scale - 额外缩放倍率
+ * @param {DraftImageTransform} transform - 图片在目标框内的取景参数
  * @return {void} 无返回值
  */
 function drawImageCover(
@@ -144,15 +217,16 @@ function drawImageCover(
   y: number,
   width: number,
   height: number,
-  scale = 1
+  scale = 1,
+  transform: DraftImageTransform = DEFAULT_DRAFT_IMAGE_TRANSFORM
 ): void {
   const sourceWidth = image instanceof HTMLCanvasElement ? image.width : image.naturalWidth
   const sourceHeight = image instanceof HTMLCanvasElement ? image.height : image.naturalHeight
-  const coverScale = Math.max(width / sourceWidth, height / sourceHeight) * scale
+  const coverScale = Math.max(width / sourceWidth, height / sourceHeight) * scale * transform.scale
   const drawWidth = sourceWidth * coverScale
   const drawHeight = sourceHeight * coverScale
-  const drawX = x + (width - drawWidth) / 2
-  const drawY = y + (height - drawHeight) / 2
+  const drawX = x + (width - drawWidth) / 2 + (width * transform.x) / 100
+  const drawY = y + (height - drawHeight) / 2 + (height * transform.y) / 100
 
   context.drawImage(image, drawX, drawY, drawWidth, drawHeight)
 }
@@ -165,6 +239,8 @@ function drawImageCover(
  * @param {CertificateTemplateField} field - 头像字段配置
  * @param {number} scale - 模板到正本的缩放倍率
  * @param {boolean} avatarIsCustom - 是否为自定义头像
+ * @param {DraftImageTransform} avatarTransform - 头像取景参数
+ * @param {LocaleCode} [locale] - 当前证书语言
  * @return {void} 无返回值
  */
 function drawAvatarField(
@@ -172,13 +248,15 @@ function drawAvatarField(
   avatarImage: HTMLImageElement,
   field: CertificateTemplateField,
   scale: number,
-  avatarIsCustom: boolean
+  avatarIsCustom: boolean,
+  avatarTransform: DraftImageTransform,
+  locale?: LocaleCode
 ): void {
   if (!field.size) {
     return
   }
 
-  const [fieldX, fieldY] = field.position
+  const [fieldX, fieldY] = getFieldPosition(field, locale)
   const x = fieldX * scale
   const y = fieldY * scale
   const width = field.size.width * scale
@@ -197,7 +275,8 @@ function drawAvatarField(
     0,
     width,
     height,
-    avatarIsCustom ? (field.customImageScale ?? 1) : 1
+    avatarIsCustom ? (field.customImageScale ?? 1) : 1,
+    avatarTransform
   )
 
   fieldContext.globalCompositeOperation = 'destination-in'
@@ -206,21 +285,62 @@ function drawAvatarField(
   fieldContext.fill()
 
   fieldContext.globalCompositeOperation = 'destination-in'
-  const feather = fieldContext.createRadialGradient(
-    width / 2,
-    height / 2,
-    Math.min(width, height) * 0.28,
-    width / 2,
-    height / 2,
-    Math.min(width, height) * 0.58
-  )
-  feather.addColorStop(0, 'rgba(0,0,0,1)')
-  feather.addColorStop(0.78, 'rgba(0,0,0,1)')
-  feather.addColorStop(1, 'rgba(0,0,0,0)')
-  fieldContext.fillStyle = feather
-  fieldContext.fillRect(0, 0, width, height)
+  const featherMask = createAvatarFeatherMask(width, height)
+
+  if (featherMask) {
+    fieldContext.drawImage(featherMask, 0, 0)
+  }
 
   context.drawImage(fieldCanvas, x, y)
+}
+
+/**
+ * @description: 获取字体垂直边界
+ * @description fontBoundingBox 以字体包围盒为准，比单个字形 bbox 更适合中英日统一基线。
+ * @param {CanvasRenderingContext2D} context - 画布上下文
+ * @param {string} text - 待测量文本
+ * @param {number} fontSize - 当前字号
+ * @return {{ ascent: number; descent: number }} 字体上下边界
+ */
+function measureTextFontBounds(
+  context: CanvasRenderingContext2D,
+  text: string,
+  fontSize: number
+): { ascent: number; descent: number } {
+  const metrics = context.measureText(text)
+  const ascent = metrics.fontBoundingBoxAscent || metrics.actualBoundingBoxAscent || fontSize * 0.82
+  const descent =
+    metrics.fontBoundingBoxDescent || metrics.actualBoundingBoxDescent || fontSize * 0.18
+
+  return { ascent, descent }
+}
+
+/**
+ * @description: 解析文字绘制基线
+ * @description middle 使用实际字形边界居中，避免不同系统字体导致称号相对冒号上下漂移。
+ * @param {CanvasRenderingContext2D} context - 画布上下文
+ * @param {CertificateTemplateField} field - 文字字段
+ * @param {string} text - 待绘制文本
+ * @param {number} fontSize - 实际字号
+ * @param {number} boxHeight - 垂直对齐容器高度
+ * @param {number} y - 垂直对齐容器上边界
+ * @return {number} alphabetic baseline 坐标
+ */
+function resolveTextBaseline(
+  context: CanvasRenderingContext2D,
+  field: CertificateTemplateField,
+  text: string,
+  fontSize: number,
+  boxHeight: number,
+  y: number
+): number {
+  if (field.textStyle?.verticalAlign === 'middle') {
+    const { ascent, descent } = measureTextFontBounds(context, text, fontSize)
+
+    return y + boxHeight / 2 + (ascent - descent) / 2
+  }
+
+  return y + boxHeight * 0.72
 }
 
 /**
@@ -272,13 +392,15 @@ function resolveFontSize(
  * @param {CertificateTemplateField} field - 字段配置
  * @param {string} text - 字段值
  * @param {number} scale - 模板到正本的缩放倍率
+ * @param {LocaleCode} [locale] - 当前证书语言
  * @return {void} 无返回值
  */
 function drawTextField(
   context: CanvasRenderingContext2D,
   field: CertificateTemplateField,
   text: string,
-  scale: number
+  scale: number,
+  locale?: LocaleCode
 ): void {
   const style = field.textStyle
 
@@ -286,7 +408,7 @@ function drawTextField(
     return
   }
 
-  const [fieldX, fieldY] = field.position
+  const [fieldX, fieldY] = getFieldPosition(field, locale)
   const fontSize = resolveFontSize(context, field, text, scale)
   const lineHeight = style.lineHeight * style.fontSize * scale
   const x = fieldX * scale
@@ -300,8 +422,7 @@ function drawTextField(
   context.shadowColor = 'rgba(255,255,255,0.36)'
   context.shadowBlur = 0
   context.shadowOffsetY = 1 * scale
-  // 字号缩小时仍以模板行盒底部为准，避免英文长称号向上漂。
-  context.fillText(text, x, y + lineHeight * 0.72)
+  context.fillText(text, x, resolveTextBaseline(context, field, text, fontSize, lineHeight, y))
   context.restore()
 }
 
@@ -324,18 +445,27 @@ function drawCertificate(
   height: number
 ): void {
   const scale = width / input.manifest.baseSize.width
+  const avatarTransform = clampAvatarImageTransform(input.avatarTransform)
 
   context.clearRect(0, 0, width, height)
   context.drawImage(templateImage, 0, 0, width, height)
 
   input.manifest.fields.forEach((field) => {
     if (field.kind === 'image' && field.id === 'avatar') {
-      drawAvatarField(context, avatarImage, field, scale, input.avatarIsCustom)
+      drawAvatarField(
+        context,
+        avatarImage,
+        field,
+        scale,
+        input.avatarIsCustom,
+        avatarTransform,
+        input.locale
+      )
       return
     }
 
     if (field.kind === 'text') {
-      drawTextField(context, field, input.fieldValues[field.id] ?? '', scale)
+      drawTextField(context, field, input.fieldValues[field.id] ?? '', scale, input.locale)
     }
   })
 }

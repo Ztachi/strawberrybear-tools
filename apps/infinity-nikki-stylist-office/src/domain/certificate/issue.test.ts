@@ -36,6 +36,11 @@ describe('certificate issue helpers', () => {
       titleId: 'windtime-collector',
       regionId: 'florawish',
       avatarId: 'avatar-default-nikki',
+      avatarTransform: {
+        x: 12,
+        y: -8,
+        scale: 1.24,
+      },
     }
     const context = resolveIssuedCertificateDraftContext(draft)
     const certificate = buildIssuedCertificateSnapshot({
@@ -55,6 +60,11 @@ describe('certificate issue helpers', () => {
       regionId: 'florawish',
       regionCode: 'FLW',
       avatarId: 'avatar-default-nikki',
+      avatarTransform: {
+        x: 12,
+        y: -8,
+        scale: 1.24,
+      },
       issuedDateText: '2026.06.21',
     })
     expect(buildCertificateRenderFieldValues(certificate)).toEqual({

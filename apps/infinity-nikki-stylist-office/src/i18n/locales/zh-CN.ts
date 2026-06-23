@@ -149,6 +149,7 @@ export default {
     positionX: '横向位置',
     positionY: '纵向位置',
     resetPosition: '恢复当前项目默认位置',
+    resetAvatarTransform: '还原',
     backRegistration: '返回登记资料',
     saveHint: '点击带标记的证书区域即可修改；手机上建议横屏查看证书细节。',
     apply: '确认校样，进入签发',
@@ -161,6 +162,17 @@ export default {
     editableNameLabel: '修改姓名',
     editableCertificateNoLabel: '修改登记地区',
     editableTitleLabel: '修改称号',
+    guideOpenLabel: '查看校样说明',
+    guideTitle: '签发前校样说明',
+    guideIntro: '确认正本签发前，可以在这里核对证书文字、地区编号、称号和头像取景。',
+    guideFieldTitle: '证书字段',
+    guideFieldBody: '点击证书上带标记的姓名、编号或称号区域，可以直接修改对应资料。',
+    guideAvatarTitle: '头像区域',
+    guideAvatarBody:
+      '头像支持拖拽调整位置；电脑可用滚轮缩放，手机和平板可用双指缩放。松手后会自动保存当前取景。',
+    guideAvatarButtonsTitle: '头像按钮',
+    guideAvatarButtonsBody:
+      '右上角铅笔用于重新选择头像；左上角还原按钮仅在调整过位置或缩放后出现，可恢复默认取景。',
   },
   signing: {
     title: '正本签发 · 第三步',
@@ -224,6 +236,7 @@ export default {
     catalogTitle: '协会资料库概览',
     catalogDescription:
       '这里集中展示协会资料库的基础内容。后续远程更新、导入导出和资料维护也会归入此处。',
+    associationDossierNo: '协会卷宗号',
     catalogVersion: '资料库版本',
     titleCount: '称号数量',
     templateCount: '模板数量',

@@ -21,6 +21,9 @@ export interface TemplateRect {
   height: number
 }
 
+/** 模板字段按语言微调的坐标偏移。 */
+export type TemplatePositionOffset = Partial<Record<LocaleCode, { x?: number; y?: number }>>
+
 /** 模板字段类型，图片字段和文字字段分开渲染。 */
 export type CertificateTemplateFieldKind = 'image' | 'text'
 
@@ -44,6 +47,8 @@ export interface CertificateTemplateTextStyle {
   align: 'left' | 'center' | 'right'
   /** 行高倍率 */
   lineHeight: number
+  /** 垂直对齐策略；middle 使用字形实际边界做视觉居中 */
+  verticalAlign?: 'baseline' | 'middle'
 }
 
 /** 图片字段裁切遮罩。 */
@@ -68,6 +73,8 @@ export interface CertificateTemplateField {
   editor?: CertificateTemplateEditorKind
   /** 字段起始坐标；模板底图需要匹配这套统一坐标 */
   position: TemplatePoint
+  /** 不同语言底图里动态字段的微调偏移，单位同模板像素。 */
+  localePositionOffset?: TemplatePositionOffset
   /** 文字内容最大宽度，超出时按最大可用字号自动缩小 */
   contentWidth?: number
   /** 图片字段渲染尺寸 */
