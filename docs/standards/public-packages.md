@@ -1,6 +1,6 @@
-# 公共库开发规范
+# 公共包规范
 
-本文档定义了 `@packages` 目录下公共库的开发标准，确保代码质量、一致性和可维护性。
+本文档定义 `packages/` 目录下公共包的开发标准，确保代码质量、一致性和可维护性。
 
 ## 目录结构
 
@@ -75,5 +75,7 @@ packages/
 
 ## 相关文档
 
-- [组件设计规范](../design/component-guide.md)
-- [主题变量文档](../design/theme.md)
+- [组件规范](components.md)
+- [注释规范](comments.md)
+- [项目结构规范](project-structure.md)
+- 各包 README：`packages/<package-name>/README.md`

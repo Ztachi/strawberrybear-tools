@@ -1,4 +1,60 @@
-# 规范文档索引
+# 文档索引
+
+根层文档只描述单仓库、公共规范和公共包边界。应用专属架构、UI、平台端口、部署和验收文档放在对应 `apps/<app>/docs/`。
+
+## 架构
+
+- [单仓库架构](architecture/monorepo.md)
+
+## 规范
+
+- [文档分层规范](standards/documentation.md)
+- [开发规范](standards/development.md)
+- [项目结构规范](standards/project-structure.md)
+- [组件规范](standards/components.md)
+- [注释与 JSDoc 规范](standards/comments.md)
+- [常量管理规范](standards/constants.md)
+- [样式规范](standards/styling.md)
+- [单元测试规范](standards/testing.md)
+- [公共包规范](standards/public-packages.md)
+- [国际化规范](standards/i18n.md)
+- [CI/CD 规范](standards/cicd.md)
+- [分支管理](standards/branching.md)
+
+## 应用文档
+
+- [Infinity Nikki Player](../apps/infinity-nikki-player/docs/README.md)
+- [Infinity Nikki Stylist Office](../apps/infinity-nikki-stylist-office/docs/README.md)
+- [Sensitive Word Checker](../apps/sensitive-word-checker/docs/README.md)
+- [Universe Explorer](../apps/universe-explorer/docs/README.md)
+- [DQ7 Shuffle](../apps/dq7-shuffle/docs/README.md)
+- [web-vue](../apps/web-vue/docs/README.md)
+- [web-react](../apps/web-react/docs/README.md)
+
+## 公共包文档
+
+公共包的使用说明以各包 `README.md` 为准，公共包写作和边界规则见 [公共包规范](standards/public-packages.md)。
+
+- [piano-roll](../packages/piano-roll/README.md)
+- [player](../packages/player/README.md)
+- [nikki-theme](../packages/nikki-theme/README.md)
+- [tsconfig](../packages/tsconfig/package.json)
+
+## Skill
+
+Skill 唯一源在根目录 [`skills/`](../skills/README.md)：
+
+- [doc-architecture](../skills/doc-architecture/SKILL.md)
+- [create-app](../skills/create-app/SKILL.md)
+- [launch-cloudflare-pages-app](../skills/launch-cloudflare-pages-app/SKILL.md)
+- [vue-1.0.1](../skills/vue-1.0.1/SKILL.md)
+- [rust-1.0.1](../skills/rust-1.0.1/SKILL.md)
+
+## 归档
+
+- [2026 项目搭建过程](archive/PLAN-2026-bootstrap.md)
+
+归档文档只保留背景信息，不作为当前架构、规范、验收或 CI 门禁依据。
 
 ## 根目录文档
 
@@ -6,23 +62,3 @@
 | ------------------------------- | ----------------------------- |
 | [README.md](../README.md)       | 中文项目文档                  |
 | [README_en.md](../README_en.md) | English project documentation |
-
-## 项目文档
-
-- [搭建计划](PLAN.md) - 项目从零搭建的完整计划与执行过程
-
-## 开发规范
-
-- [Agent 规范](AGENT.md) - Agent 开发规范
-- [UI 交互规范](UI.md) - UI 组件使用与交互规范
-- [项目结构规范](PROJECT_STRUCTURE.md) - Vue 组件层级、composables 边界与共享 tsconfig 规范
-- [常量管理规范](CONSTANTS.md) - `src/const` 模块化、统一导出与稳定机器字段规范
-- [Tailwind CSS 规范](TAILWINDCSS.md) - Tailwind 原子 class 优先与响应式使用规范
-- [公共库规范](packages/README.md) - `@packages` 公共库开发标准
-- [代码注释规范](CODE_COMMENTARY.md) - 所有代码的注释标准（JSDoc 格式、函数注释、类型注释等）
-- [CI/CD 规范](CICD.md) - Workflow 设计原则、新增 App 的 CICD 配置步骤
-- [Git 分支策略](BRANCH_STRATEGY.md) - main / develop 双层分支模型，feature/fix/hotfix 命名与生命周期约定
-
-## 国际化规范
-
-- [i18n 规范](I18N.md) - 所有项目必须做国际化，初始只适配中英文（zh-CN / en-US）
