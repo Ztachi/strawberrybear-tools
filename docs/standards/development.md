@@ -10,7 +10,7 @@
 6. 使用 async/await 处理异步操作；错误处理必须包含具体错误信息。
 7. 所有工具函数必须类型签名完整。
 
-项目目录、视图单元层级、composables 边界见 [项目结构规范](project-structure.md)。组件边界见 [组件规范](components.md)。注释见 [注释规范](comments.md)。常量见 [常量管理规范](constants.md)。
+项目目录、视图单元层级、composables 边界见 [项目结构规范](project-structure.md)。通用 UI 原则、组件库优先级、图标见 [UI 通用规范](ui.md)。注释见 [注释规范](comments.md)。常量见 [常量管理规范](constants.md)。
 
 ## ESLint + Prettier
 
@@ -83,11 +83,11 @@ docs(standards): clarify commit message requirements
 
 分支模型、PR 合并规则见 [分支管理](branching.md)。
 
-## 工具开发
+## 相关规范
 
-每个 CLI 或独立工具应包含：
-
-- 清晰的名称和描述
-- 完整的参数类型定义
-- 返回值类型注解
-- 错误处理逻辑
+- 项目结构：[project-structure.md](project-structure.md)
+- UI 通用规范：[ui.md](ui.md)
+- Tailwind：[tailwindcss.md](tailwindcss.md)
+- 注释：[comments.md](comments.md)
+- 常量：[constants.md](constants.md)
+- 依赖策略：[dependencies.md](dependencies.md)
