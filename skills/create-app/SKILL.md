@@ -16,12 +16,14 @@ description: >-
 **在动任何代码之前，必须先读完以下文档：**
 
 ```
-docs/README.md          → 文档索引（入口）
-docs/CICD.md            → CI/CD 规范（尤其重要，含完整 workflow 模板）
-docs/CODE_COMMENTARY.md → 代码注释规范
-docs/I18N.md            → 国际化规范
-docs/UI.md              → UI 交互规范（如适用）
-docs/packages/README.md → 公共库规范（如需引用 packages）
+docs/README.md                    → 文档索引（入口）
+docs/standards/cicd.md            → CI/CD 规范（尤其重要，含完整 workflow 模板）
+docs/standards/comments.md        → 注释规范
+docs/standards/i18n.md            → 国际化规范
+docs/standards/styling.md         → 样式与 UI 交互规范（如适用）
+docs/standards/public-packages.md → 公共包规范（如需引用 packages）
+docs/standards/development.md     → 开发规范
+docs/standards/project-structure.md → 项目结构规范
 ```
 
 > 关键规范不在此 SKILL 中重复，以文档为准，SKILL 只提供流程框架。
@@ -87,7 +89,7 @@ apps/<app-name>/
 ## Step 4：配置 CI/CD Workflow
 
 在 `.github/workflows/` 下新建 `release-<app-name>.yml`。
-根据 `docs/CICD.md` 选择对应情形的模板：
+根据 `docs/standards/cicd.md` 选择对应情形的模板：
 
 | 情形       | 适用场景                                   |
 | ---------- | ------------------------------------------ |
@@ -113,7 +115,7 @@ run: pnpm --filter @strawberrybear/<app-name> build
 tag_name: <app-name>@v${{ steps.version.outputs.version }}
 ```
 
-> 完整 workflow 模板见 `docs/CICD.md`，不要自行简化或省略步骤。
+> 完整 workflow 模板见 `docs/standards/cicd.md`，不要自行简化或省略步骤。
 
 ---
 
@@ -186,8 +188,8 @@ tag_name: <app-name>@v${{ steps.version.outputs.version }}
 
 ## 参考资源
 
-- [CI/CD 规范](../../docs/CICD.md) — workflow 完整模板，必读
-- [代码注释规范](../../docs/CODE_COMMENTARY.md) — JSDoc/Rust 注释格式
-- [国际化规范](../../docs/I18N.md) — i18n 实施要求
-- [UI 交互规范](../../docs/UI.md) — 组件使用约定
-- [公共库规范](../../docs/packages/README.md) — 如需引用 @packages/\*
+- [CI/CD 规范](../../docs/standards/cicd.md) — workflow 完整模板，必读
+- [注释规范](../../docs/standards/comments.md) — JSDoc/Rust 注释格式
+- [国际化规范](../../docs/standards/i18n.md) — i18n 实施要求
+- [样式规范](../../docs/standards/styling.md) — 组件使用与样式约定
+- [公共包规范](../../docs/standards/public-packages.md) — 如需引用 @strawberrybear/\*

@@ -1,7 +1,7 @@
 ---
 name: launch-cloudflare-pages-app
 description: >-
-  在 strawberrybear-tools monorepo 中从 0 到 1 创建、部署并发布一个需要 Cloudflare Pages 的 Web 应用。Use when user asks to add/create/scaffold/launch a new web app that matches docs/CICD.md "情形三：需同时部署到 Cloudflare Pages 的 Web 应用", or asks for the full feature branch →规范阅读→app folder→CI/CD→Cloudflare Pages project→develop→main release workflow.
+  在 strawberrybear-tools monorepo 中从 0 到 1 创建、部署并发布一个需要 Cloudflare Pages 的 Web 应用。Use when user asks to add/create/scaffold/launch a new web app that matches docs/standards/cicd.md "情形三：需同时部署到 Cloudflare Pages 的 Web 应用", or asks for the full feature branch →规范阅读→app folder→CI/CD→Cloudflare Pages project→develop→main release workflow.
 ---
 
 # Cloudflare Pages Web App 上线流程
@@ -23,16 +23,15 @@ description: >-
 
 ```text
 docs/README.md
-docs/BRANCH_STRATEGY.md
-docs/CICD.md
-docs/AGENT.md
-docs/CODE_COMMENTARY.md
-docs/I18N.md
-docs/UI.md
-docs/PROJECT_STRUCTURE.md
-docs/TAILWINDCSS.md
-docs/packages/README.md（如果会引用 packages）
-.cursor/skills/create-app/SKILL.md
+docs/standards/branching.md
+docs/standards/cicd.md
+docs/standards/development.md
+docs/standards/comments.md
+docs/standards/i18n.md
+docs/standards/styling.md
+docs/standards/project-structure.md
+docs/standards/public-packages.md（如果会引用 packages）
+skills/create-app/SKILL.md
 ```
 
 同时读取最接近的新 Web app 示例：
@@ -44,7 +43,7 @@ apps/sensitive-word-checker/package.json
 apps/infinity-nikki-stylist-office/package.json
 ```
 
-重点确认 `docs/CICD.md` 中“情形三：需同时部署到 Cloudflare Pages 的 Web 应用”的模板，以及当前仓库里最新可工作的 protected-main 发布模式。
+重点确认 `docs/standards/cicd.md` 中“情形三：需同时部署到 Cloudflare Pages 的 Web 应用”的模板，以及当前仓库里最新可工作的 protected-main 发布模式。
 
 ## Step 1：确认输入
 

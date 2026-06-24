@@ -84,5 +84,5 @@ interface TrackInfo {
 
 ## 相关文档
 
-- [公共库开发规范](../../../docs/packages/README.md)
+- [公共包规范](../../../docs/standards/public-packages.md)
 - [组件设计规范](../../../docs/design/component-guide.md)

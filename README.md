@@ -39,14 +39,14 @@ cd apps/web-vue && pnpm dev
 
 ### 前置清单
 
-| 事项               | 说明                                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| **目录结构**       | 在 `apps/` 下创建新目录，`package.json` 的 `name` 字段使用 `@strawberrybear/<app-name>`  |
-| **CICD 配置**      | 在 `.github/workflows/` 下新建 `release-<app-name>.yml`，参考 [CI/CD 规范](docs/CICD.md) |
-| **国际化**         | 初始适配中英文（zh-CN / en-US），参考 [i18n 规范](docs/I18N.md)                          |
-| **README**         | 在应用目录下创建 `README.md`，说明项目用途、本地开发命令、构建方式                       |
-| **CHANGELOG**      | 在应用目录下创建空的 `CHANGELOG.md`（Changesets 会自动维护，需要文件存在）               |
-| **Changeset 接入** | 发版前在 `.changeset/` 目录下创建变更描述文件，参考下方发版流程                          |
+| 事项               | 说明                                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| **目录结构**       | 在 `apps/` 下创建新目录，`package.json` 的 `name` 字段使用 `@strawberrybear/<app-name>`            |
+| **CICD 配置**      | 在 `.github/workflows/` 下新建 `release-<app-name>.yml`，参考 [CI/CD 规范](docs/standards/cicd.md) |
+| **国际化**         | 初始适配中英文（zh-CN / en-US），参考 [i18n 规范](docs/standards/i18n.md)                          |
+| **README**         | 在应用目录下创建 `README.md`，说明项目用途、本地开发命令、构建方式                                 |
+| **CHANGELOG**      | 在应用目录下创建空的 `CHANGELOG.md`（Changesets 会自动维护，需要文件存在）                         |
+| **Changeset 接入** | 发版前在 `.changeset/` 目录下创建变更描述文件，参考下方发版流程                                    |
 
 ---
 
@@ -253,7 +253,7 @@ cd apps/web-vue && pnpm dev
 | **Release**          | `.github/workflows/release-<app-name>.yml` | push 到 main，对应 app 目录有非文档变化 | 仅在检测到 changeset 版本变更时发版           |
 | **Release + 云部署** | `.github/workflows/release-<app-name>.yml` | push 到 main，对应 app 目录有非文档变化 | 同上，**并行**额外自动部署到 Cloudflare Pages |
 
-> **Release + 云部署**属于一种特定配置模式：在同一个 workflow 文件中包含 `deploy-pages` 和 `release` 两个并行的 job。适用于需要将构建产物实时公开访问（如 Web 应用）的场景，详见 [CI/CD 规范](docs/CICD.md)。
+> **Release + 云部署**属于一种特定配置模式：在同一个 workflow 文件中包含 `deploy-pages` 和 `release` 两个并行的 job。适用于需要将构建产物实时公开访问（如 Web 应用）的场景，详见 [CI/CD 规范](docs/standards/cicd.md)。
 >
 > 默认建议在 `paths` 中排除 `apps/<app-name>/**/*.md`，避免仅文档更新触发部署或发版。
 
@@ -267,17 +267,18 @@ cd apps/web-vue && pnpm dev
 
 详见 [docs/README.md](docs/README.md)
 
-- [开发规范](docs/AGENT.md)
-- [国际化规范](docs/I18N.md)
-- [项目搭建计划](docs/PLAN.md)
+- [开发规范](docs/standards/development.md)
+- [国际化规范](docs/standards/i18n.md)
+- [项目搭建计划（归档）](docs/archive/PLAN-2026-bootstrap.md)
 
 ## Agent Skills 索引
 
-仓库级 skill 放在 [`.cursor/skills`](.cursor/skills)，用于沉淀可复用的单仓库操作流程。
+仓库级 skill 放在 [`skills/`](skills)，用于沉淀可复用的单仓库操作流程。Cursor 索引见 [`.cursor/skills/README.md`](.cursor/skills/README.md)。
 
-| Skill                                                                                | 说明                                                                                                   |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| [`create-app`](.cursor/skills/create-app/SKILL.md)                                   | 创建普通 app 的基础流程，覆盖目录、package、CI/CD 和内部规范                                           |
-| [`launch-cloudflare-pages-app`](.cursor/skills/launch-cloudflare-pages-app/SKILL.md) | 从 feature 分支到 Cloudflare Pages 项目、情形三 CI/CD、develop 集成、main 发版和线上验证的完整上线流程 |
-| [`vue-1.0.1`](.cursor/skills/vue-1.0.1/SKILL.md)                                     | Vue 3 Composition API、组件、composables、性能与响应式实践                                             |
-| [`rust-1.0.1`](.cursor/skills/rust-1.0.1/SKILL.md)                                   | Rust 所有权、类型、错误处理、并发和高级陷阱参考                                                        |
+| Skill                                                                        | 说明                                                                                                   |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`create-app`](skills/create-app/SKILL.md)                                   | 创建普通 app 的基础流程，覆盖目录、package、CI/CD 和内部规范                                           |
+| [`launch-cloudflare-pages-app`](skills/launch-cloudflare-pages-app/SKILL.md) | 从 feature 分支到 Cloudflare Pages 项目、情形三 CI/CD、develop 集成、main 发版和线上验证的完整上线流程 |
+| [`doc-architecture`](skills/doc-architecture/SKILL.md)                       | 文档分层、去重与重组流程                                                                               |
+| [`vue-1.0.1`](skills/vue-1.0.1/SKILL.md)                                     | Vue 3 Composition API、组件、composables、性能与响应式实践                                             |
+| [`rust-1.0.1`](skills/rust-1.0.1/SKILL.md)                                   | Rust 所有权、类型、错误处理、并发和高级陷阱参考                                                        |

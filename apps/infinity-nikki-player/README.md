@@ -2,7 +2,7 @@
 
 无限暖暖自动演奏工具 - 基于 Tauri v2 + Vue 3 的跨平台桌面应用
 
-> **规范参考**：本项目遵循 strawberrybear-tools 仓库规范，详见 [AGENT.md](../../docs/AGENT.md) 和 [I18N.md](../../docs/I18N.md)
+> **规范参考**：本项目遵循 strawberrybear-tools 仓库规范，详见 [开发规范](../../docs/standards/development.md) 和 [i18n 规范](../../docs/standards/i18n.md)
 
 ## 技术栈
 
@@ -320,6 +320,7 @@ infinity-nikki-player/
 
 | 文档                                   | 说明                |
 | -------------------------------------- | ------------------- |
+| [文档索引](docs/README.md)             | 应用文档入口        |
 | [用户指南](docs/USER_GUIDE.md)         | 安装与使用说明      |
 | [设计文档](docs/design/README.md)      | UI 组件、主题规范   |
 | [UI 组件指南](docs/design/ui-guide.md) | antdv-next 组件使用 |

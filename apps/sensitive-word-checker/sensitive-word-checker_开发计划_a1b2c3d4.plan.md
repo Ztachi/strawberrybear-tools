@@ -191,7 +191,7 @@ apps/sensitive-word-checker/
 
 ## 国际化
 
-遵循 [docs/I18N.md](../../docs/I18N.md)，使用点号分隔 key：
+遵循 [docs/standards/i18n.md](../../docs/standards/i18n.md)，使用点号分隔 key：
 
 - `common.button.scan` — 扫描
 - `common.button.sync` — 从 GitHub 同步
@@ -209,7 +209,7 @@ apps/sensitive-word-checker/
 
 ## CI/CD
 
-参考 [docs/CICD.md](../../docs/CICD.md) 情形一（普通 Web 应用）：
+参考 [docs/standards/cicd.md](../../docs/standards/cicd.md) 情形一（普通 Web 应用）：
 
 - Workflow 文件：`.github/workflows/release-sensitive-word-checker.yml`
 - 触发条件：push 到 `main`，`apps/sensitive-word-checker/**` 有变化

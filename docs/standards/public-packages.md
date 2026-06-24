@@ -1,6 +1,6 @@
-# 公共库开发规范
+# 公共包规范
 
-本文档定义了 `@packages` 目录下公共库的开发标准，确保代码质量、一致性和可维护性。
+本文档定义 `packages/` 目录下公共包的开发标准，确保代码质量、一致性和可维护性。
 
 ## 目录结构
 
@@ -63,10 +63,7 @@ packages/
 
 ## Vue 组件规范
 
-- 使用 `<script setup lang="ts">` 组合式 API
-- Props 和 Emits 使用类型定义
-- 样式使用 scoped，避免污染全局
-- 组件放在同名目录（如 `PianoRoll/index.vue`）
+公共包如果包含 UI 组件（无论 Vue / React / Svelte / 其他），参考应用选定的 UI 框架规范与对应 skill（如 Vue 组件参考 `skills/vue-1.0.1/SKILL.md`）；不在根层重复定义框架特定 API。库内组件目录与命名遵循 [项目结构规范](project-structure.md) 的视图单元规则。
 
 ## 构建与发布
 
@@ -75,5 +72,7 @@ packages/
 
 ## 相关文档
 
-- [组件设计规范](../design/component-guide.md)
-- [主题变量文档](../design/theme.md)
+- [UI 通用规范](ui.md)
+- [项目结构规范](project-structure.md)
+- [注释规范](comments.md)
+- 各包 README：`packages/<package-name>/README.md`

@@ -239,7 +239,7 @@ cd apps/web-vue && pnpm dev
 | **Release**                | `.github/workflows/release-<app-name>.yml` | push to main, app non-doc changes | Release only when changeset version change detected                |
 | **Release + Cloud Deploy** | `.github/workflows/release-<app-name>.yml` | push to main, app non-doc changes | Same as above, plus a **parallel** auto-deploy to Cloudflare Pages |
 
-> **Release + Cloud Deploy** is a specific configuration pattern: the same workflow file contains two parallel jobs — `deploy-pages` and `release` — with no dependency between them. Use this pattern when you need the build artifact to be publicly accessible at all times (e.g. web apps). See [CI/CD Guidelines](docs/CICD.md) for the template.
+> **Release + Cloud Deploy** is a specific configuration pattern: the same workflow file contains two parallel jobs — `deploy-pages` and `release` — with no dependency between them. Use this pattern when you need the build artifact to be publicly accessible at all times (e.g. web apps). See [CI/CD Guidelines](docs/standards/cicd.md) for the template.
 >
 > Recommended default: exclude `apps/<app-name>/**/*.md` in workflow `paths` so docs-only updates do not trigger deploy/release pipelines.
 
@@ -253,6 +253,6 @@ Visit: https://github.com/Ztachi/strawberrybear-tools/actions
 
 See [docs/README.md](docs/README.md)
 
-- [Development Guidelines](docs/AGENT.md)
-- [Internationalization Guidelines](docs/I18N.md)
-- [Project Setup Plan](docs/PLAN.md)
+- [Development Guidelines](docs/standards/development.md)
+- [Internationalization Guidelines](docs/standards/i18n.md)
+- [Project Setup Plan (archive)](docs/archive/PLAN-2026-bootstrap.md)
