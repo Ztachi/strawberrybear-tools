@@ -15,6 +15,7 @@ import {
   listIssuedCertificates,
 } from '@/db/repositories/issuedCertificateRepository'
 import { resolveLocalizedText } from '@/domain/catalog/text'
+import { getTemplateLocaleMessages } from '@/i18n/template'
 import { useNavigationIntentStore } from '@/stores/navigationIntent'
 import type { LocaleCode } from '@/domain/catalog/types'
 import type { IssuedCertificate } from '@/domain/certificate/types'
@@ -102,6 +103,15 @@ function resolveLanguageDisplayName(locale: LocaleCode): string {
   return languageMap[locale]
 }
 
+/**
+ * @description: 解析证书语言下的默认会长签章
+ * @param {LocaleCode} locale - 证书语言
+ * @return {string} 默认会长签章
+ */
+function resolvePresidentName(locale: LocaleCode): string {
+  return getTemplateLocaleMessages(locale).presidentName
+}
+
 /** 过滤后的历史列表。 */
 const filteredCertificates = computed(() => {
   const keyword = searchText.value.trim().toLowerCase()
@@ -141,6 +151,10 @@ const detailRows = computed(() => {
     { label: t('common.language.label'), value: resolveLanguageDisplayName(certificate.certificateLocale) },
     { label: t('profile.historyTemplate'), value: resolveTemplateDisplayName(certificate) },
     { label: t('signing.issuedDatePreview'), value: certificate.issuedDateText },
+    {
+      label: t('profile.historyPresidentSignature'),
+      value: certificate.presidentSignature || resolvePresidentName(certificate.certificateLocale),
+    },
   ]
 })
 

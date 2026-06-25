@@ -51,6 +51,8 @@ export interface CertificateDraft {
   stage: DraftStage
   /** 搭配师姓名 */
   stylistName: string
+  /** 会长签章，空字符串时由模板语言默认签章回退 */
+  presidentSignature: string
   /** 已选择的称号 ID */
   titleId: string | null
   /** 证书语言，由顶部语言统一控制，姓名等用户输入内容不翻译 */

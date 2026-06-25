@@ -137,6 +137,28 @@
         "align": "left",
         "lineHeight": 1.1
       }
+    },
+    {
+      "id": "chairmanSignature",
+      "kind": "text",
+      "source": "presidentSignature",
+      "editable": true,
+      "editor": "signature",
+      "position": [1100, 820],
+      "hitArea": {
+        "x": 1080,
+        "y": 810,
+        "width": 220,
+        "height": 40
+      },
+      "textStyle": {
+        "fontSize": 26,
+        "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
+        "fontWeight": 600,
+        "color": "#5c4639",
+        "align": "left",
+        "lineHeight": 1.1
+      }
     }
   ]
 }

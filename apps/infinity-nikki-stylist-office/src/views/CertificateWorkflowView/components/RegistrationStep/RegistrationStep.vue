@@ -19,6 +19,7 @@ import {
   type ActiveDraftPatch,
 } from '@/db/repositories/draftRepository'
 import { resolveLocalizedText } from '@/domain/catalog/text'
+import { getTemplateLocaleMessages } from '@/i18n/template'
 import { useDraftSessionStore } from '@/stores/draftSession'
 import { useNavigationIntentStore } from '@/stores/navigationIntent'
 import { useUiStore } from '@/stores/ui'
@@ -83,6 +84,11 @@ const selectedRegion = computed(() =>
   associationCatalogSeed.regions.find((region) => region.id === draft.value?.regionId)
 )
 
+/** 当前证书语言下的模板固定文案。 */
+const templateCopy = computed(() =>
+  getTemplateLocaleMessages(draft.value?.certificateLocale ?? uiStore.uiLocale)
+)
+
 /** 当前官方头像名称，素材管理接入前先展示草稿默认选项。 */
 const selectedAvatarName = computed(() => {
   const locale = draft.value?.certificateLocale ?? uiStore.uiLocale
@@ -106,6 +112,15 @@ const stylistName = computed({
   },
 })
 
+/** 会长签章输入代理，去掉换行并限制 6 个可见字符。 */
+const presidentSignature = computed({
+  get: () => draft.value?.presidentSignature || templateCopy.value.presidentName,
+  set: (value: string) => {
+    const nextValue = value.replace(/[\r\n]/g, '').slice(0, 6)
+    void saveDraftPatch({ presidentSignature: nextValue })
+  },
+})
+
 /** 地区选择代理，选择后立即写入草稿。 */
 const selectedRegionId = computed({
   get: () => draft.value?.regionId ?? '',
@@ -117,7 +132,8 @@ const selectedRegionId = computed({
 /** 表单是否满足进入资料确认的最低条件。 */
 const canConfirm = computed(() => {
   const name = draft.value?.stylistName.trim() ?? ''
-  return Boolean(name && draft.value?.titleId && draft.value?.regionId)
+  const sig = draft.value?.presidentSignature.trim() ?? ''
+  return Boolean(name && sig && draft.value?.titleId && draft.value?.regionId)
 })
 
 /** 资料确认层展示的档案字段。 */
@@ -133,6 +149,7 @@ const confirmationRows = computed(() => {
 
   return [
     { label: t('registration.stylistName'), value: draft.value.stylistName.trim() },
+    { label: t('registration.president'), value: draft.value.presidentSignature.trim() },
     { label: t('registration.titleOption'), value: titleName },
     { label: t('registration.region'), value: regionName },
   ]
@@ -366,6 +383,16 @@ onBeforeUnmount(() => {
                 color="primary"
               />
 
+              <v-text-field
+                v-model="presidentSignature"
+                :label="t('registration.president')"
+                :hint="t('registration.presidentHint')"
+                maxlength="6"
+                counter="6"
+                variant="outlined"
+                color="primary"
+              />
+
               <v-select
                 v-model="selectedRegionId"
                 :items="regionItems"
@@ -537,6 +564,10 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.registration-basic-grid > :nth-child(3) {
+  grid-column: 1 / -1;
 }
 
 .registration-selector-grid {

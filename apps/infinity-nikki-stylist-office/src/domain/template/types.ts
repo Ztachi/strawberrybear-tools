@@ -28,7 +28,7 @@ export type TemplatePositionOffset = Partial<Record<LocaleCode, { x?: number; y?
 export type CertificateTemplateFieldKind = 'image' | 'text'
 
 /** 模板字段编辑器类型，由核对页映射到对应弹窗。 */
-export type CertificateTemplateEditorKind = 'avatar' | 'name' | 'region' | 'title'
+export type CertificateTemplateEditorKind = 'avatar' | 'name' | 'region' | 'title' | 'signature'
 
 /** 当前内置模板使用的稳定字段 ID，后续远程模板仍允许扩展其他字段。 */
 export type BuiltinTemplateFieldId = 'avatar' | 'name' | 'certificateNo' | 'title' | 'issuedDate'

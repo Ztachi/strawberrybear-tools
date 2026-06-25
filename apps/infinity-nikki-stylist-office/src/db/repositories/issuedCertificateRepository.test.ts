@@ -60,6 +60,7 @@ function createProofingDraft(): CertificateDraft {
     id: 'draft-repository-test',
     stage: 'proofing',
     stylistName: '冰沙',
+    presidentSignature: '自定义签章',
     titleId: 'windtime-collector',
     regionId: 'florawish',
     avatarId: 'avatar-default-nikki',
@@ -114,6 +115,7 @@ describe('issued certificate repository', () => {
       id: 'issued-existing',
       certificateNo: 'MC-FLW-A8K3Q2',
       stylistName: '旧档案',
+      presidentSignature: '茶叶蛋',
       titleId: 'wish-weaver',
       titleName: '心愿织光搭配师',
       regionId: 'florawish',
@@ -179,6 +181,7 @@ describe('issued certificate repository', () => {
         name: '冰沙',
         certificateNo: 'MC-FLW-A8K3Q2',
         title: '风旅拾光搭配师',
+        chairmanSignature: '自定义签章',
       },
     })
     expect(preparedInput.input.fieldValues.issuedDate).toMatch(/\d{4}\.\d{2}\.\d{2}/)

@@ -59,6 +59,8 @@ const isTemplateLoading = ref(true)
 const isDraftMissing = ref(false)
 /** 姓名编辑弹窗开关。 */
 const isNameDialogOpen = ref(false)
+/** 会长签章编辑弹窗开关。 */
+const isSignatureDialogOpen = ref(false)
 /** 称号选择弹窗开关。 */
 const isTitleDialogOpen = ref(false)
 /** 地区选择弹窗开关。 */
@@ -69,6 +71,10 @@ const isGuideOpen = ref(false)
 const isAvatarPickerOpen = ref(false)
 /** 姓名弹窗中的临时输入值，确认后才写入草稿。 */
 const draftNameInput = ref('')
+/** 会长签章弹窗中的临时输入值，确认后才写入草稿。 */
+const draftSignatureInput = ref('')
+/** 会长签章弹窗错误提示。 */
+const signatureError = ref('')
 /** 当前头像图片 URL，可能来自协会内置资源或自定义 Blob。 */
 const avatarImageSrc = ref('')
 /** 当前头像是否来自用户自定义素材。 */
@@ -160,6 +166,7 @@ const fieldValues = computed<Record<string, string>>(() => ({
   certificateNo: formatPendingCertificateNo(selectedRegion.value, templateCopy.value.pendingCertificateNo),
   title: selectedTitle.value?.displayName ?? templateCopy.value.fieldPlaceholder,
   issuedDate: formatCertificateDate(new Date()),
+  chairmanSignature: draft.value?.presidentSignature || templateCopy.value.presidentName,
 }))
 
 /** 可编辑热区的常驻提示文案。 */
@@ -168,6 +175,7 @@ const fieldLabels = computed<Record<string, string>>(() => ({
   name: t('proofing.editableNameLabel'),
   certificateNo: t('proofing.editableCertificateNoLabel'),
   title: t('proofing.editableTitleLabel'),
+  chairmanSignature: t('proofing.editableSignatureLabel'),
 }))
 
 /**
@@ -313,6 +321,13 @@ function openEditor(editor: CertificateTemplateEditorKind): void {
     return
   }
 
+  if (editor === 'signature') {
+    draftSignatureInput.value = draft.value?.presidentSignature || templateCopy.value.presidentName
+    signatureError.value = ''
+    isSignatureDialogOpen.value = true
+    return
+  }
+
   if (editor === 'title') {
     isTitleDialogOpen.value = true
     return
@@ -337,6 +352,24 @@ async function saveName(): Promise<void> {
   const nextName = draftNameInput.value.replace(/[\r\n]/g, '').trim().slice(0, 14)
   await saveDraftPatch({ stylistName: nextName })
   isNameDialogOpen.value = false
+}
+
+/**
+ * @description: 保存会长签章编辑结果
+ * @description 签章去除换行和首尾空格，空值不允许写入草稿。
+ * @return {Promise<void>} 无返回值
+ */
+async function saveSignature(): Promise<void> {
+  const next = draftSignatureInput.value.replace(/[\r\n]/g, '').slice(0, 6).trim()
+
+  if (!next) {
+    signatureError.value = t('proofing.signatureEmptyError')
+    return
+  }
+
+  signatureError.value = ''
+  await saveDraftPatch({ presidentSignature: next })
+  isSignatureDialogOpen.value = false
 }
 
 /**
@@ -599,6 +632,33 @@ onBeforeUnmount(() => {
           {{ t('common.action.cancel') }}
         </v-btn>
         <v-btn color="primary" variant="flat" data-sound="primary" @click="saveName">
+          {{ t('common.action.confirm') }}
+        </v-btn>
+      </template>
+    </PickerDialogFrame>
+
+    <PickerDialogFrame
+      v-model="isSignatureDialogOpen"
+      :title="t('proofing.editSignatureTitle')"
+      :intro="t('proofing.editSignatureIntro')"
+      :max-width="520"
+    >
+      <v-text-field
+        v-model="draftSignatureInput"
+        :label="t('proofing.signatureInputLabel')"
+        :error-messages="signatureError"
+        maxlength="6"
+        counter="6"
+        variant="outlined"
+        color="primary"
+        @keyup.enter="saveSignature"
+      />
+
+      <template #actions>
+        <v-btn variant="text" data-sound="back" @click="isSignatureDialogOpen = false">
+          {{ t('common.action.cancel') }}
+        </v-btn>
+        <v-btn color="primary" variant="flat" data-sound="primary" @click="saveSignature">
           {{ t('common.action.confirm') }}
         </v-btn>
       </template>

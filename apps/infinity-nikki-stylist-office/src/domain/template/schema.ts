@@ -59,7 +59,7 @@ const templateFieldSchema = z
     kind: z.enum(['image', 'text']),
     source: z.string().min(1),
     editable: z.boolean(),
-    editor: z.enum(['avatar', 'name', 'region', 'title']).optional(),
+    editor: z.enum(['avatar', 'name', 'region', 'title', 'signature']).optional(),
     position: pointSchema,
     localePositionOffset: localePositionOffsetSchema.optional(),
     contentWidth: z.number().positive().optional(),

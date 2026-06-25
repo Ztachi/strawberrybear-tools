@@ -118,6 +118,7 @@ export default {
     region: 'Registration Region',
     comment: 'Association Comment',
     president: 'President Seal',
+    presidentHint: 'Up to 6 visible characters',
     certificateNoPrefix: 'Certificate Number Prefix',
     selectedAsset: 'Selected',
     titlePickerTitle: 'Choose Stylist Title',
@@ -176,6 +177,12 @@ export default {
     editableNameLabel: 'Edit Name',
     editableCertificateNoLabel: 'Edit Registration Region',
     editableTitleLabel: 'Edit Title',
+    editSignatureTitle: 'Edit President Seal',
+    editSignatureIntro:
+      'The president seal is written to the bottom-right of the certificate as entered',
+    signatureInputLabel: 'President Seal',
+    editableSignatureLabel: 'Edit President Seal',
+    signatureEmptyError: 'President seal is required',
     guideOpenLabel: 'View proof guide',
     guideTitle: 'Pre-Issuance Proof Guide',
     guideIntro:
@@ -263,6 +270,7 @@ export default {
     historyCertificateNo: 'Certificate No.',
     historyStylistName: 'Name',
     historyTitle: 'Title',
+    historyPresidentSignature: 'President Seal',
     historyIssuedAt: 'Issued At',
     historyActions: 'Actions',
     historyEmptyTitle: 'No Registration History',

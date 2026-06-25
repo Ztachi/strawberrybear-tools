@@ -7,6 +7,7 @@
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import { resolveLocalizedText } from '@/domain/catalog/text'
 import { formatCertificateDate } from './format'
+import { getTemplateLocaleMessages } from '@/i18n/template'
 import type { LocaleCode, RegionOption, TitleOption } from '@/domain/catalog/types'
 import type { IssuedCertificate } from './types'
 import type { CertificateDraft } from '@/domain/draft/types'
@@ -52,6 +53,8 @@ export interface CertificateRenderFieldValues extends Record<string, string> {
   title: string
   /** 签发日期 */
   issuedDate: string
+  /** 会长签章 */
+  chairmanSignature: string
 }
 
 /**
@@ -104,6 +107,26 @@ export function resolveIssuedCertificateDraftContext(
 }
 
 /**
+ * @description: 获取模板语言下的默认会长签章
+ * @param {LocaleCode} locale - 证书语言
+ * @return {string} 默认会长签章
+ */
+function resolveTemplatePresidentName(locale: LocaleCode): string {
+  return getTemplateLocaleMessages(locale).presidentName
+}
+
+/**
+ * @description: 解析草稿中的会长签章
+ * @description 空字符串时回退模板默认签章，避免签发快照出现空白。
+ * @param {CertificateDraft} draft - 当前办理草稿
+ * @return {string} 会长签章
+ */
+function resolvePresidentSignature(draft: CertificateDraft): string {
+  const trimmed = draft.presidentSignature.trim()
+  return trimmed || resolveTemplatePresidentName(draft.certificateLocale)
+}
+
+/**
  * @description: 生成已签发证书快照
  * @description 签发后页面只读取快照，不再反向依赖之后可能变化的草稿或资料库。
  * @param {BuildIssuedCertificateSnapshotInput} input - 快照组装输入
@@ -119,6 +142,7 @@ export function buildIssuedCertificateSnapshot(
     id: input.id,
     certificateNo: input.certificateNo,
     stylistName: input.draft.stylistName,
+    presidentSignature: resolvePresidentSignature(input.draft),
     titleId: input.context.title.id,
     titleName: resolveLocalizedText(input.context.title.name, locale),
     regionId: input.context.region.id,
@@ -148,5 +172,6 @@ export function buildCertificateRenderFieldValues(
     certificateNo: certificate.certificateNo,
     title: certificate.titleName,
     issuedDate: certificate.issuedDateText,
+    chairmanSignature: certificate.presidentSignature,
   }
 }

@@ -73,6 +73,31 @@ describe('certificate issue helpers', () => {
       certificateNo: 'MC-FLW-A8K3Q2',
       title: 'Windborne Light Collector Stylist',
       issuedDate: '2026.06.21',
+      chairmanSignature: 'Tea Egg',
     })
+  })
+
+  it('falls back to template president name when draft signature is empty', () => {
+    const draft = {
+      ...createDefaultDraft('zh-CN'),
+      id: 'draft-signature-fallback',
+      stage: 'proofing' as const,
+      stylistName: '冰沙',
+      presidentSignature: '',
+      titleId: 'windtime-collector',
+      regionId: 'florawish',
+      avatarId: 'avatar-default-nikki',
+    }
+    const context = resolveIssuedCertificateDraftContext(draft)
+    const certificate = buildIssuedCertificateSnapshot({
+      id: 'issued-signature-fallback',
+      certificateNo: 'MC-FLW-A8K3Q2',
+      draft,
+      context,
+      issuedAt: new Date(2026, 5, 21, 10, 30, 0),
+    })
+
+    expect(certificate.presidentSignature).toBe('茶叶蛋')
+    expect(buildCertificateRenderFieldValues(certificate).chairmanSignature).toBe('茶叶蛋')
   })
 })

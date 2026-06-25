@@ -42,6 +42,7 @@ export function createDefaultDraft(locale: LocaleCode): CertificateDraft {
     id: nanoid(),
     stage: 'registration',
     stylistName: '',
+    presidentSignature: '',
     titleId: title?.id ?? null,
     certificateLocale: locale,
     regionId: region?.id ?? '',
@@ -75,6 +76,8 @@ export function normalizeDraft(
     ...defaultDraft,
     ...draft,
     certificateLocale: draft.certificateLocale ?? fallbackLocale,
+    presidentSignature:
+      typeof draft.presidentSignature === 'string' ? draft.presidentSignature : '',
     titleId: draft.titleId ?? defaultDraft.titleId,
     regionId: draft.regionId ?? defaultDraft.regionId,
     commentId: draft.commentId ?? defaultDraft.commentId,

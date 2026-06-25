@@ -37,6 +37,7 @@ describe('local data repository', () => {
       id: 'issued-local-backup-test',
       certificateNo: 'MC-FLW-A8K3Q2',
       stylistName: '冰沙',
+      presidentSignature: '茶叶蛋',
       titleId: 'windtime-collector',
       titleName: '风旅拾光搭配师',
       regionId: 'florawish',

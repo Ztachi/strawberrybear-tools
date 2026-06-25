@@ -18,6 +18,8 @@ export interface IssuedCertificate {
   certificateNo: string
   /** 搭配师姓名快照 */
   stylistName: string
+  /** 会长签章快照 */
+  presidentSignature: string
   /** 认证称号 ID 快照 */
   titleId: string
   /** 认证称号显示文案快照 */
