@@ -8,7 +8,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vuetify from 'vite-plugin-vuetify'
 
 const packageJson = JSON.parse(
@@ -17,8 +17,31 @@ const packageJson = JSON.parse(
   version: string
 }
 
+/**
+ * @description 生成线上版本清单，运行中的旧 bundle 可绕过资源缓存检查是否需要刷新。
+ * @param {string} version - 当前应用版本
+ * @return {Plugin} Vite 插件
+ */
+function appVersionManifestPlugin(version: string): Plugin {
+  return {
+    name: 'stylist-office-app-version-manifest',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'app-version.json',
+        source: `${JSON.stringify({ version }, null, 2)}\n`,
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [vue(), vuetify({ autoImport: true }), tailwindcss()],
+  plugins: [
+    appVersionManifestPlugin(packageJson.version),
+    vue(),
+    vuetify({ autoImport: true }),
+    tailwindcss(),
+  ],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
   },

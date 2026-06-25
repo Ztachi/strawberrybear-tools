@@ -6,7 +6,7 @@
  */
 
 /** 当前离线资源缓存名，修改清单结构时递增版本。 */
-export const OFFLINE_RESOURCE_CACHE_NAME = 'infinity-nikki-stylist-office-resources-v4'
+export const OFFLINE_RESOURCE_CACHE_NAME = 'infinity-nikki-stylist-office-resources-v5'
 
 /** 应用外壳资源；进入页面后空闲时轻量预热。 */
 export const APP_SHELL_OFFLINE_RESOURCE_PATHS = [
