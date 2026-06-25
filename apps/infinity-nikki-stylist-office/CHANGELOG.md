@@ -1,5 +1,14 @@
 # @strawberrybear/infinity-nikki-stylist-office
 
+## 1.2.1
+
+### Patch Changes
+
+- Fix custom signature cropping so signature assets use the template signature source ratio (`2172 × 724`) instead of falling back to avatar-like square framing.
+  - Wait for the current template crop ratio before opening or reinitializing the custom asset cropper.
+  - Add regression coverage for avatar and signature crop ratio resolution and signature export size.
+  - Show custom signature previews with the signature aspect ratio instead of square avatar-style thumbnails.
+
 ## 1.2.0
 
 ### Minor Changes
