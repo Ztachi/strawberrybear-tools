@@ -15,7 +15,12 @@ import {
   updateCustomImageAsset,
 } from '@/db/repositories/customAssetRepository'
 import { updateActiveDraft } from '@/db/repositories/draftRepository'
-import { getTemplateField, loadBuiltinTemplatePackage } from '@/domain/template/registry'
+import {
+  getDefaultCustomAssetCropAspectRatio,
+  resolveCustomAssetCropAspectRatio,
+  resolveCustomAssetOutputSize,
+} from '@/domain/assets/crop'
+import { loadBuiltinTemplatePackage } from '@/domain/template/registry'
 import {
   useNavigationIntentStore,
   type WorkflowRouteName,
@@ -83,7 +88,9 @@ const cropperInitVersion = ref(0)
 /** 当前原图是否来自已保存素材；替换新图时不复用旧裁剪状态。 */
 const shouldRestoreCropState = ref(false)
 /** 当前证书模板素材裁剪比例，跟随来源流程带来的 templateId 和素材类型。 */
-const assetCropAspectRatio = ref(1)
+const assetCropAspectRatio = ref(getDefaultCustomAssetCropAspectRatio('avatar'))
+/** 当前裁剪比例加载序号，用于忽略过期的异步模板读取结果。 */
+const cropAspectRatioLoadVersion = ref(0)
 
 /** 从办理流程进入时保存后需要回到对应流程页。 */
 const returnTo = computed<WorkflowRouteName | ''>(() => {
@@ -218,6 +225,9 @@ const saveAssetFailedMessage = computed(() =>
 const assetFallbackIcon = computed(() =>
   assetKindFilter.value === 'signature' ? 'mdi-draw-pen' : 'mdi-account-circle-outline'
 )
+
+/** 当前是否正在管理自定义签章。 */
+const isSignatureAssetKind = computed(() => assetKindFilter.value === 'signature')
 
 /** 选择图片按钮文案。 */
 const chooseAssetFileLabel = computed(() =>
@@ -410,32 +420,42 @@ async function loadCustomAvatars(): Promise<void> {
  * @param {string} templateId - 当前证书模板 ID
  * @return {Promise<void>} 无返回值
  */
-async function loadAssetCropAspectRatio(templateId: string): Promise<void> {
+async function loadAssetCropAspectRatio(
+  templateId: string,
+  assetKind: AssetKindFilter = assetKindFilter.value
+): Promise<void> {
+  const loadVersion = cropAspectRatioLoadVersion.value + 1
+
+  cropAspectRatioLoadVersion.value = loadVersion
+  assetCropAspectRatio.value = getDefaultCustomAssetCropAspectRatio(assetKind)
+
   const templatePackage = await loadBuiltinTemplatePackage(templateId)
-  const field = getTemplateField(
-    templatePackage.manifest,
-    assetKindFilter.value === 'signature' ? 'chairmanSignature' : 'avatar'
-  )
 
-  if (assetKindFilter.value === 'signature' && field?.signatureImageSourceSize) {
-    assetCropAspectRatio.value =
-      field.signatureImageSourceSize.width / field.signatureImageSourceSize.height
+  if (
+    cropAspectRatioLoadVersion.value !== loadVersion ||
+    templateId !== activeTemplateId.value ||
+    assetKind !== assetKindFilter.value
+  ) {
     return
   }
 
-  if (!field?.size) {
-    assetCropAspectRatio.value = 1
-    return
-  }
+  const nextRatio = resolveCustomAssetCropAspectRatio(templatePackage.manifest, assetKind)
+  const ratioChanged = Math.abs(assetCropAspectRatio.value - nextRatio) > 0.001
 
-  assetCropAspectRatio.value = field.size.width / field.size.height
+  assetCropAspectRatio.value = nextRatio
+
+  if (ratioChanged && isEditorOpen.value && sourceImageUrl.value && cropperImage.value?.complete) {
+    await initializeCropper()
+  }
 }
 
 /**
  * @description: 打开新建弹窗
  * @return {void} 无返回值
  */
-function openCreateDialog(): void {
+async function openCreateDialog(): Promise<void> {
+  await loadAssetCropAspectRatio(activeTemplateId.value, assetKindFilter.value)
+
   editingAsset.value = null
   avatarName.value = ''
   editorErrorMessage.value = ''
@@ -452,6 +472,8 @@ function openCreateDialog(): void {
  * @return {Promise<void>} 无返回值
  */
 async function openEditDialog(asset: CustomAssetRecord): Promise<void> {
+  await loadAssetCropAspectRatio(activeTemplateId.value, assetKindFilter.value)
+
   const latestAsset = (await getCustomAsset(asset.id)) ?? asset
 
   editingAsset.value = latestAsset
@@ -725,6 +747,7 @@ async function handleFileChange(event: Event): Promise<void> {
   }
 
   destroyCropper()
+  await loadAssetCropAspectRatio(activeTemplateId.value, assetKindFilter.value)
   revokeSourceImageUrl()
   editorErrorMessage.value = ''
   selectedOriginalBlob.value = file
@@ -750,26 +773,6 @@ async function handleFileChange(event: Event): Promise<void> {
 function handleCropperImageError(): void {
   destroyCropper()
   editorErrorMessage.value = t('assets.cropperImageLoadFailed')
-}
-
-/**
- * @description: 计算头像输出尺寸
- * @return {{ width: number; height: number }} 输出尺寸
- */
-function getAvatarOutputSize(): { width: number; height: number } {
-  const ratio = assetCropAspectRatio.value
-
-  if (ratio >= 1) {
-    return {
-      width: 1024,
-      height: Math.round(1024 / ratio),
-    }
-  }
-
-  return {
-    width: Math.round(1024 * ratio),
-    height: 1024,
-  }
 }
 
 /**
@@ -842,7 +845,9 @@ async function saveEditor(): Promise<void> {
         throw new Error(t('assets.cropperNotReady'))
       }
 
-      const canvas = await selection.$toCanvas(getAvatarOutputSize())
+      const canvas = await selection.$toCanvas(
+        resolveCustomAssetOutputSize(assetCropAspectRatio.value)
+      )
       const croppedBlob = await canvasToPngBlob(canvas)
       const cropSelection = getCurrentCropSelection()
       const cropTransform = getCurrentCropTransform()
@@ -975,8 +980,8 @@ onMounted(async () => {
 
 watch(
   [activeTemplateId, assetKindFilter],
-  ([templateId]) => {
-    void loadAssetCropAspectRatio(templateId)
+  ([templateId, assetKind]) => {
+    void loadAssetCropAspectRatio(templateId, assetKind)
   },
   { immediate: true }
 )
@@ -1056,7 +1061,10 @@ onBeforeUnmount(() => {
             <button
               v-bind="props"
               type="button"
-              class="profile-custom-assets__preview"
+              :class="[
+                'profile-custom-assets__preview',
+                { 'profile-custom-assets__preview--signature': isSignatureAssetKind },
+              ]"
               data-sound="open"
               @click="openPreview(item)"
             >
@@ -1064,10 +1072,21 @@ onBeforeUnmount(() => {
             </button>
           </template>
           <v-card class="profile-custom-assets__preview-popover">
-            <v-img :src="avatarPreviewUrls[item.id]" width="220" height="220" cover />
+            <v-img
+              :src="avatarPreviewUrls[item.id]"
+              :width="isSignatureAssetKind ? 300 : 220"
+              :height="isSignatureAssetKind ? 110 : 220"
+              :cover="!isSignatureAssetKind"
+            />
           </v-card>
         </v-menu>
-        <div v-else class="profile-custom-assets__preview">
+        <div
+          v-else
+          :class="[
+            'profile-custom-assets__preview',
+            { 'profile-custom-assets__preview--signature': isSignatureAssetKind },
+          ]"
+        >
           <v-icon :icon="assetFallbackIcon" size="22" />
         </div>
       </template>
@@ -1179,7 +1198,10 @@ onBeforeUnmount(() => {
             <button
               v-else
               type="button"
-              class="profile-custom-assets__upload"
+              :class="[
+                'profile-custom-assets__upload',
+                { 'profile-custom-assets__upload--signature': isSignatureAssetKind },
+              ]"
               data-sound="open"
               @click="openFilePicker"
             >
@@ -1254,8 +1276,8 @@ onBeforeUnmount(() => {
           <v-img
             v-if="previewDialogUrl"
             :src="previewDialogUrl"
-            aspect-ratio="1"
-            cover
+            :aspect-ratio="assetCropAspectRatio"
+            :cover="!isSignatureAssetKind"
             class="profile-custom-assets__dialog-preview"
           />
         </v-card-text>
@@ -1323,11 +1345,22 @@ onBeforeUnmount(() => {
   cursor: zoom-in;
 }
 
+.profile-custom-assets__preview--signature {
+  width: 92px;
+  height: 34px;
+  background: #fff9fc;
+}
+
 .profile-custom-assets__preview img,
 .profile-custom-assets__upload img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.profile-custom-assets__preview--signature img,
+.profile-custom-assets__upload--signature img {
+  object-fit: contain;
 }
 
 .profile-custom-assets__name {
@@ -1465,6 +1498,13 @@ onBeforeUnmount(() => {
   height: min(180px, 50vw);
   border-radius: 8px;
   box-shadow: 0 10px 26px rgba(122, 78, 98, 0.12);
+}
+
+.profile-custom-assets__upload--signature img {
+  width: min(320px, 68vw);
+  height: auto;
+  aspect-ratio: 2172 / 724;
+  background: #fff;
 }
 
 .profile-custom-assets__upload span {
