@@ -6,7 +6,7 @@
  */
 
 /** 当前离线资源缓存名，修改清单结构时递增版本。 */
-export const OFFLINE_RESOURCE_CACHE_NAME = 'infinity-nikki-stylist-office-resources-v3'
+export const OFFLINE_RESOURCE_CACHE_NAME = 'infinity-nikki-stylist-office-resources-v4'
 
 /** 应用外壳资源；进入页面后空闲时轻量预热。 */
 export const APP_SHELL_OFFLINE_RESOURCE_PATHS = [
@@ -18,6 +18,14 @@ export const APP_SHELL_OFFLINE_RESOURCE_PATHS = [
 
 /** 登记页会用到的内置头像资源。 */
 export const REGISTRATION_OFFLINE_RESOURCE_PATHS = ['/template/avatars/1.png'] as const
+
+/** 登记和核对页会用到的内置签章资源。 */
+export const SIGNATURE_OFFLINE_RESOURCE_PATHS = [
+  '/template/signatures/1/zh-CN.png',
+  '/template/signatures/1/zh-TW.png',
+  '/template/signatures/1/en-US.png',
+  '/template/signatures/1/ja-JP.png',
+] as const
 
 /** 核对和证书页会用到的模板资源。 */
 export const TEMPLATE_OFFLINE_RESOURCE_PATHS = [

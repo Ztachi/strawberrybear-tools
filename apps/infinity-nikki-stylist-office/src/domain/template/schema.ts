@@ -52,11 +52,28 @@ const imageMaskSchema = z.object({
   borderRadius: z.string().min(1),
 })
 
+/** 签章图片源素材比例校验，用于自定义签章裁剪。 */
+const signatureImageSourceSizeSchema = z.object({
+  width: z.number().positive(),
+  height: z.number().positive(),
+})
+
+/** 签章图片显示定位校验；只控制图片签章，不影响文字签章。 */
+const signatureImagePositionSchema = z.object({
+  anchor: z.enum(['fieldPosition', 'hitAreaCenter']),
+  offset: z
+    .object({
+      x: z.number().optional(),
+      y: z.number().optional(),
+    })
+    .optional(),
+})
+
 /** 单个动态字段校验。 */
 const templateFieldSchema = z
   .object({
     id: z.string().min(1),
-    kind: z.enum(['image', 'text']),
+    kind: z.enum(['image', 'text', 'signature']),
     source: z.string().min(1),
     editable: z.boolean(),
     editor: z.enum(['avatar', 'name', 'region', 'title', 'signature']).optional(),
@@ -71,6 +88,8 @@ const templateFieldSchema = z
       .optional(),
     imageMask: imageMaskSchema.optional(),
     customImageScale: z.number().positive().max(1).optional(),
+    signatureImageSourceSize: signatureImageSourceSizeSchema.optional(),
+    signatureImagePosition: signatureImagePositionSchema.optional(),
     hitArea: rectSchema,
     textStyle: textStyleSchema.optional(),
   })
@@ -89,6 +108,32 @@ const templateFieldSchema = z
         message: 'text fields must provide textStyle',
         path: ['textStyle'],
       })
+    }
+
+    if (field.kind === 'signature') {
+      if (!field.size) {
+        context.addIssue({
+          code: 'custom',
+          message: 'signature fields must provide image size',
+          path: ['size'],
+        })
+      }
+
+      if (!field.signatureImageSourceSize) {
+        context.addIssue({
+          code: 'custom',
+          message: 'signature fields must provide signatureImageSourceSize',
+          path: ['signatureImageSourceSize'],
+        })
+      }
+
+      if (!field.textStyle) {
+        context.addIssue({
+          code: 'custom',
+          message: 'signature fields must provide textStyle',
+          path: ['textStyle'],
+        })
+      }
     }
 
     if (field.editable && !field.editor) {

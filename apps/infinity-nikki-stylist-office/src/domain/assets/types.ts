@@ -6,7 +6,7 @@
  */
 
 /** 用户自定义素材类型。 */
-export type CustomAssetKind = 'avatar' | 'background'
+export type CustomAssetKind = 'avatar' | 'background' | 'signature'
 
 /** 自定义头像裁剪框，使用 CropperJS 画布坐标。 */
 export interface CustomAssetCropSelection {

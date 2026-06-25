@@ -112,6 +112,20 @@ function resolvePresidentName(locale: LocaleCode): string {
   return getTemplateLocaleMessages(locale).presidentName
 }
 
+/**
+ * @description: 解析历史签章展示值
+ * @description 新图片签章显示模式名称，旧记录仍按原文字签章兼容展示。
+ * @param {IssuedCertificate} certificate - 证书记录
+ * @return {string} 签章展示值
+ */
+function resolveSignatureDisplayText(certificate: IssuedCertificate): string {
+  if (certificate.signatureMode === 'image') {
+    return t('signature.imageMode')
+  }
+
+  return certificate.presidentSignature || resolvePresidentName(certificate.certificateLocale)
+}
+
 /** 过滤后的历史列表。 */
 const filteredCertificates = computed(() => {
   const keyword = searchText.value.trim().toLowerCase()
@@ -153,7 +167,7 @@ const detailRows = computed(() => {
     { label: t('signing.issuedDatePreview'), value: certificate.issuedDateText },
     {
       label: t('profile.historyPresidentSignature'),
-      value: certificate.presidentSignature || resolvePresidentName(certificate.certificateLocale),
+      value: resolveSignatureDisplayText(certificate),
     },
   ]
 })

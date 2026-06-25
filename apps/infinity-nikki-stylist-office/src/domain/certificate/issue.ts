@@ -7,10 +7,9 @@
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import { resolveLocalizedText } from '@/domain/catalog/text'
 import { formatCertificateDate } from './format'
-import { getTemplateLocaleMessages } from '@/i18n/template'
 import type { LocaleCode, RegionOption, TitleOption } from '@/domain/catalog/types'
 import type { IssuedCertificate } from './types'
-import type { CertificateDraft } from '@/domain/draft/types'
+import type { CertificateDraft, CertificateSignatureMode } from '@/domain/draft/types'
 import { normalizeDraftImageTransform } from '@/domain/draft/imageTransform'
 
 /** 正式证书短码字符集，避开容易混淆的 I/O/1/0。 */
@@ -107,23 +106,23 @@ export function resolveIssuedCertificateDraftContext(
 }
 
 /**
- * @description: 获取模板语言下的默认会长签章
- * @param {LocaleCode} locale - 证书语言
- * @return {string} 默认会长签章
- */
-function resolveTemplatePresidentName(locale: LocaleCode): string {
-  return getTemplateLocaleMessages(locale).presidentName
-}
-
-/**
  * @description: 解析草稿中的会长签章
- * @description 空字符串时回退模板默认签章，避免签发快照出现空白。
+ * @description 文字签章只保存用户确认过的输入；图片签章保留历史文字但不参与图片模式渲染。
  * @param {CertificateDraft} draft - 当前办理草稿
  * @return {string} 会长签章
  */
 function resolvePresidentSignature(draft: CertificateDraft): string {
-  const trimmed = draft.presidentSignature.trim()
-  return trimmed || resolveTemplatePresidentName(draft.certificateLocale)
+  return draft.presidentSignature.trim()
+}
+
+/**
+ * @description: 解析草稿签章模式
+ * @description 旧草稿进入签发前会被 normalizeDraft 补齐，这里只做最后一道兜底。
+ * @param {CertificateDraft} draft - 当前办理草稿
+ * @return {CertificateSignatureMode} 签章模式
+ */
+function resolveSignatureMode(draft: CertificateDraft): CertificateSignatureMode {
+  return draft.signatureMode === 'text' ? 'text' : 'image'
 }
 
 /**
@@ -143,6 +142,8 @@ export function buildIssuedCertificateSnapshot(
     certificateNo: input.certificateNo,
     stylistName: input.draft.stylistName,
     presidentSignature: resolvePresidentSignature(input.draft),
+    signatureMode: resolveSignatureMode(input.draft),
+    signatureImageId: input.draft.signatureImageId,
     titleId: input.context.title.id,
     titleName: resolveLocalizedText(input.context.title.name, locale),
     regionId: input.context.region.id,
@@ -166,12 +167,14 @@ export function buildIssuedCertificateSnapshot(
 export function buildCertificateRenderFieldValues(
   certificate: IssuedCertificate
 ): CertificateRenderFieldValues {
+  const signatureMode = certificate.signatureMode ?? 'text'
+
   return {
     avatar: '',
     name: certificate.stylistName,
     certificateNo: certificate.certificateNo,
     title: certificate.titleName,
     issuedDate: certificate.issuedDateText,
-    chairmanSignature: certificate.presidentSignature,
+    chairmanSignature: signatureMode === 'text' ? certificate.presidentSignature : '',
   }
 }

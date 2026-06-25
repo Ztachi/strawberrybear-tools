@@ -230,7 +230,7 @@ describe('certificate template manifest', () => {
     expect(resolveTemplateAssetUrl('/template/templates/1/', 'blob:avatar')).toBe('blob:avatar')
   })
 
-  it('accepts signature editor kind in template manifest schema', () => {
+  it('accepts mixed signature field in template manifest schema', () => {
     const result = certificateTemplateManifestSchema.safeParse({
       schemaVersion: '2026-06-20',
       templateId: 'template-signature-test',
@@ -250,11 +250,27 @@ describe('certificate template manifest', () => {
       fields: [
         {
           id: 'chairmanSignature',
-          kind: 'text',
+          kind: 'signature',
           source: 'presidentSignature',
           editable: true,
           editor: 'signature',
           position: [1100, 820],
+          contentWidth: 220,
+          size: {
+            width: 201,
+            height: 67,
+          },
+          signatureImageSourceSize: {
+            width: 2172,
+            height: 724,
+          },
+          signatureImagePosition: {
+            anchor: 'hitAreaCenter',
+            offset: {
+              x: 0,
+              y: 0,
+            },
+          },
           hitArea: {
             x: 1080,
             y: 810,

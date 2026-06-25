@@ -15,7 +15,7 @@ const localizedTextSchema = z.partialRecord(localeCodeSchema, z.string().min(1))
 /** 图片资源校验，尺寸必须为正数，避免无效素材进入 Canvas 渲染链路。 */
 const imageAssetSchema = z.object({
   id: z.string().min(1),
-  kind: z.enum(['template-base', 'seal', 'avatar', 'background', 'ornament']),
+  kind: z.enum(['template-base', 'seal', 'avatar', 'background', 'signature', 'ornament']),
   url: z.string().min(1),
   mimeType: z.string().min(1),
   width: z.number().positive(),
@@ -80,6 +80,19 @@ const officialAssetSchema = z.object({
   assetId: z.string().min(1),
 })
 
+const localeAssetRecordSchema = z.object({
+  'zh-CN': z.string().min(1),
+  'zh-TW': z.string().min(1),
+  'en-US': z.string().min(1),
+  'ja-JP': z.string().min(1),
+})
+
+const officialSignatureSchema = z.object({
+  id: z.string().min(1),
+  name: localizedTextSchema,
+  localeAssetIds: localeAssetRecordSchema,
+})
+
 /** 资料库 manifest 顶层校验模型。 */
 export const associationCatalogSchema = z.object({
   schemaVersion: z.string().min(1),
@@ -93,6 +106,7 @@ export const associationCatalogSchema = z.object({
   comments: z.array(commentSchema),
   officialAvatars: z.array(officialAssetSchema),
   officialBackgrounds: z.array(officialAssetSchema),
+  officialSignatures: z.array(officialSignatureSchema),
   imageAssets: z.array(imageAssetSchema),
   fontAssets: z.array(imageAssetSchema),
 })

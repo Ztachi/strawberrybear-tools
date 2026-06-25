@@ -61,6 +61,7 @@ function createProofingDraft(): CertificateDraft {
     stage: 'proofing',
     stylistName: '冰沙',
     presidentSignature: '自定义签章',
+    signatureMode: 'text',
     titleId: 'windtime-collector',
     regionId: 'florawish',
     avatarId: 'avatar-default-nikki',
@@ -126,6 +127,7 @@ describe('issued certificate repository', () => {
         y: 0,
         scale: 1,
       },
+      signatureMode: 'text',
       certificateLocale: 'zh-CN',
       templateId: draft.templateId,
       catalogVersion: draft.catalogVersion,
@@ -147,7 +149,7 @@ describe('issued certificate repository', () => {
 
   it('keeps the draft and writes no partial records when validation fails', async () => {
     const draft = createProofingDraft()
-    draft.titleId = null
+    draft.titleId = 'missing-title'
 
     await stylistOfficeDb.activeDraft.put(draft)
 
@@ -171,6 +173,7 @@ describe('issued certificate repository', () => {
     expect(preparedInput.input).toMatchObject({
       templateImageSrc: '/template/templates/1/zh-CN.png',
       avatarIsCustom: false,
+      signatureMode: 'text',
       avatarTransform: {
         x: 14,
         y: -6,
@@ -185,6 +188,31 @@ describe('issued certificate repository', () => {
       },
     })
     expect(preparedInput.input.fieldValues.issuedDate).toMatch(/\d{4}\.\d{2}\.\d{2}/)
+    preparedInput.cleanup()
+  })
+
+  it('prepares built-in image signature render source on demand', async () => {
+    const draft = {
+      ...createProofingDraft(),
+      signatureMode: 'image' as const,
+      signatureImageId: 'signature-classic-001',
+      presidentSignature: '历史文字签章',
+    }
+
+    await stylistOfficeDb.activeDraft.put(draft)
+
+    const certificate = await issueCertificateFromDraft(draft.id, {
+      randomCode: () => 'A8K3Q2',
+    })
+    const preparedInput = await prepareIssuedCertificateRenderInput(certificate)
+
+    expect(preparedInput.input).toMatchObject({
+      signatureMode: 'image',
+      signatureImageSrc: '/template/signatures/1/zh-CN.png',
+      fieldValues: {
+        chairmanSignature: '',
+      },
+    })
     preparedInput.cleanup()
   })
 

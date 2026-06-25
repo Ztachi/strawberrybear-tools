@@ -10,9 +10,11 @@ import AssetPickerDialog from '@/components/AssetPickerDialog/AssetPickerDialog.
 import BottomActionBar from '@/components/BottomActionBar/BottomActionBar.vue'
 import PickerDialogFrame from '@/components/PickerDialogFrame/PickerDialogFrame.vue'
 import ResponsivePageShell from '@/components/ResponsivePageShell/ResponsivePageShell.vue'
+import SignaturePickerDialog from '@/components/SignaturePickerDialog/SignaturePickerDialog.vue'
 import WorkflowEmptyState from '../WorkflowEmptyState/WorkflowEmptyState.vue'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import { getCustomAsset } from '@/db/repositories/customAssetRepository'
+import { resolveSignatureDisplaySource } from '@/db/repositories/signatureDisplayRepository'
 import {
   getActiveDraft,
   updateActiveDraft,
@@ -59,8 +61,8 @@ const isTemplateLoading = ref(true)
 const isDraftMissing = ref(false)
 /** 姓名编辑弹窗开关。 */
 const isNameDialogOpen = ref(false)
-/** 会长签章编辑弹窗开关。 */
-const isSignatureDialogOpen = ref(false)
+/** 会长签章选择弹窗开关。 */
+const isSignaturePickerOpen = ref(false)
 /** 称号选择弹窗开关。 */
 const isTitleDialogOpen = ref(false)
 /** 地区选择弹窗开关。 */
@@ -71,16 +73,18 @@ const isGuideOpen = ref(false)
 const isAvatarPickerOpen = ref(false)
 /** 姓名弹窗中的临时输入值，确认后才写入草稿。 */
 const draftNameInput = ref('')
-/** 会长签章弹窗中的临时输入值，确认后才写入草稿。 */
-const draftSignatureInput = ref('')
-/** 会长签章弹窗错误提示。 */
-const signatureError = ref('')
 /** 当前头像图片 URL，可能来自协会内置资源或自定义 Blob。 */
 const avatarImageSrc = ref('')
 /** 当前头像是否来自用户自定义素材。 */
 const isCustomAvatar = ref(false)
 /** 自定义头像 Blob 生成的临时 URL，草稿切换头像时释放。 */
 const customAvatarObjectUrl = ref('')
+/** 当前图片签章 URL，可能来自协会内置资源或自定义 Blob。 */
+const signatureImageSrc = ref('')
+/** 当前图片签章是否因为自定义素材删除等原因不可用。 */
+const isSignatureImageUnavailable = ref(false)
+/** 当前签章 Blob URL 清理函数。 */
+let cleanupSignatureImage: () => void = () => {}
 /** 当前模板包，找不到模板时由注册表回退默认模板。 */
 const templatePackage = ref<BuiltinCertificateTemplatePackage | null>(null)
 /** 拖拽头像时的即时预览取景参数，松手后再持久化进草稿。 */
@@ -166,7 +170,8 @@ const fieldValues = computed<Record<string, string>>(() => ({
   certificateNo: formatPendingCertificateNo(selectedRegion.value, templateCopy.value.pendingCertificateNo),
   title: selectedTitle.value?.displayName ?? templateCopy.value.fieldPlaceholder,
   issuedDate: formatCertificateDate(new Date()),
-  chairmanSignature: draft.value?.presidentSignature || templateCopy.value.presidentName,
+  chairmanSignature:
+    draft.value?.signatureMode === 'text' ? draft.value.presidentSignature.trim() : '',
 }))
 
 /** 可编辑热区的常驻提示文案。 */
@@ -178,6 +183,21 @@ const fieldLabels = computed<Record<string, string>>(() => ({
   chairmanSignature: t('proofing.editableSignatureLabel'),
 }))
 
+/** 是否可以进入正式签发。 */
+const canProceedToSigning = computed(() => {
+  if (!draft.value || !templateManifest.value) {
+    return false
+  }
+
+  if (draft.value.signatureMode === 'text') {
+    return Boolean(draft.value.presidentSignature.trim())
+  }
+
+  return Boolean(
+    draft.value.signatureImageId && signatureImageSrc.value && !isSignatureImageUnavailable.value
+  )
+})
+
 /**
  * @description: 释放自定义头像 URL
  * @description 头像来源切换时避免 Blob URL 泄漏。
@@ -188,6 +208,18 @@ function revokeCustomAvatarObjectUrl(): void {
     URL.revokeObjectURL(customAvatarObjectUrl.value)
     customAvatarObjectUrl.value = ''
   }
+}
+
+/**
+ * @description: 释放当前签章图片 URL
+ * @description 自定义签章通过 Blob URL 预览，切换草稿或离开页面时必须清理。
+ * @return {void} 无返回值
+ */
+function cleanupSignaturePreview(): void {
+  cleanupSignatureImage()
+  cleanupSignatureImage = () => {}
+  signatureImageSrc.value = ''
+  isSignatureImageUnavailable.value = false
 }
 
 /**
@@ -245,6 +277,8 @@ async function loadDraft(): Promise<void> {
 
   if (navigationIntent.consumeAvatarPicker('proofing')) {
     isAvatarPickerOpen.value = true
+  } else if (navigationIntent.consumeSignaturePicker('proofing')) {
+    isSignaturePickerOpen.value = true
   } else if (route.query.avatarPicker === '1') {
     isAvatarPickerOpen.value = true
     void router.replace({ name: 'proofing' })
@@ -310,6 +344,28 @@ async function resolveAvatarImage(): Promise<void> {
 }
 
 /**
+ * @description: 解析当前图片签章 URL
+ * @description 文字签章模式不加载图片；图片签章按证书语言解析官方或自定义资源。
+ * @return {Promise<void>} 无返回值
+ */
+async function resolveSignatureImage(): Promise<void> {
+  cleanupSignaturePreview()
+
+  if (!draft.value || draft.value.signatureMode !== 'image' || !draft.value.signatureImageId) {
+    return
+  }
+
+  const source = await resolveSignatureDisplaySource(
+    draft.value.signatureImageId,
+    draft.value.certificateLocale
+  )
+
+  isSignatureImageUnavailable.value = !source.imageSrc
+  signatureImageSrc.value = source.imageSrc
+  cleanupSignatureImage = source.cleanup
+}
+
+/**
  * @description: 打开图上字段编辑器
  * @param {CertificateTemplateEditorKind} editor - 模板字段声明的编辑器类型
  * @return {void} 无返回值
@@ -322,9 +378,7 @@ function openEditor(editor: CertificateTemplateEditorKind): void {
   }
 
   if (editor === 'signature') {
-    draftSignatureInput.value = draft.value?.presidentSignature || templateCopy.value.presidentName
-    signatureError.value = ''
-    isSignatureDialogOpen.value = true
+    isSignaturePickerOpen.value = true
     return
   }
 
@@ -352,24 +406,6 @@ async function saveName(): Promise<void> {
   const nextName = draftNameInput.value.replace(/[\r\n]/g, '').trim().slice(0, 14)
   await saveDraftPatch({ stylistName: nextName })
   isNameDialogOpen.value = false
-}
-
-/**
- * @description: 保存会长签章编辑结果
- * @description 签章去除换行和首尾空格，空值不允许写入草稿。
- * @return {Promise<void>} 无返回值
- */
-async function saveSignature(): Promise<void> {
-  const next = draftSignatureInput.value.replace(/[\r\n]/g, '').slice(0, 6).trim()
-
-  if (!next) {
-    signatureError.value = t('proofing.signatureEmptyError')
-    return
-  }
-
-  signatureError.value = ''
-  await saveDraftPatch({ presidentSignature: next })
-  isSignatureDialogOpen.value = false
 }
 
 /**
@@ -410,6 +446,29 @@ function handleAssetSelect(payload: { kind: 'avatar' | 'background'; id: string 
 }
 
 /**
+ * @description: 保存签章选择
+ * @description 弹窗确认后才会写入草稿，保留另一种签章模式的历史值。
+ * @param {{ mode: 'image'; imageId: string } | { mode: 'text'; text: string }} payload - 签章选择结果
+ * @return {void} 无返回值
+ */
+function handleSignatureConfirm(
+  payload: { mode: 'image'; imageId: string } | { mode: 'text'; text: string }
+): void {
+  if (payload.mode === 'image') {
+    void saveDraftPatch({
+      signatureMode: 'image',
+      signatureImageId: payload.imageId,
+    })
+    return
+  }
+
+  void saveDraftPatch({
+    signatureMode: 'text',
+    presidentSignature: payload.text,
+  })
+}
+
+/**
  * @description: 即时预览头像取景
  * @param {DraftImageTransform} transform - 当前手势生成的取景参数
  * @return {void} 无返回值
@@ -445,6 +504,21 @@ function openAssetLibrary(): void {
 }
 
 /**
+ * @description: 进入自定义签章管理
+ * @description 携带 returnTo 和 reopen 标识，保存新签章后回到核对页并打开签章选择层。
+ * @return {void} 无返回值
+ */
+function openSignatureLibrary(): void {
+  navigationIntent.requestCustomAssetFlow('proofing', 'signature', draft.value?.templateId)
+  void router.push({
+    name: 'profile',
+    query: {
+      tab: 'customAssets',
+    },
+  })
+}
+
+/**
  * @description: 返回登记资料
  * @return {Promise<void>} 无返回值
  */
@@ -457,6 +531,11 @@ async function backToRegistration(): Promise<void> {
  * @return {void} 无返回值
  */
 function requestSigning(): void {
+  if (!canProceedToSigning.value) {
+    isSignaturePickerOpen.value = true
+    return
+  }
+
   draftSession.setLastKnownStage('proofing')
   void router.push({ name: 'signing' })
 }
@@ -478,6 +557,17 @@ watch(
 )
 
 watch(
+  [
+    () => draft.value?.signatureMode,
+    () => draft.value?.signatureImageId,
+    () => draft.value?.certificateLocale,
+  ],
+  () => {
+    void resolveSignatureImage()
+  }
+)
+
+watch(
   () => draft.value?.templateId,
   () => {
     void loadCurrentTemplatePackage()
@@ -491,6 +581,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   revokeCustomAvatarObjectUrl()
+  cleanupSignaturePreview()
 })
 </script>
 
@@ -544,7 +635,13 @@ onBeforeUnmount(() => {
             <v-btn variant="outlined" color="primary" data-sound="back" @click="backToRegistration">
               {{ t('proofing.backRegistration') }}
             </v-btn>
-            <v-btn color="primary" variant="flat" data-sound="primary" @click="requestSigning">
+            <v-btn
+              color="primary"
+              variant="flat"
+              :disabled="!canProceedToSigning"
+              data-sound="primary"
+              @click="requestSigning"
+            >
               {{ t('proofing.apply') }}
             </v-btn>
           </div>
@@ -557,6 +654,8 @@ onBeforeUnmount(() => {
           :avatar-src="avatarImageSrc"
           :avatar-is-custom="isCustomAvatar"
           :avatar-transform="currentAvatarTransform"
+          :signature-mode="draft.signatureMode"
+          :signature-image-src="signatureImageSrc"
           :field-values="fieldValues"
           :field-labels="fieldLabels"
           :avatar-reset-label="t('proofing.resetAvatarTransform')"
@@ -606,7 +705,7 @@ onBeforeUnmount(() => {
       v-if="draft && templateManifest && !isDraftMissing"
       :primary-label="t('proofing.apply')"
       :secondary-label="t('proofing.backRegistration')"
-      :primary-disabled="!draft || !templateManifest"
+      :primary-disabled="!canProceedToSigning"
       @primary="requestSigning"
       @secondary="backToRegistration"
     />
@@ -632,33 +731,6 @@ onBeforeUnmount(() => {
           {{ t('common.action.cancel') }}
         </v-btn>
         <v-btn color="primary" variant="flat" data-sound="primary" @click="saveName">
-          {{ t('common.action.confirm') }}
-        </v-btn>
-      </template>
-    </PickerDialogFrame>
-
-    <PickerDialogFrame
-      v-model="isSignatureDialogOpen"
-      :title="t('proofing.editSignatureTitle')"
-      :intro="t('proofing.editSignatureIntro')"
-      :max-width="520"
-    >
-      <v-text-field
-        v-model="draftSignatureInput"
-        :label="t('proofing.signatureInputLabel')"
-        :error-messages="signatureError"
-        maxlength="6"
-        counter="6"
-        variant="outlined"
-        color="primary"
-        @keyup.enter="saveSignature"
-      />
-
-      <template #actions>
-        <v-btn variant="text" data-sound="back" @click="isSignatureDialogOpen = false">
-          {{ t('common.action.cancel') }}
-        </v-btn>
-        <v-btn color="primary" variant="flat" data-sound="primary" @click="saveSignature">
           {{ t('common.action.confirm') }}
         </v-btn>
       </template>
@@ -713,6 +785,17 @@ onBeforeUnmount(() => {
       :selected-id="selectedAvatarId"
       @select="handleAssetSelect"
       @manage="openAssetLibrary"
+    />
+
+    <SignaturePickerDialog
+      v-if="draft"
+      v-model="isSignaturePickerOpen"
+      :locale="currentCertificateLocale"
+      :selected-mode="draft.signatureMode"
+      :selected-image-id="draft.signatureImageId"
+      :selected-text="draft.presidentSignature"
+      @confirm="handleSignatureConfirm"
+      @manage="openSignatureLibrary"
     />
   </ResponsivePageShell>
 </template>

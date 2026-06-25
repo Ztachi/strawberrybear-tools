@@ -29,6 +29,12 @@ export interface CreateCustomAvatarInput {
   cropTransform?: CustomAssetCropTransform
 }
 
+/** 新建自定义图片素材需要的图片 Blob。 */
+export interface CreateCustomImageAssetInput extends CreateCustomAvatarInput {
+  /** 素材类型 */
+  kind: CustomAssetKind
+}
+
 /** 更新自定义头像的输入。 */
 export interface UpdateCustomAvatarInput {
   /** 素材 ID */
@@ -45,6 +51,12 @@ export interface UpdateCustomAvatarInput {
   cropSelection?: CustomAssetCropSelection
   /** 可选原图变换矩阵；缺省时沿用已有矩阵 */
   cropTransform?: CustomAssetCropTransform
+}
+
+/** 更新自定义图片素材的输入。 */
+export interface UpdateCustomImageAssetInput extends UpdateCustomAvatarInput {
+  /** 素材类型 */
+  kind: CustomAssetKind
 }
 
 /**
@@ -169,13 +181,13 @@ export async function getCustomAsset(id: string): Promise<CustomAssetRecord | un
  * @param {CreateCustomAvatarInput} input - 头像图片信息
  * @return {Promise<CustomAssetRecord>} 新建或复用的自定义头像
  */
-export async function createCustomAvatarAsset(
-  input: CreateCustomAvatarInput
+export async function createCustomImageAsset(
+  input: CreateCustomImageAssetInput
 ): Promise<CustomAssetRecord> {
   const sha256 = await calculateBlobSha256(input.croppedBlob)
   const duplicated = await stylistOfficeDb.customAssets.where('sha256').equals(sha256).first()
 
-  if (duplicated?.kind === 'avatar') {
+  if (duplicated?.kind === input.kind) {
     return duplicated
   }
 
@@ -183,8 +195,8 @@ export async function createCustomAvatarAsset(
   const croppedSize = await readImageBlobSize(input.croppedBlob)
   const originalSize = await readImageBlobSize(input.originalBlob)
   const record: CustomAssetRecord = {
-    id: `custom-avatar-${nanoid()}`,
-    kind: 'avatar',
+    id: `custom-${input.kind}-${nanoid()}`,
+    kind: input.kind,
     name: input.name.trim() || input.fallbackName,
     mimeType: input.croppedBlob.type || 'image/png',
     width: croppedSize.width,
@@ -206,18 +218,30 @@ export async function createCustomAvatarAsset(
 }
 
 /**
+ * @description: 新建自定义头像素材
+ * @description 保存原图和裁剪版；如裁剪版重复，则返回已有素材，避免用户库出现重复项。
+ * @param {CreateCustomAvatarInput} input - 头像图片信息
+ * @return {Promise<CustomAssetRecord>} 新建或复用的自定义头像
+ */
+export async function createCustomAvatarAsset(
+  input: CreateCustomAvatarInput
+): Promise<CustomAssetRecord> {
+  return createCustomImageAsset({ ...input, kind: 'avatar' })
+}
+
+/**
  * @description: 更新自定义头像素材
  * @description 支持仅改名，也支持替换原图并重新裁剪。
  * @param {UpdateCustomAvatarInput} input - 更新信息
  * @return {Promise<CustomAssetRecord>} 更新后的头像
  */
-export async function updateCustomAvatarAsset(
-  input: UpdateCustomAvatarInput
+export async function updateCustomImageAsset(
+  input: UpdateCustomImageAssetInput
 ): Promise<CustomAssetRecord> {
   const existing = await stylistOfficeDb.customAssets.get(input.id)
 
-  if (!existing || existing.kind !== 'avatar') {
-    throw new Error('Custom avatar asset not found')
+  if (!existing || existing.kind !== input.kind) {
+    throw new Error(`Custom ${input.kind} asset not found`)
   }
 
   const now = new Date().toISOString()
@@ -246,6 +270,18 @@ export async function updateCustomAvatarAsset(
 
   await stylistOfficeDb.customAssets.put(nextRecord)
   return nextRecord
+}
+
+/**
+ * @description: 更新自定义头像素材
+ * @description 支持仅改名，也支持替换原图并重新裁剪。
+ * @param {UpdateCustomAvatarInput} input - 更新信息
+ * @return {Promise<CustomAssetRecord>} 更新后的头像
+ */
+export async function updateCustomAvatarAsset(
+  input: UpdateCustomAvatarInput
+): Promise<CustomAssetRecord> {
+  return updateCustomImageAsset({ ...input, kind: 'avatar' })
 }
 
 /**
