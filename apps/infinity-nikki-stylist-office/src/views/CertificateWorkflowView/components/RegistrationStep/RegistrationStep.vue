@@ -129,10 +129,22 @@ const selectedRegionId = computed({
   },
 })
 
-/** 表单是否满足进入资料确认的最低条件。 */
+/**
+ * @description: 解析当前会长签章显示值
+ * @description 草稿未填写时回退到模板语言默认签章，默认值同样视为有效。
+ * @return {string} 会长签章文本
+ */
+function resolvePresidentSignature(): string {
+  return draft.value?.presidentSignature.trim() || templateCopy.value.presidentName
+}
+
+/**
+ * @description: 表单是否满足进入资料确认的最低条件。
+ * @description 默认值同样视为有效，只有用户清空后才拦截。
+ */
 const canConfirm = computed(() => {
   const name = draft.value?.stylistName.trim() ?? ''
-  const sig = draft.value?.presidentSignature.trim() ?? ''
+  const sig = resolvePresidentSignature()
   return Boolean(name && sig && draft.value?.titleId && draft.value?.regionId)
 })
 
@@ -149,9 +161,9 @@ const confirmationRows = computed(() => {
 
   return [
     { label: t('registration.stylistName'), value: draft.value.stylistName.trim() },
-    { label: t('registration.president'), value: draft.value.presidentSignature.trim() },
     { label: t('registration.titleOption'), value: titleName },
     { label: t('registration.region'), value: regionName },
+    { label: t('registration.president'), value: resolvePresidentSignature() },
   ]
 })
 
@@ -383,16 +395,6 @@ onBeforeUnmount(() => {
                 color="primary"
               />
 
-              <v-text-field
-                v-model="presidentSignature"
-                :label="t('registration.president')"
-                :hint="t('registration.presidentHint')"
-                maxlength="6"
-                counter="6"
-                variant="outlined"
-                color="primary"
-              />
-
               <v-select
                 v-model="selectedRegionId"
                 :items="regionItems"
@@ -445,6 +447,15 @@ onBeforeUnmount(() => {
                 :selected-title="selectedTitle"
                 :title-options="titleItems"
                 @select="selectTitle"
+              />
+              <v-text-field
+                v-model="presidentSignature"
+                :label="t('registration.president')"
+                :hint="t('registration.presidentHint')"
+                maxlength="6"
+                counter="6"
+                variant="outlined"
+                color="primary"
               />
             </div>
 
@@ -564,10 +575,6 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.registration-basic-grid > :nth-child(3) {
-  grid-column: 1 / -1;
 }
 
 .registration-selector-grid {
