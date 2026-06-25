@@ -1,7 +1,8 @@
 const CACHE_PREFIX = 'infinity-nikki-stylist-office'
-const CACHE_NAME = 'infinity-nikki-stylist-office-resources-v3'
+const CACHE_NAME = 'infinity-nikki-stylist-office-resources-v5'
 const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 const IS_LOCAL_DEV_HOST = LOCAL_DEV_HOSTS.has(self.location.hostname)
+const NETWORK_ONLY_PATHS = ['/app-version.json']
 const NETWORK_FIRST_PATH_PREFIXES = ['/association-data/']
 const CACHE_FIRST_PATH_PREFIXES = ['/template/', '/ui/nikki/']
 const CORE_RESOURCES = ['/', '/favicon.ico', '/association-data/manifest.seed.json']
@@ -48,6 +49,12 @@ function shouldUseNetworkFirst(request, requestUrl) {
   )
 }
 
+function shouldUseNetworkOnly(requestUrl) {
+  return NETWORK_ONLY_PATHS.some(
+    (path) => requestUrl.pathname === path || requestUrl.pathname.endsWith(path)
+  )
+}
+
 function shouldUseCacheFirst(requestUrl) {
   return CACHE_FIRST_PATH_PREFIXES.some((prefix) => requestUrl.pathname.startsWith(prefix))
 }
@@ -91,6 +98,10 @@ function staleWhileRevalidate(request) {
     .match(request)
     .then((cachedResponse) => cachedResponse || networkResponse)
     .then((response) => response || createOfflineResponse(request))
+}
+
+function networkOnly(request) {
+  return fetch(request).catch(() => createOfflineResponse(request))
 }
 
 if (IS_LOCAL_DEV_HOST) {
@@ -140,6 +151,11 @@ if (IS_LOCAL_DEV_HOST) {
     const requestUrl = new URL(request.url)
 
     if (requestUrl.origin !== self.location.origin) {
+      return
+    }
+
+    if (shouldUseNetworkOnly(requestUrl)) {
+      event.respondWith(networkOnly(request))
       return
     }
 

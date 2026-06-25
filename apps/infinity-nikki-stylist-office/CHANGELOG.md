@@ -1,13 +1,19 @@
 # @strawberrybear/infinity-nikki-stylist-office
 
+## 1.2.2
+
+### Patch Changes
+
+- Revert the unnecessary custom signature cropper refactor from 1.2.1 after confirming the observed ratio issue was caused by stale offline caches.
+- Add a build-time app version manifest and reuse the existing bottom resource-update prompt when the deployed version differs from the running bundle.
+- Clear rebuildable offline caches before applying a version refresh, so unchanged public asset paths such as template signature images do not keep serving stale Cache API entries.
+- Bump the offline resource cache names to invalidate previously cached template and signature assets.
+
 ## 1.2.1
 
 ### Patch Changes
 
-- Fix custom signature cropping so signature assets use the template signature source ratio (`2172 × 724`) instead of falling back to avatar-like square framing.
-  - Wait for the current template crop ratio before opening or reinitializing the custom asset cropper.
-  - Add regression coverage for avatar and signature crop ratio resolution and signature export size.
-  - Show custom signature previews with the signature aspect ratio instead of square avatar-style thumbnails.
+- Restore custom signature crop ratio handling and signature preview proportions. Reverted in 1.2.2 after the underlying issue was confirmed to be stale offline cache data.
 
 ## 1.2.0
 
