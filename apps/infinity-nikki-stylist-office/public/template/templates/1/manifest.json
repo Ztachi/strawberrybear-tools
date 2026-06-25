@@ -144,16 +144,16 @@
       "source": "presidentSignature",
       "editable": true,
       "editor": "signature",
-      "position": [1080, 790],
+      "position": [1100, 830],
       "contentWidth": 200,
       "hitArea": {
-        "x": 1060,
-        "y": 760,
+        "x": 1090,
+        "y": 820,
         "width": 220,
         "height": 60
       },
       "textStyle": {
-        "fontSize": 28,
+        "fontSize": 38,
         "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
         "fontWeight": 650,
         "color": "#7a5135",
