@@ -67,9 +67,15 @@
 
 ## 模板包
 
-当前模板以目录包组织，例如：
+当前模板以目录包组织，内置签章资源与模板同在 `public/template/` 下，例如：
 
 ```text
+signatures/
+└── 1/
+    ├── zh-CN.png
+    ├── zh-TW.png
+    ├── en-US.png
+    └── ja-JP.png
 templates/1/
 ├── manifest.json
 ├── zh-CN.png
@@ -88,6 +94,31 @@ templates/1/
 - 字段来源与编辑器类型。
 - 签章字段中，`signatureImagePosition` 控制图片签章显示位置；`signatureImageSourceSize` 只控制自定义签章裁剪比例。
 
+会长签章字段使用 `kind: "signature"`。文字签章继续使用字段自身的 `position`、`textStyle` 与 `autoFit`；图片签章使用同一个字段的 `size`、`hitArea` 和 `signatureImagePosition`。
+
+```json
+{
+  "id": "chairmanSignature",
+  "kind": "signature",
+  "signatureImageSourceSize": {
+    "width": 2172,
+    "height": 724
+  },
+  "signatureImagePosition": {
+    "anchor": "hitAreaCenter",
+    "offset": {
+      "x": 0,
+      "y": 0
+    }
+  }
+}
+```
+
+- `signatureImagePosition.anchor = "hitAreaCenter"` 表示图片签章以签章点击热区中心为基准对齐。
+- `signatureImagePosition.offset.x` 正数向右、负数向左移动图片签章。
+- `signatureImagePosition.offset.y` 正数向下、负数向上移动图片签章。
+- 只想微调图片签章位置时改 `signatureImagePosition.offset`；需要扩大点击范围时改 `hitArea`；需要调整文字签章时改原字段的文字坐标和样式。
+
 当前模板 1 的基准尺寸为 `1672 × 941`。
 
 ## 素材规格
@@ -96,5 +127,5 @@ templates/1/
 - 背景：16:9，推荐 `3840 × 2160`，最低 `1920 × 1080`。
 - 头像：正方形，推荐 `1024 × 1024`，最低 `512 × 512`。
 - 印章：透明 PNG，推荐 `1024 × 1024`，最低 `512 × 512`。
-- 签章：透明 PNG，推荐原始比例 `2172 × 724`。
+- 签章：透明 PNG，推荐原始比例 `2172 × 724`；第一套内置签章位于 `public/template/signatures/1/{locale}.png`。
 - 签名字体：优先 WOFF2，并在模板 `textSlots` 中通过 `fontAssetId` 引用。
