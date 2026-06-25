@@ -9,7 +9,7 @@ import {
   clampAvatarImageTransform,
   DEFAULT_DRAFT_IMAGE_TRANSFORM,
 } from '@/domain/draft/imageTransform'
-import type { DraftImageTransform } from '@/domain/draft/types'
+import type { CertificateSignatureMode, DraftImageTransform } from '@/domain/draft/types'
 import type { LocaleCode } from '@/domain/catalog/types'
 import type { CertificateTemplateField, CertificateTemplateManifest } from '@/domain/template/types'
 
@@ -41,6 +41,10 @@ export interface CertificateRenderInput {
   avatarIsCustom: boolean
   /** 头像在证书框内的取景参数 */
   avatarTransform?: DraftImageTransform
+  /** 当前签章模式 */
+  signatureMode?: CertificateSignatureMode
+  /** 图片签章 URL，支持 public、blob 和 data URL */
+  signatureImageSrc?: string
   /** 动态字段值 */
   fieldValues: CertificateRenderFieldValues
 }
@@ -227,6 +231,35 @@ function drawImageCover(
   const drawHeight = sourceHeight * coverScale
   const drawX = x + (width - drawWidth) / 2 + (width * transform.x) / 100
   const drawY = y + (height - drawHeight) / 2 + (height * transform.y) / 100
+
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight)
+}
+
+/**
+ * @description: 绘制 contain 模式图片
+ * @param {CanvasRenderingContext2D} context - 画布上下文
+ * @param {HTMLImageElement | HTMLCanvasElement} image - 图片
+ * @param {number} x - 目标 x
+ * @param {number} y - 目标 y
+ * @param {number} width - 目标宽度
+ * @param {number} height - 目标高度
+ * @return {void} 无返回值
+ */
+function drawImageContain(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement | HTMLCanvasElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): void {
+  const sourceWidth = image instanceof HTMLCanvasElement ? image.width : image.naturalWidth
+  const sourceHeight = image instanceof HTMLCanvasElement ? image.height : image.naturalHeight
+  const fitScale = Math.min(width / sourceWidth, height / sourceHeight)
+  const drawWidth = sourceWidth * fitScale
+  const drawHeight = sourceHeight * fitScale
+  const drawX = x + (width - drawWidth) / 2
+  const drawY = y + (height - drawHeight) / 2
 
   context.drawImage(image, drawX, drawY, drawWidth, drawHeight)
 }
@@ -427,6 +460,54 @@ function drawTextField(
 }
 
 /**
+ * @description: 绘制图片签章字段
+ * @description 签章字段的 position 兼容原文字基线位置，图片以该点作为视觉中线。
+ * @param {CanvasRenderingContext2D} context - 画布上下文
+ * @param {HTMLImageElement} signatureImage - 签章图片
+ * @param {CertificateTemplateField} field - 签章字段配置
+ * @param {number} scale - 模板到正本的缩放倍率
+ * @param {LocaleCode} [locale] - 当前证书语言
+ * @return {void} 无返回值
+ */
+function drawSignatureImageField(
+  context: CanvasRenderingContext2D,
+  signatureImage: HTMLImageElement,
+  field: CertificateTemplateField,
+  scale: number,
+  locale?: LocaleCode
+): void {
+  if (!field.size) {
+    return
+  }
+
+  const [fieldX, fieldY] = getFieldPosition(field, locale)
+  const width = field.size.width * scale
+  const height = field.size.height * scale
+  const offsetX = field.signatureImagePosition?.offset?.x ?? 0
+  const offsetY = field.signatureImagePosition?.offset?.y ?? 0
+
+  if (field.signatureImagePosition?.anchor === 'hitAreaCenter') {
+    const centerX = field.hitArea.x + field.hitArea.width / 2 + offsetX
+    const centerY = field.hitArea.y + field.hitArea.height / 2 + offsetY
+
+    drawImageContain(
+      context,
+      signatureImage,
+      Math.max(0, centerX - field.size.width / 2) * scale,
+      Math.max(0, centerY - field.size.height / 2) * scale,
+      width,
+      height
+    )
+    return
+  }
+
+  const x = Math.max(0, fieldX + offsetX) * scale
+  const y = Math.max(0, fieldY - field.size.height / 2 + offsetY) * scale
+
+  drawImageContain(context, signatureImage, x, y, width, height)
+}
+
+/**
  * @description: 将模板绘制到指定画布
  * @param {CanvasRenderingContext2D} context - 目标画布上下文
  * @param {CertificateRenderInput} input - 渲染输入
@@ -441,6 +522,7 @@ function drawCertificate(
   input: CertificateRenderInput,
   templateImage: HTMLImageElement,
   avatarImage: HTMLImageElement,
+  signatureImage: HTMLImageElement | null,
   width: number,
   height: number
 ): void {
@@ -466,6 +548,16 @@ function drawCertificate(
 
     if (field.kind === 'text') {
       drawTextField(context, field, input.fieldValues[field.id] ?? '', scale, input.locale)
+      return
+    }
+
+    if (field.kind === 'signature') {
+      if (input.signatureMode === 'image' && signatureImage) {
+        drawSignatureImageField(context, signatureImage, field, scale, input.locale)
+        return
+      }
+
+      drawTextField(context, field, input.fieldValues[field.id] ?? '', scale, input.locale)
     }
   })
 }
@@ -479,9 +571,12 @@ function drawCertificate(
 async function createWideCertificateCanvas(
   input: CertificateRenderInput
 ): Promise<HTMLCanvasElement> {
-  const [templateImage, avatarImage] = await Promise.all([
+  const [templateImage, avatarImage, signatureImage] = await Promise.all([
     loadImageElement(input.templateImageSrc),
     loadImageElement(input.avatarSrc),
+    input.signatureMode === 'image' && input.signatureImageSrc
+      ? loadImageElement(input.signatureImageSrc)
+      : Promise.resolve(null),
   ])
   const wideCanvas = createCanvas(WIDE_CERTIFICATE_SIZE.width, WIDE_CERTIFICATE_SIZE.height)
   const wideContext = wideCanvas.getContext('2d')
@@ -495,6 +590,7 @@ async function createWideCertificateCanvas(
     input,
     templateImage,
     avatarImage,
+    signatureImage,
     WIDE_CERTIFICATE_SIZE.width,
     WIDE_CERTIFICATE_SIZE.height
   )

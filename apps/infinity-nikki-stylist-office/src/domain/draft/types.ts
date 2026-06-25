@@ -9,6 +9,9 @@ import type { LocaleCode } from '@/domain/catalog/types'
 /** 办理草稿当前阶段。 */
 export type DraftStage = 'registration' | 'proofing'
 
+/** 会长签章模式。 */
+export type CertificateSignatureMode = 'image' | 'text'
+
 /** 旧版模板文字层 ID，仅用于兼容开发阶段历史草稿。 */
 export type TemplateTextLayerId =
   | 'certificateTitle'
@@ -51,6 +54,12 @@ export interface CertificateDraft {
   stage: DraftStage
   /** 搭配师姓名 */
   stylistName: string
+  /** 会长文字签章；仅文字签章模式参与渲染 */
+  presidentSignature: string
+  /** 当前会长签章模式 */
+  signatureMode: CertificateSignatureMode
+  /** 当前使用的官方或自定义图片签章 ID */
+  signatureImageId: string
   /** 已选择的称号 ID */
   titleId: string | null
   /** 证书语言，由顶部语言统一控制，姓名等用户输入内容不翻译 */

@@ -8,6 +8,7 @@ import { cacheOfflineResources } from './cache'
 import {
   APP_SHELL_OFFLINE_RESOURCE_PATHS,
   REGISTRATION_OFFLINE_RESOURCE_PATHS,
+  SIGNATURE_OFFLINE_RESOURCE_PATHS,
   SIGNING_OFFLINE_RESOURCE_PATHS,
   TEMPLATE_OFFLINE_RESOURCE_PATHS,
   resolveOfflineResourceUrls,
@@ -61,20 +62,24 @@ export function preloadOfflineResourcesForRoute(routeName: unknown): void {
   switch (routeName) {
     case 'registration':
       scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('signature', SIGNATURE_OFFLINE_RESOURCE_PATHS)
       break
     case 'proofing':
     case 'certificate':
       scheduleOfflineResources('template', TEMPLATE_OFFLINE_RESOURCE_PATHS)
       scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('signature', SIGNATURE_OFFLINE_RESOURCE_PATHS)
       break
     case 'signing':
       scheduleOfflineResources('template', TEMPLATE_OFFLINE_RESOURCE_PATHS)
       scheduleOfflineResources('signing', SIGNING_OFFLINE_RESOURCE_PATHS)
       scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('signature', SIGNATURE_OFFLINE_RESOURCE_PATHS)
       break
     case 'profile':
       scheduleOfflineResources('template', TEMPLATE_OFFLINE_RESOURCE_PATHS)
       scheduleOfflineResources('registration', REGISTRATION_OFFLINE_RESOURCE_PATHS)
+      scheduleOfflineResources('signature', SIGNATURE_OFFLINE_RESOURCE_PATHS)
       break
     default:
       break

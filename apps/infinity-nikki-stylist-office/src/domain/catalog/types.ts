@@ -12,7 +12,13 @@ export type LocaleCode = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP'
 export type LocalizedText = Partial<Record<LocaleCode, string>>
 
 /** 资料库支持的图片资源类型。 */
-export type CatalogImageKind = 'template-base' | 'seal' | 'avatar' | 'background' | 'ornament'
+export type CatalogImageKind =
+  | 'template-base'
+  | 'seal'
+  | 'avatar'
+  | 'background'
+  | 'signature'
+  | 'ornament'
 
 /** 证书模板中的图层类型。 */
 export type TemplateLayerType = 'image' | 'background' | 'avatar'
@@ -137,6 +143,16 @@ export interface OfficialAssetOption {
   assetId: string
 }
 
+/** 协会内置签章素材引用；同一个签章按证书语言切换图片。 */
+export interface OfficialSignatureOption {
+  /** 稳定选项 ID */
+  id: string
+  /** 展示名称 */
+  name: LocalizedText
+  /** 各证书语言对应 imageAssets 中的资源 ID */
+  localeAssetIds: Record<LocaleCode, string>
+}
+
 /**
  * @description: 协会资料库 manifest
  * @description 前端本地 seed 和后续后台/R2 JSON 必须保持同一结构。
@@ -164,6 +180,8 @@ export interface AssociationCatalog {
   officialAvatars: OfficialAssetOption[]
   /** 协会背景列表 */
   officialBackgrounds: OfficialAssetOption[]
+  /** 协会签章列表 */
+  officialSignatures: OfficialSignatureOption[]
   /** 图片资源清单 */
   imageAssets: CatalogImageAsset[]
   /** 字体资源清单，当前阶段只保留接口形态 */

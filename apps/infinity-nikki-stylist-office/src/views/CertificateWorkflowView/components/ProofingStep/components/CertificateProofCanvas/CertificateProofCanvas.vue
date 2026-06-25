@@ -10,7 +10,7 @@ import {
   clampAvatarImageTransform,
   DEFAULT_DRAFT_IMAGE_TRANSFORM,
 } from '@/domain/draft/imageTransform'
-import type { DraftImageTransform } from '@/domain/draft/types'
+import type { CertificateSignatureMode, DraftImageTransform } from '@/domain/draft/types'
 import type { LocaleCode } from '@/domain/catalog/types'
 import type {
   CertificateTemplateEditorKind,
@@ -31,6 +31,10 @@ const props = defineProps<{
   avatarIsCustom: boolean
   /** 当前头像取景参数 */
   avatarTransform: DraftImageTransform
+  /** 当前签章模式 */
+  signatureMode: CertificateSignatureMode
+  /** 当前图片签章 URL */
+  signatureImageSrc: string
   /** 动态字段值 */
   fieldValues: Record<string, string>
   /** 可编辑热区提示文案 */
@@ -53,6 +57,9 @@ const emit = defineEmits<{
 /** 模板动态字段按渲染类型拆分，避免模板里写复杂判断。 */
 const imageFields = computed(() => props.manifest.fields.filter((field) => field.kind === 'image'))
 const textFields = computed(() => props.manifest.fields.filter((field) => field.kind === 'text'))
+const signatureFields = computed(() =>
+  props.manifest.fields.filter((field) => field.kind === 'signature')
+)
 const editableFields = computed(() => props.manifest.fields.filter((field) => field.editable))
 const hotspotFields = computed(() => editableFields.value.filter((field) => field.id !== 'avatar'))
 const canResetAvatarTransform = computed(
@@ -175,6 +182,40 @@ function getTextFieldStyle(field: CertificateTemplateField): Record<string, stri
     fontWeight: `${textStyle?.fontWeight ?? 600}`,
     lineHeight: `${lineHeight}`,
     textAlign: textStyle?.align ?? 'left',
+  }
+}
+
+/**
+ * @description: 生成签章图片字段样式
+ * @description 签章 manifest 的 position 沿用文字基线位置，图片渲染时以该点做视觉中线。
+ * @param {CertificateTemplateField} field - 签章字段
+ * @return {Record<string, string>} Vue 样式
+ */
+function getSignatureImageFieldStyle(field: CertificateTemplateField): Record<string, string> {
+  const width = field.size?.width ?? field.contentWidth ?? 0
+  const height = field.size?.height ?? 0
+  const offsetX = field.signatureImagePosition?.offset?.x ?? 0
+  const offsetY = field.signatureImagePosition?.offset?.y ?? 0
+
+  if (field.signatureImagePosition?.anchor === 'hitAreaCenter') {
+    const centerX = field.hitArea.x + field.hitArea.width / 2 + offsetX
+    const centerY = field.hitArea.y + field.hitArea.height / 2 + offsetY
+
+    return {
+      left: `${xPercent(Math.max(0, centerX - width / 2))}%`,
+      top: `${yPercent(Math.max(0, centerY - height / 2))}%`,
+      width: `${xPercent(width)}%`,
+      height: `${yPercent(height)}%`,
+    }
+  }
+
+  const [x, y] = getFieldPosition(field)
+
+  return {
+    left: `${xPercent(Math.max(0, x + offsetX))}%`,
+    top: `${yPercent(Math.max(0, y - height / 2 + offsetY))}%`,
+    width: `${xPercent(width)}%`,
+    height: `${yPercent(height)}%`,
   }
 }
 
@@ -655,6 +696,37 @@ function handleAvatarWheel(event: WheelEvent): void {
         </template>
       </div>
 
+      <div
+        v-for="field in signatureFields"
+        :key="field.id"
+        :class="[
+          'certificate-proof-canvas__signature-field',
+          signatureMode === 'text' ? 'certificate-proof-canvas__signature-field--text' : '',
+        ]"
+        :style="
+          signatureMode === 'image'
+            ? getSignatureImageFieldStyle(field)
+            : getTextFieldStyle(field)
+        "
+      >
+        <img
+          v-if="signatureMode === 'image' && signatureImageSrc"
+          :src="signatureImageSrc"
+          alt=""
+          draggable="false"
+        />
+        <AutoFitText
+          v-else-if="signatureMode === 'text' && field.contentWidth"
+          :text="getFieldValue(field)"
+          :max-font-size="getTextFieldMaxFontSize(field)"
+          :line-height="getTextFieldLineHeight(field)"
+          :vertical-align="getTextFieldVerticalAlign(field)"
+        />
+        <template v-else-if="signatureMode === 'text'">
+          {{ getFieldValue(field) }}
+        </template>
+      </div>
+
       <button
         v-for="field in hotspotFields"
         :key="`hotspot-${field.id}`"
@@ -705,6 +777,7 @@ function handleAvatarWheel(event: WheelEvent): void {
 
 .certificate-proof-canvas__image-field,
 .certificate-proof-canvas__text-field,
+.certificate-proof-canvas__signature-field,
 .certificate-proof-canvas__hotspot {
   position: absolute;
 }
@@ -834,6 +907,25 @@ function handleAvatarWheel(event: WheelEvent): void {
   z-index: 2;
   white-space: nowrap;
   pointer-events: none;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.certificate-proof-canvas__signature-field {
+  z-index: 2;
+  display: grid;
+  pointer-events: none;
+}
+
+.certificate-proof-canvas__signature-field img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.certificate-proof-canvas__signature-field--text {
+  white-space: nowrap;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 

@@ -8,11 +8,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  createCustomAvatarAsset,
+  createCustomImageAsset,
   deleteCustomAsset,
   getCustomAsset,
   listCustomAssets,
-  updateCustomAvatarAsset,
+  updateCustomImageAsset,
 } from '@/db/repositories/customAssetRepository'
 import { updateActiveDraft } from '@/db/repositories/draftRepository'
 import { getTemplateField, loadBuiltinTemplatePackage } from '@/domain/template/registry'
@@ -22,12 +22,13 @@ import {
 } from '@/stores/navigationIntent'
 import { useUiStore } from '@/stores/ui'
 import type {
+  CustomAssetKind,
   CustomAssetCropSelection,
   CustomAssetCropTransform,
   CustomAssetRecord,
 } from '@/domain/assets/types'
 
-type AssetKindFilter = 'avatar'
+type AssetKindFilter = Extract<CustomAssetKind, 'avatar' | 'signature'>
 
 const { t } = useI18n()
 const route = useRoute()
@@ -81,8 +82,8 @@ const isCropperReady = ref(false)
 const cropperInitVersion = ref(0)
 /** 当前原图是否来自已保存素材；替换新图时不复用旧裁剪状态。 */
 const shouldRestoreCropState = ref(false)
-/** 当前证书模板头像裁剪比例，跟随来源流程带来的 templateId。 */
-const avatarCropAspectRatio = ref(1)
+/** 当前证书模板素材裁剪比例，跟随来源流程带来的 templateId 和素材类型。 */
+const assetCropAspectRatio = ref(1)
 
 /** 从办理流程进入时保存后需要回到对应流程页。 */
 const returnTo = computed<WorkflowRouteName | ''>(() => {
@@ -112,6 +113,10 @@ const assetKindItems = computed(() => [
   {
     title: t('assets.avatarAssetType'),
     value: 'avatar',
+  },
+  {
+    title: t('assets.signatureAssetType'),
+    value: 'signature',
   },
 ])
 
@@ -160,12 +165,79 @@ const filteredAvatarRows = computed(() => {
 
 /** 当前弹窗标题。 */
 const editorTitle = computed(() =>
-  editingAsset.value ? t('assets.editAvatarTitle') : t('assets.createAvatarTitle')
+  editingAsset.value
+    ? assetKindFilter.value === 'signature'
+      ? t('assets.editSignatureTitle')
+      : t('assets.editAvatarTitle')
+    : assetKindFilter.value === 'signature'
+      ? t('assets.createSignatureTitle')
+      : t('assets.createAvatarTitle')
 )
 
 /** 当前弹窗说明。 */
 const editorIntro = computed(() =>
-  editingAsset.value ? t('assets.editAvatarIntro') : t('assets.createAvatarIntro')
+  editingAsset.value
+    ? assetKindFilter.value === 'signature'
+      ? t('assets.editSignatureIntro')
+      : t('assets.editAvatarIntro')
+    : assetKindFilter.value === 'signature'
+      ? t('assets.createSignatureIntro')
+      : t('assets.createAvatarIntro')
+)
+
+/** 当前素材类型名称。 */
+const assetNameLabel = computed(() =>
+  assetKindFilter.value === 'signature' ? t('assets.signatureName') : t('assets.avatarName')
+)
+
+/** 当前素材名称输入占位。 */
+const assetNamePlaceholder = computed(() =>
+  assetKindFilter.value === 'signature'
+    ? t('assets.signatureNamePlaceholder')
+    : t('assets.avatarNamePlaceholder')
+)
+
+/** 新建按钮文案。 */
+const newAssetLabel = computed(() =>
+  assetKindFilter.value === 'signature' ? t('assets.newSignature') : t('assets.newAvatar')
+)
+
+/** 当前素材保存按钮文案。 */
+const saveAssetLabel = computed(() =>
+  assetKindFilter.value === 'signature' ? t('assets.saveSignature') : t('assets.saveAvatar')
+)
+
+/** 当前类型保存失败文案。 */
+const saveAssetFailedMessage = computed(() =>
+  assetKindFilter.value === 'signature'
+    ? t('assets.saveSignatureFailed')
+    : t('assets.saveAvatarFailed')
+)
+
+/** 当前素材缺省图标。 */
+const assetFallbackIcon = computed(() =>
+  assetKindFilter.value === 'signature' ? 'mdi-draw-pen' : 'mdi-account-circle-outline'
+)
+
+/** 选择图片按钮文案。 */
+const chooseAssetFileLabel = computed(() =>
+  assetKindFilter.value === 'signature'
+    ? t('assets.chooseSignatureFile')
+    : t('assets.chooseAvatarFile')
+)
+
+/** 替换图片按钮文案。 */
+const replaceAssetFileLabel = computed(() =>
+  assetKindFilter.value === 'signature'
+    ? t('assets.replaceSignatureFile')
+    : t('assets.replaceAvatarFile')
+)
+
+/** 当前类型的默认素材名。 */
+const customAssetFallbackName = computed(() =>
+  assetKindFilter.value === 'signature'
+    ? t('assets.customSignatureFallbackName')
+    : t('assets.customAvatarFallbackName')
 )
 
 /** 当前编辑素材的裁剪版预览。 */
@@ -193,12 +265,20 @@ const canSaveEditor = computed(() => {
 
 /** 表格空状态标题。 */
 const emptyTitle = computed(() =>
-  searchText.value.trim() ? t('assets.emptySearchTitle') : t('assets.emptyAvatarTitle')
+  searchText.value.trim()
+    ? t('assets.emptySearchTitle')
+    : assetKindFilter.value === 'signature'
+      ? t('assets.emptySignatureTitle')
+      : t('assets.emptyAvatarTitle')
 )
 
 /** 表格空状态说明。 */
 const emptyDescription = computed(() =>
-  searchText.value.trim() ? t('assets.emptySearchDescription') : t('assets.emptyDescription')
+  searchText.value.trim()
+    ? t('assets.emptySearchDescription')
+    : assetKindFilter.value === 'signature'
+      ? t('assets.emptySignatureDescription')
+      : t('assets.emptyDescription')
 )
 
 /**
@@ -245,8 +325,8 @@ async function consumeLegacyNavigationQuery(): Promise<void> {
     )
   }
 
-  if (route.query.assetKind === 'avatar') {
-    assetKindFilter.value = 'avatar'
+  if (route.query.assetKind === 'avatar' || route.query.assetKind === 'signature') {
+    assetKindFilter.value = route.query.assetKind
   }
 
   if (route.query.returnTo || route.query.templateId || route.query.assetKind || route.query.reopen) {
@@ -260,12 +340,17 @@ async function consumeLegacyNavigationQuery(): Promise<void> {
 }
 
 /**
- * @description: 返回流程页并重新打开头像选择层
+ * @description: 返回流程页并重新打开素材选择层
  * @param {WorkflowRouteName} targetRouteName - 目标流程页
  * @return {Promise<void>} 无返回值
  */
-async function returnToDraftWithAvatarPicker(targetRouteName: WorkflowRouteName): Promise<void> {
-  navigationIntent.requestAvatarPicker(targetRouteName)
+async function returnToDraftWithAssetPicker(targetRouteName: WorkflowRouteName): Promise<void> {
+  if (assetKindFilter.value === 'signature') {
+    navigationIntent.requestSignaturePicker(targetRouteName)
+  } else {
+    navigationIntent.requestAvatarPicker(targetRouteName)
+  }
+
   navigationIntent.clearCustomAssetFlow()
   await router.push({ name: targetRouteName })
 }
@@ -325,16 +410,25 @@ async function loadCustomAvatars(): Promise<void> {
  * @param {string} templateId - 当前证书模板 ID
  * @return {Promise<void>} 无返回值
  */
-async function loadAvatarCropAspectRatio(templateId: string): Promise<void> {
+async function loadAssetCropAspectRatio(templateId: string): Promise<void> {
   const templatePackage = await loadBuiltinTemplatePackage(templateId)
-  const avatarField = getTemplateField(templatePackage.manifest, 'avatar')
+  const field = getTemplateField(
+    templatePackage.manifest,
+    assetKindFilter.value === 'signature' ? 'chairmanSignature' : 'avatar'
+  )
 
-  if (!avatarField?.size) {
-    avatarCropAspectRatio.value = 1
+  if (assetKindFilter.value === 'signature' && field?.signatureImageSourceSize) {
+    assetCropAspectRatio.value =
+      field.signatureImageSourceSize.width / field.signatureImageSourceSize.height
     return
   }
 
-  avatarCropAspectRatio.value = avatarField.size.width / avatarField.size.height
+  if (!field?.size) {
+    assetCropAspectRatio.value = 1
+    return
+  }
+
+  assetCropAspectRatio.value = field.size.width / field.size.height
 }
 
 /**
@@ -405,7 +499,7 @@ function openFilePicker(): void {
   fileInput.value?.click()
 }
 
-/** CropperJS v2 模板；显式开启图片平移缩放并锁定头像比例。 */
+/** CropperJS v2 模板；显式开启图片平移缩放并锁定当前素材比例。 */
 const cropperTemplate = computed(
   () => `
     <cropper-canvas background scale-step="0.08">
@@ -414,7 +508,7 @@ const cropperTemplate = computed(
       <cropper-handle action="select" plain></cropper-handle>
       <cropper-selection
         initial-coverage="0.82"
-        aspect-ratio="${avatarCropAspectRatio.value}"
+        aspect-ratio="${assetCropAspectRatio.value}"
         movable
         resizable
         zoomable
@@ -565,7 +659,7 @@ function applySavedCropState(
     savedSelection.y,
     savedSelection.width,
     savedSelection.height,
-    avatarCropAspectRatio.value,
+    assetCropAspectRatio.value,
     true
   )
   selection.$render()
@@ -663,7 +757,7 @@ function handleCropperImageError(): void {
  * @return {{ width: number; height: number }} 输出尺寸
  */
 function getAvatarOutputSize(): { width: number; height: number } {
-  const ratio = avatarCropAspectRatio.value
+  const ratio = assetCropAspectRatio.value
 
   if (ratio >= 1) {
     return {
@@ -687,7 +781,7 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
-        reject(new Error(t('assets.saveAvatarFailed')))
+        reject(new Error(saveAssetFailedMessage.value))
         return
       }
 
@@ -754,19 +848,21 @@ async function saveEditor(): Promise<void> {
       const cropTransform = getCurrentCropTransform()
 
       if (editingAsset.value) {
-        savedAsset = await updateCustomAvatarAsset({
+        savedAsset = await updateCustomImageAsset({
           id: editingAsset.value.id,
+          kind: assetKindFilter.value,
           name: avatarName.value,
-          fallbackName: t('assets.customAvatarFallbackName'),
+          fallbackName: customAssetFallbackName.value,
           originalBlob: selectedOriginalBlob.value,
           croppedBlob,
           cropSelection,
           cropTransform,
         })
       } else {
-        savedAsset = await createCustomAvatarAsset({
+        savedAsset = await createCustomImageAsset({
+          kind: assetKindFilter.value,
           name: avatarName.value,
-          fallbackName: t('assets.customAvatarFallbackName'),
+          fallbackName: customAssetFallbackName.value,
           originalBlob: selectedOriginalBlob.value,
           croppedBlob,
           cropSelection,
@@ -774,18 +870,24 @@ async function saveEditor(): Promise<void> {
         })
       }
     } else if (editingAsset.value) {
-      savedAsset = await updateCustomAvatarAsset({
+      savedAsset = await updateCustomImageAsset({
         id: editingAsset.value.id,
+        kind: assetKindFilter.value,
         name: avatarName.value,
-        fallbackName: t('assets.customAvatarFallbackName'),
+        fallbackName: customAssetFallbackName.value,
       })
     } else {
       return
     }
 
     if (shouldReturnToDraft.value) {
-      await updateActiveDraft({ avatarId: savedAsset.id })
-      await returnToDraftWithAvatarPicker(returnTo.value as WorkflowRouteName)
+      if (assetKindFilter.value === 'signature') {
+        await updateActiveDraft({ signatureMode: 'image', signatureImageId: savedAsset.id })
+      } else {
+        await updateActiveDraft({ avatarId: savedAsset.id })
+      }
+
+      await returnToDraftWithAssetPicker(returnTo.value as WorkflowRouteName)
       return
     }
 
@@ -797,10 +899,10 @@ async function saveEditor(): Promise<void> {
     editorErrorMessage.value = [
       t('assets.cropperNotReady'),
       t('assets.cropperImageLoadFailed'),
-      t('assets.saveAvatarFailed'),
+      saveAssetFailedMessage.value,
     ].includes(message)
       ? message
-      : t('assets.saveAvatarFailed')
+      : saveAssetFailedMessage.value
   } finally {
     isSaving.value = false
   }
@@ -856,12 +958,15 @@ async function backToDraft(): Promise<void> {
     return
   }
 
-  await returnToDraftWithAvatarPicker(returnTo.value as WorkflowRouteName)
+  await returnToDraftWithAssetPicker(returnTo.value as WorkflowRouteName)
 }
 
 onMounted(async () => {
-  if (navigationIntent.customAssetKind === 'avatar') {
-    assetKindFilter.value = 'avatar'
+  if (
+    navigationIntent.customAssetKind === 'avatar' ||
+    navigationIntent.customAssetKind === 'signature'
+  ) {
+    assetKindFilter.value = navigationIntent.customAssetKind
   }
 
   await consumeLegacyNavigationQuery()
@@ -869,9 +974,9 @@ onMounted(async () => {
 })
 
 watch(
-  activeTemplateId,
-  (templateId) => {
-    void loadAvatarCropAspectRatio(templateId)
+  [activeTemplateId, assetKindFilter],
+  ([templateId]) => {
+    void loadAssetCropAspectRatio(templateId)
   },
   { immediate: true }
 )
@@ -924,7 +1029,7 @@ onBeforeUnmount(() => {
         </v-btn>
         <v-btn color="primary" variant="flat" data-sound="primary" @click="openCreateDialog">
           <v-icon icon="mdi-plus" start />
-          {{ t('assets.newAvatar') }}
+          {{ newAssetLabel }}
         </v-btn>
       </div>
     </div>
@@ -963,7 +1068,7 @@ onBeforeUnmount(() => {
           </v-card>
         </v-menu>
         <div v-else class="profile-custom-assets__preview">
-          <v-icon icon="mdi-account-circle-outline" size="22" />
+          <v-icon :icon="assetFallbackIcon" size="22" />
         </div>
       </template>
 
@@ -1043,8 +1148,8 @@ onBeforeUnmount(() => {
         <v-card-text class="grid gap-4 px-6 pb-5 pt-2 max-[560px]:px-5">
           <v-text-field
             v-model="avatarName"
-            :label="t('assets.avatarName')"
-            :placeholder="t('assets.avatarNamePlaceholder')"
+            :label="assetNameLabel"
+            :placeholder="assetNamePlaceholder"
             variant="outlined"
             color="primary"
             maxlength="32"
@@ -1083,7 +1188,7 @@ onBeforeUnmount(() => {
                 <v-icon icon="mdi-image-plus-outline" size="30" />
               </span>
               <strong>
-                {{ editingPreviewUrl ? t('assets.currentPreview') : t('assets.chooseAvatarFile') }}
+                {{ editingPreviewUrl ? t('assets.currentPreview') : chooseAssetFileLabel }}
               </strong>
               <small>
                 {{ editingPreviewUrl ? t('assets.replaceAvatarHint') : t('assets.chooseImageBeforeSave') }}
@@ -1093,7 +1198,7 @@ onBeforeUnmount(() => {
 
           <v-btn variant="outlined" color="primary" data-sound="open" @click="openFilePicker">
             <v-icon icon="mdi-image-sync-outline" start />
-            {{ editingPreviewUrl || sourceImageUrl ? t('assets.replaceAvatarFile') : t('assets.chooseAvatarFile') }}
+            {{ editingPreviewUrl || sourceImageUrl ? replaceAssetFileLabel : chooseAssetFileLabel }}
           </v-btn>
         </v-card-text>
 
@@ -1109,7 +1214,7 @@ onBeforeUnmount(() => {
             data-sound="primary"
             @click="saveEditor"
           >
-            {{ shouldReturnToDraft ? t('assets.saveAndUse') : t('assets.saveAvatar') }}
+            {{ shouldReturnToDraft ? t('assets.saveAndUse') : saveAssetLabel }}
           </v-btn>
         </v-card-actions>
       </v-card>

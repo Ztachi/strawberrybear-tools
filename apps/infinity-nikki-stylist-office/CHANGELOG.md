@@ -1,5 +1,17 @@
 # @strawberrybear/infinity-nikki-stylist-office
 
+## 1.2.0
+
+### Minor Changes
+
+- Add image and text modes for president signatures.
+  - New drafts default to the first built-in image signature, and built-in signatures follow the selected certificate language.
+  - Add a tabbed signature picker for built-in image signatures, custom image signatures, and text signatures.
+  - Add text signature validation with no default fallback; blank text signatures now prompt before saving.
+  - Add custom signature assets with upload, crop, edit, delete, and save-and-use flows.
+  - Persist issued signature snapshots and render image/text signatures consistently in proofing, issued certificate previews, and downloaded certificate images.
+  - Document template-driven signature image positioning and the `2172 × 724` custom signature crop ratio.
+
 ## 1.1.0
 
 ### Minor Changes

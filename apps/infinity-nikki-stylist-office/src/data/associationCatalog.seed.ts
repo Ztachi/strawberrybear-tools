@@ -199,6 +199,23 @@ const rawAssociationCatalog = {
       assetId: 'asset-background-snow-mountain',
     },
   ],
+  officialSignatures: [
+    {
+      id: 'signature-classic-001',
+      name: {
+        'zh-CN': '协会默认签章',
+        'zh-TW': '協會預設簽章',
+        'en-US': 'Association Default Signature',
+        'ja-JP': '協会デフォルト署名',
+      },
+      localeAssetIds: {
+        'zh-CN': 'asset-signature-classic-001-zh-cn',
+        'zh-TW': 'asset-signature-classic-001-zh-tw',
+        'en-US': 'asset-signature-classic-001-en-us',
+        'ja-JP': 'asset-signature-classic-001-ja-jp',
+      },
+    },
+  ],
   imageAssets: [
     {
       id: 'asset-template-classic-zh-cn',
@@ -223,6 +240,38 @@ const rawAssociationCatalog = {
       mimeType: 'image/png',
       width: 3840,
       height: 2160,
+    },
+    {
+      id: 'asset-signature-classic-001-zh-cn',
+      kind: 'signature',
+      url: 'signatures/1/zh-CN.png',
+      mimeType: 'image/png',
+      width: 2172,
+      height: 724,
+    },
+    {
+      id: 'asset-signature-classic-001-zh-tw',
+      kind: 'signature',
+      url: 'signatures/1/zh-TW.png',
+      mimeType: 'image/png',
+      width: 2172,
+      height: 724,
+    },
+    {
+      id: 'asset-signature-classic-001-en-us',
+      kind: 'signature',
+      url: 'signatures/1/en-US.png',
+      mimeType: 'image/png',
+      width: 2172,
+      height: 724,
+    },
+    {
+      id: 'asset-signature-classic-001-ja-jp',
+      kind: 'signature',
+      url: 'signatures/1/ja-JP.png',
+      mimeType: 'image/png',
+      width: 2172,
+      height: 724,
     },
   ],
   fontAssets: [],

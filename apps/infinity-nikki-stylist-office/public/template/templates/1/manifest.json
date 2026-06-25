@@ -137,6 +137,45 @@
         "align": "left",
         "lineHeight": 1.1
       }
+    },
+    {
+      "id": "chairmanSignature",
+      "kind": "signature",
+      "source": "presidentSignature",
+      "editable": true,
+      "editor": "signature",
+      "position": [1100, 830],
+      "contentWidth": 200,
+      "size": {
+        "width": 201,
+        "height": 67
+      },
+      "signatureImageSourceSize": {
+        "width": 2172,
+        "height": 724
+      },
+      "signatureImagePosition": {
+        "anchor": "hitAreaCenter",
+        "offset": {
+          "x": -5,
+          "y": 5
+        }
+      },
+      "hitArea": {
+        "x": 1090,
+        "y": 820,
+        "width": 220,
+        "height": 60
+      },
+      "textStyle": {
+        "fontSize": 38,
+        "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
+        "fontWeight": 650,
+        "color": "#7a5135",
+        "align": "left",
+        "lineHeight": 1.1,
+        "verticalAlign": "middle"
+      }
     }
   ]
 }

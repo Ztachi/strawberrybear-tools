@@ -33,6 +33,8 @@ describe('certificate issue helpers', () => {
       id: 'draft-issue-test',
       stage: 'proofing' as const,
       stylistName: 'Nikki',
+      presidentSignature: 'Tea Egg',
+      signatureMode: 'text' as const,
       titleId: 'windtime-collector',
       regionId: 'florawish',
       avatarId: 'avatar-default-nikki',
@@ -55,6 +57,8 @@ describe('certificate issue helpers', () => {
       id: 'issued-1',
       certificateNo: 'MC-FLW-A8K3Q2',
       stylistName: 'Nikki',
+      presidentSignature: 'Tea Egg',
+      signatureMode: 'text',
       titleId: 'windtime-collector',
       titleName: 'Windborne Light Collector Stylist',
       regionId: 'florawish',
@@ -73,6 +77,32 @@ describe('certificate issue helpers', () => {
       certificateNo: 'MC-FLW-A8K3Q2',
       title: 'Windborne Light Collector Stylist',
       issuedDate: '2026.06.21',
+      chairmanSignature: 'Tea Egg',
     })
+  })
+
+  it('keeps empty text signature empty instead of falling back to template president name', () => {
+    const draft = {
+      ...createDefaultDraft('zh-CN'),
+      id: 'draft-signature-fallback',
+      stage: 'proofing' as const,
+      stylistName: '冰沙',
+      presidentSignature: '',
+      signatureMode: 'text' as const,
+      titleId: 'windtime-collector',
+      regionId: 'florawish',
+      avatarId: 'avatar-default-nikki',
+    }
+    const context = resolveIssuedCertificateDraftContext(draft)
+    const certificate = buildIssuedCertificateSnapshot({
+      id: 'issued-signature-fallback',
+      certificateNo: 'MC-FLW-A8K3Q2',
+      draft,
+      context,
+      issuedAt: new Date(2026, 5, 21, 10, 30, 0),
+    })
+
+    expect(certificate.presidentSignature).toBe('')
+    expect(buildCertificateRenderFieldValues(certificate).chairmanSignature).toBe('')
   })
 })
