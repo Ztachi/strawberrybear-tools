@@ -8,7 +8,10 @@ import { nanoid } from 'nanoid'
 import { associationCatalogSeed } from '@/data/associationCatalog.seed'
 import { stylistOfficeDb, type CertificateImageRecord } from '@/db/database'
 import { getCustomAsset } from '@/db/repositories/customAssetRepository'
-import { getOfficialAssetImageSource } from '@/domain/assets/officialAssets'
+import {
+  getOfficialAssetImageSource,
+  getOfficialSignatureImageSource,
+} from '@/domain/assets/officialAssets'
 import {
   buildCertificateRenderFieldValues,
   buildIssuedCertificateSnapshot,
@@ -19,6 +22,8 @@ import {
 import type { CertificateRenderInput } from '@/domain/certificate/render'
 import { getTemplateImageSource, loadBuiltinTemplatePackage } from '@/domain/template/registry'
 import { DEFAULT_DRAFT_IMAGE_TRANSFORM } from '@/domain/draft/imageTransform'
+import { normalizeDraft } from '@/domain/draft/factory'
+import { DEFAULT_UI_LOCALE } from '@/i18n'
 import type { CertificateDraft } from '@/domain/draft/types'
 import type { IssuedCertificate } from '@/domain/certificate/types'
 
@@ -141,7 +146,7 @@ async function getDraftForSigning(draftId: string): Promise<CertificateDraft> {
     throw new Error('Active draft not found')
   }
 
-  return draft
+  return normalizeDraft(draft, draft.certificateLocale ?? DEFAULT_UI_LOCALE)
 }
 
 /**
@@ -178,6 +183,48 @@ async function resolveAvatarRenderSource(avatarId: string): Promise<{
   return {
     src,
     isCustom: true,
+    revoke: () => URL.revokeObjectURL(src),
+  }
+}
+
+/**
+ * @description: 解析图片签章源
+ * @description 官方签章随证书语言换图，自定义签章临时创建 Blob URL 并由调用方释放。
+ * @param {string} signatureId - 签章 ID
+ * @param {import('@/domain/catalog/types').LocaleCode} locale - 证书语言
+ * @return {Promise<{ src: string; revoke?: () => void }>} 签章渲染源
+ */
+async function resolveSignatureRenderSource(
+  signatureId: string,
+  locale: IssuedCertificate['certificateLocale']
+): Promise<{
+  src: string
+  revoke?: () => void
+}> {
+  const officialSignature = associationCatalogSeed.officialSignatures.find(
+    (item) => item.id === signatureId
+  )
+
+  if (officialSignature) {
+    const src = getOfficialSignatureImageSource(officialSignature.id, locale)
+
+    if (!src) {
+      throw new Error('Official signature image source not found')
+    }
+
+    return { src }
+  }
+
+  const customSignature = await getCustomAsset(signatureId)
+
+  if (!customSignature || customSignature.kind !== 'signature') {
+    throw new Error('Custom signature not found')
+  }
+
+  const src = URL.createObjectURL(customSignature.blob)
+
+  return {
+    src,
     revoke: () => URL.revokeObjectURL(src),
   }
 }
@@ -234,6 +281,14 @@ export async function prepareIssuedCertificateRenderInput(
 ): Promise<PreparedCertificateRenderInput> {
   const templatePackage = await loadBuiltinTemplatePackage(certificate.templateId)
   const avatarSource = await resolveAvatarRenderSource(certificate.avatarId)
+  const signatureMode = certificate.signatureMode ?? 'text'
+  const signatureSource =
+    signatureMode === 'image' && certificate.signatureImageId
+      ? await resolveSignatureRenderSource(
+          certificate.signatureImageId,
+          certificate.certificateLocale
+        )
+      : null
 
   return {
     input: {
@@ -247,8 +302,13 @@ export async function prepareIssuedCertificateRenderInput(
       avatarSrc: avatarSource.src,
       avatarIsCustom: avatarSource.isCustom,
       avatarTransform: certificate.avatarTransform ?? DEFAULT_DRAFT_IMAGE_TRANSFORM,
+      signatureMode,
+      signatureImageSrc: signatureSource?.src,
       fieldValues: buildCertificateRenderFieldValues(certificate),
     },
-    cleanup: () => avatarSource.revoke?.(),
+    cleanup: () => {
+      avatarSource.revoke?.()
+      signatureSource?.revoke?.()
+    },
   }
 }

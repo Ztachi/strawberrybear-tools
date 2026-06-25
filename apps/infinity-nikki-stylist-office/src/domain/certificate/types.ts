@@ -5,7 +5,7 @@
  * @date 2026-06-18
  */
 import type { LocaleCode } from '@/domain/catalog/types'
-import type { DraftImageTransform } from '@/domain/draft/types'
+import type { CertificateSignatureMode, DraftImageTransform } from '@/domain/draft/types'
 
 /**
  * @description: 已正式签发证书
@@ -18,6 +18,12 @@ export interface IssuedCertificate {
   certificateNo: string
   /** 搭配师姓名快照 */
   stylistName: string
+  /** 会长签章快照 */
+  presidentSignature: string
+  /** 会长签章模式；旧记录缺失时按文字签章兼容 */
+  signatureMode?: CertificateSignatureMode
+  /** 会长图片签章 ID；图片签章模式使用 */
+  signatureImageId?: string
   /** 认证称号 ID 快照 */
   titleId: string
   /** 认证称号显示文案快照 */

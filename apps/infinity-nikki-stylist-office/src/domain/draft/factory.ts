@@ -37,11 +37,15 @@ export function createDefaultDraft(locale: LocaleCode): CertificateDraft {
   const background =
     pickRandom(associationCatalogSeed.officialBackgrounds) ??
     associationCatalogSeed.officialBackgrounds[0]
+  const signature = associationCatalogSeed.officialSignatures[0]
 
   return {
     id: nanoid(),
     stage: 'registration',
     stylistName: '',
+    presidentSignature: '',
+    signatureMode: 'image',
+    signatureImageId: signature?.id ?? '',
     titleId: title?.id ?? null,
     certificateLocale: locale,
     regionId: region?.id ?? '',
@@ -70,11 +74,25 @@ export function normalizeDraft(
   fallbackLocale: LocaleCode
 ): CertificateDraft {
   const defaultDraft = createDefaultDraft(fallbackLocale)
+  const presidentSignature =
+    typeof draft.presidentSignature === 'string' ? draft.presidentSignature : ''
+  const signatureMode =
+    draft.signatureMode === 'image' || draft.signatureMode === 'text'
+      ? draft.signatureMode
+      : presidentSignature.trim()
+        ? 'text'
+        : defaultDraft.signatureMode
 
   return {
     ...defaultDraft,
     ...draft,
     certificateLocale: draft.certificateLocale ?? fallbackLocale,
+    presidentSignature,
+    signatureMode,
+    signatureImageId:
+      typeof draft.signatureImageId === 'string' && draft.signatureImageId
+        ? draft.signatureImageId
+        : defaultDraft.signatureImageId,
     titleId: draft.titleId ?? defaultDraft.titleId,
     regionId: draft.regionId ?? defaultDraft.regionId,
     commentId: draft.commentId ?? defaultDraft.commentId,

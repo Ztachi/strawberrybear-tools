@@ -4,6 +4,8 @@
  * @author strawberrybear
  * @date 2026-06-20
  */
+import { associationCatalogSeed } from '@/data/associationCatalog.seed'
+import type { LocaleCode } from '@/domain/catalog/types'
 
 /** public/template 资源根入口，后续远程素材包也按同样的相对路径机制解析。 */
 const OFFICIAL_TEMPLATE_ASSET_ROOT = `${import.meta.env.BASE_URL || '/'}template/`
@@ -23,6 +25,10 @@ function resolveOfficialTemplateAssetUrl(relativePath: string): string {
 /** 协会内置图片资源 URL，key 必须对应资料库 imageAssets.assetId。 */
 const OFFICIAL_ASSET_IMAGE_SOURCES: Record<string, string> = {
   'asset-avatar-default-nikki': resolveOfficialTemplateAssetUrl('avatars/1.png'),
+  'asset-signature-classic-001-zh-cn': resolveOfficialTemplateAssetUrl('signatures/1/zh-CN.png'),
+  'asset-signature-classic-001-zh-tw': resolveOfficialTemplateAssetUrl('signatures/1/zh-TW.png'),
+  'asset-signature-classic-001-en-us': resolveOfficialTemplateAssetUrl('signatures/1/en-US.png'),
+  'asset-signature-classic-001-ja-jp': resolveOfficialTemplateAssetUrl('signatures/1/ja-JP.png'),
 }
 
 /**
@@ -33,4 +39,20 @@ const OFFICIAL_ASSET_IMAGE_SOURCES: Record<string, string> = {
  */
 export function getOfficialAssetImageSource(assetId: string): string {
   return OFFICIAL_ASSET_IMAGE_SOURCES[assetId] ?? ''
+}
+
+/**
+ * @description: 获取协会内置签章图片 URL
+ * @description 同一签章会随证书语言切换不同图片，缺失时回退简体中文。
+ * @param {string} signatureId - 签章选项 ID
+ * @param {LocaleCode} locale - 证书语言
+ * @return {string} 构建后的图片 URL
+ */
+export function getOfficialSignatureImageSource(signatureId: string, locale: LocaleCode): string {
+  const signature = associationCatalogSeed.officialSignatures.find(
+    (item) => item.id === signatureId
+  )
+  const assetId = signature?.localeAssetIds[locale] ?? signature?.localeAssetIds['zh-CN']
+
+  return assetId ? getOfficialAssetImageSource(assetId) : ''
 }

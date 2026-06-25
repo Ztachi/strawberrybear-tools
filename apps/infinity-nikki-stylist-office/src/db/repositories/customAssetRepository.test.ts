@@ -9,10 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stylistOfficeDb } from '@/db/database'
 import {
   createCustomAvatarAsset,
+  createCustomImageAsset,
   deleteCustomAsset,
   getCustomAsset,
   listCustomAssets,
   updateCustomAvatarAsset,
+  updateCustomImageAsset,
 } from './customAssetRepository'
 
 describe('custom asset repository', () => {
@@ -102,6 +104,37 @@ describe('custom asset repository', () => {
     expect(updatedAsset.cropSelection).toEqual({ x: 20, y: 30, width: 280, height: 280 })
     expect(updatedAsset.cropTransform).toEqual([1.45, 0, 0, 1.45, -72, -96])
     expect(updatedAsset.updatedAt).not.toBeUndefined()
+  })
+
+  it('saves and updates custom signature blobs separately from avatars', async () => {
+    const originalBlob = new Blob(['original-signature'], { type: 'image/png' })
+    const croppedBlob = new Blob(['cropped-signature'], { type: 'image/png' })
+    const asset = await createCustomImageAsset({
+      kind: 'signature',
+      name: 'My Signature',
+      fallbackName: 'Custom Signature',
+      originalBlob,
+      croppedBlob,
+      cropSelection: { x: 10, y: 12, width: 300, height: 100 },
+      cropTransform: [1, 0, 0, 1, -10, -12],
+    })
+    const updatedBlob = new Blob(['updated-signature'], { type: 'image/png' })
+    const updatedAsset = await updateCustomImageAsset({
+      id: asset.id,
+      kind: 'signature',
+      name: 'Updated Signature',
+      fallbackName: 'Custom Signature',
+      originalBlob,
+      croppedBlob: updatedBlob,
+    })
+    const signatures = await listCustomAssets('signature')
+    const avatars = await listCustomAssets('avatar')
+
+    expect(asset.id).toContain('custom-signature-')
+    expect(updatedAsset.name).toBe('Updated Signature')
+    expect(updatedAsset.blob).toBe(updatedBlob)
+    expect(signatures).toHaveLength(1)
+    expect(avatars).toHaveLength(0)
   })
 
   it('deletes custom assets', async () => {

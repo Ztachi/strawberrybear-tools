@@ -16,6 +16,8 @@ export const useNavigationIntentStore = defineStore('navigationIntent', {
     profileIssuedDetailId: null as string | null,
     /** 从自定义资料返回后需要重新打开头像选择层的流程页。 */
     reopenAvatarPickerFor: null as WorkflowRouteName | null,
+    /** 从自定义资料返回后需要重新打开签章选择层的流程页。 */
+    reopenSignaturePickerFor: null as WorkflowRouteName | null,
     /** 自定义资料页保存后返回的流程页。 */
     customAssetReturnTo: null as WorkflowRouteName | null,
     /** 自定义资料页打开时的素材类型。 */
@@ -86,6 +88,27 @@ export const useNavigationIntentStore = defineStore('navigationIntent', {
       }
 
       this.reopenAvatarPickerFor = null
+      return true
+    },
+    /**
+     * @description: 请求流程页重新打开签章选择层
+     * @param {WorkflowRouteName} routeName - 目标流程页
+     * @return {void} 无返回值
+     */
+    requestSignaturePicker(routeName: WorkflowRouteName): void {
+      this.reopenSignaturePickerFor = routeName
+    },
+    /**
+     * @description: 消费签章选择层打开请求
+     * @param {WorkflowRouteName} routeName - 当前流程页
+     * @return {boolean} 是否需要打开
+     */
+    consumeSignaturePicker(routeName: WorkflowRouteName): boolean {
+      if (this.reopenSignaturePickerFor !== routeName) {
+        return false
+      }
+
+      this.reopenSignaturePickerFor = null
       return true
     },
   },

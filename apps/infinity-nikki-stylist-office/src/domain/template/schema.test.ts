@@ -5,6 +5,7 @@
  * @date 2026-06-20
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { certificateTemplateManifestSchema } from './schema'
 import { getTemplateField, loadBuiltinTemplatePackage, resolveTemplateAssetUrl } from './registry'
 
 describe('certificate template manifest', () => {
@@ -227,5 +228,67 @@ describe('certificate template manifest', () => {
       'https://example.com/templates/1/zh-CN.png'
     )
     expect(resolveTemplateAssetUrl('/template/templates/1/', 'blob:avatar')).toBe('blob:avatar')
+  })
+
+  it('accepts mixed signature field in template manifest schema', () => {
+    const result = certificateTemplateManifestSchema.safeParse({
+      schemaVersion: '2026-06-20',
+      templateId: 'template-signature-test',
+      name: {
+        'zh-CN': '测试证书',
+      },
+      baseSize: {
+        width: 1672,
+        height: 941,
+      },
+      localeImages: {
+        'zh-CN': 'zh-CN.png',
+        'zh-TW': 'zh-TW.png',
+        'en-US': 'en-US.png',
+        'ja-JP': 'ja-JP.png',
+      },
+      fields: [
+        {
+          id: 'chairmanSignature',
+          kind: 'signature',
+          source: 'presidentSignature',
+          editable: true,
+          editor: 'signature',
+          position: [1100, 820],
+          contentWidth: 220,
+          size: {
+            width: 201,
+            height: 67,
+          },
+          signatureImageSourceSize: {
+            width: 2172,
+            height: 724,
+          },
+          signatureImagePosition: {
+            anchor: 'hitAreaCenter',
+            offset: {
+              x: 0,
+              y: 0,
+            },
+          },
+          hitArea: {
+            x: 1080,
+            y: 810,
+            width: 220,
+            height: 40,
+          },
+          textStyle: {
+            fontSize: 26,
+            fontFamily: "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
+            fontWeight: 600,
+            color: '#5c4639',
+            align: 'left',
+            lineHeight: 1.1,
+          },
+        },
+      ],
+    })
+
+    expect(result.success).toBe(true)
   })
 })

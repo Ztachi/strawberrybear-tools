@@ -24,11 +24,11 @@ export interface TemplateRect {
 /** 模板字段按语言微调的坐标偏移。 */
 export type TemplatePositionOffset = Partial<Record<LocaleCode, { x?: number; y?: number }>>
 
-/** 模板字段类型，图片字段和文字字段分开渲染。 */
-export type CertificateTemplateFieldKind = 'image' | 'text'
+/** 模板字段类型，图片字段、文字字段和签章混合字段分开渲染。 */
+export type CertificateTemplateFieldKind = 'image' | 'text' | 'signature'
 
 /** 模板字段编辑器类型，由核对页映射到对应弹窗。 */
-export type CertificateTemplateEditorKind = 'avatar' | 'name' | 'region' | 'title'
+export type CertificateTemplateEditorKind = 'avatar' | 'name' | 'region' | 'title' | 'signature'
 
 /** 当前内置模板使用的稳定字段 ID，后续远程模板仍允许扩展其他字段。 */
 export type BuiltinTemplateFieldId = 'avatar' | 'name' | 'certificateNo' | 'title' | 'issuedDate'
@@ -57,6 +57,30 @@ export interface CertificateTemplateImageMask {
   shape: 'roundedArch'
   /** CSS border-radius 值，由模板按头像框造型配置。 */
   borderRadius: string
+}
+
+/** 签章图片的源素材比例，用于自定义签章裁剪。 */
+export interface CertificateTemplateSignatureImageSourceSize {
+  /** 源素材推荐宽度 */
+  width: number
+  /** 源素材推荐高度 */
+  height: number
+}
+
+/** 签章图片在证书上的锚点。 */
+export type CertificateTemplateSignatureImageAnchor = 'fieldPosition' | 'hitAreaCenter'
+
+/** 签章图片显示定位；只影响图片签章，不影响文字签章。 */
+export interface CertificateTemplateSignatureImagePosition {
+  /** 图片锚点来源；hitAreaCenter 会让图片框中心对齐点击热区中心。 */
+  anchor: CertificateTemplateSignatureImageAnchor
+  /** 基于锚点的微调偏移，正数 x 向右、正数 y 向下。 */
+  offset?: {
+    /** 横向偏移，单位为模板基准像素 */
+    x?: number
+    /** 纵向偏移，单位为模板基准像素 */
+    y?: number
+  }
 }
 
 /** 模板动态字段。 */
@@ -88,6 +112,10 @@ export interface CertificateTemplateField {
   imageMask?: CertificateTemplateImageMask
   /** 自定义图片素材显示缩放；用于没有透明背景的头像避免顶满模板框 */
   customImageScale?: number
+  /** 签章自定义图片裁剪源比例；签章字段才会读取 */
+  signatureImageSourceSize?: CertificateTemplateSignatureImageSourceSize
+  /** 签章图片在证书上的显示定位；签章字段才会读取 */
+  signatureImagePosition?: CertificateTemplateSignatureImagePosition
   /** 点击热区，允许比文字或图片本体略大以提升移动端命中率 */
   hitArea: TemplateRect
   /** 文字字段渲染样式 */
