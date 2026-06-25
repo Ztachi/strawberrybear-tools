@@ -144,20 +144,22 @@
       "source": "presidentSignature",
       "editable": true,
       "editor": "signature",
-      "position": [1100, 820],
+      "position": [1080, 790],
+      "contentWidth": 200,
       "hitArea": {
-        "x": 1080,
-        "y": 810,
+        "x": 1060,
+        "y": 760,
         "width": 220,
-        "height": 40
+        "height": 60
       },
       "textStyle": {
-        "fontSize": 26,
+        "fontSize": 28,
         "fontFamily": "Georgia, 'Times New Roman', 'Noto Serif SC', serif",
-        "fontWeight": 600,
-        "color": "#5c4639",
+        "fontWeight": 650,
+        "color": "#7a5135",
         "align": "left",
-        "lineHeight": 1.1
+        "lineHeight": 1.1,
+        "verticalAlign": "middle"
       }
     }
   ]
