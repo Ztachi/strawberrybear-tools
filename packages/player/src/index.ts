@@ -22,7 +22,7 @@ export type ShuffleMode = 'off' | 'on'
 export type EndBehavior = 'advance' | 'pause' | 'stop'
 
 /** 产品层播放模式，面向 UI 和持久化设置使用。 */
-export type PlaybackMode = 'sequential' | 'shuffle' | 'repeat-one' | 'repeat-all'
+export type PlaybackMode = 'sequential' | 'shuffle' | 'repeat-one' | 'repeat-all' | 'play-once'
 
 /** 播放器对外派发的事件类型。 */
 export type PlayerEventType = 'statechange' | 'error' | 'ended'
@@ -197,6 +197,7 @@ export const PLAYBACK_MODES: PlaybackMode[] = [
   'shuffle',
   'repeat-one',
   'repeat-all',
+  'play-once',
 ]
 
 /**
@@ -979,7 +980,7 @@ export function isPlaybackMode(value: unknown): value is PlaybackMode {
  */
 function applyPlaybackModeToState(state: PlayerState, mode: PlaybackMode): void {
   state.playbackMode = mode
-  state.endBehavior = 'advance'
+  state.endBehavior = mode === 'play-once' ? 'stop' : 'advance'
 
   switch (mode) {
     case 'shuffle':

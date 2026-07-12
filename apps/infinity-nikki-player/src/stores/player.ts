@@ -230,6 +230,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** bootstrap 注入的公共播放器实例。 */
   let previewPlayer: Player | null = null
+  let selectMidiRequestId = 0
 
   /** bootstrap 注入的 MIDI 试听适配层。 */
   let midiPreview: MidiPreviewPlaybackFeature | null = null
@@ -1061,6 +1062,26 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   /**
+   * 点击指定歌曲的统一播放语义：正在播放则暂停，已暂停则恢复，否则切换目标并播放。
+   */
+  async function toggleMidiInQueue(
+    midi: MidiInfo,
+    items: MidiInfo[],
+    context: MidiPreviewQueueContext | null = null
+  ): Promise<void> {
+    const isCurrent = currentMidi.value?.filename === midi.filename
+    if (isCurrent && isPreviewPlaying.value && !isPreviewPaused.value) {
+      pausePreviewPlayback()
+      return
+    }
+    if (isCurrent && isPreviewPaused.value) {
+      resumePreviewPlayback()
+      return
+    }
+    await playMidiInQueue(midi, items, context)
+  }
+
+  /**
    * @description: 从库中删除 MIDI 文件
    * @param {string} filename - 要删除的文件名
    * @return Promise 删除是否成功
@@ -1412,6 +1433,7 @@ export const usePlayerStore = defineStore('player', () => {
       resetPreviewProgress?: boolean
     } & SelectMidiQueueOptions = {}
   ) {
+    const requestId = ++selectMidiRequestId
     const { syncPreviewQueue = true, resetPreviewProgress = true } = options
     if (options.queueItems) {
       setPreviewQueueContext(options.queueItems, options.queueContext ?? null)
@@ -1419,6 +1441,7 @@ export const usePlayerStore = defineStore('player', () => {
     currentMidi.value = midi
     try {
       const analysis = await readMidiAnalysis(midi)
+      if (requestId !== selectMidiRequestId || currentMidi.value?.filename !== midi.filename) return
       melody.value = analysis.melody
       allNotes.value = analysis.allNotes
       tracks.value = analysis.tracks
@@ -1438,6 +1461,7 @@ export const usePlayerStore = defineStore('player', () => {
         previewPlayer?.updateProgress(previewCurrentTime.value / 1000, duration / 1000)
       }
     } catch (e) {
+      if (requestId !== selectMidiRequestId) return
       toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 失败:', e)
     }
@@ -2087,6 +2111,7 @@ export const usePlayerStore = defineStore('player', () => {
     getSongPlaybackState,
     selectMidiInQueue,
     playMidiInQueue,
+    toggleMidiInQueue,
     playTemporaryMidiBuffer,
     restoreTemporaryOnlinePreview,
     replaceTemporaryOnlinePreviewWithLocal,

@@ -26,13 +26,16 @@ const mainWindowUiStore = useMainWindowUiStore()
 const onlineStore = useOnlineMidiLibraryStore()
 const playerStore = usePlayerStore()
 
-const GRID_COLUMN_COUNT = 2
+const MIN_CARD_WIDTH = 280
+const TARGET_MAX_CARD_WIDTH = 360
+const MIN_GRID_COLUMN_COUNT = 2
 const CARD_HEIGHT = 324
 const CARD_GAP = 16
 const ROW_HEIGHT = CARD_HEIGHT + CARD_GAP
 const SCROLL_THRESHOLD = 200
 
 const viewportRef = ref<HTMLElement | null>(null)
+const gridColumnCount = ref(MIN_GRID_COLUMN_COUNT)
 const previewLoadingId = ref<string | null>(null)
 const importLoadingId = ref<string | null>(null)
 const shouldRestoreOnUnmount = ref(true)
@@ -44,7 +47,7 @@ let backToTopRegistration: FloatingActionRegistration | null = null
 const songs = computed(() => onlineStore.filteredSongs)
 const filters = onlineStore.filters
 const isInitialLoading = computed(() => onlineStore.isSyncing && !onlineStore.hasCache)
-const virtualRowsCount = computed(() => Math.ceil(songs.value.length / GRID_COLUMN_COUNT))
+const virtualRowsCount = computed(() => Math.ceil(songs.value.length / gridColumnCount.value))
 const rowVirtualizer = useVirtualizer(
   computed(() => ({
     count: virtualRowsCount.value,
@@ -56,8 +59,8 @@ const rowVirtualizer = useVirtualizer(
 const virtualRows = computed(() => rowVirtualizer.value.getVirtualItems())
 const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
 const gridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${GRID_COLUMN_COUNT}, minmax(0, 1fr))`,
-  gap: `${CARD_GAP}px`,
+  gridTemplateColumns: `repeat(${gridColumnCount.value}, minmax(0, 1fr))`,
+  columnGap: `${CARD_GAP}px`,
 }))
 
 function describeError(error: unknown) {
@@ -118,8 +121,8 @@ function labelFor(
 }
 
 function getRowSongs(rowIndex: number) {
-  const start = rowIndex * GRID_COLUMN_COUNT
-  return songs.value.slice(start, start + GRID_COLUMN_COUNT)
+  const start = rowIndex * gridColumnCount.value
+  return songs.value.slice(start, start + gridColumnCount.value)
 }
 
 function findImportedMidi(song: OnlineMidiSong): MidiInfo | null {
@@ -137,10 +140,10 @@ function isSongPlaying(song: OnlineMidiSong) {
     playerStore.currentTemporaryOnlineSongId === song.id &&
     playerStore.currentMidi?.online_song_id === song.id
   ) {
-    return playerStore.isPreviewPlaying || playerStore.isPreviewPaused
+    return playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
   }
   const imported = findImportedMidi(song)
-  return imported ? playerStore.getSongPlaybackState(imported.filename) !== 'idle' : false
+  return imported ? playerStore.getSongPlaybackState(imported.filename) === 'playing' : false
 }
 
 async function getSongBytes(song: OnlineMidiSong) {
@@ -172,8 +175,31 @@ function observeViewport(element: HTMLElement | null) {
   resizeObserver = null
   if (!element) return
 
-  resizeObserver = new ResizeObserver(() => {
-    rowVirtualizer.value.measure()
+  resizeObserver = new ResizeObserver(([entry]) => {
+    const width = entry?.contentRect.width ?? element.clientWidth
+    const maxFittingColumns = Math.max(
+      MIN_GRID_COLUMN_COUNT,
+      Math.floor((width + CARD_GAP) / (MIN_CARD_WIDTH + CARD_GAP))
+    )
+    const columnsForTargetWidth = Math.max(
+      MIN_GRID_COLUMN_COUNT,
+      Math.ceil((width + CARD_GAP) / (TARGET_MAX_CARD_WIDTH + CARD_GAP))
+    )
+    const nextColumnCount = Math.min(maxFittingColumns, columnsForTargetWidth)
+    if (gridColumnCount.value !== nextColumnCount) {
+      const firstVisibleSongIndex =
+        Math.floor((element.scrollTop ?? 0) / ROW_HEIGHT) * gridColumnCount.value
+      gridColumnCount.value = nextColumnCount
+      void nextTick(() => {
+        rowVirtualizer.value.measure()
+        rowVirtualizer.value.scrollToIndex(
+          Math.floor(firstVisibleSongIndex / nextColumnCount),
+          { align: 'start' }
+        )
+      })
+      return
+    }
+    void nextTick(() => rowVirtualizer.value.measure())
   })
   resizeObserver.observe(element)
   void nextTick(() => {
@@ -190,29 +216,32 @@ function scrollToTop(): void {
 }
 
 async function togglePlay(song: OnlineMidiSong) {
-  if (isSongPlaying(song)) {
-    if (playerStore.currentTemporaryOnlineSongId === song.id) {
+  const imported = findImportedMidi(song)
+  if (imported) {
+    if (playerStore.currentTemporaryOnlineSongId) {
       await playerStore.restoreTemporaryOnlinePreview()
-    } else {
-      await playerStore.stopPreviewPlayback()
     }
+    await playerStore.toggleMidiInQueue(imported, playerStore.midiLibrary, {
+      id: 'all',
+      title: t('songList.allSongs'),
+    })
+    return
+  }
+
+  if (isSongPlaying(song)) {
+    await playerStore.restoreTemporaryOnlinePreview()
+    return
+  }
+  if (
+    playerStore.currentTemporaryOnlineSongId === song.id &&
+    playerStore.isPreviewPaused
+  ) {
+    playerStore.resumePreviewPlayback()
     return
   }
 
   previewLoadingId.value = song.id
   try {
-    const imported = findImportedMidi(song)
-    if (imported) {
-      if (playerStore.currentTemporaryOnlineSongId) {
-        await playerStore.restoreTemporaryOnlinePreview()
-      }
-      await playerStore.playMidiInQueue(imported, playerStore.midiLibrary, {
-        id: 'all',
-        title: t('songList.allSongs'),
-      })
-      return
-    }
-
     const bytes = await getSongBytes(song)
     await playerStore.playTemporaryMidiBuffer(
       sanitizeMidiFilename(displaySongTitle(song) || song.downloadFilename || song.id),
@@ -539,11 +568,11 @@ onBeforeUnmount(() => {
 }
 
 .song-grid-row {
-  @apply grid mb-[16px];
+  @apply grid h-full;
 }
 
 .song-card {
-  @apply flex justify-between min-w-0 flex-col gap-2.5 overflow-hidden rounded-lg p-5;
+  @apply flex h-full justify-between min-w-0 flex-col gap-2.5 overflow-hidden rounded-lg p-5;
   border: 1px solid rgba(214, 94, 143, 0.16);
   background: rgba(255, 255, 255, 0.78);
   box-shadow: 0 10px 26px rgba(201, 67, 127, 0.07);

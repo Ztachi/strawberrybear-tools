@@ -23,11 +23,7 @@ const isPlaying = computed(() => playbackState.value === 'playing')
 
 async function handleCoverAction(event: MouseEvent): Promise<void> {
   event.stopPropagation()
-  if (isPlaying.value) {
-    playerStore.pausePreviewPlayback()
-    return
-  }
-  await playerStore.playMidiInQueue(props.midi, props.queueItems, props.queueContext ?? null)
+  await playerStore.toggleMidiInQueue(props.midi, props.queueItems, props.queueContext ?? null)
 }
 </script>
 

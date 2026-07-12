@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, RotateCwSquare, Repeat, Repeat1, Shuffle } from 'lucide-vue-next'
+import { Check, CircleStop, RotateCwSquare, Repeat, Repeat1, Shuffle } from 'lucide-vue-next'
 import { Popover, Tooltip } from 'antdv-next'
 import type { Component } from 'vue'
 import type { PlaybackMode } from '@strawberrybear/player'
@@ -50,6 +50,7 @@ const playbackModeOptions: PlaybackModeOption[] = [
   { value: 'shuffle', icon: Shuffle },
   { value: 'repeat-one', icon: Repeat1 },
   { value: 'repeat-all', icon: Repeat },
+  { value: 'play-once', icon: CircleStop },
 ]
 
 /** 当前模式选项，用于触发按钮展示对应图标。 */

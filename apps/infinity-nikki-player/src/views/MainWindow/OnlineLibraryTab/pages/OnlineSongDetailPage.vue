@@ -137,10 +137,10 @@ function isSongPlaying(target: OnlineMidiSong) {
     playerStore.currentTemporaryOnlineSongId === target.id &&
     playerStore.currentMidi?.online_song_id === target.id
   ) {
-    return playerStore.isPreviewPlaying || playerStore.isPreviewPaused
+    return playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
   }
   const imported = findImportedMidi(target)
-  return imported ? playerStore.getSongPlaybackState(imported.filename) !== 'idle' : false
+  return imported ? playerStore.getSongPlaybackState(imported.filename) === 'playing' : false
 }
 
 async function getSongBytes(target: OnlineMidiSong) {
@@ -168,29 +168,32 @@ async function loadSong(): Promise<void> {
 
 async function togglePlay(): Promise<void> {
   if (!song.value) return
-  if (isSongPlaying(song.value)) {
-    if (playerStore.currentTemporaryOnlineSongId === song.value.id) {
+  const imported = findImportedMidi(song.value)
+  if (imported) {
+    if (playerStore.currentTemporaryOnlineSongId) {
       await playerStore.restoreTemporaryOnlinePreview()
-    } else {
-      await playerStore.stopPreviewPlayback()
     }
+    await playerStore.toggleMidiInQueue(imported, playerStore.midiLibrary, {
+      id: 'all',
+      title: t('songList.allSongs'),
+    })
+    return
+  }
+
+  if (isSongPlaying(song.value)) {
+    await playerStore.restoreTemporaryOnlinePreview()
+    return
+  }
+  if (
+    playerStore.currentTemporaryOnlineSongId === song.value.id &&
+    playerStore.isPreviewPaused
+  ) {
+    playerStore.resumePreviewPlayback()
     return
   }
 
   previewLoading.value = true
   try {
-    const imported = findImportedMidi(song.value)
-    if (imported) {
-      if (playerStore.currentTemporaryOnlineSongId) {
-        await playerStore.restoreTemporaryOnlinePreview()
-      }
-      await playerStore.playMidiInQueue(imported, playerStore.midiLibrary, {
-        id: 'all',
-        title: t('songList.allSongs'),
-      })
-      return
-    }
-
     const bytes = await getSongBytes(song.value)
     await playerStore.playTemporaryMidiBuffer(
       sanitizeMidiFilename(displaySongTitle(song.value) || song.value.downloadFilename || song.value.id),
