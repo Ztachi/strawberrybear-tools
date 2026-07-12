@@ -4,20 +4,17 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
+import { KeystrokeSequencer, type KeystrokeNote } from '@strawberrybear/keystroke-sequencer'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
-import { KeyboardMapper } from '@/lib/keyboardMapper'
 import {
   DEFAULT_PLAYBACK_FPS,
   ENABLE_ADAPTIVE_FPS_TIMING,
   createKeyboardTimingProfile,
+  type KeyboardTimingProfile,
 } from '@/lib/keyboardTiming'
 import type { MidiInfo } from '@/types'
-import {
-  setKeyboardEventCallback,
-  setOnPlaybackStopCallback,
-  setVolume as setMidiPreviewVolume,
-} from '@/lib/midiPlayer'
+import { getKeyboardNoteSchedule, setVolume as setMidiPreviewVolume } from '@/lib/midiPlayer'
 import { ChevronDown, ChevronUp, Crosshair, X } from 'lucide-vue-next'
 import { Tooltip } from 'antdv-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
@@ -34,8 +31,15 @@ const OVERLAY_WIDTH = 360
 const OVERLAY_COLLAPSED_HEIGHT = 156
 const OVERLAY_EXPANDED_HEIGHT = 320
 
-// 键盘映射器实例
-const keyboardMapper = ref<KeyboardMapper | null>(null) as any
+// 按键序列执行器实例（每次开始播放时按当前曲目时间表重建）
+let keystrokeSequencer: KeystrokeSequencer | null = null
+
+// 播放前锁定的按键时序（3 秒倒计时结束时按实际 FPS 更新）
+const lockedTimingProfile = ref<KeyboardTimingProfile>(
+  createKeyboardTimingProfile(
+    ENABLE_ADAPTIVE_FPS_TIMING ? settingsStore.manualFps : DEFAULT_PLAYBACK_FPS
+  )
+)
 
 interface OverlayFpsControlExpose {
   startCountdownSampling: () => Promise<void>
@@ -86,7 +90,7 @@ let countdownTimer: number | null = null
 
 async function lockKeyboardTimingProfile() {
   if (!ENABLE_ADAPTIVE_FPS_TIMING) {
-    keyboardMapper.value?.setTimingProfile(createKeyboardTimingProfile(DEFAULT_PLAYBACK_FPS))
+    lockedTimingProfile.value = createKeyboardTimingProfile(DEFAULT_PLAYBACK_FPS)
     return
   }
 
@@ -96,7 +100,7 @@ async function lockKeyboardTimingProfile() {
       console.error('锁定 FPS 失败:', error)
       return settingsStore.manualFps
     })
-  keyboardMapper.value?.setTimingProfile(createKeyboardTimingProfile(fps ?? settingsStore.manualFps))
+  lockedTimingProfile.value = createKeyboardTimingProfile(fps ?? settingsStore.manualFps)
 }
 
 function runAfterCountdown(action: () => void | Promise<void>) {
@@ -127,8 +131,7 @@ function runAfterCountdown(action: () => void | Promise<void>) {
 }
 
 function resetOverlayKeyboardState() {
-  keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
-  keyboardMapper.value?.reset()
+  disposeKeystrokeSequencer()
 }
 
 // 开始倒计时播放 - 按下播放按钮时，先显示 3 秒倒计时，让用户有时间切换到游戏窗口
@@ -198,6 +201,8 @@ function seekOverlayPlayback(time: number) {
   const isActivelyPlaying = playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
   playerStore.setPreviewTime(time)
   if (isActivelyPlaying && countdown.value <= 0) {
+    // 播放中拖动进度：按键序列与音频同步跳转（时间表是原速音乐时间，需乘速度倍率）
+    keystrokeSequencer?.seek(time * playerStore.speed)
     void playerStore.seekPreview(time)
     return
   }
@@ -205,93 +210,98 @@ function seekOverlayPlayback(time: number) {
   runAfterCountdown(() => playerStore.seekPreviewAndPlay(time))
 }
 
-// 初始化键盘映射器 - 创建键盘映射器实例，设置键盘模拟回调
-function initKeyboardMapper() {
-  const template = settingsStore.getCurrentTemplate()
-  if (template) {
-    if (!keyboardMapper.value) {
-      keyboardMapper.value = new KeyboardMapper()
-      keyboardMapper.value.setTimingProfile(
-        createKeyboardTimingProfile(
-          ENABLE_ADAPTIVE_FPS_TIMING ? settingsStore.manualFps : DEFAULT_PLAYBACK_FPS
-        )
-      )
-      // 设置键盘模拟回调（悬浮模式强制启用）
-      keyboardMapper.value.setKeyboardSimCallback((action: string, key: string) => {
-        if (
-          (settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) &&
-          settingsStore.playMode === 'piano'
-        ) {
-          if (action === 'press') {
-            invoke('simulate_key_down', { key }).catch(console.error)
-          } else {
-            invoke('simulate_key_up', { key }).catch(console.error)
-          }
-        }
-      })
-    }
-    keyboardMapper.value.setTemplate(template)
-
-    // 直接同步键盘事件回调（绕过 Vue 响应式批处理，精确到每个 NoteOn/NoteOff）
-    setKeyboardEventCallback((type, pitch, _velocity, noteInstanceId, nextNoteDelayMs) => {
-      if (!keyboardMapper.value) return
-      if (
-        !(settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) ||
-        settingsStore.playMode !== 'piano'
-      )
-        return
-      if (type === 'on') {
-        keyboardMapper.value.noteOn(
-          pitch,
-          playerStore.previewCurrentTime,
-          noteInstanceId,
-          nextNoteDelayMs
-        )
-      } else {
-        keyboardMapper.value.noteOff(pitch, playerStore.previewCurrentTime, noteInstanceId)
-      }
-    })
-
-    // 播放停止时释放所有按键
-    setOnPlaybackStopCallback(() => {
-      keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
-    })
-  }
+/**
+ * @description: 判断当前是否允许模拟游戏按键
+ * @return {boolean} 悬浮模式强制启用（或设置开启）且处于钢琴模式时为 true
+ */
+function isKeystrokeSimEnabled(): boolean {
+  return (
+    (settingsStore.enableKeyboardSim || settingsStore.isOverlayMode) &&
+    settingsStore.playMode === 'piano'
+  )
 }
 
-// 监听暂停状态变化 - 暂停时释放所有按键（游戏不应保持按键状态）
+/**
+ * @description: 销毁按键序列执行器（内部会抬起所有仍按下的物理键）
+ * @return {void} 无返回值
+ */
+function disposeKeystrokeSequencer() {
+  keystrokeSequencer?.dispose()
+  keystrokeSequencer = null
+}
+
+/**
+ * @description: 按当前曲目时间表与模板构建按键序列执行器，并从当前进度开始演奏
+ * @return {void} 无返回值
+ */
+function startKeystrokePlayback() {
+  disposeKeystrokeSequencer()
+  if (!isKeystrokeSimEnabled()) return
+  const template = settingsStore.getCurrentTemplate()
+  if (!template) return
+
+  // 模板音高 → 规范化物理键
+  const pitchToKey = new Map<number, string>()
+  for (const mapping of template.mappings) {
+    pitchToKey.set(mapping.pitch, mapping.key.trim().toUpperCase())
+  }
+
+  const notes: KeystrokeNote[] = []
+  for (const note of getKeyboardNoteSchedule()) {
+    const key = pitchToKey.get(note.targetPitch)
+    if (key) notes.push({ key, startMs: note.startMs, durationMs: note.durationMs })
+  }
+
+  keystrokeSequencer = new KeystrokeSequencer({
+    notes,
+    timing: {
+      holdMs: lockedTimingProfile.value.holdMs,
+      gapMs: lockedTimingProfile.value.releaseMs,
+    },
+    speed: playerStore.speed,
+    onKeyDown: (key) => void invoke('simulate_key_down', { key }).catch(console.error),
+    onKeyUp: (key) => void invoke('simulate_key_up', { key }).catch(console.error),
+  })
+  // 进度条时间是真实播放耗时，换算成原速音乐时间后启动
+  keystrokeSequencer.play(playerStore.previewCurrentTime * playerStore.speed)
+}
+
+// 监听播放状态与当前歌曲变化 - 合并在一个侦听器里，避免"切歌销毁"与"进入播放态启动"
+// 在同一批响应式刷新中因执行顺序不同而互相覆盖：
+// 处于播放态（含切歌后继续播放）→ 按最新时间表重建执行器；暂停 → 释放按键；其余 → 销毁
 watch(
-  () => playerStore.isPreviewPaused,
-  (paused) => {
-    if (paused && keyboardMapper.value) {
-      keyboardMapper.value.releaseAll(playerStore.previewCurrentTime)
+  () =>
+    [
+      playerStore.isPreviewPlaying,
+      playerStore.isPreviewPaused,
+      playerStore.currentMidi?.filename,
+    ] as const,
+  ([playing, paused]) => {
+    if (playing && !paused) {
+      startKeystrokePlayback()
+    } else if (paused) {
+      keystrokeSequencer?.pause()
+    } else {
+      disposeKeystrokeSequencer()
     }
   }
 )
 
-// 监听模板变化 - 切换模板时停止播放并重置映射器
+// 监听模板变化 - 切换模板时停止播放并销毁按键序列
 watch(
   () => settingsStore.currentTemplateId,
   () => {
     cancelCountdown()
     void playerStore.stopPreviewPlayback()
-    if (keyboardMapper.value) {
-      keyboardMapper.value.releaseAll(playerStore.previewCurrentTime)
-      keyboardMapper.value.reset()
-    }
-    initKeyboardMapper()
+    disposeKeystrokeSequencer()
   }
 )
 
-// 监听当前 MIDI 变化 - 切换歌曲时重置映射器
+// 监听当前 MIDI 变化 - 切换歌曲时取消进行中的倒计时（按键序列由上方状态侦听器统一管理）
 watch(
   () => playerStore.currentMidi?.filename,
   () => {
     cancelCountdown()
-    if (keyboardMapper.value) {
-      keyboardMapper.value.reset()
-    }
-    initKeyboardMapper()
   }
 )
 
@@ -307,16 +317,12 @@ async function resizeOverlayWindow(expanded = isExpanded.value) {
 
 // 组件挂载完成（窗口尺寸/装饰由 Rust enter_overlay_mode 统一设置，这里不再重复 resize）
 onMounted(() => {
-  initKeyboardMapper()
   muteOverlayFromDetailState()
 })
 
-// 组件卸载 - 清理回调，释放所有按键
+// 组件卸载 - 销毁按键序列，释放所有按键
 onUnmounted(() => {
-  // 清理直接回调，释放所有按键
-  setKeyboardEventCallback(null)
-  setOnPlaybackStopCallback(null)
-  keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
+  disposeKeystrokeSequencer()
 })
 
 // 开始拖拽窗口 - 仅当点击的是非交互元素时才触发拖拽
@@ -362,10 +368,8 @@ async function locateCurrentMidi() {
 async function exitOverlayMode() {
   try {
     void playerStore.stopPreviewPlayback()
-    // 退出前清理键盘回调
-    setKeyboardEventCallback(null)
-    setOnPlaybackStopCallback(null)
-    keyboardMapper.value?.releaseAll(playerStore.previewCurrentTime)
+    // 退出前销毁按键序列，释放所有按键
+    disposeKeystrokeSequencer()
     // 恢复进入前的 playMode
     settingsStore.setPlayMode(settingsStore.modeBeforeOverlay)
     // 恢复进入悬浮前的主窗口音量状态，悬浮期间的音量改动不带回主窗口。

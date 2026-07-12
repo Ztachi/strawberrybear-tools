@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@antdv-next/icons": "^1.0.8",
+    "@strawberrybear/keystroke-sequencer": "workspace:*",
     "@strawberrybear/piano-roll": "workspace:*",
     "@strawberrybear/player": "workspace:*",
     "@tanstack/vue-virtual": "^3.13.28",
