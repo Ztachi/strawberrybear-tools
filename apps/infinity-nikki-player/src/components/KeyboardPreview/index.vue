@@ -4,7 +4,6 @@
  * @description 显示虚拟键盘布局，实时显示激活的按键状态，支持按键日志查看
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Tooltip } from 'antdv-next'
 import { KEYBOARD_LAYOUT } from './constants'
 import KeyLogPopover from './components/KeyLogPopover.vue'
 import type { KeyLogEntry, KeyLogChapter } from '@/lib/keyboardMapper'
@@ -164,8 +163,6 @@ onMounted(() => {
     resizeObserver.observe(keyboardPreviewRef.value.parentElement)
   }
   if (toolbarRef.value) resizeObserver.observe(toolbarRef.value)
-  if (scaleShellRef.value) resizeObserver.observe(scaleShellRef.value)
-  if (keyboardAreaRef.value) resizeObserver.observe(keyboardAreaRef.value)
   window.addEventListener('resize', scheduleKeyboardScaleUpdate)
   void nextTick(() => {
     scheduleKeyboardScaleUpdate()
@@ -182,7 +179,7 @@ onUnmounted(() => {
 })
 
 watch(
-  () => [props.keyCodeToPitch, props.activeKeys, showToolbar.value],
+  () => showToolbar.value,
   () => void nextTick(scheduleKeyboardScaleUpdate)
 )
 </script>
@@ -228,38 +225,34 @@ watch(
           :class="getRowClass(rowIndex)"
         >
           <!-- 遍历每个按键 -->
-          <Tooltip
+          <div
             v-for="key in row"
             :key="key.code"
-            placement="top"
+            class="key"
+            tabindex="-1"
             :title="
               props.keyCodeToPitch?.has(key.code)
                 ? pitchToNoteName(props.keyCodeToPitch!.get(key.code)!)
                 : ''
             "
+            :class="{
+              active: activeKeySet.has(key.code), // 是否激活
+              function: key.type === 'function', // 是否为功能键
+              control: key.type === 'control',
+              clickable: props.keyCodeToPitch?.has(key.code), // 是否可点击（有映射）
+              [`width-${key.width}`]: key.width,
+              [getKeyClass(key.key)]: getKeyClass(key.key),
+            }"
+            @mousedown.prevent.stop
+            @click="handleKeyClick(key.code, $event)"
           >
-            <div
-              class="key"
-              tabindex="-1"
-              :class="{
-                active: activeKeySet.has(key.code), // 是否激活
-                function: key.type === 'function', // 是否为功能键
-                control: key.type === 'control',
-                clickable: props.keyCodeToPitch?.has(key.code), // 是否可点击（有映射）
-                [`width-${key.width}`]: key.width,
-                [getKeyClass(key.key)]: getKeyClass(key.key),
-              }"
-              @mousedown.prevent.stop
-              @click="handleKeyClick(key.code, $event)"
-            >
-              <!-- 按键标签 -->
-              <span class="key-label">{{ getKeyLabel(key.key) }}</span>
-              <!-- 音高标签（如果有映射） -->
-              <span v-if="props.keyCodeToPitch?.has(key.code)" class="pitch-label">
-                {{ pitchToNoteName(props.keyCodeToPitch!.get(key.code)!) }}
-              </span>
-            </div>
-          </Tooltip>
+            <!-- 按键标签 -->
+            <span class="key-label">{{ getKeyLabel(key.key) }}</span>
+            <!-- 音高标签（如果有映射） -->
+            <span v-if="props.keyCodeToPitch?.has(key.code)" class="pitch-label">
+              {{ pitchToNoteName(props.keyCodeToPitch!.get(key.code)!) }}
+            </span>
+          </div>
         </div>
       </div>
     </div>

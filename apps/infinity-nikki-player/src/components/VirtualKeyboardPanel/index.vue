@@ -25,6 +25,8 @@ const settingsStore = useSettingsStore()
 const keyboardMapper = ref<KeyboardMapper | null>(null)
 /** 当前页面会话内的按键日志，离开页面后自然重置。 */
 const keyLog = ref<KeyLogEntry[]>([])
+/** immediate watcher 首次执行只初始化页面，不应误触发全局播放过滤重排。 */
+let hasInitializedTemplate = false
 
 /** 当前模板的物理按键 code 到音高映射，用于虚拟键盘标签和点击试听。 */
 const keyCodeToPitch = computed<Map<string, number>>(() => {
@@ -123,9 +125,10 @@ watch(
     keyboardMapper.value?.reset()
     keyLog.value = []
     initKeyboardMapper()
-    if (playerStore.isPreviewPlaying) {
+    if (hasInitializedTemplate && playerStore.isPreviewPlaying) {
       playerStore.applyPlayModeFilter()
     }
+    hasInitializedTemplate = true
   },
   { immediate: true }
 )
