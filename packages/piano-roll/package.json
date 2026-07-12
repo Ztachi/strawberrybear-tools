@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./src/PianoRoll.vue",
-  "types": "./src/PianoRoll.vue",
+  "types": "./src/PianoRoll.d.ts",
   "exports": {
     ".": {
-      "import": "./src/PianoRoll.vue",
-      "types": "./src/PianoRoll.vue"
+      "types": "./src/PianoRoll.d.ts",
+      "import": "./src/PianoRoll.vue"
     },
     "./index": {
       "import": "./src/index.ts",
