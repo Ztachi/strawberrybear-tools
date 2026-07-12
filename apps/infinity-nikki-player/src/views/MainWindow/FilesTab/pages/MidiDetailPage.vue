@@ -104,10 +104,6 @@ function navigateBack(): void {
 
 async function playDetailMidi(): Promise<void> {
   if (!detailMidi.value) return
-  if (isDetailPlaying.value) {
-    playerStore.pausePreviewPlayback()
-    return
-  }
 
   // 详情页只是查看入口，不天然代表一个播放域；点击封面播放时才需要决定队列。
   // 如果当前播放域已经包含这首歌，沿用当前域；否则回退到全部歌曲，避免详情页误写歌单作用域。
@@ -117,7 +113,7 @@ async function playDetailMidi(): Promise<void> {
   const queueContext = detailInActiveQueue
     ? playerStore.previewQueueContext
     : { id: 'all', title: t('songList.allSongs') }
-  await playerStore.playMidiInQueue(detailMidi.value, queueItems, queueContext)
+  await playerStore.toggleMidiInQueue(detailMidi.value, queueItems, queueContext)
 }
 
 watch(

@@ -38,6 +38,10 @@ function percentToTime(percent: number) {
   return (percent / 100) * props.duration
 }
 
+function formatSliderTooltip(percent?: number) {
+  return formatTime(percentToTime(percent ?? 0))
+}
+
 function onSliderPointerDown() {
   isDragging.value = true
   emit('dragging', true)
@@ -83,6 +87,7 @@ onUnmounted(() => {
         v-model:value="internalPercent"
         :max="100"
         :step="0.1"
+        :tooltip="{ formatter: formatSliderTooltip }"
         class="progress-slider"
         @pointerdown="onSliderPointerDown"
         @update:value="onSliderUpdate"

@@ -5,7 +5,6 @@
 
 import type { KeyTemplate, KeyMapping } from '@/types'
 import { mappingKeyToCode } from '@/lib/templateKeys'
-import { createKeyboardTimingProfile, type KeyboardTimingProfile } from '@/lib/keyboardTiming'
 
 /**
  * C 大调白键相对于 C 的半音偏移量
@@ -65,26 +64,6 @@ export type KeyLogCallback = (entry: KeyLogEntry) => void
 /** 键盘模拟回调类型 */
 export type KeyboardSimCallback = (action: 'press' | 'release', key: string) => void
 
-interface KeySimulationState {
-  isDown: boolean
-  nextAvailableAt: number
-  timers: number[]
-  activePress: KeySimulationPress | null
-  queuedPresses: KeySimulationPress[]
-}
-
-interface KeySimulationPress {
-  id: number
-  key: string
-  pressAt: number | null
-  plannedReleaseDelayMs: number | null
-  releaseRequestedAt: number | null
-  startTimer: number | null
-  plannedReleaseTimer: number | null
-  releaseTimer: number | null
-  released: boolean
-}
-
 /**
  * @description: 键盘映射器
  * 将 MIDI 音符移调并量化到 C 大调白键，然后映射到键盘按键
@@ -113,8 +92,6 @@ export class KeyboardMapper {
   private previousActiveKeys = new Set<string>()
   /** 上一帧的 code -> pitch 映射（用于 release 事件） */
   private previousCodeToPitch = new Map<string, number>()
-  /** 按键引用计数（key字符 → 当前按住该键的音符数），用于同键冲突处理 */
-  private keyRefCount = new Map<string, number>()
   /** 日志更新回调 */
   private keyLogCallback: KeyLogCallback | null = null
   /** 音符按下回调（用于发音） */
@@ -123,12 +100,6 @@ export class KeyboardMapper {
   private onNoteOff: ((pitch: number, originalPitch: number) => void) | undefined
   /** 键盘模拟回调 */
   private keyboardSimCallback: KeyboardSimCallback | null = null
-  private keySimulationState = new Map<string, KeySimulationState>()
-  private keyboardPressesById = new Map<number, KeySimulationPress>()
-  private fallbackKeyboardPressIds = new Map<number, number[]>()
-  private nextFallbackKeyboardPressId = -1
-  /** 当前键盘模拟时序，播放开始前按锁定 FPS 更新。 */
-  private timingProfile: KeyboardTimingProfile = createKeyboardTimingProfile()
 
   constructor(options: KeyboardMapperOptions = {}) {
     this.rows = options.rows ?? KEYBOARD_ROWS
@@ -160,8 +131,6 @@ export class KeyboardMapper {
    * @param {number} currentTimeMs 当前播放时间
    */
   clearKeyState(currentTimeMs: number): void {
-    this.releaseAllKeyboardSimulation()
-
     // 为 previousActiveKeys 中的所有按键生成 release 日志
     for (const code of this.previousActiveKeys) {
       const pitch = this.previousCodeToPitch.get(code)
@@ -182,35 +151,6 @@ export class KeyboardMapper {
   }
 
   /**
-   * @description: 重置所有状态（切换模板时调用，确保完全清空所有按键）
-   * @param {number} currentTimeMs 当前播放时间
-   */
-  resetState(currentTimeMs: number): void {
-    this.releaseAllKeyboardSimulation()
-
-    // 为所有 previousActiveKeys 生成 release 日志
-    for (const code of this.previousActiveKeys) {
-      const pitch = this.previousCodeToPitch.get(code)
-      const entry: KeyLogEntry = {
-        time: currentTimeMs,
-        key: pitch !== undefined ? this.pitchToNoteName(pitch) : code,
-        code: code,
-        pitch: pitch ?? 0,
-        originalPitch: pitch ?? 0,
-        action: 'release',
-      }
-      this.keyLog.push(entry)
-      this.keyLogCallback?.(entry)
-    }
-    // 完全重置所有状态
-    this.previousActiveKeys = new Set()
-    this.previousCodeToPitch = new Map()
-    this.keyRefCount.clear()
-    this.keySimulationState.clear()
-    this.keyLog = []
-  }
-
-  /**
    * @description: 设置日志更新回调，每次有新日志时调用
    * @param {KeyLogCallback | null} callback 回调函数
    */
@@ -224,338 +164,6 @@ export class KeyboardMapper {
    */
   setKeyboardSimCallback(callback: KeyboardSimCallback | null): void {
     this.keyboardSimCallback = callback
-  }
-
-  /**
-   * @description: 设置键盘模拟时序
-   * @param {KeyboardTimingProfile} profile 播放前锁定的按键时序
-   */
-  setTimingProfile(profile: KeyboardTimingProfile): void {
-    this.timingProfile = profile
-  }
-
-  private getKeySimulationState(key: string): KeySimulationState {
-    let state = this.keySimulationState.get(key)
-    if (!state) {
-      state = {
-        isDown: false,
-        nextAvailableAt: 0,
-        timers: [],
-        activePress: null,
-        queuedPresses: [],
-      }
-      this.keySimulationState.set(key, state)
-    }
-    return state
-  }
-
-  private createFallbackKeyboardPressId(mappedPitch: number): number {
-    const id = this.nextFallbackKeyboardPressId--
-    const ids = this.fallbackKeyboardPressIds.get(mappedPitch) ?? []
-    ids.push(id)
-    this.fallbackKeyboardPressIds.set(mappedPitch, ids)
-    return id
-  }
-
-  private resolveKeyboardPressId(mappedPitch: number, noteInstanceId?: number): number {
-    if (typeof noteInstanceId === 'number') return noteInstanceId
-    return this.createFallbackKeyboardPressId(mappedPitch)
-  }
-
-  private resolveKeyboardReleaseId(mappedPitch: number, noteInstanceId?: number): number | null {
-    if (typeof noteInstanceId === 'number') return noteInstanceId
-    const ids = this.fallbackKeyboardPressIds.get(mappedPitch)
-    const id = ids?.shift()
-    if (ids && ids.length === 0) {
-      this.fallbackKeyboardPressIds.delete(mappedPitch)
-    }
-    return typeof id === 'number' ? id : null
-  }
-
-  private scheduleKeyboardPress(key: string, pressId: number, nextNoteDelayMs?: number): void {
-    const state = this.getKeySimulationState(key)
-    const existingPress = this.keyboardPressesById.get(pressId)
-    if (existingPress && !existingPress.released) return
-
-    const press: KeySimulationPress = {
-      id: pressId,
-      key,
-      pressAt: null,
-      plannedReleaseDelayMs:
-        typeof nextNoteDelayMs === 'number' && Number.isFinite(nextNoteDelayMs)
-          ? Math.max(0, nextNoteDelayMs - this.timingProfile.releaseMs)
-          : null,
-      releaseRequestedAt: null,
-      startTimer: null,
-      plannedReleaseTimer: null,
-      releaseTimer: null,
-      released: false,
-    }
-
-    this.keyboardPressesById.set(press.id, press)
-
-    if (state.activePress && !state.activePress.released) {
-      this.requestKeyboardPressRelease(state.activePress, performance.now())
-    }
-
-    state.queuedPresses.push(press)
-    this.scheduleNextQueuedKeyboardPress(key)
-  }
-
-  private scheduleNextQueuedKeyboardPress(key: string): void {
-    const state = this.getKeySimulationState(key)
-    if (state.activePress || state.isDown) return
-
-    while (state.queuedPresses[0]?.released) {
-      state.queuedPresses.shift()
-    }
-
-    const press = state.queuedPresses[0]
-    if (!press || press.startTimer !== null) return
-
-    const now = performance.now()
-    const pressAt = Math.max(now, state.nextAvailableAt)
-    const startTimer = window.setTimeout(() => {
-      press.startTimer = null
-      if (press.released) {
-        if (state.queuedPresses[0] === press) {
-          state.queuedPresses.shift()
-        }
-        this.scheduleNextQueuedKeyboardPress(key)
-        return
-      }
-      if (state.activePress || state.isDown || state.queuedPresses[0] !== press) {
-        this.scheduleNextQueuedKeyboardPress(key)
-        return
-      }
-
-      state.queuedPresses.shift()
-      this.startKeyboardPress(state, press)
-    }, pressAt - now)
-
-    press.startTimer = startTimer
-    state.timers.push(startTimer)
-  }
-
-  private startKeyboardPress(state: KeySimulationState, press: KeySimulationPress): void {
-    if (press.released) return
-
-    if (state.isDown) {
-      this.keyboardSimCallback?.('release', press.key)
-    }
-
-    state.activePress = press
-    state.isDown = true
-    press.pressAt = performance.now()
-    this.keyboardSimCallback?.('press', press.key)
-
-    if (press.plannedReleaseDelayMs !== null) {
-      const plannedReleaseTimer = window.setTimeout(() => {
-        press.plannedReleaseTimer = null
-        this.requestKeyboardPressRelease(press, performance.now())
-      }, press.plannedReleaseDelayMs)
-      press.plannedReleaseTimer = plannedReleaseTimer
-      state.timers.push(plannedReleaseTimer)
-    }
-
-    if (press.releaseRequestedAt !== null) {
-      this.scheduleKeyboardPressRelease(press)
-    }
-  }
-
-  private requestKeyboardPressRelease(press: KeySimulationPress, requestedAt: number): void {
-    if (press.released) return
-    press.releaseRequestedAt =
-      press.releaseRequestedAt === null
-        ? requestedAt
-        : Math.min(press.releaseRequestedAt, requestedAt)
-
-    if (press.pressAt !== null) {
-      this.scheduleKeyboardPressRelease(press)
-    }
-  }
-
-  private requestKeyboardRelease(pressId: number | null): void {
-    if (pressId === null) return
-    const press = this.keyboardPressesById.get(pressId)
-    if (!press) return
-    this.requestKeyboardPressRelease(press, performance.now())
-  }
-
-  private scheduleKeyboardPressRelease(press: KeySimulationPress): void {
-    if (press.released || press.pressAt === null || press.releaseRequestedAt === null) return
-    const state = this.keySimulationState.get(press.key)
-    if (!state) return
-
-    if (press.releaseTimer !== null) {
-      clearTimeout(press.releaseTimer)
-      press.releaseTimer = null
-    }
-    if (press.plannedReleaseTimer !== null) {
-      clearTimeout(press.plannedReleaseTimer)
-      press.plannedReleaseTimer = null
-    }
-
-    const now = performance.now()
-    const releaseAt = Math.max(press.releaseRequestedAt, press.pressAt + this.timingProfile.holdMs)
-    const releaseTimer = window.setTimeout(
-      () => {
-        this.finishKeyboardPress(press)
-      },
-      Math.max(0, releaseAt - now)
-    )
-
-    press.releaseTimer = releaseTimer
-    state.timers.push(releaseTimer)
-  }
-
-  private finishKeyboardPress(press: KeySimulationPress): void {
-    if (press.released) return
-    const state = this.keySimulationState.get(press.key)
-    if (!state) return
-
-    if (press.startTimer !== null) {
-      clearTimeout(press.startTimer)
-      press.startTimer = null
-    }
-    if (press.releaseTimer !== null) {
-      clearTimeout(press.releaseTimer)
-      press.releaseTimer = null
-    }
-
-    press.released = true
-    this.keyboardPressesById.delete(press.id)
-
-    if (state.activePress === press) {
-      state.activePress = null
-    }
-
-    if (state.isDown) {
-      this.keyboardSimCallback?.('release', press.key)
-      state.isDown = false
-    }
-
-    state.nextAvailableAt = performance.now() + this.timingProfile.releaseMs
-    this.scheduleNextQueuedKeyboardPress(press.key)
-  }
-
-  private releaseAllKeyboardSimulation(): void {
-    for (const press of this.keyboardPressesById.values()) {
-      press.released = true
-    }
-    for (const [key, state] of this.keySimulationState) {
-      for (const timer of state.timers) {
-        clearTimeout(timer)
-      }
-      if (state.isDown) {
-        this.keyboardSimCallback?.('release', key)
-      }
-    }
-    this.keySimulationState.clear()
-    this.keyboardPressesById.clear()
-    this.fallbackKeyboardPressIds.clear()
-  }
-
-  /**
-   * @description: 处理音符按下事件（由 midiPlayer 直接同步调用，不经过 Vue 响应式）
-   * 使用引用计数：同一个按键被多个音符占用时，只在首次按下时发送 press
-   * @param {number} mappedPitch 映射后的模板音高
-   * @param {number} currentTimeMs 当前播放时间
-   */
-  noteOn(
-    mappedPitch: number,
-    currentTimeMs: number,
-    noteInstanceId?: number,
-    nextNoteDelayMs?: number
-  ): void {
-    if (!this.template) return
-    const mapping = this.template.mappings.find((m) => m.pitch === mappedPitch)
-    if (!mapping) return
-
-    const key = mapping.key
-    const count = (this.keyRefCount.get(key) ?? 0) + 1
-    this.keyRefCount.set(key, count)
-    this.scheduleKeyboardPress(
-      key,
-      this.resolveKeyboardPressId(mappedPitch, noteInstanceId),
-      nextNoteDelayMs
-    )
-
-    if (count === 1) {
-      // 首次按下该键 → 发送 press
-      const code = mappingKeyToCode(key)
-      const entry: KeyLogEntry = {
-        time: currentTimeMs,
-        key: this.pitchToNoteName(mappedPitch),
-        code,
-        pitch: mappedPitch,
-        originalPitch: mappedPitch,
-        action: 'press',
-      }
-      this.keyLog.push(entry)
-      this.keyLogCallback?.(entry)
-    }
-  }
-
-  /**
-   * @description: 处理音符释放事件（由 midiPlayer 直接同步调用，不经过 Vue 响应式）
-   * 引用计数归零时才发送 release，防止多音符共享同一按键时提前释放
-   * @param {number} mappedPitch 映射后的模板音高
-   * @param {number} currentTimeMs 当前播放时间
-   */
-  noteOff(mappedPitch: number, currentTimeMs: number, noteInstanceId?: number): void {
-    if (!this.template) return
-    const mapping = this.template.mappings.find((m) => m.pitch === mappedPitch)
-    if (!mapping) return
-
-    const key = mapping.key
-    this.requestKeyboardRelease(this.resolveKeyboardReleaseId(mappedPitch, noteInstanceId))
-    const count = this.keyRefCount.get(key) ?? 0
-    const newCount = Math.max(0, count - 1)
-    this.keyRefCount.set(key, newCount)
-
-    if (newCount === 0 && count > 0) {
-      // 最后一个占用该键的音符释放 → 发送 release
-      const code = mappingKeyToCode(key)
-      const entry: KeyLogEntry = {
-        time: currentTimeMs,
-        key: this.pitchToNoteName(mappedPitch),
-        code,
-        pitch: mappedPitch,
-        originalPitch: mappedPitch,
-        action: 'release',
-      }
-      this.keyLog.push(entry)
-      this.keyLogCallback?.(entry)
-    }
-  }
-
-  /**
-   * @description: 释放所有按下的键（播放停止或暂停时调用）
-   * @param {number} currentTimeMs 当前播放时间
-   */
-  releaseAll(currentTimeMs: number): void {
-    this.releaseAllKeyboardSimulation()
-
-    for (const [key, count] of this.keyRefCount) {
-      if (count > 0) {
-        const mapping = this.template?.mappings.find((m) => m.key === key)
-        if (mapping) {
-          const code = mappingKeyToCode(key)
-          const entry: KeyLogEntry = {
-            time: currentTimeMs,
-            key: this.pitchToNoteName(mapping.pitch),
-            code,
-            pitch: mapping.pitch,
-            originalPitch: mapping.pitch,
-            action: 'release',
-          }
-          this.keyLog.push(entry)
-          this.keyLogCallback?.(entry)
-        }
-      }
-    }
-    this.keyRefCount.clear()
   }
 
   /**
@@ -916,12 +524,10 @@ export class KeyboardMapper {
    * @description: 重置缓存（切换歌曲时调用）
    */
   reset(): void {
-    this.releaseAllKeyboardSimulation()
     this.pitchCache.clear()
     this.keyLog = []
     this.previousActiveKeys.clear()
     this.previousCodeToPitch.clear()
-    this.keyRefCount.clear()
   }
 
   // ==================== 私有方法 ====================

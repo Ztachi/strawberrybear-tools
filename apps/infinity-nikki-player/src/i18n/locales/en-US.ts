@@ -440,6 +440,7 @@ export default {
       shuffle: 'Shuffle',
       'repeat-one': 'Repeat One',
       'repeat-all': 'Repeat All',
+      'play-once': 'Play Once',
     },
     fpsBetaWarning: 'Auto FPS detection is experimental. Enable it with caution.',
     fpsAutoTip:

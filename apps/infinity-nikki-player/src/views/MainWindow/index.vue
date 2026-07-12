@@ -269,6 +269,10 @@ async function handleImportPaths(paths: string[]) {
  * @param {boolean} [options.autoSelect] - 是否自动选中（单文件时）
  */
 async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean } = {}) {
+  const dropTargetSongListId =
+    route.name === 'files-song-list-detail' || route.name === 'files-song-list-edit'
+      ? String(route.params.id ?? '')
+      : ''
   const midiFiles = files.filter((file) => isMidiFilename(file.name))
   const invalidFiles = files.filter((file) => !isMidiFilename(file.name)).map((file) => file.name)
   // 只有恰好 1 个 MIDI 文件时才自动进入详情
@@ -281,11 +285,25 @@ async function handleDroppedFiles(files: File[], options: { autoSelect?: boolean
   }
 
   playerStore.clearLastImportedMidi()
+  const importedFilenames = new Set<string>()
 
   // 导入 MIDI 文件
   for (const file of midiFiles) {
     const bytes = await readFileAsUint8Array(file)
     await playerStore.importMidiBuffer(file.name, bytes, { autoSelect: shouldAutoSelect })
+    if (playerStore.lastImportedMidi) {
+      importedFilenames.add(playerStore.lastImportedMidi.filename)
+    }
+  }
+
+  if (dropTargetSongListId && importedFilenames.size > 0) {
+    const updatedSongList = await songListStore.addSongs(
+      dropTargetSongListId,
+      Array.from(importedFilenames)
+    )
+    if (updatedSongList) {
+      await playerStore.syncActivePreviewQueue()
+    }
   }
 
   // 提示无效文件

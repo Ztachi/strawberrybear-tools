@@ -59,6 +59,8 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   private loadedMidiData: ArrayBuffer | null = null
   /** 当前已加载到 WebAudio 层的媒体 ID，用于发现 UI 当前曲和底层音频不一致的脏状态。 */
   private loadedMediaId: string | null = null
+  /** 递增加载令牌，防止较早的异步读取在切歌后覆盖新媒体。 */
+  private loadRequestId = 0
   /** 预览进度刷新定时器，播放中按约 60fps 推进 Player 进度。 */
   private previewTimer: number | null = null
   /** 播放开始时的 performance 时间戳偏移，用于本地平滑计时。 */
@@ -164,11 +166,10 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     context?: MidiPreviewQueueContext | null
   ): Promise<void> {
     if (!this.player) return
-    const state = this.player.getState()
     const loadedAnotherMidi = this.loadedMediaId !== null && this.loadedMediaId !== midi.filename
-    if (loadedAnotherMidi && ['loading', 'playing', 'paused'].includes(state.status)) {
+    if (loadedAnotherMidi) {
       // 详情查看、导入或队列同步可能只更新公共 Player 当前项，而旧 MIDI 音频仍在内存中。
-      // 播放一个不同文件前必须先停止旧音频，否则会出现“UI 显示 B、实际播放 A”。
+      // 是否释放旧源只取决于底层实际加载的媒体，不能依赖会被队列同步重置的 UI 状态。
       await this.player.stop()
     }
     this.syncMidiQueue(library, midi, context)
@@ -367,11 +368,14 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @return {Promise<void>} 加载完成后 resolve
    */
   async load(media: MediaItem): Promise<void> {
+    const requestId = ++this.loadRequestId
     await this.bindings.onMediaSelected?.(media)
     this.bindings.configurePlaybackFilter?.()
     setDisabledTracks(this.bindings.getDisabledTracks?.() ?? new Set())
 
-    this.loadedMidiData = await this.readMidiData(media.url)
+    const midiData = await this.readMidiData(media.url)
+    if (requestId !== this.loadRequestId) return
+    this.loadedMidiData = midiData
     this.loadedMediaId = media.id
     const { duration } = await loadMidiForDuration(this.loadedMidiData)
     this.pausedAtTime = 0
@@ -419,6 +423,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @return {Promise<void>} 停止完成后 resolve
    */
   async stop(): Promise<void> {
+    this.loadRequestId += 1
     stopPreviewAudio()
     this.stopPreviewTimer()
     this.loadedMidiData = null
