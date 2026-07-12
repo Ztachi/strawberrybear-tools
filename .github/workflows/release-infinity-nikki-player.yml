@@ -5,8 +5,12 @@ on:
     branches:
       - main
     paths:
+      - '.github/workflows/release-infinity-nikki-player.yml'
       - 'apps/infinity-nikki-player/**'
       - '!apps/infinity-nikki-player/**/*.md'
+      - 'packages/keystroke-sequencer/**'
+      - 'packages/piano-roll/**'
+      - 'packages/player/**'
   workflow_dispatch:
 
 env:
