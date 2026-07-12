@@ -428,6 +428,7 @@ export default {
       shuffle: '随机播放',
       'repeat-one': '单曲循环',
       'repeat-all': '列表循环',
+      'play-once': '播完即停',
     },
     fpsBetaWarning: '自动获取 FPS 是测试功能，请谨慎开启。',
     fpsAutoTip: '开启后会在播放前检测游戏帧数，用来调整按键持续和间隔，减少断音。',

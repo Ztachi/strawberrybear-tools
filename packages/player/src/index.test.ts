@@ -211,6 +211,33 @@ describe('Player', () => {
       repeatMode: 'none',
       shuffleMode: 'off',
     })
+
+    player.setPlaybackMode('play-once')
+    expect(player.getState()).toMatchObject({
+      playbackMode: 'play-once',
+      repeatMode: 'none',
+      shuffleMode: 'off',
+      endBehavior: 'stop',
+    })
+  })
+
+  it('stops after the current item in play-once mode but keeps manual navigation available', async () => {
+    const audio = createAudioMock()
+    const player = new Player({ audio })
+    player.setQueue(tracks, 0)
+    player.setPlaybackMode('play-once')
+
+    await player.play()
+    await player.handleEnded()
+
+    expect(player.getState()).toMatchObject({
+      currentIndex: 0,
+      status: 'stopped',
+      positionSeconds: 0,
+    })
+
+    await player.next()
+    expect(player.getState()).toMatchObject({ currentIndex: 1, status: 'playing' })
   })
 
   it('selects next without invoking the audio port', () => {
