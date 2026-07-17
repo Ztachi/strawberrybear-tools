@@ -25,6 +25,7 @@
 
 ## 应用文档
 
+- [萌园园上岗日](../apps/myy-on-duty/docs/README.md)
 - [Infinity Nikki Player](../apps/infinity-nikki-player/docs/README.md)
 - [Infinity Nikki Stylist Office](../apps/infinity-nikki-stylist-office/docs/README.md)
 - [Sensitive Word Checker](../apps/sensitive-word-checker/docs/README.md)
