@@ -2,8 +2,10 @@ import { nanoid } from 'nanoid'
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref } from 'vue'
 import { BALANCE } from '@/config/balance'
-import { db, finishGame, saveCurrentGame } from '@/db/database'
+import { BOARD } from '@/config/board'
+import { finishGame, loadCurrentGame, saveCurrentGame } from '@/db/database'
 import { GameEngine } from '@/game/engine/GameEngine'
+import { playSfx } from '@/game/engine/audio'
 import {
   addMaterial,
   calculateResult,
@@ -12,7 +14,14 @@ import {
   selectEvent,
   settleInspection,
 } from '@/game/systems/rules'
-import type { DeviceId, EndReason, GameSession } from '@/game/types'
+import type { DeviceId, EndReason, GameSession, KeyBindings, RunningPhase } from '@/game/types'
+
+interface FeedbackMessage {
+  /** i18n 文案键。 */
+  key: string
+  /** 文案插值；以 Key 结尾的字段由视图继续翻译。 */
+  params?: Record<string, string | number>
+}
 
 /** @description 创建一局干净的初始数据 @return {GameSession} 初始对局 */
 function createSession(): GameSession {
@@ -29,11 +38,23 @@ function createSession(): GameSession {
     sales: [],
     targets: { week: false, purchase: false, limit: false },
     event: null,
+    eventCooldownMs: 0,
+    inspectionCaptureMs: 0,
+    inspectionCooldownMs: 0,
+    meteorCaptureMs: 0,
+    endingMs: 0,
     eventHistory: [],
     rescueAvailable: true,
     rescueCount: 0,
     stats: {},
-    physics: { x: 654, y: 1100, vx: 0, vy: 0 },
+    physics: {
+      x: 656,
+      y: 1100,
+      vx: 0,
+      vy: 0,
+      launched: false,
+      mainEntered: false,
+    },
     configVersion: BALANCE.version,
   }
 }
@@ -41,16 +62,19 @@ function createSession(): GameSession {
 export const useGameStore = defineStore('game', () => {
   const session = ref<GameSession | null>(null)
   const engine = ref<GameEngine | null>(null)
-  const lastComboHitAt = ref(0)
-  const lastDeviceHitAt = new Map<DeviceId, number>()
-  const eventReadyAt = ref(0)
-  const feedback = ref('')
+  const feedback = ref<FeedbackMessage | null>(null)
   const reportOpen = ref(false)
-  const timerId = ref<number>()
-  const autoSaveId = ref<number>()
   const pendingResume = ref(false)
-  /** 暂停开始时刻，用于恢复时顺延事件与冷却截止时间。 */
-  const pausedAt = ref(0)
+  const launchState = ref<'ready' | 'traveling' | 'entered'>('ready')
+  const physicsDiagnostic = ref({ x: BOARD.ballStart.x, y: BOARD.ballStart.y, speed: 0 })
+  const unstickCount = ref(0)
+  const lastDeviceHitAt = new Map<DeviceId, number>()
+  let timerId: number | undefined
+  let autoSaveId: number | undefined
+  let feedbackId: number | undefined
+  let lastTickAt = 0
+  let ballInLaborZone = false
+  let finishInProgress = false
 
   const inventoryCount = computed(
     () => session.value?.inventory.reduce((sum, item) => sum + item.count, 0) ?? 0
@@ -64,74 +88,200 @@ export const useGameStore = defineStore('game', () => {
    * @description 启动新局或恢复存档并连接游戏引擎
    * @param {HTMLElement} host 画布容器
    * @param {boolean} resume 是否恢复
+   * @param {KeyBindings} keyBindings PC 按键映射
+   * @param {(key: string) => string} translate 游戏画布标签翻译器
    * @return {Promise<void>} 启动完成
    */
-  async function start(host: HTMLElement, resume = false): Promise<void> {
+  async function start(
+    host: HTMLElement,
+    resume = false,
+    keyBindings?: KeyBindings,
+    translate?: (key: string) => string
+  ): Promise<void> {
     clearTimers()
-    const saved = resume ? await db.currentGames.get('current') : null
+    lastDeviceHitAt.clear()
+    finishInProgress = false
+    reportOpen.value = false
+    unstickCount.value = 0
+    physicsDiagnostic.value = { x: BOARD.ballStart.x, y: BOARD.ballStart.y, speed: 0 }
+    const saved = resume ? await loadCurrentGame() : null
     session.value = saved?.session ?? createSession()
-    const gameEngine = markRaw(new GameEngine())
+    launchState.value = saved?.session.physics.mainEntered
+      ? 'entered'
+      : saved?.session.physics.launched
+        ? 'traveling'
+        : 'ready'
+    const gameEngine = markRaw(new GameEngine(keyBindings, translate))
     engine.value = gameEngine
     await gameEngine.init(host)
+
     if (saved) {
+      const savedPhase = saved.session.phase
+      const runningPhase: RunningPhase =
+        savedPhase === 'paused'
+          ? (saved.session.pausedPhase ?? (saved.session.elapsedMs > 0 ? 'playing' : 'launcher'))
+          : savedPhase === 'ended'
+            ? 'launcher'
+            : savedPhase
       gameEngine.restore(saved.session.physics)
       gameEngine.setPaused(true)
+      gameEngine.setInputEnabled(runningPhase !== 'ending')
+      session.value.pausedPhase = runningPhase
       session.value.phase = 'paused'
       pendingResume.value = true
     }
-    if (saved) applyEventSideEffects()
+
+    applyEventSideEffects()
+    updateEventCard()
+    syncTargetViews()
+    updateInspectionGate()
     gameEngine.on('launched', () => {
-      if (!session.value) return
-      session.value.phase = 'playing'
+      const current = session.value
+      if (!current || current.phase !== 'launcher') return
+      current.phase = 'playing'
+      current.stats.launches = (current.stats.launches ?? 0) + 1
+      updateEventCard()
     })
+    gameEngine.on('launcher', ({ state }) => {
+      launchState.value = state
+    })
+    if (import.meta.env.DEV) {
+      let lastDiagnosticAt = 0
+      gameEngine.on('physics', ({ x, y, vx, vy }) => {
+        const now = performance.now()
+        if (now - lastDiagnosticAt < 100) return
+        lastDiagnosticAt = now
+        physicsDiagnostic.value = { x, y, speed: Math.hypot(vx, vy) }
+      })
+      gameEngine.on('unstuck', () => {
+        unstickCount.value += 1
+      })
+    }
     gameEngine.on('bumper', ({ device }) => handleDeviceHit(device))
     gameEngine.on('target', ({ id }) => handleTarget(id))
     gameEngine.on('excuse', ({ index }) => handleExcuse(index))
-    gameEngine.on('sensor', ({ id }) => {
+    gameEngine.on('sensor', ({ id, entered }) => {
+      if (id === 'laborZone') handleLaborZone(entered)
+      if (!entered) return
       if (id === 'meteor') handleMeteor()
       else if (id === 'event') triggerEvent()
       else if (id === 'inspection') void inspectInventory()
-      else if (id === 'drain' || id === 'leftOutlane' || id === 'rightOutlane') void handleExit(id)
+      else if (id === 'loop') handleLoop()
+      else if (id === 'drain' || id === 'leftOutlane' || id === 'rightOutlane') {
+        void handleExit(id)
+      }
     })
-    timerId.value = window.setInterval(tick, 100)
-    autoSaveId.value = window.setInterval(() => void save(), BALANCE.rules.autoSaveMs)
+    lastTickAt = performance.now()
+    timerId = window.setInterval(tick, BALANCE.rules.logicTickMs)
+    autoSaveId = window.setInterval(() => void save(), BALANCE.rules.autoSaveMs)
   }
 
-  /** @description 推进玩法计时、连击、事件和验收冷却 @return {void} */
+  /** @description 推进所有可冻结的玩法计时状态 @return {void} */
   function tick(): void {
+    const now = performance.now()
+    const deltaMs = Math.min(250, Math.max(0, now - lastTickAt))
+    lastTickAt = now
     const current = session.value
-    if (!current || current.phase !== 'playing') return
-    current.elapsedMs += 100
-    if (current.combo && Date.now() - lastComboHitAt.value > BALANCE.rules.comboTimeoutMs) {
+    if (!current || current.phase === 'paused' || current.phase === 'ended') return
+
+    if (current.phase === 'inspection') {
+      current.inspectionCaptureMs = Math.max(0, current.inspectionCaptureMs - deltaMs)
+      if (current.inspectionCaptureMs === 0) finishInspectionCapture()
+      return
+    }
+
+    if (current.phase === 'ending') {
+      current.endingMs = Math.max(0, current.endingMs - deltaMs)
+      if (current.endingMs === 0) void finalizeGame()
+      return
+    }
+
+    if (current.phase !== 'playing') return
+    current.elapsedMs += deltaMs
+    if (
+      current.combo &&
+      current.elapsedMs - (current.stats.lastComboAtMs ?? 0) > BALANCE.rules.comboTimeoutMs
+    ) {
       current.combo = 0
     }
-    if (current.event && Date.now() >= current.event.endsAt) endEvent()
-    // 验收冷却结束后三块目标同时升起，开始下一轮验收。
-    if (current.inspectionCooldownUntil && Date.now() >= current.inspectionCooldownUntil) {
-      current.inspectionCooldownUntil = undefined
-      current.targets = { week: false, purchase: false, limit: false }
-      for (const id of Object.keys(current.targets)) engine.value?.setTargetDown(id, false)
+
+    if (current.meteorCaptureMs > 0) {
+      current.meteorCaptureMs = Math.max(0, current.meteorCaptureMs - deltaMs)
+      if (current.meteorCaptureMs === 0) finishMeteorCapture()
+    }
+
+    if (current.event) {
+      current.event.remainingMs = Math.max(0, current.event.remainingMs - deltaMs)
+      if (current.event.remainingMs === 0) endEvent(current.event.phase === 'active')
+    } else if (current.eventCooldownMs > 0) {
+      const previous = current.eventCooldownMs
+      current.eventCooldownMs = Math.max(0, current.eventCooldownMs - deltaMs)
+      if (previous > 0 && current.eventCooldownMs === 0) updateEventCard()
+    }
+
+    if (current.inspectionCooldownMs > 0) {
+      const previous = current.inspectionCooldownMs
+      current.inspectionCooldownMs = Math.max(0, current.inspectionCooldownMs - deltaMs)
+      if (previous > 0 && current.inspectionCooldownMs === 0) {
+        current.targets = { week: false, purchase: false, limit: false }
+        syncTargetViews()
+        updateInspectionGate()
+      }
     }
   }
 
-  /** @description 结束当前事件并清理其物理副作用 @return {void} */
-  function endEvent(): void {
-    const current = session.value
-    if (!current?.event) return
-    if (current.event.id === 'excuses') engine.value?.clearExcuses()
-    current.event = null
-    engine.value?.setBumperBoost({})
-    eventReadyAt.value = Date.now() + BALANCE.events.sprint.cooldownMs
+  /**
+   * @description 显示短时玩法反馈
+   * @param {string} key i18n 文案键
+   * @param {Record<string, string | number>} params 插值参数
+   * @return {void}
+   */
+  function showFeedback(key: string, params?: Record<string, string | number>): void {
+    feedback.value = { key, params }
+    window.clearTimeout(feedbackId)
+    feedbackId = window.setTimeout(() => {
+      feedback.value = null
+    }, 1600)
   }
 
-  /** @description 按当前事件重建装置弹力等物理副作用（用于恢复存档） @return {void} */
-  function applyEventSideEffects(): void {
+  /**
+   * @description 结束当前事件并清理其物理副作用
+   * @param {boolean} completed 是否按事件目标完成
+   * @return {void}
+   */
+  function endEvent(completed = false): void {
     const current = session.value
-    const event = current?.event
-    if (!current || !event) return
+    const activeEvent = current?.event
+    if (!current || !activeEvent) return
+    const id = activeEvent.id
+    clearEventSideEffects()
+    current.event = null
+    current.eventCooldownMs = BALANCE.events[id].cooldownMs
+    updateEventCard()
+    if (completed) {
+      current.stats[`eventCompleted:${id}`] = (current.stats[`eventCompleted:${id}`] ?? 0) + 1
+    }
+  }
+
+  /** @description 清理事件创建的所有物理状态 @return {void} */
+  function clearEventSideEffects(): void {
+    engine.value?.clearExcuses()
+    engine.value?.setOvertimeGate(false)
+    engine.value?.setBumperBoost({})
+    engine.value?.setSprintBoost(false)
+    engine.value?.setEventVisuals()
+  }
+
+  /** @description 按当前事件重建物理副作用，用于继续游戏 @return {void} */
+  function applyEventSideEffects(): void {
+    clearEventSideEffects()
+    const event = session.value?.event
+    if (!event) return
+    if (event.id === 'overtime' && event.phase === 'active') engine.value?.setOvertimeGate(true)
     if (event.id === 'sprint') {
       const boost = BALANCE.physics.sprintMultiplier
       engine.value?.setBumperBoost({ farm: boost, pond: boost, nest: boost })
+      engine.value?.setSprintBoost(true)
     }
     if (event.id === 'wanted' && event.target) {
       const boost: Partial<Record<DeviceId, number>> = {}
@@ -141,22 +291,50 @@ export const useGameStore = defineStore('game', () => {
       engine.value?.setBumperBoost(boost)
     }
     if (event.id === 'excuses') engine.value?.raiseExcuses()
-    // 恢复已倒下的目标牌状态，保证物理和存档一致。
+    engine.value?.setEventVisuals(event.id, event.target, event.progress)
+  }
+
+  /** @description 同步事件牌亮起、执行和冷却视觉状态 @return {void} */
+  function updateEventCard(): void {
+    const current = session.value
+    engine.value?.setEventCardAvailable(
+      !!current && !current.event && current.eventCooldownMs === 0 && current.phase === 'playing'
+    )
+  }
+
+  /** @description 同步三块目标牌的碰撞与视觉状态 @return {void} */
+  function syncTargetViews(): void {
+    const current = session.value
+    if (!current) return
     for (const [id, down] of Object.entries(current.targets)) {
       engine.value?.setTargetDown(id, down)
     }
+  }
+
+  /** @description 根据目标、库存与冷却状态同步验收通道门 @return {void} */
+  function updateInspectionGate(): void {
+    const current = session.value
+    const open =
+      !!current &&
+      allTargetsDown.value &&
+      current.inventory.length > 0 &&
+      current.inspectionCooldownMs === 0 &&
+      current.phase !== 'inspection' &&
+      current.phase !== 'ending' &&
+      current.phase !== 'ended'
+    engine.value?.setInspectionOpen(open)
   }
 
   /** @description 处理劳动装置有效命中 @param {DeviceId} device 装置 @return {void} */
   function handleDeviceHit(device: DeviceId): void {
     const current = session.value
     if (!current || current.phase !== 'playing') return
-    const now = Date.now()
+    const now = performance.now()
     if (now - (lastDeviceHitAt.get(device) ?? 0) < BALANCE.rules.hitDebounceMs) return
     lastDeviceHitAt.set(device, now)
     const event = current.event
     if (event?.id === 'wanted' && event.target !== device && device !== 'meteor') {
-      feedback.value = 'event.feedback.rejected'
+      showFeedback('game.feedback.rejected')
       return
     }
     const boosted =
@@ -166,135 +344,199 @@ export const useGameStore = defineStore('game', () => {
     const amount = event?.id === 'wanted' && event.target === device ? 2 : 1
     current.inventory = addMaterial(current.inventory, material, device, amount)
     current.collected = addMaterial(current.collected, material, device, amount)
-    feedback.value = `${material.nameKey} +${amount}`
+    showFeedback(
+      material.id === 'giantMeteor' ? 'game.feedback.giantMaterial' : 'game.feedback.material',
+      { materialKey: material.nameKey, amount }
+    )
+    updateInspectionGate()
     if (device !== 'meteor') {
       current.combo += 1
       current.maxCombo = Math.max(current.maxCombo, current.combo)
-      lastComboHitAt.value = now
+      current.stats.lastComboAtMs = current.elapsedMs
     }
     if (material.id === 'giantMeteor' || material.id === 'honeyMeteor') {
       current.stats.special = (current.stats.special ?? 0) + 1
     }
-    // 暖暖查岗：三个装置各命中一次后事件提前完成。
     if (event?.id === 'inspection' && event.progress && device !== 'meteor') {
       event.progress[device] = true
+      engine.value?.setEventVisuals(event.id, event.target, event.progress)
       if (['farm', 'pond', 'nest'].every((key) => event.progress?.[key])) {
         current.stats.inspectionEvents = (current.stats.inspectionEvents ?? 0) + 1
-        endEvent()
+        endEvent(true)
       }
     }
-    // 陨星丰收：完成一次抽取后事件立即结束。
-    if (event?.id === 'meteorHarvest' && device === 'meteor') endEvent()
+    if (event?.id === 'meteorHarvest' && device === 'meteor') endEvent(true)
   }
 
-  /** @description 处理陨星坑：捕获、掉落材料并弹回台面 @return {void} */
+  /** @description 处理陨星坑捕获、掉落与弹回 @return {void} */
   function handleMeteor(): void {
     const current = session.value
-    if (!current || current.phase !== 'playing') return
+    if (!current || current.phase !== 'playing' || current.meteorCaptureMs > 0) return
     handleDeviceHit('meteor')
-    // 短暂捕获后向台面中上部弹出，方向避开落口与陨星坑入口。
+    current.meteorCaptureMs = BALANCE.rules.meteorCaptureMs
     engine.value?.setPaused(true)
-    window.setTimeout(() => {
-      if (!session.value || session.value.phase !== 'playing') return
-      engine.value?.restore({
-        x: 300,
-        y: 320,
-        vx: -4,
-        vy: -BALANCE.physics.meteorImpulse * 0.4,
-      })
-      engine.value?.setPaused(false)
-    }, 400)
+  }
+
+  /** @description 完成陨星坑捕获并向安全方向弹回 @return {void} */
+  function finishMeteorCapture(): void {
+    const current = session.value
+    if (!current || current.phase !== 'playing') return
+    engine.value?.restore({
+      x: 300,
+      y: 320,
+      vx: -4,
+      vy: -BALANCE.physics.meteorImpulse * 0.4,
+      launched: true,
+      mainEntered: true,
+    })
+    engine.value?.setPaused(false)
   }
 
   /** @description 借口连发：击倒指定借口牌 @param {number} index 借口牌下标 @return {void} */
   function handleExcuse(index: number): void {
     const current = session.value
     const event = current?.event
-    if (!current || event?.id !== 'excuses') return
+    if (!current || current.phase !== 'playing' || event?.id !== 'excuses') return
     engine.value?.knockExcuse(index)
     event.knocked = (event.knocked ?? 0) + 1
     current.stats.excuses = (current.stats.excuses ?? 0) + 1
-    // 三块借口牌全部粉碎后事件提前结束。
     if (event.knocked >= 3) {
       current.stats.excuseEvents = (current.stats.excuseEvents ?? 0) + 1
-      endEvent()
+      endEvent(true)
     }
   }
 
   /** @description 击倒验收目标 @param {string} id 目标编号 @return {void} */
   function handleTarget(id: string): void {
     const current = session.value
-    if (!current || current.targets[id] || current.phase !== 'playing') return
+    if (
+      !current ||
+      current.phase !== 'playing' ||
+      current.targets[id] ||
+      current.inspectionCooldownMs > 0
+    ) {
+      return
+    }
     current.targets[id] = true
     current.stats.targets = (current.stats.targets ?? 0) + 1
     engine.value?.setTargetDown(id, true)
+    if (allTargetsDown.value) {
+      current.stats.targetRounds = (current.stats.targetRounds ?? 0) + 1
+      showFeedback('inspection.ready')
+    }
+    updateInspectionGate()
   }
 
   /** @description 完成当前库存的成果验收 @return {Promise<void>} 结算完成 */
   async function inspectInventory(): Promise<void> {
     const current = session.value
-    // 通道只在三目标倒下、有待售材料且不在冷却时开启。
     if (
       !current ||
       current.phase !== 'playing' ||
       !allTargetsDown.value ||
       !current.inventory.length ||
-      current.inspectionCooldownUntil
+      current.inspectionCooldownMs > 0
     ) {
       return
     }
     current.phase = 'inspection'
+    current.inspectionCaptureMs = BALANCE.rules.inspectionCaptureMs
+    engine.value?.setInspectionOpen(false)
     engine.value?.setPaused(true)
     const sale = settleInspection(current.inventory)
-    // 结算结果先固定到内存并立即保存，刷新后不会重新抽倍率或重复出售。
+    // 整批材料与收入写入同一份当前对局记录；单次 IndexedDB put 保证记录级原子性。
     current.sales.push(sale)
     current.currency += sale.earned
     current.inventory = []
     current.stats.inspections = (current.stats.inspections ?? 0) + 1
-    // 事件计时同步顺延验收捕获时长，符合「验收期间暂停事件计时」。
-    if (current.event) current.event.endsAt += 1200
-    feedback.value = `inspection.result:${sale.rating}:${sale.earned}`
+    current.stats.bestMultiplier = Math.max(current.stats.bestMultiplier ?? 0, sale.multiplier)
+    showFeedback('inspection.result', {
+      ratingKey: `inspection.rating.${sale.rating}`,
+      earned: sale.earned,
+    })
+    playSfx('inspection')
     await save()
-    window.setTimeout(() => {
-      if (!session.value || session.value.phase === 'ended') return
-      // 通道关闭进入冷却；目标保持倒下，冷却结束由 tick 统一升起。
-      session.value.inspectionCooldownUntil = Date.now() + BALANCE.rules.inspectionCooldownMs
-      session.value.phase = 'playing'
-      // 将萌园园弹回台面中上部继续游戏。
-      engine.value?.restore({ x: 360, y: 300, vx: 2, vy: -BALANCE.physics.inspectionImpulse * 0.4 })
-      engine.value?.setPaused(false)
-    }, 1200)
+  }
+
+  /** @description 结束验收反馈、进入冷却并把弹珠送回主台面 @return {void} */
+  function finishInspectionCapture(): void {
+    const current = session.value
+    if (!current || current.phase !== 'inspection') return
+    current.inspectionCaptureMs = 0
+    current.inspectionCooldownMs = BALANCE.rules.inspectionCooldownMs
+    current.phase = 'playing'
+    engine.value?.restore({
+      x: 360,
+      y: 300,
+      vx: 2,
+      vy: -BALANCE.physics.inspectionImpulse * 0.4,
+      launched: true,
+      mainEntered: true,
+    })
+    engine.value?.setPaused(false)
+    updateInspectionGate()
   }
 
   /** @description 命中事件牌后选择并启动事件 @return {void} */
   function triggerEvent(): void {
     const current = session.value
-    if (!current || current.phase !== 'playing' || current.event || Date.now() < eventReadyAt.value)
+    if (!current || current.phase !== 'playing' || current.event || current.eventCooldownMs > 0) {
       return
+    }
     const id = selectEvent(current)
     const target =
       id === 'wanted'
         ? (['farm', 'pond', 'nest'][Math.floor(Math.random() * 3)] as DeviceId)
         : undefined
+    const overtimeActive = id === 'overtime' && ballInLaborZone
     current.event = {
       id,
-      endsAt: Date.now() + BALANCE.events[id].durationMs,
+      phase: id === 'overtime' && !overtimeActive ? 'waiting' : 'active',
+      remainingMs:
+        id === 'overtime' && !overtimeActive
+          ? (BALANCE.events.overtime.waitTimeoutMs ?? BALANCE.events.overtime.durationMs)
+          : BALANCE.events[id].durationMs,
       target,
-      // 暖暖查岗需要跟踪三个装置的首次命中。
       progress: id === 'inspection' ? { farm: false, pond: false, nest: false } : undefined,
       knocked: id === 'excuses' ? 0 : undefined,
     }
     current.eventHistory.push(id)
     current.stats[`event:${id}`] = (current.stats[`event:${id}`] ?? 0) + 1
+    showFeedback(`game.event.${id}`)
+    playSfx('event')
+    updateEventCard()
     if (id === 'rescueReturn') {
-      // 大喵重新上岗立即生效并结束，不占用事件时长。
       current.rescueAvailable = true
+      current.stats['eventCompleted:rescueReturn'] =
+        (current.stats['eventCompleted:rescueReturn'] ?? 0) + 1
       current.event = null
-      eventReadyAt.value = Date.now() + BALANCE.events.rescueReturn.cooldownMs
-      feedback.value = 'game.event.rescueReturn'
+      current.eventCooldownMs = BALANCE.events.rescueReturn.cooldownMs
+      updateEventCard()
       return
     }
     applyEventSideEffects()
+  }
+
+  /**
+   * @description 跟踪弹珠是否进入劳动区，并启动等待中的强制加班
+   * @param {boolean} entered 是否进入区域
+   * @return {void}
+   */
+  function handleLaborZone(entered: boolean): void {
+    ballInLaborZone = entered
+    const event = session.value?.event
+    if (!entered || event?.id !== 'overtime' || event.phase !== 'waiting') return
+    event.phase = 'active'
+    event.remainingMs = BALANCE.events.overtime.durationMs
+    engine.value?.setOvertimeGate(true)
+  }
+
+  /** @description 记录完整通过左侧加班回环 @return {void} */
+  function handleLoop(): void {
+    const current = session.value
+    if (!current || current.phase !== 'playing') return
+    current.stats.loop = (current.stats.loop ?? 0) + 1
+    showFeedback('game.feedback.loop', { count: current.stats.loop })
   }
 
   /** @description 处理中央落口或外侧下班道 @param {EndReason} reason 出口 @return {Promise<void>} 完成 */
@@ -302,32 +544,53 @@ export const useGameStore = defineStore('game', () => {
     const current = session.value
     if (!current || current.phase !== 'playing') return
     if (reason !== 'drain' && current.rescueAvailable) {
-      // 大喵只保护左右外侧下班道，消耗后把萌园园弹回台面中部偏上。
       current.rescueAvailable = false
       current.rescueCount += 1
-      feedback.value = 'game.rescue.message'
+      current.stats.rescueAtMs = current.elapsedMs
+      showFeedback('game.rescue.message')
+      playSfx('rescue')
       engine.value?.restore({
         x: 360,
         y: 480,
         vx: reason === 'leftOutlane' ? 4 : -4,
         vy: -BALANCE.physics.rescueImpulse * 0.6,
+        launched: true,
+        mainEntered: true,
       })
       return
     }
-    current.phase = 'ended'
+    current.phase = 'ending'
     current.endReason = reason
+    current.endingMs = BALANCE.rules.endingAnimationMs
+    clearEventSideEffects()
+    current.event = null
+    engine.value?.setInputEnabled(false)
+    updateEventCard()
+    showFeedback(`game.end.${reason}`)
+    playSfx('end')
+  }
+
+  /** @description 完成下班结算、称号计算和历史落库 @return {Promise<void>} 完成 */
+  async function finalizeGame(): Promise<void> {
+    const current = session.value
+    if (!current || current.phase !== 'ending' || finishInProgress) return
+    finishInProgress = true
+    current.phase = 'ended'
     current.endedAt = Date.now()
-    endEvent()
-    // 剩余待售材料按基础价值 ×1.0 结算后再计算称号。
+    current.physics = engine.value?.getSnapshot() ?? current.physics
+    engine.value?.setPaused(true)
     const leftoverValue = inventoryValue(current.inventory)
+    current.stats.leftoverCount = current.inventory.reduce((sum, item) => sum + item.count, 0)
     current.stats.leftoverValue = leftoverValue
+    current.stats.inspectionIncome = current.sales.reduce((sum, sale) => sum + sale.earned, 0)
     current.currency += leftoverValue
     current.inventory = []
+    if (current.stats.rescueAtMs !== undefined) {
+      current.stats.rescueSurvivalMs = Math.max(0, current.elapsedMs - current.stats.rescueAtMs)
+    }
     const result = calculateResult(current)
     current.finalTitle = result.title
     current.highlights = result.highlights
-    current.physics = engine.value?.getSnapshot() ?? current.physics
-    engine.value?.setPaused(true)
     await finishGame(current)
     reportOpen.value = true
   }
@@ -343,7 +606,7 @@ export const useGameStore = defineStore('game', () => {
   async function pause(): Promise<void> {
     const current = session.value
     if (!current || current.phase === 'ended' || current.phase === 'paused') return
-    pausedAt.value = Date.now()
+    current.pausedPhase = current.phase
     current.phase = 'paused'
     engine.value?.setPaused(true)
     await save()
@@ -353,34 +616,54 @@ export const useGameStore = defineStore('game', () => {
   function resume(): void {
     const current = session.value
     if (!current || current.phase !== 'paused') return
+    const target = current.pausedPhase ?? (current.elapsedMs > 0 ? 'playing' : 'launcher')
+    current.phase = target
+    current.pausedPhase = undefined
     pendingResume.value = false
-    // 暂停期间事件与冷却计时冻结，恢复时按暂停时长整体顺延截止时间。
-    if (pausedAt.value) {
-      const frozenMs = Date.now() - pausedAt.value
-      if (current.event) current.event.endsAt += frozenMs
-      if (current.inspectionCooldownUntil) current.inspectionCooldownUntil += frozenMs
-      if (eventReadyAt.value) eventReadyAt.value += frozenMs
-      pausedAt.value = 0
-    }
-    // 发射前暂停恢复后仍处于发射状态，进入主场后才恢复计时。
-    current.phase = current.elapsedMs > 0 ? 'playing' : 'launcher'
-    engine.value?.setPaused(false)
+    engine.value?.setInputEnabled(target !== 'ending')
+    // 验收与陨星捕获依靠 Store 计时结束，期间 Rapier 必须继续冻结。
+    engine.value?.setPaused(target === 'inspection' || current.meteorCaptureMs > 0)
+    applyEventSideEffects()
+    updateInspectionGate()
+    updateEventCard()
+    lastTickAt = performance.now()
+  }
+
+  /** @description 开始发射蓄力 @return {void} */
+  function beginCharge(): void {
+    if (session.value?.phase === 'launcher') engine.value?.beginCharge()
+  }
+
+  /** @description 释放发射蓄力 @return {void} */
+  function releaseCharge(): void {
+    if (session.value?.phase === 'launcher') engine.value?.releaseCharge()
+  }
+
+  /** @description 同步调试面板可实时生效的物理参数 @return {void} */
+  function syncBalance(): void {
+    engine.value?.syncBalance()
+  }
+
+  /** @description 运行中切换语言时同步 Pixi 台面文案 @return {void} */
+  function setTranslator(translate: (key: string) => string): void {
+    engine.value?.setTranslator(translate)
   }
 
   /** @description 销毁引擎与定时器 @return {void} */
   function dispose(): void {
     void save()
     clearTimers()
+    window.clearTimeout(feedbackId)
     engine.value?.destroy()
     engine.value = null
   }
 
-  /** @description 清理所有持有的周期定时器 @return {void} */
+  /** @description 清理所有周期定时器 @return {void} */
   function clearTimers(): void {
-    if (timerId.value) window.clearInterval(timerId.value)
-    if (autoSaveId.value) window.clearInterval(autoSaveId.value)
-    timerId.value = undefined
-    autoSaveId.value = undefined
+    if (timerId) window.clearInterval(timerId)
+    if (autoSaveId) window.clearInterval(autoSaveId)
+    timerId = undefined
+    autoSaveId = undefined
   }
 
   return {
@@ -388,12 +671,19 @@ export const useGameStore = defineStore('game', () => {
     feedback,
     reportOpen,
     pendingResume,
+    launchState,
+    physicsDiagnostic,
+    unstickCount,
     inventoryCount,
     inventoryEstimate,
     start,
     save,
     pause,
     resume,
+    beginCharge,
+    releaseCharge,
+    syncBalance,
+    setTranslator,
     dispose,
   }
 })

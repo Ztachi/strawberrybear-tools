@@ -93,9 +93,12 @@ export function settleInspection(items: InventoryItem[], random = Math.random())
  */
 export function selectEvent(session: GameSession, random = Math.random()): EventId {
   const previous = session.eventHistory.at(-1)
+  const previousCategory = previous ? BALANCE.events[previous].category : undefined
   const candidates = Object.entries(BALANCE.events)
     .filter(([id]) => id !== previous)
     .filter(([id]) => id !== 'rescueReturn' || !session.rescueAvailable)
+    // 风险事件不能连续出现，避免连续封锁或阻挡破坏节奏。
+    .filter(([, config]) => previousCategory !== 'risk' || config.category !== 'risk')
   return weightedPick(candidates, ([, config]) => config.weight, random)[0] as EventId
 }
 
@@ -126,21 +129,53 @@ export function durationScore(seconds: number): number {
 export function calculateResult(session: GameSession): { title: string; highlights: string[] } {
   const { weights } = BALANCE.title
   const currency = Math.min(100, (session.currency / BALANCE.title.currencyMax) * 100)
+  const rescueSurvivalSeconds = (session.stats.rescueSurvivalMs ?? 0) / 1000
   const technique = Math.min(
     100,
-    session.maxCombo * 1.5 + session.sales.length * 10 + (session.stats.loop ?? 0) * 4
+    session.maxCombo * 1.2 +
+      session.sales.length * 9 +
+      (session.stats.targetRounds ?? 0) * 4 +
+      (session.stats.inspectionEvents ?? 0) * 6 +
+      (session.stats.excuseEvents ?? 0) * 6 +
+      (session.stats.loop ?? 0) * 4 +
+      Math.min(12, rescueSurvivalSeconds / 5)
   )
-  const special = Math.min(100, (session.stats.special ?? 0) * 25)
+  const triggeredEventTypes = Object.keys(session.stats).filter(
+    (key) => key.startsWith('event:') && (session.stats[key] ?? 0) > 0
+  ).length
+  const specialCount =
+    (session.stats.special ?? 0) +
+    ((session.stats.bestMultiplier ?? 0) >= 1.4 ? 1 : 0) +
+    (triggeredEventTypes >= 8 ? 1 : 0) +
+    (session.maxCombo >= 50 ? 1 : 0)
+  const special = Math.min(100, specialCount * 25)
   const score =
     currency * weights.currency +
     durationScore(session.elapsedMs / 1000) * weights.duration +
     technique * weights.technique +
     special * weights.special
   const title = BALANCE.title.ranges.find((range) => score >= range.min)?.key ?? 'escapeHelper'
-  const highlights = [
+  const rarityRank: Record<InventoryItem['rarity'], number> = {
+    common: 0,
+    uncommon: 1,
+    rare: 2,
+    epic: 3,
+    legendary: 4,
+    event: 5,
+  }
+  const rarest = [...session.collected].sort(
+    (left, right) => rarityRank[right.rarity] - rarityRank[left.rarity] || right.value - left.value
+  )[0]
+  const candidates = [
+    rarest ? `report.highlight.rare:${rarest.nameKey}` : null,
     `report.highlight.combo:${session.maxCombo}`,
-    `report.highlight.sales:${session.sales.length}`,
+    (session.stats.bestMultiplier ?? 0) > 0
+      ? `report.highlight.multiplier:${session.stats.bestMultiplier}`
+      : null,
+    session.sales.length ? `report.highlight.sales:${session.sales.length}` : null,
+    (session.stats.loop ?? 0) > 0 ? `report.highlight.loop:${session.stats.loop}` : null,
     `report.highlight.currency:${session.currency}`,
   ]
+  const highlights = candidates.filter((item): item is string => item !== null).slice(0, 3)
   return { title, highlights }
 }

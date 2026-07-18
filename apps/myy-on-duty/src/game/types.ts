@@ -11,7 +11,33 @@ export type EventId =
   | 'meteorHarvest'
   | 'rescueReturn'
 export type EndReason = 'drain' | 'leftOutlane' | 'rightOutlane'
-export type GamePhase = 'launcher' | 'playing' | 'paused' | 'inspection' | 'ended'
+export type GamePhase = 'launcher' | 'playing' | 'paused' | 'inspection' | 'ending' | 'ended'
+export type RunningPhase = Exclude<GamePhase, 'paused' | 'ended'>
+
+/** PC 输入使用 KeyboardEvent.code，避免键盘布局改变业务按键。 */
+export interface KeyBindings {
+  /** 左拍板按键。 */
+  left: string
+  /** 右拍板按键。 */
+  right: string
+  /** 发射蓄力按键。 */
+  launch: string
+}
+
+/** 可恢复的实时物理快照。 */
+export interface PhysicsSnapshot {
+  /** 弹珠设计坐标与 Rapier 线速度。 */
+  x: number
+  y: number
+  vx: number
+  vy: number
+  /** 是否已经离开发射弹簧、是否已经进入主台面。 */
+  launched?: boolean
+  mainEntered?: boolean
+  /** 左右拍板角度，用于暂停后视觉与碰撞状态一致。 */
+  leftFlipperAngle?: number
+  rightFlipperAngle?: number
+}
 
 /** 库存中的单项材料。 */
 export interface InventoryItem {
@@ -51,6 +77,8 @@ export interface GameSession {
   id: string
   /** 当前流程阶段。 */
   phase: GamePhase
+  /** 暂停前阶段，保证发射、验收捕获和结束动画能恢复到正确状态。 */
+  pausedPhase?: RunningPhase
   /** 开始时间。 */
   startedAt: number
   /** 结束时间。 */
@@ -70,16 +98,24 @@ export interface GameSession {
   sales: SaleRecord[]
   /** 三块目标击倒状态。 */
   targets: Record<string, boolean>
-  /** 当前随机事件；progress 用于查岗完成度，knocked 用于借口牌计数。 */
+  /** 当前随机事件；所有计时保存剩余毫秒，关闭页面后不会继续流逝。 */
   event: {
     id: EventId
-    endsAt: number
+    phase: 'waiting' | 'active'
+    remainingMs: number
     target?: DeviceId
     progress?: Record<string, boolean>
     knocked?: number
   } | null
-  /** 成果验收通道冷却截止时间戳，冷却结束后三块目标重新升起。 */
-  inspectionCooldownUntil?: number
+  /** 事件牌冷却剩余时间。 */
+  eventCooldownMs: number
+  /** 成果验收捕获反馈与冷却的剩余时间。 */
+  inspectionCaptureMs: number
+  inspectionCooldownMs: number
+  /** 陨星坑短暂捕获剩余时间。 */
+  meteorCaptureMs: number
+  /** 下班掉出画面的剩余动画时间。 */
+  endingMs: number
   /** 事件历史，避免连续重复。 */
   eventHistory: EventId[]
   /** 大喵保护是否可用。 */
@@ -89,7 +125,7 @@ export interface GameSession {
   /** 各类表现计数。 */
   stats: Record<string, number>
   /** 物理状态。 */
-  physics: { x: number; y: number; vx: number; vy: number }
+  physics: PhysicsSnapshot
   /** 最终结算字段。 */
   endReason?: EndReason
   finalTitle?: string

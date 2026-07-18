@@ -2,6 +2,7 @@ import { sound } from '@pixi/sound'
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { loadSettings, saveSettings, type SettingsRecord } from '@/db/database'
+import { i18n } from '@/i18n'
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<SettingsRecord>({
@@ -18,12 +19,14 @@ export const useSettingsStore = defineStore('settings', () => {
   async function init(): Promise<void> {
     settings.value = await loadSettings()
     applyAudio()
+    applyLocale()
     if (initialized) return
     initialized = true
     watch(
       settings,
       async (value) => {
         applyAudio()
+        applyLocale()
         await saveSettings(value)
       },
       { deep: true }
@@ -34,6 +37,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function applyAudio(): void {
     sound.volumeAll = settings.value.volume
     settings.value.muted ? sound.muteAll() : sound.unmuteAll()
+  }
+
+  /** @description 把持久化语言同步到 vue-i18n @return {void} */
+  function applyLocale(): void {
+    i18n.global.locale.value = settings.value.locale
   }
 
   /** @description 切换统一静音 @return {void} */

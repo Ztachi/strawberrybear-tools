@@ -23,6 +23,11 @@ const session: GameSession = {
   sales: [],
   targets: { week: true, purchase: true, limit: true },
   event: null,
+  eventCooldownMs: 0,
+  inspectionCaptureMs: 0,
+  inspectionCooldownMs: 0,
+  meteorCaptureMs: 0,
+  endingMs: 0,
   eventHistory: ['wanted'],
   rescueAvailable: true,
   rescueCount: 0,
@@ -55,6 +60,40 @@ describe('玩法规则', () => {
 
   it('事件不会与上一事件连续重复', () => {
     expect(selectEvent(session, 0)).not.toBe('wanted')
+  })
+
+  it('风险事件不会连续出现', () => {
+    const previousRisk: GameSession = { ...session, eventHistory: ['overtime'] }
+    expect(BALANCE.events[selectEvent(previousRisk, 0)].category).not.toBe('risk')
+  })
+
+  it('八类事件都有机会被调度且大喵返岗只在保护耗尽后出现', () => {
+    const withoutRescue: GameSession = {
+      ...session,
+      rescueAvailable: false,
+      eventHistory: [],
+    }
+    const selected = new Set(
+      Array.from({ length: 1000 }, (_, index) => selectEvent(withoutRescue, index / 1000))
+    )
+
+    expect(selected).toEqual(new Set(Object.keys(BALANCE.events)))
+    expect(
+      Array.from({ length: 1000 }, (_, index) => selectEvent(session, index / 1000))
+    ).not.toContain('rescueReturn')
+  })
+
+  it('正向与趣味事件的总权重高于风险事件且全部具有冷却', () => {
+    const entries = Object.values(BALANCE.events)
+    const supportiveWeight = entries
+      .filter((event) => event.category !== 'risk')
+      .reduce((sum, event) => sum + event.weight, 0)
+    const riskWeight = entries
+      .filter((event) => event.category === 'risk')
+      .reduce((sum, event) => sum + event.weight, 0)
+
+    expect(supportiveWeight).toBeGreaterThan(riskWeight)
+    expect(entries.every((event) => event.cooldownMs > 0)).toBe(true)
   })
 
   it('称号计算始终产出有效区间与三条亮点', () => {
