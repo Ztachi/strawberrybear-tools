@@ -60,13 +60,13 @@ onMounted(async () => {
       <div class="mascot mb-7" :aria-label="$t('home.mascot')">
         <span>萌</span>
       </div>
-      <p class="mb-2 text-sm font-bold tracking-[0.35em] text-[var(--gold)]">
+      <p class="mb-2 text-sm font-bold tracking-[0.35em] text-[var(--color-primary-hover)]">
         {{ $t('home.eyebrow') }}
       </p>
       <h1 class="font-display text-center text-5xl font-black tracking-tight">
         {{ $t('home.title') }}
       </h1>
-      <p class="mt-3 text-white/60">
+      <p class="mt-3 text-[var(--color-muted-dark)]">
         {{ $t('home.subtitle') }}
       </p>
 
@@ -75,16 +75,16 @@ onMounted(async () => {
           {{ $t('home.start') }}
         </button>
         <button
-          class="secondary-button text-lg disabled:cursor-not-allowed disabled:opacity-40"
+          class="secondary-button text-lg disabled:cursor-not-allowed disabled:border-[var(--color-primary-disabled-border)] disabled:bg-[var(--color-primary-disabled-bg)] disabled:text-[var(--color-primary-disabled-text)]"
           :disabled="!hasSave"
           @click="router.push({ name: 'game', query: { mode: 'continue' } })"
         >
           <span>{{ $t('home.continue') }}</span>
-          <small v-if="hasSave" class="mt-1 block text-xs font-normal text-white/60">
+          <small v-if="hasSave" class="mt-1 block text-xs font-normal text-[var(--color-muted)]">
             {{ continueSummary }}
           </small>
         </button>
-        <p v-if="!hasSave" class="text-center text-xs text-white/45">
+        <p v-if="!hasSave" class="text-center text-xs text-[var(--color-muted)]">
           {{ $t('home.noSave') }}
         </p>
       </div>
@@ -114,7 +114,7 @@ onMounted(async () => {
   </main>
 
   <BaseModal v-if="modal === 'help'" :title="$t('help.title')" @close="modal = null">
-    <p class="leading-8 text-white/75">
+    <p class="leading-8 text-[var(--color-muted-dark)]">
       {{ $t('help.body') }}
     </p>
   </BaseModal>
@@ -124,32 +124,32 @@ onMounted(async () => {
   </BaseModal>
 
   <BaseModal v-if="modal === 'about'" :title="$t('about.title')" @close="modal = null">
-    <p class="leading-8 text-white/75">
+    <p class="leading-8 text-[var(--color-muted-dark)]">
       {{ $t('about.body') }}
     </p>
-    <p class="mt-4 text-sm text-white/45">v0.1.0</p>
+    <p class="mt-4 text-sm text-[var(--color-muted)]">v0.1.0</p>
   </BaseModal>
 
   <BaseModal v-if="modal === 'records'" :title="$t('records.title')" @close="modal = null">
-    <p v-if="!history.length" class="py-10 text-center text-white/50">
+    <p v-if="!history.length" class="py-10 text-center text-[var(--color-muted)]">
       {{ $t('records.empty') }}
     </p>
     <button
       v-for="record in history"
       :key="record.id"
-      class="mb-3 flex w-full items-center justify-between rounded-2xl bg-white/5 p-4 text-left hover:bg-white/10"
+      class="mb-3 flex w-full items-center justify-between rounded-2xl bg-[var(--color-primary-light)] p-4 text-left hover:bg-[var(--color-primary-disabled-border)]"
       @click="selectedReport = record"
     >
       <span>
         <strong>{{ $t(`title.${record.finalTitle}`) }}</strong>
         <small
-          class="mt-1 block text-white/50"
+          class="mt-1 block text-[var(--color-muted)]"
           >{{ new Date(record.startedAt).toLocaleString() }}</small
         >
       </span>
       <span class="text-right">
         <b class="block text-[var(--gold)]">{{ record.currency.toLocaleString() }}</b>
-        <small class="text-white/45">{{ formatDuration(record.elapsedMs) }}</small>
+        <small class="text-[var(--color-muted)]">{{ formatDuration(record.elapsedMs) }}</small>
       </span>
     </button>
   </BaseModal>

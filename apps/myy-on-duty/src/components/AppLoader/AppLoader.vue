@@ -39,26 +39,26 @@ async function loadResources(): Promise<void> {
       </h1>
       <template v-if="!failed">
         <div
-          class="mt-8 h-3 overflow-hidden rounded-full bg-white/10"
+          class="mt-8 h-3 overflow-hidden rounded-full bg-[var(--color-primary-disabled-bg)] ring-1 ring-[var(--color-primary-disabled-border)]"
           role="progressbar"
           :aria-valuenow="progress"
           aria-valuemin="0"
           aria-valuemax="100"
         >
           <div
-            class="h-full rounded-full bg-gradient-to-r from-[var(--gold)] to-[var(--pink)] transition-[width] duration-300"
+            class="h-full rounded-full bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-active)] transition-[width] duration-300"
             :style="{ width: `${progress}%` }"
           />
         </div>
-        <p class="mt-4 text-white/65">
+        <p class="mt-4 text-[var(--color-muted-dark)]">
           {{ $t('loading.progress', { progress }) }}
         </p>
       </template>
       <template v-else>
-        <h2 class="mt-8 text-xl font-bold text-[var(--gold)]">
+        <h2 class="mt-8 text-xl font-bold text-[var(--color-primary-active)]">
           {{ $t('loading.failed') }}
         </h2>
-        <p class="mt-3 text-white/65">
+        <p class="mt-3 text-[var(--color-muted-dark)]">
           {{ $t('loading.failedDetail') }}
         </p>
         <button class="primary-button mt-6 w-full" @click="loadResources">

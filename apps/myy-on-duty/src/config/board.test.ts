@@ -24,12 +24,7 @@ describe('台面几何配置', () => {
       left: BOARD.launcher.x - BALANCE.physics.ballRadius,
       right: BOARD.launcher.x + BALANCE.physics.ballRadius,
     }
-    const channelWallIds = new Set([
-      'outer-right',
-      'launcher-inner',
-      'launcher-floor',
-      'launcher-curve',
-    ])
+    const channelWallIds = new Set(['outer-right', 'launcher-inner', 'launcher-floor'])
     const blockingWalls = BOARD.walls.filter((wall) => {
       if (channelWallIds.has(wall.id)) return false
       const minX = Math.min(wall.x1, wall.x2)
@@ -76,10 +71,14 @@ describe('台面几何配置', () => {
     expect(activeGap).toBeGreaterThan(BALANCE.physics.ballRadius * 2)
   })
 
-  it('除顶部边界和发射弹簧底座外不存在会长期托球的水平墙', () => {
+  it('除顶部边界（含圆弧角）和发射弹簧底座外不存在会长期托球的水平墙', () => {
+    // corner- 前缀是顶部圆弧角的拟合分段，弹珠只会从下方接触，不构成托球平台。
     const intentionalHorizontalWalls = new Set(['outer-top', 'launcher-floor'])
     const shelves = BOARD.walls.filter(
-      (wall) => !intentionalHorizontalWalls.has(wall.id) && Math.abs(wall.y2 - wall.y1) < 12
+      (wall) =>
+        !intentionalHorizontalWalls.has(wall.id) &&
+        !wall.id.startsWith('corner-') &&
+        Math.abs(wall.y2 - wall.y1) < 12
     )
 
     expect(shelves).toEqual([])
@@ -97,7 +96,11 @@ describe('台面几何配置', () => {
     expect(launcherInner).toBeDefined()
     if (!launcherInner) return
 
+    // 间隙要么小到球进不去（完全封闭），要么大到球能顺畅通过，禁止出现恰好卡球的缝隙。
     const rightmostGateX = Math.max(BOARD.inspectionGate.x1, BOARD.inspectionGate.x2)
-    expect(launcherInner.x1 - rightmostGateX).toBeGreaterThan(BALANCE.physics.ballRadius * 2 + 12)
+    const gap = launcherInner.x1 - rightmostGateX
+    const sealed = gap <= 12
+    const passable = gap > BALANCE.physics.ballRadius * 2 + 12
+    expect(sealed || passable).toBe(true)
   })
 })

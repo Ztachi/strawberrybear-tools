@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
     :title="$t('pause.title')"
     @close="resume"
   >
-    <div class="mb-6 rounded-2xl bg-white/5 p-5">
+    <div class="mb-6 rounded-2xl bg-[var(--color-primary-light)] p-5">
       <p>{{ $t('game.inventory') }}：{{ game.inventoryCount }}</p>
       <p class="mt-2">{{ $t('pause.estimate') }}：{{ game.inventoryEstimate }}</p>
     </div>
@@ -244,7 +244,7 @@ onBeforeUnmount(() => {
   </BaseModal>
 
   <BaseModal v-if="tutorialOpen" :title="$t('tutorial.title')" @close="tutorialOpen = false">
-    <ol class="mb-6 list-decimal space-y-3 pl-6 text-white/75">
+    <ol class="mb-6 list-decimal space-y-3 pl-6 text-[var(--color-muted-dark)]">
       <li v-for="step in $tm('tutorial.steps')" :key="String(step)">
         {{ step }}
       </li>

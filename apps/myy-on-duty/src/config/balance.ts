@@ -74,13 +74,13 @@ const balanceSchema = z.object({
 
 /** 游戏唯一的数值平衡配置。策划调整手感与经济时只修改此对象。 */
 export const BALANCE = balanceSchema.parse({
-  version: '1.1.0',
+  version: '1.2.0',
   physics: {
     fixedStep: 1 / 120,
     gravity: 27,
     ballRadius: 18,
-    ballRestitution: 0.72,
-    wallRestitution: 0.5,
+    ballRestitution: 0.62,
+    wallRestitution: 0.42,
     friction: 0.18,
     maxSpeed: 62,
     stallSpeed: 0.45,
@@ -91,8 +91,8 @@ export const BALANCE = balanceSchema.parse({
     launcherMaxForce: 66,
     chargeDurationMs: 1400,
     flipperSpeed: 18,
-    flipperImpulse: 22,
-    bumperImpulse: 17,
+    flipperImpulse: 24,
+    bumperImpulse: 14,
     sprintMultiplier: 1.35,
     rejectMultiplier: 1.7,
     slingshotImpulse: 15,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NIKKI_COLORS } from '@strawberrybear/nikki-theme'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/BaseModal/BaseModal.vue'
@@ -86,34 +87,34 @@ function generateShare(): void {
   const context = canvas.getContext('2d')
   if (!context) return
   const gradient = context.createLinearGradient(0, 0, 1080, 1440)
-  gradient.addColorStop(0, '#2a1c39')
-  gradient.addColorStop(0.55, '#70476f')
-  gradient.addColorStop(1, '#d87899')
+  gradient.addColorStop(0, NIKKI_COLORS.primaryLight)
+  gradient.addColorStop(0.55, NIKKI_COLORS.primary)
+  gradient.addColorStop(1, NIKKI_COLORS.primaryHover)
   context.fillStyle = gradient
   context.fillRect(0, 0, 1080, 1440)
-  context.fillStyle = 'rgba(255,255,255,0.08)'
+  context.fillStyle = 'rgba(255,255,255,0.35)'
   context.beginPath()
   context.arc(170, 180, 120, 0, Math.PI * 2)
   context.arc(925, 1110, 190, 0, Math.PI * 2)
   context.fill()
-  context.fillStyle = '#fff8ed'
+  context.fillStyle = NIKKI_COLORS.mutedDark
   context.textAlign = 'center'
   context.font = '700 62px sans-serif'
   drawCentered(context, t('home.title'), 155)
   context.font = '900 88px sans-serif'
-  context.fillStyle = '#f3d58a'
+  context.fillStyle = NIKKI_COLORS.primaryActive
   drawCentered(context, t(`title.${titleKey.value}`), 350)
-  context.fillStyle = '#fff8ed'
+  context.fillStyle = NIKKI_COLORS.foreground
   context.font = '600 46px sans-serif'
   drawCentered(context, `${t('report.currency')}  ${props.session.currency.toLocaleString()}`, 500)
   drawCentered(context, `${t('report.duration')}  ${formatDuration(props.session.elapsedMs)}`, 585)
-  context.fillStyle = 'rgba(255,255,255,0.16)'
+  context.fillStyle = 'rgba(255,255,255,0.55)'
   context.fillRect(120, 680, 840, 2)
-  context.fillStyle = '#fff8ed'
+  context.fillStyle = NIKKI_COLORS.foreground
   context.font = '500 40px sans-serif'
   highlights.value.forEach((highlight, index) => drawCentered(context, highlight, 790 + index * 90))
   context.font = '700 38px sans-serif'
-  context.fillStyle = '#f3d58a'
+  context.fillStyle = NIKKI_COLORS.primaryActive
   drawCentered(context, t('report.shareCopy'), 1280)
   shareUrl.value = canvas.toDataURL('image/png')
 }
@@ -122,13 +123,13 @@ function generateShare(): void {
 <template>
   <BaseModal :title="$t('report.title')" @close="emit('close')">
     <header class="text-center">
-      <p class="mb-1 text-sm text-white/60">
+      <p class="mb-1 text-sm text-[var(--color-muted)]">
         {{ $t('report.performance') }}
       </p>
-      <h3 class="font-display text-3xl font-black text-[var(--gold)]">
+      <h3 class="font-display text-3xl font-black text-[var(--color-primary-active)]">
         {{ $t(`title.${titleKey}`) }}
       </h3>
-      <p v-if="highlights.length" class="mt-3 text-sm leading-6 text-white/60">
+      <p v-if="highlights.length" class="mt-3 text-sm leading-6 text-[var(--color-muted-dark)]">
         {{ highlights.join(' · ') }}
       </p>
     </header>
@@ -154,19 +155,19 @@ function generateShare(): void {
       </div>
     </dl>
 
-    <section class="mb-5 rounded-2xl bg-white/5 p-4">
+    <section class="mb-5 rounded-2xl bg-[var(--color-primary-light)] p-4">
       <h4 class="font-bold text-[var(--gold)]">
         {{ $t('report.incomeTitle') }}
       </h4>
       <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.inspectionIncome') }}
           </dt>
           <dd>{{ inspectionIncome.toLocaleString() }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.leftoverIncome') }}
           </dt>
           <dd>{{ leftoverIncome.toLocaleString() }}</dd>
@@ -181,12 +182,12 @@ function generateShare(): void {
       <details
         v-for="group in materialGroups"
         :key="group.source"
-        class="mb-2 rounded-2xl bg-white/5 p-4"
+        class="mb-2 rounded-2xl bg-[var(--color-primary-light)] p-4"
       >
         <summary class="cursor-pointer font-bold">
           {{ $t(`game.device.${group.source}`) }} · {{ group.count }}
         </summary>
-        <p v-if="!group.items.length" class="mt-3 text-sm text-white/45">
+        <p v-if="!group.items.length" class="mt-3 text-sm text-[var(--color-muted)]">
           {{ $t('report.noMaterial') }}
         </p>
         <div v-for="item in group.items" :key="item.id" class="mt-3 flex justify-between text-sm">
@@ -196,61 +197,61 @@ function generateShare(): void {
       </details>
     </section>
 
-    <section class="mb-5 rounded-2xl bg-white/5 p-4">
+    <section class="mb-5 rounded-2xl bg-[var(--color-primary-light)] p-4">
       <h4 class="font-bold text-[var(--gold)]">
         {{ $t('report.gameplayTitle') }}
       </h4>
       <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.combo') }}
           </dt>
           <dd>×{{ session.maxCombo }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.inspections') }}
           </dt>
           <dd>{{ session.sales.length }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.bestMultiplier') }}
           </dt>
           <dd>×{{ bestMultiplier.toFixed(1) }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.targets') }}
           </dt>
           <dd>{{ session.stats.targetRounds ?? 0 }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.excuses') }}
           </dt>
           <dd>{{ session.stats.excuses ?? 0 }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.events') }}
           </dt>
           <dd>{{ eventCount }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.loops') }}
           </dt>
           <dd>{{ session.stats.loop ?? 0 }}</dd>
         </div>
         <div>
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.rescues') }}
           </dt>
           <dd>{{ session.rescueCount }}</dd>
         </div>
         <div class="col-span-2">
-          <dt class="text-white/55">
+          <dt class="text-[var(--color-muted)]">
             {{ $t('report.endReason') }}
           </dt>
           <dd>{{ $t(`game.end.${session.endReason ?? 'drain'}`) }}</dd>
@@ -258,11 +259,11 @@ function generateShare(): void {
       </dl>
     </section>
 
-    <section v-if="highlights.length" class="mb-5 rounded-2xl bg-white/5 p-4">
+    <section v-if="highlights.length" class="mb-5 rounded-2xl bg-[var(--color-primary-light)] p-4">
       <h4 class="font-bold text-[var(--gold)]">
         {{ $t('report.highlightsTitle') }}
       </h4>
-      <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
+      <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-[var(--color-muted-dark)]">
         <li v-for="highlight in highlights" :key="highlight">
           {{ highlight }}
         </li>

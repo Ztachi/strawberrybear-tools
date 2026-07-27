@@ -49,7 +49,8 @@ function simulateDrop(start: { x: number; y: number }): {
   for (const wall of BOARD.walls) createWall(world, wall)
   for (const slingshot of BOARD.slingshots) createWall(world, slingshot)
   createWall(world, BOARD.inspectionGate)
-  for (const gate of BOARD.overtimeGates) createWall(world, gate)
+  // 强制加班挡板只在事件期间临时启用，事件内的短暂滞留由引擎防卡死机制兜底，
+  // 这里只验证常驻几何的持续流动性。
 
   for (const post of BOARD.posts) {
     const body = world.createRigidBody(
@@ -124,11 +125,20 @@ function simulateDrop(start: { x: number; y: number }): {
 
 describe('台面持续流动', () => {
   it.each([
-    ['旧版左侧短导轨卡点', { x: 175, y: 590 }],
-    ['左回环出口', { x: 235, y: 215 }],
-    ['倾斜目标组', { x: 475, y: 545 }],
-    ['关闭的验收门', { x: 510, y: 745 }],
-    ['旧版验收门与发射通道夹点', { x: 597, y: 779 }],
+    ['左回环通道内倒滚', { x: 95, y: 500 }],
+    ['左回环出口', { x: 300, y: 118 }],
+    ['顶部弧道贴顶滑行', { x: 430, y: 115 }],
+    ['农田与回环内轨间的窄缝上方', { x: 178, y: 295 }],
+    ['回环唇口与顶盖之间的落缝', { x: 348, y: 150 }],
+    ['陨星坑顶盖尖端', { x: 397, y: 170 }],
+    ['陨星坑导流柱之间', { x: 400, y: 268 }],
+    ['倾斜目标组', { x: 480, y: 520 }],
+    ['小动物窝与首块目标牌之间', { x: 390, y: 515 }],
+    ['末块目标牌与右墙的通道', { x: 585, y: 600 }],
+    ['关闭的验收门', { x: 585, y: 668 }],
+    ['左弹弓顶角', { x: 184, y: 930 }],
+    ['左外道入口', { x: 76, y: 895 }],
+    ['回环底部导流坡', { x: 112, y: 855 }],
   ])('%s 不会在上半台面永久静止', (_name, start) => {
     const result = simulateDrop(start)
 

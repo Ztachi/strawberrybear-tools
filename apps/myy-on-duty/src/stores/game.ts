@@ -75,6 +75,8 @@ export const useGameStore = defineStore('game', () => {
   let lastTickAt = 0
   let ballInLaborZone = false
   let finishInProgress = false
+  /** 最近一次经过回环低位传感器的时间，用于判定完整通过而非倒滚。 */
+  let loopLowEnteredAt = 0
 
   const inventoryCount = computed(
     () => session.value?.inventory.reduce((sum, item) => sum + item.count, 0) ?? 0
@@ -166,6 +168,7 @@ export const useGameStore = defineStore('game', () => {
       if (id === 'meteor') handleMeteor()
       else if (id === 'event') triggerEvent()
       else if (id === 'inspection') void inspectInventory()
+      else if (id === 'loopLow') loopLowEnteredAt = performance.now()
       else if (id === 'loop') handleLoop()
       else if (id === 'drain' || id === 'leftOutlane' || id === 'rightOutlane') {
         void handleExit(id)
@@ -377,19 +380,17 @@ export const useGameStore = defineStore('game', () => {
     engine.value?.setPaused(true)
   }
 
-  /** @description 完成陨星坑捕获并向安全方向弹回 @return {void} */
+  /** @description 完成陨星坑捕获：从坑口带光效向下方弹出弹珠 @return {void} */
   function finishMeteorCapture(): void {
     const current = session.value
     if (!current || current.phase !== 'playing') return
-    engine.value?.restore({
-      x: 300,
-      y: 320,
-      vx: -4,
-      vy: -BALANCE.physics.meteorImpulse * 0.4,
-      launched: true,
-      mainEntered: true,
-    })
     engine.value?.setPaused(false)
+    engine.value?.ejectBall({
+      x: 380,
+      y: 285,
+      vx: -3,
+      vy: BALANCE.physics.meteorImpulse * 0.5,
+    })
   }
 
   /** @description 借口连发：击倒指定借口牌 @param {number} index 借口牌下标 @return {void} */
@@ -465,15 +466,14 @@ export const useGameStore = defineStore('game', () => {
     current.inspectionCaptureMs = 0
     current.inspectionCooldownMs = BALANCE.rules.inspectionCooldownMs
     current.phase = 'playing'
-    engine.value?.restore({
-      x: 360,
-      y: 300,
-      vx: 2,
-      vy: -BALANCE.physics.inspectionImpulse * 0.4,
-      launched: true,
-      mainEntered: true,
-    })
     engine.value?.setPaused(false)
+    // 从验收口袋上方带光效向左上抛出，而不是跨台面瞬移。
+    engine.value?.ejectBall({
+      x: 540,
+      y: 665,
+      vx: -6,
+      vy: -BALANCE.physics.inspectionImpulse * 0.55,
+    })
     updateInspectionGate()
   }
 
@@ -531,10 +531,13 @@ export const useGameStore = defineStore('game', () => {
     engine.value?.setOvertimeGate(true)
   }
 
-  /** @description 记录完整通过左侧加班回环 @return {void} */
+  /** @description 记录完整通过左侧加班回环；倒滚或从顶部落入不计数 @return {void} */
   function handleLoop(): void {
     const current = session.value
     if (!current || current.phase !== 'playing') return
+    // 只有先经过低位传感器再到达顶部出口才算完整通过。
+    if (!loopLowEnteredAt || performance.now() - loopLowEnteredAt > 4000) return
+    loopLowEnteredAt = 0
     current.stats.loop = (current.stats.loop ?? 0) + 1
     showFeedback('game.feedback.loop', { count: current.stats.loop })
   }
@@ -549,13 +552,12 @@ export const useGameStore = defineStore('game', () => {
       current.stats.rescueAtMs = current.elapsedMs
       showFeedback('game.rescue.message')
       playSfx('rescue')
-      engine.value?.restore({
-        x: 360,
-        y: 480,
-        vx: reason === 'leftOutlane' ? 4 : -4,
+      // 从坠落一侧的下半场带光效上抛回主场，出球点避开事件牌感应区与小动物窝碰撞体。
+      engine.value?.ejectBall({
+        x: reason === 'leftOutlane' ? 240 : 430,
+        y: 800,
+        vx: reason === 'leftOutlane' ? 2 : -2,
         vy: -BALANCE.physics.rescueImpulse * 0.6,
-        launched: true,
-        mainEntered: true,
       })
       return
     }

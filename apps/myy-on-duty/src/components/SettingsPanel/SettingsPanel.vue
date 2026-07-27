@@ -80,16 +80,18 @@ function captureKey(event: KeyboardEvent, action: keyof KeyBindings): void {
     />
   </label>
 
-  <label class="flex items-center justify-between rounded-xl bg-white/5 p-4">
+  <label class="flex items-center justify-between rounded-xl bg-[var(--color-primary-light)] p-4">
     <span>{{ $t('settings.muted') }}</span>
     <input v-model="settingsStore.settings.muted" type="checkbox" />
   </label>
 
-  <label class="mt-4 flex items-center justify-between rounded-xl bg-white/5 p-4">
+  <label
+    class="mt-4 flex items-center justify-between rounded-xl bg-[var(--color-primary-light)] p-4"
+  >
     <span>{{ $t('settings.language') }}</span>
     <select
       v-model="settingsStore.settings.locale"
-      class="rounded-lg bg-[#1d1328] px-3 py-2"
+      class="rounded-lg border border-[var(--color-border)] bg-white px-3 py-2"
       :aria-label="$t('settings.language')"
     >
       <option value="zh-CN">{{ $t('settings.locale.zhCN') }}</option>
@@ -97,26 +99,28 @@ function captureKey(event: KeyboardEvent, action: keyof KeyBindings): void {
     </select>
   </label>
 
-  <section class="mt-5 rounded-xl bg-white/5 p-4">
+  <section class="mt-5 rounded-xl bg-[var(--color-primary-light)] p-4">
     <h3 class="font-bold">
       {{ $t('settings.keys') }}
     </h3>
-    <p class="mt-1 text-sm text-white/55">
+    <p class="mt-1 text-sm text-[var(--color-muted)]">
       {{ canEditKeys ? $t('settings.key.editHint') : $t('settings.key.mobileHint') }}
     </p>
     <div class="mt-4 grid gap-2">
       <button
         v-for="row in keyRows"
         :key="row.id"
-        class="flex min-h-12 items-center justify-between rounded-xl border border-white/10 px-4 disabled:cursor-default"
-        :class="editingKey === row.id ? 'border-[var(--gold)] bg-white/10' : 'bg-black/10'"
+        class="flex min-h-12 items-center justify-between rounded-xl border border-[var(--color-primary-disabled-border)] px-4 disabled:cursor-default"
+        :class="editingKey === row.id ? 'border-[var(--color-primary-active)] bg-[var(--color-primary-light)]' : 'bg-white'"
         :disabled="!canEditKeys"
         :aria-label="$t('settings.key.editAria', { action: row.label })"
         @click="beginKeyEdit(row.id)"
         @keydown="captureKey($event, row.id)"
       >
         <span>{{ row.label }}</span>
-        <kbd class="rounded-lg bg-black/25 px-3 py-1.5 font-mono text-[var(--gold)]">
+        <kbd
+          class="rounded-lg bg-[var(--color-primary-light)] px-3 py-1.5 font-mono text-[var(--color-primary-active)]"
+        >
           {{ editingKey === row.id ? $t('settings.key.waiting') : row.value }}
         </kbd>
       </button>

@@ -1,8 +1,8 @@
 import RAPIER from '@dimforge/rapier2d-compat'
-import { Application, Assets, Container, Graphics, Sprite, Text, type Texture } from 'pixi.js'
-import boardBackgroundUrl from '@/assets/board-playfield-v2.png'
+import { Application, Container, Graphics, Text } from 'pixi.js'
 import { BALANCE } from '@/config/balance'
 import { BOARD, hasEnteredMainPlayfield, type BoardSensorId } from '@/config/board'
+import { PALETTE, PALETTE_TEXT } from '@/config/palette'
 import { playSfx } from '@/game/engine/audio'
 import { normalizeAngle, stepAngleTowards } from '@/game/engine/physicsMath'
 import type { DeviceId, EventId, KeyBindings, PhysicsSnapshot } from '@/game/types'
@@ -92,6 +92,8 @@ export class GameEngine {
   private excuseParts: { body: RAPIER.RigidBody; view: Graphics }[] = []
   /** Pixi 文案不是 Vue 节点，需要单独记录才能在运行中切换语言。 */
   private localizedTexts = new Map<Text, string>()
+  /** 捕获/弹出等一次性光效，在渲染循环中按存活时间推进并自动销毁。 */
+  private bursts: { view: Graphics; bornAt: number }[] = []
 
   constructor(
     private readonly keyBindings: KeyBindings = {
@@ -109,13 +111,12 @@ export class GameEngine {
    */
   async init(host: HTMLElement): Promise<void> {
     await RAPIER.init()
-    const backgroundTexture = await Assets.load<Texture>(boardBackgroundUrl)
-    await this.app.init({ resizeTo: host, antialias: true, background: '#100b1d' })
+    await this.app.init({ resizeTo: host, antialias: true, background: '#fbe0e8' })
     host.append(this.app.canvas)
     this.app.stage.addChild(this.root)
     this.world = new RAPIER.World({ x: 0, y: BALANCE.physics.gravity })
     this.eventQueue = new RAPIER.EventQueue(true)
-    this.createBoard(backgroundTexture)
+    this.createBoard()
     this.syncBallInterpolation()
     this.bindInput(host)
     this.resize(host)
@@ -304,13 +305,13 @@ export class GameEngine {
       view.alpha = 1
       view.tint = 0xffffff
       if (eventId === 'wanted' && device !== 'meteor') {
-        view.tint = device === target ? 0xffe69a : 0xff7f91
-        view.alpha = device === target ? 1 : 0.68
+        view.tint = device === target ? 0xffe066 : 0xff96a6
+        view.alpha = device === target ? 1 : 0.6
       } else if (eventId === 'inspection' && device !== 'meteor') {
-        view.tint = progress?.[device] ? 0x83d6a5 : 0xc8b5ff
-        view.alpha = progress?.[device] ? 0.72 : 1
+        view.tint = progress?.[device] ? 0x9be3b4 : 0xd6c2f5
+        view.alpha = progress?.[device] ? 0.7 : 1
       } else if ((eventId === 'sprint' || eventId === 'rareHarvest') && device !== 'meteor') {
-        view.tint = 0xffe69a
+        view.tint = 0xffe066
       } else if (eventId === 'meteorHarvest' && device === 'meteor') {
         view.tint = 0xffd45f
       }
@@ -320,8 +321,8 @@ export class GameEngine {
   /** @description 设置事件牌是否亮起可触发 @param {boolean} available 是否可触发 @return {void} */
   setEventCardAvailable(available: boolean): void {
     if (!this.eventCardView) return
-    this.eventCardView.alpha = available ? 1 : 0.28
-    this.eventCardView.tint = available ? 0xffffff : 0x8b8196
+    this.eventCardView.alpha = available ? 1 : 0.35
+    this.eventCardView.tint = available ? 0xffffff : 0xd8c3c8
   }
 
   /** @description 把调试面板修改的重力同步到 Rapier 世界 @return {void} */
@@ -362,10 +363,13 @@ export class GameEngine {
         body
       )
       this.colliderKinds.set(collider.handle, { kind: 'excuse', id: String(index) })
-      const view = new Graphics().roundRect(-34, -12, 68, 24, 6).fill(0xd96d6d)
+      const view = new Graphics()
+        .roundRect(-34, -12, 68, 24, 8)
+        .fill(PALETTE.danger)
+        .stroke({ width: 3, color: PALETTE.white })
       const text = new Text({
         text: this.translate(`game.excuse.${index}`),
-        style: { fill: '#ffffff', fontSize: 13 },
+        style: { fill: PALETTE_TEXT.white, fontSize: 13, fontWeight: '700' },
       })
       this.localize(text, `game.excuse.${index}`)
       text.anchor.set(0.5)
@@ -405,6 +409,33 @@ export class GameEngine {
   }
 
   /**
+   * @description 在指定位置播放一圈扩散光效，用于捕获、弹出和救球反馈
+   * @param {number} x 设计坐标 X
+   * @param {number} y 设计坐标 Y
+   * @return {void}
+   */
+  playBurst(x: number, y: number): void {
+    const view = new Graphics()
+      .circle(0, 0, 26)
+      .stroke({ width: 6, color: PALETTE.gold })
+      .circle(0, 0, 14)
+      .stroke({ width: 4, color: PALETTE.primaryHover })
+    view.position.set(x, y)
+    this.root.addChild(view)
+    this.bursts.push({ view, bornAt: performance.now() })
+  }
+
+  /**
+   * @description 从指定装置口弹出弹珠：先落位再赋予速度并伴随光效，替代跨台面瞬移
+   * @param {{x:number,y:number,vx:number,vy:number}} state 弹出位置与初速度
+   * @return {void}
+   */
+  ejectBall(state: { x: number; y: number; vx: number; vy: number }): void {
+    this.playBurst(state.x, state.y)
+    this.restore({ ...state, launched: true, mainEntered: true })
+  }
+
+  /**
    * @description 把弹珠放回发射弹簧，等待再次蓄力
    * @return {void}
    */
@@ -440,21 +471,22 @@ export class GameEngine {
 
   /**
    * @description 创建静态台面、机关、传感器和弹珠
-   * @param {Texture} backgroundTexture 台面底板纹理
    * @return {void}
    */
-  private createBoard(backgroundTexture: Texture): void {
-    this.createBackdrop(backgroundTexture)
+  private createBoard(): void {
+    this.createBackdrop()
     this.drawPlayfieldZones()
     for (const wall of BOARD.walls) {
-      const isOuterRail = wall.id.startsWith('outer') || wall.id.startsWith('launcher')
-      const isLoopRail = wall.id.startsWith('loop')
+      const isOuterRail =
+        wall.id.startsWith('outer') ||
+        wall.id.startsWith('launcher') ||
+        wall.id.startsWith('corner')
       this.createWall(
         wall.x1,
         wall.y1,
         wall.x2,
         wall.y2,
-        isLoopRail ? 0x89cdb9 : isOuterRail ? 0xd9b66d : 0xd9c487
+        isOuterRail ? PALETTE.primaryActive : PALETTE.primaryHover
       )
     }
     for (const post of BOARD.posts) {
@@ -562,20 +594,19 @@ export class GameEngine {
       )
       this.colliderKinds.set(collider.handle, { kind: 'flipper', id: side })
       const view = new Graphics()
-      view.roundRect(0, -14, config.length, 28, 14).fill(0xf28baa).stroke({
-        width: 5,
-        color: 0xf5d38b,
+      view.roundRect(0, -14, config.length, 28, 14).fill(PALETTE.white).stroke({
+        width: 4,
+        color: PALETTE.primaryActive,
       })
       view
-        .moveTo(22, -5)
-        .lineTo(config.length - 18, -5)
+        .moveTo(20, 0)
+        .lineTo(config.length - 16, 0)
         .stroke({
-          width: 3,
-          color: 0xffd7e3,
-          alpha: 0.7,
+          width: 6,
+          color: PALETTE.primary,
           cap: 'round',
         })
-      view.circle(0, 0, 17).fill(0x5d315f).stroke({ width: 5, color: 0xf5d38b })
+      view.circle(0, 0, 17).fill(PALETTE.primaryHover).stroke({ width: 5, color: PALETTE.white })
       view.position.set(config.x, config.y)
       view.rotation = config.rest
       this.root.addChild(view)
@@ -600,7 +631,7 @@ export class GameEngine {
     y1: number,
     x2: number,
     y2: number,
-    color = 0xc7a8df,
+    color = PALETTE.primary,
     activeEvents = false
   ): { collider: RAPIER.Collider; view: Graphics } {
     const dx = x2 - x1
@@ -618,17 +649,18 @@ export class GameEngine {
     if (activeEvents) descriptor.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS)
     const collider = this.world.createCollider(descriptor, body)
     const wall = new Graphics()
+    // 柔和的同色系描边：底层浅晕 + 主体轨道 + 顶部高光，保持粉白主题的干净观感。
     wall.moveTo(x1, y1).lineTo(x2, y2).stroke({
       width: 13,
-      color: 0x090914,
-      alpha: 0.9,
+      color: PALETTE.primaryActive,
+      alpha: 0.16,
       cap: 'round',
     })
-    wall.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: 7, color, cap: 'round' })
+    wall.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: 8, color, cap: 'round' })
     wall.moveTo(x1, y1).lineTo(x2, y2).stroke({
-      width: 1.5,
-      color: 0xfff1c7,
-      alpha: 0.55,
+      width: 2.5,
+      color: PALETTE.white,
+      alpha: 0.65,
       cap: 'round',
     })
     this.root.addChild(wall)
@@ -638,12 +670,20 @@ export class GameEngine {
   /** @description 创建左右下班弹弓，并为碰撞附加主动冲量 @return {void} */
   private createSlingshots(): void {
     for (const slingshot of BOARD.slingshots) {
+      // 弹弓三角形整体填充，主动弹面用更深的粉色强调可交互性。
+      const back = BOARD.walls.find((wall) => wall.id === `${slingshot.id}-sling-back`)
+      if (back) {
+        const fill = new Graphics()
+          .poly([slingshot.x1, slingshot.y1, slingshot.x2, slingshot.y2, back.x2, back.y2])
+          .fill(PALETTE.primaryLight)
+        this.root.addChild(fill)
+      }
       const part = this.createWall(
         slingshot.x1,
         slingshot.y1,
         slingshot.x2,
         slingshot.y2,
-        0xef8da8,
+        PALETTE.primaryActive,
         true
       )
       this.colliderKinds.set(part.collider.handle, { kind: 'slingshot', id: slingshot.id })
@@ -658,13 +698,13 @@ export class GameEngine {
       launcher.y1,
       launcher.x2,
       launcher.y2,
-      0xf3d58a
+      PALETTE.gold
     )
     this.launcherGate.collider.setEnabled(false)
     this.launcherGate.view.visible = false
 
     this.overtimeGates = BOARD.overtimeGates.map((gate) => {
-      const part = this.createWall(gate.x1, gate.y1, gate.x2, gate.y2, 0xe487a5)
+      const part = this.createWall(gate.x1, gate.y1, gate.x2, gate.y2, PALETTE.danger)
       part.collider.setEnabled(false)
       part.view.visible = false
       return part
@@ -675,7 +715,7 @@ export class GameEngine {
       inspection.y1,
       inspection.x2,
       inspection.y2,
-      0xf3d58a
+      PALETTE.gold
     )
   }
 
@@ -913,6 +953,20 @@ export class GameEngine {
     } else {
       this.launcherSpringView.scale.y = 1
     }
+    // 推进一次性光效：0.4 秒内扩散并淡出，结束后销毁视图。
+    if (this.bursts.length) {
+      const now = performance.now()
+      this.bursts = this.bursts.filter((burst) => {
+        const progress = (now - burst.bornAt) / 400
+        if (progress >= 1) {
+          burst.view.destroy()
+          return false
+        }
+        burst.view.scale.set(0.5 + progress * 1.8)
+        burst.view.alpha = 1 - progress
+        return true
+      })
+    }
     const position = this.ball.translation()
     const velocity = this.ball.linvel()
     this.emit('physics', {
@@ -934,48 +988,69 @@ export class GameEngine {
   }
 
   /**
-   * @description 创建与物理坐标一致的台面底板
-   * @param {Texture} texture 台面底板纹理
+   * @description 绘制奶油底板、粉色外框和低对比圆点纹理
    * @return {void}
    */
-  private createBackdrop(texture: Texture): void {
-    const backdrop = new Sprite(texture)
-    backdrop.width = BOARD.width
-    backdrop.height = BOARD.height
+  private createBackdrop(): void {
+    const backdrop = new Graphics()
+    backdrop.rect(0, 0, BOARD.width, BOARD.height).fill(PALETTE.boardShade)
+    backdrop.roundRect(26, 26, BOARD.width - 52, BOARD.height - 52, 44).fill(PALETTE.boardBase)
+    backdrop
+      .roundRect(26, 26, BOARD.width - 52, BOARD.height - 52, 44)
+      .stroke({ width: 4, color: PALETTE.border })
+    // 低对比波点让大面积底板不显得空旷，同时不会与任何碰撞体混淆。
+    for (let x = 90; x <= BOARD.width - 90; x += 84) {
+      for (let y = 90; y <= BOARD.height - 90; y += 84) {
+        backdrop
+          .circle(x + ((y / 84) % 2) * 42, y, 5)
+          .fill({ color: PALETTE.boardLane, alpha: 0.9 })
+      }
+    }
     this.root.addChild(backdrop)
-
-    const glass = new Graphics()
-      .roundRect(24, 24, BOARD.width - 48, BOARD.height - 48, 38)
-      .fill({ color: 0x050817, alpha: 0.06 })
-    this.root.addChild(glass)
   }
 
-  /** @description 绘制连续通道色带，让装饰与真实碰撞边界一眼可区分 @return {void} */
+  /** @description 绘制通道色带与引导箭头，让可通行区域一眼可读 @return {void} */
   private drawPlayfieldZones(): void {
     const zones = new Graphics()
-    // 左侧回环只使用外墙和一条内轨，整块青绿色带明确表达可通行区域。
+    // 发射通道底色（顶端止于右上圆弧角下沿）。
+    zones.roundRect(628, 248, 66, 924, 24).fill({ color: PALETTE.boardLane, alpha: 0.9 })
+    // 左侧加班回环色带沿真实通道中心线绘制（外墙与内轨之间约 90px 宽）。
     zones
-      .poly([50, 120, 50, 850, 145, 850, 145, 600, 155, 380, 185, 260, 285, 185])
-      .fill({ color: 0x2c766c, alpha: 0.3 })
-    // 发射通道与主场使用不同材质，玩家无需猜测右侧长条的用途。
-    zones.roundRect(620, 165, 80, 1015, 28).fill({ color: 0x6d3159, alpha: 0.34 })
-    // 外侧下班道使用暖红色，和中间可救球区域保持清晰分离。
-    zones.poly([50, 850, 100, 900, 280, 1240, 50, 1160]).fill({ color: 0x76364d, alpha: 0.32 })
-    zones.poly([620, 850, 570, 900, 390, 1240, 620, 1160]).fill({ color: 0x76364d, alpha: 0.32 })
-    // 弹弓下方的色块形成明确的左右对称下半台面，不再依赖零散线条解释结构。
-    zones.poly([145, 880, 240, 980, 205, 1035, 155, 1005]).fill({ color: 0x5c3c70, alpha: 0.38 })
-    zones.poly([525, 880, 430, 980, 465, 1035, 515, 1005]).fill({ color: 0x5c3c70, alpha: 0.38 })
-    // 目标组只使用低对比底色分区，不绘制会被误解为碰撞墙的边框。
-    zones.roundRect(410, 535, 190, 155, 28).fill({ color: 0x5d3a62, alpha: 0.2 })
+      .moveTo(95, 868)
+      .lineTo(95, 330)
+      .quadraticCurveTo(100, 220, 160, 160)
+      .quadraticCurveTo(230, 110, 320, 122)
+      .stroke({ width: 64, color: PALETTE.boardLane, alpha: 0.9, cap: 'round', join: 'round' })
+    // 左右外侧下班道用略深一档的粉色提示风险。
+    zones
+      .moveTo(80, 912)
+      .lineTo(84, 1002)
+      .lineTo(150, 1104)
+      .stroke({ width: 42, color: PALETTE.boardShade, cap: 'round', join: 'round' })
+    zones
+      .moveTo(588, 916)
+      .lineTo(584, 1002)
+      .lineTo(520, 1104)
+      .stroke({ width: 42, color: PALETTE.boardShade, cap: 'round', join: 'round' })
+    // 拍板下方的落球区。
+    zones.poly([250, 1160, 420, 1160, 388, 1236, 282, 1236]).fill({
+      color: PALETTE.boardShade,
+      alpha: 0.85,
+    })
     this.root.addChild(zones)
 
-    const addArrow = (x: number, y: number, color: number) => {
-      const arrow = new Graphics().poly([-10, 9, 0, -9, 10, 9]).fill({ color, alpha: 0.46 })
+    const addArrow = (x: number, y: number, rotation = 0) => {
+      const arrow = new Graphics().poly([-9, 8, 0, -9, 9, 8]).fill({
+        color: PALETTE.primaryHover,
+        alpha: 0.5,
+      })
       arrow.position.set(x, y)
+      arrow.rotation = rotation
       this.root.addChild(arrow)
     }
-    for (const y of [710, 510, 320]) addArrow(92, y, 0xa8ead7)
-    for (const y of [930, 710, 490]) addArrow(660, y, 0xf2c4da)
+    // 回环向上、发射通道向上的引导箭头。
+    for (const y of [760, 600, 440]) addArrow(100, y)
+    for (const y of [920, 700, 480]) addArrow(660, y)
   }
 
   /**
@@ -987,12 +1062,12 @@ export class GameEngine {
    */
   private drawPost(x: number, y: number, radius: number): void {
     const view = new Graphics()
-    view.circle(x + 2, y + 4, radius + 4).fill({ color: 0x08050f, alpha: 0.65 })
-    view.circle(x, y, radius + 4).fill(0xf0cf84)
-    view.circle(x, y, radius).fill(0x9d79cf)
-    view.circle(x - radius * 0.28, y - radius * 0.32, radius * 0.28).fill({
-      color: 0xffffff,
-      alpha: 0.8,
+    view.circle(x + 1, y + 3, radius + 3).fill({ color: PALETTE.primaryActive, alpha: 0.2 })
+    view.circle(x, y, radius + 3).fill(PALETTE.white)
+    view.circle(x, y, radius).fill(PALETTE.meteor)
+    view.circle(x - radius * 0.28, y - radius * 0.32, radius * 0.3).fill({
+      color: PALETTE.white,
+      alpha: 0.7,
     })
     this.root.addChild(view)
   }
@@ -1014,33 +1089,33 @@ export class GameEngine {
     labelKey: string
   ): Container {
     const palettes: Record<string, { outer: number; inner: number }> = {
-      farm: { outer: 0x8bd0a5, inner: 0x2f765e },
-      pond: { outer: 0x8bcce2, inner: 0x356f91 },
-      nest: { outer: 0xf0aa9d, inner: 0x995066 },
+      farm: PALETTE.farm,
+      pond: PALETTE.pond,
+      nest: PALETTE.nest,
     }
     const palette = palettes[id] ?? palettes.farm
     const view = new Graphics()
-    view.circle(x + 4, y + 8, radius + 13).fill({ color: 0x090511, alpha: 0.75 })
+    view.circle(x + 2, y + 5, radius + 12).fill({ color: PALETTE.primaryActive, alpha: 0.14 })
     for (let index = 0; index < 10; index += 1) {
       const angle = (Math.PI * 2 * index) / 10
       view
         .circle(x + Math.cos(angle) * (radius + 9), y + Math.sin(angle) * (radius + 9), 7)
-        .fill(index % 2 ? 0xf0cc80 : palette.outer)
+        .fill(index % 2 ? PALETTE.white : palette.outer)
     }
     view
       .circle(x, y, radius + 5)
-      .fill(0x29183c)
-      .stroke({ width: 5, color: 0xf4d58f })
+      .fill(PALETTE.white)
+      .stroke({ width: 4, color: palette.outer })
     view
       .circle(x, y, radius - 4)
-      .fill(palette.inner)
+      .fill(palette.outer)
       .stroke({
         width: 5,
-        color: palette.outer,
+        color: PALETTE.white,
       })
-    view.circle(x - radius * 0.25, y - radius * 0.28, radius * 0.18).fill({
-      color: 0xffffff,
-      alpha: 0.22,
+    view.circle(x - radius * 0.25, y - radius * 0.28, radius * 0.2).fill({
+      color: PALETTE.white,
+      alpha: 0.55,
     })
     const container = new Container()
     container.addChild(view)
@@ -1048,10 +1123,10 @@ export class GameEngine {
     const text = new Text({
       text: this.translate(labelKey),
       style: {
-        fill: '#fff7e8',
+        fill: PALETTE_TEXT.white,
         fontSize: 21,
-        fontWeight: '700',
-        dropShadow: { color: '#160d25', blur: 3, distance: 2 },
+        fontWeight: '800',
+        stroke: { color: palette.inner, width: 5, join: 'round' },
       },
     })
     this.localize(text, labelKey)
@@ -1085,20 +1160,20 @@ export class GameEngine {
     container.rotation = angle
     const plate = new Graphics()
       .roundRect(-width / 2, -height / 2, width, height, 12)
-      .fill(0xe9a95e)
-      .stroke({ width: 4, color: 0xffe9aa })
+      .fill(PALETTE.warning)
+      .stroke({ width: 4, color: PALETTE.white })
     plate
       .moveTo(-width / 2 + 8, -height / 2 + 10)
       .lineTo(width / 2 - 8, -height / 2 + 10)
       .stroke({
         width: 2,
-        color: 0xffffff,
-        alpha: 0.55,
+        color: PALETTE.white,
+        alpha: 0.7,
       })
     const text = new Text({
       text: this.translate(labelKey),
       style: {
-        fill: '#3c2240',
+        fill: '#7a4c12',
         fontSize: 13,
         fontWeight: '800',
         wordWrap: true,
@@ -1123,85 +1198,86 @@ export class GameEngine {
       const portal = new Graphics()
       portal
         .ellipse(sensor.x, sensor.y, sensor.width / 2 + 10, sensor.height / 2 + 10)
-        .fill({
-          color: 0x120a24,
-          alpha: 0.9,
-        })
-        .stroke({ width: 5, color: 0xf0c875 })
+        .fill(0xf1eafb)
+        .stroke({ width: 5, color: PALETTE.meteor })
       portal.ellipse(sensor.x, sensor.y, sensor.width / 2 - 4, sensor.height / 2 - 4).stroke({
-        width: 5,
-        color: 0xb98bea,
+        width: 3,
+        color: PALETTE.meteorDeep,
+        alpha: 0.7,
       })
       portal
-        .moveTo(sensor.x, sensor.y - 16)
+        .moveTo(sensor.x, sensor.y - 15)
         .lineTo(sensor.x + 5, sensor.y - 3)
-        .lineTo(sensor.x + 18, sensor.y)
+        .lineTo(sensor.x + 17, sensor.y)
         .lineTo(sensor.x + 5, sensor.y + 4)
-        .lineTo(sensor.x, sensor.y + 18)
+        .lineTo(sensor.x, sensor.y + 17)
         .lineTo(sensor.x - 5, sensor.y + 4)
-        .lineTo(sensor.x - 18, sensor.y)
+        .lineTo(sensor.x - 17, sensor.y)
         .lineTo(sensor.x - 5, sensor.y - 3)
         .closePath()
-        .fill(0xffe59a)
+        .fill(PALETTE.gold)
       this.root.addChild(portal)
       this.deviceViews.set('meteor', portal)
-      this.addLabel(sensor.labelKey, sensor.x, sensor.y + sensor.height / 2 + 20, 13)
+      this.addLabel(sensor.labelKey, sensor.x, sensor.y + sensor.height / 2 + 22, 13)
       return
     }
     if (sensor.id === 'inspection') {
       const lane = new Graphics()
         .circle(sensor.x, sensor.y, sensor.width / 2 + 5)
-        .fill({ color: 0x241633, alpha: 0.92 })
-        .stroke({ width: 6, color: 0xd8b66e })
+        .fill(PALETTE.boardLane)
+        .stroke({ width: 5, color: PALETTE.gold })
       lane.circle(sensor.x, sensor.y, sensor.width / 2 - 8).stroke({
         width: 3,
-        color: 0xb994d2,
-        alpha: 0.8,
+        color: PALETTE.primaryHover,
+        alpha: 0.75,
       })
       this.root.addChild(lane)
       this.addLabel(sensor.labelKey, sensor.x, sensor.y, 13)
       return
     }
-    const isEvent = sensor.id === 'event'
+    if (sensor.id === 'loop') {
+      this.addLabel(sensor.labelKey, sensor.x, sensor.y, 13)
+      return
+    }
     const card = new Graphics()
       .roundRect(
         sensor.x - sensor.width / 2 - 6,
         sensor.y - sensor.height / 2 - 6,
         sensor.width + 12,
         sensor.height + 12,
-        isEvent ? 12 : 20
+        14
       )
-      .fill({ color: isEvent ? 0x7d3e69 : 0x493164, alpha: 0.94 })
-      .stroke({ width: 4, color: isEvent ? 0xf0a9bd : 0xd8c0f5 })
+      .fill(PALETTE.primaryHover)
+      .stroke({ width: 4, color: PALETTE.white })
     this.root.addChild(card)
     if (sensor.id === 'event') this.eventCardView = card
-    this.addLabel(sensor.labelKey, sensor.x, sensor.y, isEvent ? 15 : 13)
+    this.addLabel(sensor.labelKey, sensor.x, sensor.y, 15)
   }
 
   /** @description 绘制萌园园弹珠外观 @return {void} */
   private drawBall(): void {
     const radius = BALANCE.physics.ballRadius
-    this.ballView.circle(3, 5, radius + 4).fill({ color: 0x08050f, alpha: 0.65 })
+    this.ballView.circle(2, 4, radius + 3).fill({ color: PALETTE.primaryActive, alpha: 0.25 })
     this.ballView
       .circle(0, 0, radius + 2)
-      .fill(0xf3a0b8)
-      .stroke({ width: 4, color: 0xffe7aa })
-    this.ballView.circle(-5, -3, 2.5).fill(0x3a203f)
-    this.ballView.circle(5, -3, 2.5).fill(0x3a203f)
+      .fill(PALETTE.primary)
+      .stroke({ width: 4, color: PALETTE.white })
+    this.ballView.circle(-5, -3, 2.5).fill(PALETTE.foreground)
+    this.ballView.circle(5, -3, 2.5).fill(PALETTE.foreground)
     this.ballView.moveTo(-5, 5).quadraticCurveTo(0, 9, 5, 5).stroke({
       width: 2,
-      color: 0x713e64,
+      color: PALETTE.foreground,
       cap: 'round',
     })
-    this.ballView.circle(-10, 3, 3).fill({ color: 0xffd0d9, alpha: 0.8 })
-    this.ballView.circle(10, 3, 3).fill({ color: 0xffd0d9, alpha: 0.8 })
+    this.ballView.circle(-10, 3, 3).fill({ color: PALETTE.primaryHover, alpha: 0.9 })
+    this.ballView.circle(10, 3, 3).fill({ color: PALETTE.primaryHover, alpha: 0.9 })
   }
 
   /** @description 绘制可实时压缩的发射弹簧 @return {void} */
   private drawLauncherSpring(): void {
     this.launcherSpringView.moveTo(-25, 0).lineTo(25, 0).stroke({
       width: 8,
-      color: 0xf5d58b,
+      color: PALETTE.gold,
       cap: 'round',
     })
     this.launcherSpringView.moveTo(0, 6)
@@ -1210,7 +1286,7 @@ export class GameEngine {
     }
     this.launcherSpringView.lineTo(0, 72).stroke({
       width: 6,
-      color: 0xd8b5f1,
+      color: PALETTE.primaryHover,
       cap: 'round',
       join: 'round',
     })
@@ -1229,10 +1305,10 @@ export class GameEngine {
     const text = new Text({
       text: this.translate(labelKey),
       style: {
-        fill: '#fff7e8',
+        fill: PALETTE_TEXT.mutedDark,
         fontSize,
-        fontWeight: '700',
-        dropShadow: { color: '#12091e', blur: 3, distance: 1 },
+        fontWeight: '800',
+        stroke: { color: PALETTE_TEXT.white, width: 4, join: 'round' },
       },
     })
     this.localize(text, labelKey)
