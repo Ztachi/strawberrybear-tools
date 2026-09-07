@@ -9,10 +9,12 @@
 /**
  * @description: MIDI 播放器工具模块
  * @module midiPlayer
- * 使用 midi-player-js 解析 + soundfont-player 发声
+ * 试听由 Rust 原始时间轴和 WebAudio 驱动；midi-player-js 保留为游戏按键时间表的兼容解析器。
  */
 import MidiPlayer from 'midi-player-js'
 import soundfont from 'soundfont-player'
+import { createTimeline } from '@strawberrybear/piano-roll/core'
+import type { MidiInfo } from '@/types'
 
 const { Player } = MidiPlayer
 
@@ -24,6 +26,12 @@ let audioContext: AudioContext | null = null
 
 /** 合成器 */
 let instrument: soundfont.Player | null = null
+/** 多个异步播放请求共享一次音色加载，避免切歌时创建多份合成器。 */
+let instrumentPromise: Promise<void> | null = null
+/** 所有异步音频准备任务必须属于当前会话。stop/切歌立即使旧任务失效。 */
+let audioSessionId = 0
+/** 暂停/seek 可取消等待 AudioContext.resume 的旧操作，但不销毁媒体。 */
+let audioOperationId = 0
 
 /** 主输出增益节点 */
 let masterGainNode: GainNode | null = null
@@ -97,6 +105,7 @@ let keyboardNoteSchedule: KeyboardScheduleNote[] = []
 /** SoundFont 试听使用的原始音符时间轴。 */
 interface PreviewScheduleNote {
   startMs: number
+  endMs: number
   pitch: number
   noteName: string
   velocity: number
@@ -107,6 +116,10 @@ interface PreviewScheduleNote {
 interface ScheduledPreviewNode {
   node: { stop: (when?: number) => void }
   expiresAt: number
+  startMs: number
+  endMs: number
+  pitch: number
+  noteName: string
 }
 
 const PREVIEW_LOOKAHEAD_SECONDS = 5
@@ -120,6 +133,9 @@ let nextPreviewNoteIndex = 0
 let previewAnchorContextTime = 0
 let previewAnchorPositionMs = 0
 let previewPlaybackSpeed = 1
+let previewDurationMs = 0
+/** 前缀最大结束时间可快速找到 seek 时仍跨越播放位置的长音。 */
+let previewEndPrefix: number[] = []
 
 function resolveTargetPitchForKeyboard(event: MidiPlaybackEvent): number | null {
   if (!event.noteName) return null
@@ -224,39 +240,73 @@ function buildKeyboardNoteSchedule(playerInstance: InstanceType<typeof Player>):
     .sort((a, b) => a.startMs - b.startMs)
 }
 
-/** 将 MIDI NoteOn 预编译为以原速音乐时间表示的试听时间轴。 */
-function buildPreviewNoteSchedule(playerInstance: InstanceType<typeof Player>): void {
-  const playerEvents =
-    (playerInstance as InstanceType<typeof Player> & { events?: MidiPlaybackEvent[][] }).events ??
-    []
+/**
+ * @description: 使用 Rust 原始 tick/tempo 建立试听时间轴，保留非整数 BPM 和尾部静音。
+ * @param {MidiInfo} midi - 后端解析的 MIDI 文档
+ * @return {PianoRollTimeline} 与卷帘使用相同语义的纯时间轴
+ */
+function createMidiTimeline(midi: MidiInfo) {
+  return createTimeline({
+    ticksPerBeat: midi.ticks_per_beat,
+    durationTicks: midi.duration_ticks ?? 0,
+    tempoMap: midi.tempo_map?.map((point) => ({
+      tick: point.tick,
+      microsecondsPerQuarter: point.microseconds_per_quarter,
+    })) ?? [{ tick: 0, microsecondsPerQuarter: midi.tempo || 500000 }],
+    timeSignatureMap: midi.time_signature_map ?? [],
+    tracks: [],
+    notes: [],
+  })
+}
 
-  previewNoteSchedule = playerEvents
-    .flatMap((trackEvents) =>
-      trackEvents
-        .filter(
-          (event) =>
-            event.name === 'Note on' &&
-            event.velocity > 0 &&
-            event.noteName &&
-            event.tick !== undefined
-        )
-        .map((event) => ({
-          startMs: playerInstance.ticksToSeconds(0, event.tick!) * 1000,
-          pitch: event.noteNumber ?? noteNameToPitch(event.noteName!) ?? 60,
-          noteName: event.noteName!,
-          velocity: event.velocity,
-          track: event.track,
-        }))
-    )
-    .sort((a, b) => a.startMs - b.startMs)
+/**
+ * @description: 从原始结束 tick 读取试听时长，避免序列化整数毫秒损失亚毫秒精度
+ * @param {MidiInfo} midi - Rust MIDI 文档
+ * @return {number} 原曲时长，毫秒
+ */
+export function getMidiSourceDurationMs(midi: MidiInfo): number {
+  return midi.duration_ticks === undefined
+    ? midi.duration_ms
+    : createMidiTimeline(midi).durationSeconds * 1000
+}
+
+/**
+ * @description: 编译原始音符时间表并建立长音 seek 索引
+ * @param {MidiInfo} midi - Rust MIDI 文档
+ * @return {void} 无返回值
+ */
+function buildPreviewNoteSchedule(midi: MidiInfo): void {
+  const timeline = createMidiTimeline(midi)
+  previewDurationMs =
+    midi.duration_ticks === undefined ? midi.duration_ms : timeline.durationSeconds * 1000
+  previewNoteSchedule = midi.events
+    .map((note) => ({
+      startMs: timeline.tickToSeconds(note.start_tick) * 1000,
+      endMs: timeline.tickToSeconds(Math.max(note.start_tick, note.end_tick)) * 1000,
+      pitch: note.pitch,
+      noteName: pitchToNoteName(note.pitch),
+      velocity: note.velocity,
+      // 持久化音轨屏蔽采用 midi-player-js 从 1 开始的编号，Rust 原轨编号从 0 开始。
+      track: (note.source_track ?? note.track) + 1,
+    }))
+    .sort((left, right) => left.startMs - right.startMs)
+  previewEndPrefix = []
+  let maxEnd = 0
+  for (const note of previewNoteSchedule) {
+    maxEnd = Math.max(maxEnd, note.endMs)
+    previewEndPrefix.push(maxEnd)
+  }
 }
 
 function getScheduledPreviewPositionMs(): number {
   if (!audioContext || !isPlaying || isPaused) return previewAnchorPositionMs
-  return Math.max(
-    0,
-    previewAnchorPositionMs +
-      (audioContext.currentTime - previewAnchorContextTime) * 1000 * previewPlaybackSpeed
+  return Math.min(
+    previewDurationMs,
+    Math.max(
+      0,
+      previewAnchorPositionMs +
+        (audioContext.currentTime - previewAnchorContextTime) * 1000 * previewPlaybackSpeed
+    )
   )
 }
 
@@ -313,6 +363,17 @@ function schedulePreviewWindow(): void {
 
   const contextNow = audioContext.currentTime
   const positionMs = getScheduledPreviewPositionMs()
+  // WebAudio 调度是试听的真实时钟；不能让 midi-player-js 按原速触发 EOF 截断慢速试听。
+  if (positionMs >= previewDurationMs) {
+    previewAnchorPositionMs = previewDurationMs
+    isPlaying = false
+    isPaused = false
+    stopPreviewScheduler()
+    activeNotes.clear()
+    notifyActiveNotesChange()
+    onEndCallback?.()
+    return
+  }
   const horizonMs = positionMs + PREVIEW_LOOKAHEAD_SECONDS * 1000 * previewPlaybackSpeed
 
   for (const scheduled of scheduledPreviewNodes) {
@@ -337,12 +398,21 @@ function schedulePreviewWindow(): void {
 
     const delaySeconds = Math.max(0, (note.startMs - positionMs) / 1000 / previewPlaybackSpeed)
     const when = contextNow + delaySeconds
+    const duration = Math.max(
+      0.005,
+      (note.endMs - Math.max(note.startMs, positionMs)) / 1000 / previewPlaybackSpeed
+    )
     const node = instrument.play(resolved.noteName, when, {
       gain: getNoteGain(note.velocity),
+      duration,
     }) as unknown as { stop: (when?: number) => void }
     scheduledPreviewNodes.add({
       node,
-      expiresAt: when + PREVIEW_NODE_RETENTION_SECONDS,
+      expiresAt: when + duration + PREVIEW_NODE_RETENTION_SECONDS,
+      startMs: Math.max(note.startMs, positionMs),
+      endMs: note.endMs,
+      pitch: resolved.pitch,
+      noteName: resolved.noteName,
     })
   }
 }
@@ -353,7 +423,36 @@ function startPreviewScheduler(positionMs: number): void {
   previewAnchorPositionMs = Math.max(0, positionMs)
   previewAnchorContextTime = audioContext.currentTime
   nextPreviewNoteIndex = findPreviewNoteIndex(previewAnchorPositionMs)
+  // seek/resume 到长音中部时恢复剩余音长，后续 NoteOn 仍由正常可见窗口调度。
+  const nextIndex = nextPreviewNoteIndex
+  let low = 0
+  let high = nextIndex
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (previewEndPrefix[middle]! <= previewAnchorPositionMs) low = middle + 1
+    else high = middle
+  }
+  for (let index = low; index < nextIndex; index += 1) {
+    const note = previewNoteSchedule[index]!
+    if (note.endMs <= previewAnchorPositionMs) continue
+    const resolved = resolvePreviewNote(note)
+    if (!resolved || !instrument) continue
+    const duration = (note.endMs - previewAnchorPositionMs) / 1000 / previewPlaybackSpeed
+    const node = instrument.play(resolved.noteName, audioContext.currentTime, {
+      gain: getNoteGain(note.velocity),
+      duration,
+    }) as unknown as { stop: (when?: number) => void }
+    scheduledPreviewNodes.add({
+      node,
+      expiresAt: audioContext.currentTime + duration + PREVIEW_NODE_RETENTION_SECONDS,
+      startMs: previewAnchorPositionMs,
+      endMs: note.endMs,
+      pitch: resolved.pitch,
+      noteName: resolved.noteName,
+    })
+  }
   schedulePreviewWindow()
+  if (!isPlaying || isPaused) return
   previewSchedulerTimer = window.setInterval(schedulePreviewWindow, PREVIEW_SCHEDULER_INTERVAL_MS)
 }
 
@@ -373,21 +472,23 @@ export function getKeyboardNoteSchedule(): KeyboardScheduleNote[] {
 /**
  * @description: 初始化音频上下文和合成器
  */
-async function initInstrument() {
-  if (!audioContext) {
-    audioContext = new AudioContext()
-  }
-
+async function initInstrument(): Promise<void> {
+  if (!audioContext) audioContext = new AudioContext()
   initOutputNodes()
-
-  if (!instrument) {
-    // 从本地加载音色（public 目录下的文件可被直接访问）
-    instrument = await soundfont.instrument(
-      audioContext,
-      '/soundfonts/acoustic_grand_piano-mp3.js' as never,
-      { destination: masterGainNode }
-    )
+  if (instrument) return
+  if (!instrumentPromise) {
+    instrumentPromise = soundfont
+      .instrument(audioContext, '/soundfonts/acoustic_grand_piano-mp3.js' as never, {
+        destination: masterGainNode,
+      })
+      .then((loaded) => {
+        instrument = loaded
+      })
+      .finally(() => {
+        instrumentPromise = null
+      })
   }
+  await instrumentPromise
 }
 
 /**
@@ -431,88 +532,6 @@ function getNoteGain(velocity: number): number {
   return Math.max(0.05, normalizedVelocity) * NOTE_INPUT_GAIN
 }
 
-/**
- * @description: 播放 MIDI 事件
- */
-function handleMidiEvent(
-  event: MidiPlaybackEvent,
-  disabledTracks: Set<number>,
-  options: { playAudio?: boolean } = {}
-) {
-  // 确保音频上下文和乐器已初始化
-  if (!audioContext || !instrument) {
-    return
-  }
-
-  const isTrackDisabled = event.track !== undefined && disabledTracks.has(event.track)
-
-  if (event.name === 'Note on' && event.velocity > 0 && event.noteName && !isTrackDisabled) {
-    // 直接使用 noteNumber（MIDI 标准），如果不存在则从 noteName 解析
-    const noteNumber = event.noteNumber
-    const originalPitch = noteNumber ?? noteNameToPitch(event.noteName)
-
-    // 如果有音高映射器，先转换音高
-    let targetPitch = originalPitch ?? 60
-    let targetNoteName = event.noteName
-    if (pitchMapper && originalPitch !== null) {
-      const mappedPitch = pitchMapper(originalPitch)
-      if (mappedPitch === null) {
-        return // 该音符不需要播放
-      }
-      targetPitch = mappedPitch
-      targetNoteName = pitchToNoteName(targetPitch)
-    }
-
-    // 如果有音符过滤器，用映射后的音高检查是否允许播放
-    if (noteFilter) {
-      const allowed = noteFilter({
-        noteName: targetNoteName,
-        pitch: targetPitch,
-        velocity: event.velocity,
-      })
-      if (!allowed) {
-        return
-      }
-    }
-
-    // 播放音符
-    if (options.playAudio !== false) {
-      const node = instrument.play(targetNoteName, audioContext.currentTime, {
-        gain: getNoteGain(event.velocity),
-      })
-      // 存储节点（用于停止特定音符）
-      activeNoteNodes.set(targetNoteName, node)
-    }
-
-    // 追踪活跃音符（用于同步键盘高亮），用 pitch 作为唯一 key
-    activeNotes.set(targetPitch, { pitch: targetPitch, noteName: targetNoteName })
-    notifyActiveNotesChange()
-  }
-
-  // Note off 或 velocity 为 0 时不主动停止，让音符自然衰减
-  if (
-    (event.name === 'Note off' || (event.name === 'Note on' && event.velocity === 0)) &&
-    event.noteName
-  ) {
-    // 直接使用 noteNumber（MIDI 标准），如果不存在则从 noteName 解析
-    const noteNumber = event.noteNumber
-    const originalPitch = noteNumber ?? noteNameToPitch(event.noteName)
-    let targetPitch = originalPitch ?? 0
-
-    if (pitchMapper && originalPitch !== null) {
-      const mappedPitch = pitchMapper(originalPitch)
-      if (mappedPitch !== null) {
-        targetPitch = mappedPitch
-      }
-    }
-
-    activeNoteNodes.delete(pitchToNoteName(targetPitch))
-    // 移除活跃音符
-    activeNotes.delete(targetPitch)
-    notifyActiveNotesChange()
-  }
-}
-
 /** 通知活跃音符变化 */
 function notifyActiveNotesChange() {
   if (onActiveNotesChange) {
@@ -540,52 +559,55 @@ export function getDisabledTracks(): Set<number> {
   return disabledTracks
 }
 
+/** 试听初始化参数；MIDI tick 文档是音符、播放头和总时长的唯一时间源。 */
+export interface MidiPreviewOptions {
+  /** Rust 解析的完整 MIDI 文档。 */
+  midi: MidiInfo
+  /** 原曲时间，单位毫秒；seek 首次加载也可直接从这里准备。 */
+  positionMs?: number
+  /** false 时只准备播放会话，不提交音符到 WebAudio。 */
+  autoPlay?: boolean
+}
+
 /**
- * @description: 播放 MIDI 文件
+ * @description: 准备或播放 MIDI；旧解析器仅为游戏按键提供既有事件表。
+ * @param {ArrayBuffer} midiData - 原始二进制，保持模拟按键解析来源不变
+ * @param {number} speed - 试听速度倍率
+ * @param {MidiPreviewOptions} options - 试听权威文档、初始位置与播放状态
+ * @return {Promise<{stop: () => void}>} 仅可停止本会话的句柄
  */
 export async function playMidi(
   midiData: ArrayBuffer,
-  speed: number = 1.0
+  speed: number,
+  options: MidiPreviewOptions
 ): Promise<{ stop: () => void }> {
   stop()
-
+  const sessionId = audioSessionId
+  const operationId = ++audioOperationId
   await initInstrument()
-  previewPlaybackSpeed = Math.max(0.01, speed)
-
-  player = new Player((event: MidiPlaybackEvent) => {
-    if (isPlaying && !isPaused) {
-      // midi-player-js 仅维护解析进度和高亮；声音已提前提交给 Web Audio 时间轴。
-      handleMidiEvent(event, disabledTracks, { playAudio: false })
-    }
-  })
-
-  player.on('playing', () => {
-    if (!isPaused && player) {
-      const remainingTime = player.getSongTimeRemaining()
-      const totalTime = player.getSongTime()
-      const currentTime = (totalTime - remainingTime) * 1000
-      onTimeUpdate?.(currentTime)
-    }
-  })
-
-  player.on('endOfFile', () => {
-    isPlaying = false
-    isPaused = false
-    stopPreviewScheduler()
-    onEndCallback?.()
-  })
-
+  if (sessionId !== audioSessionId || operationId !== audioOperationId) return { stop: () => {} }
+  if (options.autoPlay !== false && audioContext?.state === 'suspended') {
+    await audioContext.resume()
+    if (sessionId !== audioSessionId || operationId !== audioOperationId) return { stop: () => {} }
+  }
+  previewPlaybackSpeed = Number.isFinite(speed) && speed > 0 ? speed : 1
+  // 以下三步保持旧模拟按键输入构建顺序；试听不再使用它的 BPM 或事件时钟。
+  player = new Player()
   player.loadArrayBuffer(midiData)
-  ;(player as any).setTempo?.((player as any).tempo * speed)
+  ;(player as InstanceType<typeof Player> & { setTempo?: (tempo: number) => void }).setTempo?.(
+    player.tempo * speed
+  )
   buildKeyboardNoteSchedule(player)
-  buildPreviewNoteSchedule(player)
-
+  buildPreviewNoteSchedule(options.midi)
+  previewAnchorPositionMs = Math.max(0, Math.min(previewDurationMs, options.positionMs ?? 0))
   isPlaying = true
-  isPaused = false
-  startPreviewScheduler(0)
-  player.play()
-
-  return { stop }
+  isPaused = options.autoPlay === false
+  if (!isPaused) startPreviewScheduler(previewAnchorPositionMs)
+  return {
+    stop: () => {
+      if (sessionId === audioSessionId) stop()
+    },
+  }
 }
 
 /**
@@ -608,6 +630,8 @@ export async function loadMidiForDuration(
  * @description: 停止播放
  */
 export function stop() {
+  audioSessionId += 1
+  audioOperationId += 1
   stopPreviewScheduler()
   if (player) {
     player.stop()
@@ -616,7 +640,10 @@ export function stop() {
   isPlaying = false
   isPaused = false
   previewAnchorPositionMs = 0
+  previewDurationMs = 0
   nextPreviewNoteIndex = 0
+  previewNoteSchedule = []
+  previewEndPrefix = []
   // 停止所有正在播放的音符
   for (const [_, node] of activeNoteNodes) {
     try {
@@ -635,71 +662,98 @@ export function stop() {
  * @description: 暂停播放
  */
 export function pause() {
+  audioOperationId += 1
   if (isPlaying && !isPaused) {
     previewAnchorPositionMs = getScheduledPreviewPositionMs()
     stopPreviewScheduler()
     isPaused = true
-    player?.pause()
+    activeNotes.clear()
+    notifyActiveNotesChange()
   }
 }
 
 /**
- * @description: 继续播放（midi-player-js 用 play() 代替 resume）
+ * @description: 继续播放，以音频时钟重新锚定暂停位置
  */
-export function resume() {
+export async function resume(): Promise<void> {
+  const sessionId = audioSessionId
+  const operationId = ++audioOperationId
   if (isPlaying && isPaused) {
+    if (audioContext?.state === 'suspended') await audioContext.resume()
+    if (sessionId !== audioSessionId || operationId !== audioOperationId) return
     isPaused = false
     startPreviewScheduler(previewAnchorPositionMs)
-    player?.play()
   }
+}
+
+/**
+ * @description: 更新正在运行的试听速度，并以当前音频时钟重新锚定调度器。
+ * @param {number} speed - 试听速度倍率
+ * @return {void} 无返回值
+ */
+export function setPreviewSpeed(speed: number): void {
+  const nextSpeed = Number.isFinite(speed) && speed > 0 ? speed : 1
+  if (!audioContext || !isPlaying || isPaused) {
+    previewPlaybackSpeed = nextSpeed
+    return
+  }
+  previewAnchorPositionMs = getScheduledPreviewPositionMs()
+  previewPlaybackSpeed = nextSpeed
+  startPreviewScheduler(previewAnchorPositionMs)
 }
 
 /**
  * @description: 获取当前播放位置（毫秒）
  */
 export function getCurrentTime(): number {
-  if (!player) return 0
-  const totalTime = player.getSongTime()
-  const remainingTime = player.getSongTimeRemaining()
-  return Math.max(0, (totalTime - remainingTime) * 1000)
+  const positionMs = getScheduledPreviewPositionMs()
+  const nextActive = new Map<number, { pitch: number; noteName: string }>()
+  if (isPlaying && !isPaused) {
+    for (const scheduled of scheduledPreviewNodes) {
+      if (scheduled.startMs <= positionMs && scheduled.endMs > positionMs) {
+        nextActive.set(scheduled.pitch, { pitch: scheduled.pitch, noteName: scheduled.noteName })
+      }
+    }
+  }
+  if (
+    nextActive.size !== activeNotes.size ||
+    [...nextActive.keys()].some((pitch) => !activeNotes.has(pitch))
+  ) {
+    activeNotes.clear()
+    for (const [pitch, note] of nextActive) activeNotes.set(pitch, note)
+    notifyActiveNotesChange()
+  }
+  onTimeUpdate?.(positionMs)
+  return positionMs
 }
 
 /**
- * @description: 获取总时长（毫秒）
+ * @description: 获取完整 MIDI 结束时间（毫秒），包含尾部静音
+ * @return {number} 原曲时长
  */
 export function getTotalDuration(): number {
-  if (!player) return 0
-  return player.getSongTime() * 1000
+  return previewDurationMs
 }
 
 /**
- * @description: 跳转到指定位置（毫秒）
- * @param {number} timeMs - 目标播放位置
- * @param {{ autoPlay?: boolean }} options - 跳转后是否自动恢复播放
+ * @description: 移动音频会话到原曲时间；不经过整数 BPM 或延迟 play 任务。
+ * @param {number} timeMs - 原曲位置，毫秒
+ * @param {{autoPlay?: boolean}} options - 是否继续播放
  * @return {void} 无返回值
  */
-export function seekTo(timeMs: number, options: { autoPlay?: boolean } = {}) {
-  if (!player) {
-    console.warn('seekTo: player not initialized')
-    return
-  }
-  const seconds = timeMs / 1000
-  try {
-    stopPreviewScheduler()
-    previewAnchorPositionMs = Math.max(0, timeMs)
-    player.skipToSeconds(seconds)
-    if (options.autoPlay !== false) {
-      isPlaying = true
-      isPaused = false
-      startPreviewScheduler(previewAnchorPositionMs)
-      // midi-player-js 的 skip 需要下一轮 play 才能继续推进，停止/归零场景会显式关闭 autoPlay。
-      setTimeout(() => {
-        player?.play()
-      }, 100)
-    }
-  } catch (e) {
-    console.error('seekTo failed:', e)
-  }
+export function seekTo(timeMs: number, options: { autoPlay?: boolean } = {}): void {
+  audioOperationId += 1
+  if (!player) return
+  stopPreviewScheduler()
+  previewAnchorPositionMs = Math.max(
+    0,
+    Math.min(previewDurationMs, Number.isFinite(timeMs) ? timeMs : 0)
+  )
+  isPlaying = true
+  isPaused = options.autoPlay === false
+  activeNotes.clear()
+  notifyActiveNotesChange()
+  if (!isPaused) startPreviewScheduler(previewAnchorPositionMs)
 }
 
 /**
@@ -745,8 +799,8 @@ export function pausePreview() {
 /**
  * @description: 继续预览
  */
-export function resumePreview() {
-  resume()
+export async function resumePreview(): Promise<void> {
+  await resume()
 }
 
 /**

@@ -6,12 +6,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, Popover } from 'antdv-next'
-import { Clock3, Music2, Pause, Piano, Play } from 'lucide-vue-next'
-import PianoRoll from '@strawberrybear/piano-roll'
+import { Clock3, Music2, Pause, Piano, Play, X } from 'lucide-vue-next'
+import PianoRoll from '@strawberrybear/piano-roll/vue'
 import { usePlayerStore } from '@/stores/player'
-import type { TrackInfo } from '@/types'
 import { getMidiDisplayArtist, getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
 import { formatDuration } from '../utils'
+import { adaptMidiToPianoRoll, applyPianoTrackEnabled } from './MidiDetailPage/pianoRollAdapter'
+import { usePianoDetailSeek } from './MidiDetailPage/usePianoDetailSeek'
+import { usePianoEditorResize } from './MidiDetailPage/usePianoEditorResize'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -19,14 +21,11 @@ const router = useRouter()
 const playerStore = usePlayerStore()
 
 const filename = computed(() => String(route.params.filename ?? ''))
-const detailMidi = computed(() => playerStore.detailMidi)
-const currentPlaybackMatchesDetail = computed(
-  () => Boolean(detailMidi.value) && playerStore.currentMidi?.filename === detailMidi.value?.filename
-)
-const pianoRollCurrentTime = computed(() =>
-  currentPlaybackMatchesDetail.value ? playerStore.previewCurrentTime : 0
-)
-const detailDuration = computed(() => playerStore.detailDuration || detailMidi.value?.duration_ms || 0)
+const detailMidi = computed(() => {
+  const midi = playerStore.detailMidi
+  return midi?.filename === filename.value ? midi : null
+})
+const detailDuration = computed(() => detailMidi.value?.duration_ms ?? 0)
 const detailPlaybackState = computed(() =>
   detailMidi.value ? playerStore.getSongPlaybackState(detailMidi.value.filename) : 'idle'
 )
@@ -41,6 +40,61 @@ const detailAuthor = computed(() =>
   detailMidi.value ? getMidiDisplayArtist(detailMidi.value) : ''
 )
 const detailDescription = computed(() => detailMidi.value?.description?.trim() ?? '')
+const selectedTrackId = ref<string | null>(null)
+const isPianoEditorOpen = ref(false)
+const {
+  matchesPlayback: currentPlaybackMatchesDetail,
+  previewSeconds: pianoSeekPreviewSeconds,
+  error: pianoSeekError,
+  preview: previewPianoSeek,
+  seek: seekPianoRoll,
+  getQueue: getDetailQueue,
+} = usePianoDetailSeek(detailMidi, filename)
+const {
+  heightPercent: editorHeightPercent,
+  handleRef: editorResizeHandleRef,
+  containerRef: detailBodyRef,
+  begin: beginEditorResize,
+  move: moveEditorResize,
+  end: endEditorResize,
+  onKeydown: handleEditorResizeKey,
+} = usePianoEditorResize(closePianoEditor)
+
+const pianoRollLabels = computed(() => ({
+  overview: t('midi.pianoRoll.overview'),
+  editor: t('midi.pianoRoll.editor'),
+  follow: t('midi.pianoRoll.follow'),
+  following: t('midi.pianoRoll.following'),
+  timeZoom: t('midi.pianoRoll.timeZoom'),
+  pitchZoom: t('midi.pianoRoll.pitchZoom'),
+  enableTrack: t('midi.clickToEnable'),
+  disableTrack: t('midi.clickToDisable'),
+  notes: t('midi.pianoRoll.notes'),
+  empty: t('midi.pianoRoll.empty'),
+  playhead: t('midi.pianoRoll.playhead'),
+  fit: t('midi.pianoRoll.fit'),
+  close: t('midi.pianoRoll.close'),
+}))
+const sourcePianoDocument = computed(() =>
+  adaptMidiToPianoRoll(detailMidi.value, (index) => t('midi.trackIndex', { n: index }))
+)
+const pianoRollDocument = computed(() => {
+  // Set 可原地修改，版本号使启用状态更新；大型音符数组保持同一份引用。
+  void playerStore.detailDisabledTracksVersion
+  return applyPianoTrackEnabled(sourcePianoDocument.value, playerStore.detailDisabledTracks)
+})
+const pianoRollTracks = computed(() => pianoRollDocument.value.tracks)
+
+const pianoRollTransport = computed(() => ({
+  positionSeconds:
+    pianoSeekPreviewSeconds.value ??
+    (currentPlaybackMatchesDetail.value ? playerStore.previewCurrentTime / 1000 : 0),
+  isPlaying:
+    currentPlaybackMatchesDetail.value &&
+    isDetailPlaying.value &&
+    pianoSeekPreviewSeconds.value === null,
+  playbackRate: playerStore.speed,
+}))
 
 const descriptionRef = ref<HTMLElement | null>(null)
 const isDescriptionOverflowing = ref(false)
@@ -79,17 +133,23 @@ const detailStats = computed(() => [
   },
 ])
 
-const translatedTracks = computed<TrackInfo[]>(() =>
-  playerStore.detailTracks.map((track) => {
-    if (track.name.includes('|percussion')) {
-      return { ...track, name: t('midi.percussionTrack') }
-    }
-    return { ...track, name: `${t('midi.trackIndex', { n: Number(track.name) })}` }
-  })
-)
+function selectPianoTrack(trackId: string): void {
+  if (pianoRollTracks.value.some((track) => track.id === trackId)) selectedTrackId.value = trackId
+}
 
-function toggleTrack(trackIndex: number): void {
-  playerStore.toggleDetailTrack(trackIndex)
+function openPianoEditor(trackId: string): void {
+  selectPianoTrack(trackId)
+  isPianoEditorOpen.value = true
+}
+
+function closePianoEditor(): void {
+  endEditorResize()
+  previewPianoSeek(null)
+  isPianoEditorOpen.value = false
+}
+
+function togglePianoTrack(trackId: string): void {
+  playerStore.toggleDetailTrackById(trackId)
 }
 
 function navigateBack(): void {
@@ -107,13 +167,8 @@ async function playDetailMidi(): Promise<void> {
 
   // 详情页只是查看入口，不天然代表一个播放域；点击封面播放时才需要决定队列。
   // 如果当前播放域已经包含这首歌，沿用当前域；否则回退到全部歌曲，避免详情页误写歌单作用域。
-  const activeQueue = playerStore.activePreviewQueueItems
-  const detailInActiveQueue = activeQueue.some((midi) => midi.filename === detailMidi.value?.filename)
-  const queueItems = detailInActiveQueue ? activeQueue : playerStore.midiLibrary
-  const queueContext = detailInActiveQueue
-    ? playerStore.previewQueueContext
-    : { id: 'all', title: t('songList.allSongs') }
-  await playerStore.toggleMidiInQueue(detailMidi.value, queueItems, queueContext)
+  const queue = getDetailQueue(detailMidi.value)
+  await playerStore.toggleMidiInQueue(detailMidi.value, queue.items, queue.context)
 }
 
 watch(
@@ -121,6 +176,16 @@ watch(
   () => {
     if (!filename.value) return
     void playerStore.loadMidiDetailByFilename(filename.value)
+  },
+  { immediate: true }
+)
+
+watch(
+  pianoRollTracks,
+  (tracks) => {
+    if (!tracks.some((track) => track.id === selectedTrackId.value)) {
+      selectedTrackId.value = tracks[0]?.id ?? null
+    }
   },
   { immediate: true }
 )
@@ -203,22 +268,86 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <div class="detail-body">
-        <div class="panel-scroll">
+      <div
+        ref="detailBodyRef"
+        class="detail-body"
+        :style="{ '--piano-editor-height': `${editorHeightPercent}%` }"
+      >
+        <div
+          class="piano-overview-host"
+          :class="{ 'piano-overview-host--with-editor': isPianoEditorOpen }"
+        >
           <PianoRoll
             :key="detailMidi.filename"
             class="detail-piano-roll"
-            :notes="detailMidi.events || []"
-            :duration="detailDuration"
-            :ticks-per-beat="detailMidi.ticks_per_beat || 480"
-            :tempo="detailMidi.tempo || 500000"
-            :tracks="translatedTracks"
-            :disabled-tracks="playerStore.detailDisabledTracks"
-            :disabled-tracks-version="playerStore.detailDisabledTracksVersion"
-            :current-time="pianoRollCurrentTime"
-            @toggle="toggleTrack"
+            variant="overview"
+            :document="pianoRollDocument"
+            :transport="pianoRollTransport"
+            :labels="pianoRollLabels"
+            :selected-track-id="selectedTrackId"
+            @select-track="selectPianoTrack"
+            @open-editor="openPianoEditor"
+            @toggle-track="togglePianoTrack"
+            @seek="seekPianoRoll"
+            @seek-preview="previewPianoSeek"
           />
         </div>
+        <section
+          v-if="isPianoEditorOpen"
+          class="piano-editor-overlay"
+          :aria-label="t('midi.pianoRoll.editor')"
+          @keydown.esc.stop="closePianoEditor"
+        >
+          <div
+            ref="editorResizeHandleRef"
+            class="piano-editor-resize-handle"
+            role="separator"
+            tabindex="0"
+            aria-orientation="horizontal"
+            :aria-label="t('midi.pianoRoll.resize')"
+            :aria-valuenow="Math.round(editorHeightPercent)"
+            :aria-valuemin="25"
+            :aria-valuemax="82"
+            :aria-valuetext="t('midi.pianoRoll.heightPercent', { value: Math.round(editorHeightPercent) })"
+            @pointerdown="beginEditorResize"
+            @pointermove="moveEditorResize"
+            @pointerup="endEditorResize"
+            @pointercancel="endEditorResize"
+            @lostpointercapture="endEditorResize"
+            @keydown="handleEditorResizeKey"
+          >
+            <span aria-hidden="true" />
+          </div>
+          <PianoRoll
+            class="detail-piano-editor"
+            variant="editor"
+            :document="pianoRollDocument"
+            :transport="pianoRollTransport"
+            :labels="pianoRollLabels"
+            :selected-track-id="selectedTrackId"
+            @select-track="selectPianoTrack"
+            @toggle-track="togglePianoTrack"
+            @seek="seekPianoRoll"
+            @seek-preview="previewPianoSeek"
+          >
+            <template #toolbar>
+              <Button
+                type="text"
+                size="small"
+                :aria-label="t('midi.pianoRoll.close')"
+                :title="t('midi.pianoRoll.close')"
+                @click="closePianoEditor"
+              >
+                <template #icon>
+                  <X class="size-4" :stroke-width="2" />
+                </template>
+              </Button>
+            </template>
+          </PianoRoll>
+        </section>
+        <p v-if="pianoSeekError" class="piano-seek-error" role="status">
+          {{ pianoSeekError }}
+        </p>
       </div>
     </template>
 
@@ -320,17 +449,55 @@ onBeforeUnmount(() => {
 }
 
 .detail-body {
-  @apply flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white;
+  @apply relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white;
+  --piano-editor-size: max(0px, min(var(--piano-editor-height), calc(100% - 6rem)));
   border: 1px solid var(--border-primary-15);
 }
 
-.panel-scroll {
-  @apply min-h-0 flex-1 overflow-auto p-3;
+.piano-overview-host {
+  @apply min-h-0 shrink-0 overflow-hidden p-3;
+  height: 100%;
+}
+
+.piano-overview-host--with-editor {
+  /* 浮层按需出现时保留总览滚动条的可见区域，实例、缩放与滚动策略保持独立。 */
+  height: calc(100% - var(--piano-editor-size));
 }
 
 .detail-piano-roll {
-  width: 100%;
-  min-height: 100%;
+  @apply h-full w-full min-h-0;
+}
+
+.piano-editor-overlay {
+  @apply absolute inset-x-0 bottom-0 z-20 flex min-h-0 flex-col overflow-hidden;
+  height: var(--piano-editor-size);
+  background: var(--color-primary-light);
+  box-shadow: 0 -8px 24px var(--border-primary-15);
+}
+
+.piano-editor-resize-handle {
+  @apply flex h-3 shrink-0 touch-none cursor-ns-resize items-center justify-center;
+  background: var(--bg-primary-15);
+}
+
+.piano-editor-resize-handle span {
+  @apply h-1 w-10 rounded-full;
+  background: var(--color-primary-active);
+}
+
+.piano-editor-resize-handle:focus-visible {
+  @apply outline-none;
+  box-shadow: inset 0 0 0 2px var(--color-primary-active);
+}
+
+.detail-piano-editor {
+  @apply min-h-0 flex-1;
+}
+
+.piano-seek-error {
+  @apply pointer-events-none absolute right-4 top-4 z-30 max-w-md rounded-lg px-3 py-2 text-sm;
+  color: var(--color-foreground);
+  background: var(--bg-white-95);
 }
 
 .missing-state {

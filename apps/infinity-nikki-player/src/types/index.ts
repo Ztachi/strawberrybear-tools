@@ -5,6 +5,8 @@
 
 /** MIDI 音符事件 */
 export interface NoteEvent {
+  /** 稳定的音符 ID；旧缓存可能缺失该字段 */
+  id?: string
   /** 音高 (0-127) */
   pitch: number
   /** 力度 (0-127) */
@@ -15,8 +17,34 @@ export interface NoteEvent {
   end_tick: number
   /** MIDI 通道 (0-15) */
   channel: number
-  /** 音轨索引 */
+  /** 完整原始轨道索引；旧解析结果可能缺失，回退 track。 */
+  source_track?: number | null
+  /** 旧模拟按键协议的音轨索引。 */
   track: number
+}
+
+/** MIDI tempo 变化点，保留原始微秒精度 */
+export interface MidiTempoPoint {
+  tick: number
+  microseconds_per_quarter: number
+}
+
+/** MIDI 拍号变化点 */
+export interface MidiTimeSignaturePoint {
+  tick: number
+  numerator: number
+  denominator: number
+}
+
+/** MIDI 原始音轨元数据 */
+export interface MidiTrackInfo {
+  id: string
+  index: number
+  name: string
+  channel?: number | null
+  is_percussion: boolean
+  note_count: number
+  enabled: boolean
 }
 
 /**
@@ -67,6 +95,14 @@ export interface MidiInfo {
   ticks_per_beat: number
   /** 速度（微秒每拍） */
   tempo: number
+  /** MIDI 文件完整结束 tick，包含尾部元事件时间 */
+  duration_ticks?: number
+  /** 按 tick 排序的 tempo 变化点 */
+  tempo_map?: MidiTempoPoint[]
+  /** 按 tick 排序的拍号变化点 */
+  time_signature_map?: MidiTimeSignaturePoint[]
+  /** MIDI 原始音轨元数据 */
+  tracks?: MidiTrackInfo[]
   /** 音符事件列表 */
   events: NoteEvent[]
 }

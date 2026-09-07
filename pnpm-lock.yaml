@@ -192,6 +192,9 @@ importers:
       vite:
         specifier: ^8.0.5
         version: 8.0.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@22.19.17)(esbuild@0.27.7)(jiti@1.21.7)(terser@5.46.1)(yaml@2.9.0)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.6(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(yaml@2.9.0)
       vue-tsc:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.7.3)
@@ -494,6 +497,25 @@ importers:
       vue:
         specifier: ^3.0.0
         version: 3.5.32(typescript@6.0.3)
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.56.1
+        version: 1.56.1
+      '@strawberrybear/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      esbuild:
+        specifier: ^0.27.0
+        version: 0.27.7
+      typescript:
+        specifier: ~5.7.2
+        version: 5.7.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.6(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(yaml@2.9.0)
+      vue-tsc:
+        specifier: ^2.2.0
+        version: 2.2.12(typescript@5.7.3)
 
   packages/player:
     devDependencies:
@@ -510,6 +532,37 @@ importers:
   packages/tsconfig: {}
 
 packages:
+  '@playwright/test@1.56.1':
+    resolution:
+      {
+        integrity: sha512-vSMYtL/zOcFpvJCW71Q/OEGQb7KYBPAdKh35WNSkaZA75JlAO8ED8UN6GUNTm3drWomcbcqRPFqQbLae8yBTdg==,
+      }
+    engines: { node: '>=18' }
+    hasBin: true
+
+  playwright@1.56.1:
+    resolution:
+      {
+        integrity: sha512-aFi5B0WovBHTEvpM3DzXTUaeN6eN0qWnTkKx4NQaH4Wvcmc153PdaY2UBdSYKaGYw+UyWXSVyxDUg5DoPEttjw==,
+      }
+    engines: { node: '>=18' }
+    hasBin: true
+
+  playwright-core@1.56.1:
+    resolution:
+      {
+        integrity: sha512-hutraynyn31F+Bifme+Ps9Vq59hKuUCz7H1kDOcBs+2oGguKkWTU50bBWrtz34OUWmIwpBTWDxaRPXrIXkgvmQ==,
+      }
+    engines: { node: '>=18' }
+    hasBin: true
+
+  fsevents@2.3.2:
+    resolution:
+      {
+        integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==,
+      }
+    engines: { node: ^8.16.0 || ^10.6.0 || >=11.0.0 }
+    os: [darwin]
   '@alloc/quick-lru@5.2.0':
     resolution:
       {
@@ -9658,6 +9711,20 @@ packages:
       }
 
 snapshots:
+  '@playwright/test@1.56.1':
+    dependencies:
+      playwright: 1.56.1
+
+  playwright@1.56.1:
+    dependencies:
+      playwright-core: 1.56.1
+    optionalDependencies:
+      fsevents: 2.3.2
+
+  playwright-core@1.56.1: {}
+
+  fsevents@2.3.2:
+    optional: true
   '@alloc/quick-lru@5.2.0': {}
 
   '@ant-design/colors@7.2.1':

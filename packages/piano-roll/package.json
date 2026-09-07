@@ -12,10 +12,39 @@
     "./index": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./core": {
+      "import": "./src/core.ts",
+      "types": "./src/core.ts"
+    },
+    "./vue": {
+      "types": "./src/vue.ts",
+      "import": "./src/vue.ts"
+    },
+    "./PianoRollOverview.vue": "./src/PianoRollOverview.vue",
+    "./PianoRollEditor.vue": "./src/PianoRollEditor.vue",
+    "./PianoRoll.vue": "./src/PianoRoll.vue",
+    "./browser": {
+      "types": "./src/browser.ts",
+      "import": "./src/browser.ts"
     }
   },
   "peerDependencies": {
     "vue": "^3.0.0"
   },
-  "dependencies": {}
+  "scripts": {
+    "build": "vue-tsc -p tsconfig.json --noEmit",
+    "type-check": "vue-tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --api false",
+    "lint": "eslint .",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@strawberrybear/tsconfig": "workspace:*",
+    "esbuild": "^0.27.0",
+    "typescript": "~5.7.2",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^2.2.0"
+  }
 }
