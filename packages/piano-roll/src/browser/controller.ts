@@ -1,6 +1,8 @@
 import { createNoteIndex, createTimeline } from '../core'
 import { drawGrid, drawKeyboard, drawNotes, visibleRows, type TrackRow } from './renderer'
 import { installStyles } from './styles'
+import { applyPianoRollTheme, resolvePianoRollTheme } from './theme'
+import { installGestureZoom } from './gesture-zoom'
 import {
   defaultLabels,
   type PianoRollTransport,
@@ -8,7 +10,15 @@ import {
   type PianoRollViewOptions,
   type PianoRollViewport,
 } from './types'
-import { clamp, dragScrollVelocity, followScrollLeft, zoomScrollLeft } from './viewport'
+import {
+  clamp,
+  createResizeScheduler,
+  dragScrollVelocity,
+  followScrollLeft,
+  resizeScrollLeft,
+  timeZoomBounds,
+  zoomScrollLeft,
+} from './viewport'
 
 /** 两种视图共用的浏览器控制器；只有纵向布局策略不同。 */
 export function createView(
@@ -20,6 +30,7 @@ export function createView(
   if (!window) throw new Error('钢琴卷帘需要有效的浏览器文档')
   installStyles(owner)
   let labels = { ...defaultLabels, ...options.labels }
+  let theme = resolvePianoRollTheme(options.theme)
   const make = <K extends keyof HTMLElementTagNameMap>(
     tag: K,
     className: string
@@ -29,6 +40,7 @@ export function createView(
     return element
   }
   const root = make('div', 'pr-view')
+  applyPianoRollTheme(root, theme)
   root.dataset.variant = variant
   root.style.setProperty('--pr-gutter', variant === 'overview' ? '160px' : '64px')
   const corner = make('div', 'pr-corner')
@@ -72,10 +84,13 @@ export function createView(
     playbackRate: 1,
   }
   let timeZoom = clamp(options.timeZoom ?? (variant === 'overview' ? 42 : 110), 0.001, 1200)
+  let { minTimeZoom, maxTimeZoom } = timeZoomBounds(0, timeline.durationSeconds)
+  let fitting = false
   let pitchZoom = clamp(options.pitchZoom ?? 16, 8, 36)
   let follow = options.follow ?? true
   let width = 0
   let height = 0
+  let layoutDirty = true
   let destroyed = false
   let renderFrame = 0
   let expectedScroll: { left: number; top: number } | null = null
@@ -91,12 +106,29 @@ export function createView(
     raf: number
   } | null = null
   let pointerPreview: number | null = null
+  let selectionBeforeGesture: string | null | undefined
+  let gestureActive = false
+
+  function selectTrack(trackId: string, event: MouseEvent): void {
+    // 双击之前的两次 click 会先改变选轨，必须保留第一次 click 前的选择供宿主判断关闭。
+    if (event.detail === 1) selectionBeforeGesture = selected
+    options.onTrackSelect?.(trackId)
+  }
+  function openTrack(trackId: string): void {
+    options.onTrackOpen?.(trackId, {
+      selectedTrackIdAtGestureStart:
+        selectionBeforeGesture === undefined ? selected : selectionBeforeGesture,
+    })
+    selectionBeforeGesture = undefined
+  }
 
   function snapshot(): Readonly<PianoRollViewport> {
     return Object.freeze({
       scrollLeft: scroll.scrollLeft,
       scrollTop: scroll.scrollTop,
       timeZoom,
+      minTimeZoom,
+      maxTimeZoom,
       pitchZoom,
       follow,
     })
@@ -156,8 +188,11 @@ export function createView(
   }
   function resizeContent(): void {
     const last = rows[rows.length - 1]
-    spacer.style.width = `${Math.max(width, timeline.durationSeconds * timeZoom + 32)}px`
+    // fit 的宽度直接取 clientWidth，避免浮点乘法把一屏变成多出 1px 的可滚动内容。
+    spacer.style.width = `${fitting ? width : Math.max(width, timeline.durationSeconds * timeZoom)}px`
     spacer.style.height = `${variant === 'editor' ? 128 * pitchZoom : Math.max(height, last ? last.top + last.height : height)}px`
+    // 内容缩小时浏览器会自行裁剪偏移，这也是程序滚动，不能误暂停本视图的 Follow。
+    expectedScroll = { left: scroll.scrollLeft, top: scroll.scrollTop }
   }
   function focusPitch(force: boolean): void {
     if (variant !== 'editor' || !selected || height <= 0) return
@@ -178,7 +213,7 @@ export function createView(
   }
   function renderGutter(visible: TrackRow[]): void {
     if (variant === 'editor') {
-      drawKeyboard(keyboard, height, pitchZoom, scroll.scrollTop)
+      drawKeyboard(keyboard, height, pitchZoom, scroll.scrollTop, theme)
       return
     }
     // 只为可见轨道建立可键盘操作的控件，保持现有节点以保留焦点。
@@ -196,8 +231,8 @@ export function createView(
         const select = make('button', 'pr-track-select')
         select.type = 'button'
         select.append(make('strong', ''), make('small', ''))
-        select.addEventListener('click', () => options.onTrackSelect?.(row.track.id))
-        select.addEventListener('dblclick', () => options.onTrackOpen?.(row.track.id))
+        select.addEventListener('click', (event) => selectTrack(row.track.id, event))
+        select.addEventListener('dblclick', () => openTrack(row.track.id))
         const toggle = make('button', 'pr-track-toggle')
         toggle.type = 'button'
         toggle.textContent = '♫'
@@ -241,6 +276,7 @@ export function createView(
       scrollTop: scroll.scrollTop,
       timeZoom,
       pitchZoom,
+      theme,
     }
     drawGrid(grid, rulerCanvas, frame)
     drawNotes(notes, frame)
@@ -251,13 +287,30 @@ export function createView(
   function scheduleRender(): void {
     if (!destroyed && !renderFrame) renderFrame = window!.requestAnimationFrame(render)
   }
-  function resize(): void {
-    width = scroll.clientWidth
-    height = scroll.clientHeight
+  function resize(force = false): void {
+    if (destroyed) return
+    const nextWidth = scroll.clientWidth
+    const nextHeight = scroll.clientHeight
+    // v-show / display:none 不应把已保存的缩放和滚动状态压缩到零尺寸。
+    if (nextWidth <= 0 || nextHeight <= 0) return
+    if (!force && !layoutDirty && width === nextWidth && height === nextHeight) return
+    const previousWidth = width
+    const previousZoom = timeZoom
+    const previousLeft = scroll.scrollLeft
+    width = nextWidth
+    height = nextHeight
+    layoutDirty = false
+    ;({ minTimeZoom, maxTimeZoom } = timeZoomBounds(width, timeline.durationSeconds))
+    timeZoom = fitting ? minTimeZoom : clamp(timeZoom, minTimeZoom, maxTimeZoom)
+    fitting = timeZoom === minTimeZoom
     resizeContent()
+    setScroll(
+      fitting ? 0 : resizeScrollLeft(previousLeft, previousZoom, timeZoom, previousWidth, width)
+    )
     if (!pitchFocused) focusPitch(true)
     scheduleRender()
     updatePlayhead()
+    changed()
   }
   function eventSeconds(clientX: number): number {
     const x = clientX - ruler.getBoundingClientRect().left + scroll.scrollLeft
@@ -321,23 +374,35 @@ export function createView(
     { passive: true }
   )
   listen(
-    scroll,
+    root,
     'wheel',
     ((event: WheelEvent) => {
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault()
+        // Safari gesturechange 可能同时伴随 wheel；同一根区域只接受手势事件一次。
+        if (gestureActive) return
+        const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1
         view.setTimeZoom(
-          timeZoom * Math.exp(-event.deltaY * 0.01),
+          timeZoom * Math.exp(clamp(-event.deltaY * unit * 0.01, -100, 100)),
           event.clientX - scroll.getBoundingClientRect().left
         )
-      } else setFollow(false)
+      }
     }) as EventListener,
     { passive: false }
+  )
+  listen(
+    scroll,
+    'wheel',
+    ((event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) setFollow(false)
+    }) as EventListener,
+    { passive: true }
   )
   listen(
     gutter,
     'wheel',
     ((event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) return
       event.preventDefault()
       setFollow(false)
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1
@@ -348,12 +413,12 @@ export function createView(
   listen(scroll, 'click', ((event: MouseEvent) => {
     if (variant !== 'overview') return
     const row = trackAt(event.clientY)
-    if (row) options.onTrackSelect?.(row.track.id)
+    if (row) selectTrack(row.track.id, event)
   }) as EventListener)
   listen(scroll, 'dblclick', ((event: MouseEvent) => {
     if (variant !== 'overview') return
     const row = trackAt(event.clientY)
-    if (row) options.onTrackOpen?.(row.track.id)
+    if (row) openTrack(row.track.id)
   }) as EventListener)
   listen(ruler, 'pointerdown', ((event: PointerEvent) => {
     if (event.target === handle || event.button !== 0) return
@@ -409,15 +474,31 @@ export function createView(
     event.preventDefault()
     options.onSeek?.(clamp(next, 0, timeline.durationSeconds))
   }) as EventListener)
-  listen(window, 'resize', resize)
-
-  const resizeObserver = new ResizeObserver(resize)
+  const resizeScheduler = createResizeScheduler(() => resize())
+  listen(window, 'resize', resizeScheduler.schedule)
+  const resizeObserver = new ResizeObserver(resizeScheduler.schedule)
   resizeObserver.observe(scroll)
   cleanups.push(() => resizeObserver.disconnect())
+  cleanups.push(resizeScheduler.cancel)
   const view: PianoRollView = {
+    setTheme(next) {
+      if (destroyed) return
+      theme = resolvePianoRollTheme(next)
+      applyPianoRollTheme(root, theme)
+      // 换肤仅使静态图层失效，不替换节点、数据或交互状态。
+      scheduleRender()
+    },
+    getTheme() {
+      return Object.freeze({
+        colors: Object.freeze({ ...theme.colors }),
+        metrics: Object.freeze({ ...theme.metrics }),
+      })
+    },
     setDocument(next) {
       if (destroyed) return
       finishDrag(false)
+      selectionBeforeGesture = undefined
+      layoutDirty = true
       const notesChanged = document.notes !== next.notes
       document = next
       timeline = createTimeline(next)
@@ -425,7 +506,7 @@ export function createView(
       if (!document.tracks.some((track) => track.id === selected))
         selected = document.tracks[0]?.id ?? null
       rebuildRows()
-      resizeContent()
+      resize(true)
       focusPitch(false)
       scheduleRender()
     },
@@ -451,7 +532,10 @@ export function createView(
       scheduleRender()
     },
     setTimeZoom(value, anchorX) {
-      const next = clamp(value, 0.001, 1200, timeZoom)
+      if (destroyed) return
+      // 若用户在防抖尚未结束时操作缩放，先使用最新容器宽度更新边界。
+      resize()
+      const next = clamp(value, minTimeZoom, maxTimeZoom, timeZoom)
       const playhead = position() * timeZoom - scroll.scrollLeft
       const anchor = clamp(
         anchorX ?? (playhead >= 0 && playhead <= width ? playhead : width / 2),
@@ -460,8 +544,9 @@ export function createView(
       )
       const left = zoomScrollLeft(scroll.scrollLeft, timeZoom, next, anchor)
       timeZoom = next
+      fitting = next === minTimeZoom
       resizeContent()
-      setScroll(left)
+      setScroll(fitting ? 0 : left)
       scheduleRender()
       changed()
     },
@@ -482,7 +567,10 @@ export function createView(
     },
     setFollow,
     fitToSong() {
-      view.setTimeZoom(Math.max(0.001, (width - 32) / Math.max(0.1, timeline.durationSeconds)), 0)
+      if (destroyed) return
+      resize()
+      fitting = true
+      view.setTimeZoom(minTimeZoom, 0)
       setScroll(0)
     },
     getViewport: snapshot,
@@ -500,6 +588,17 @@ export function createView(
       root.remove()
     },
   }
+  const gestureZoom = installGestureZoom(root, {
+    getZoom: () => view.getViewport().timeZoom,
+    viewportElement: scroll,
+    onActiveChange: (active) => {
+      gestureActive = active
+    },
+    onZoom: (value, anchorX) => {
+      view.setTimeZoom(value, anchorX)
+    },
+  })
+  cleanups.push(gestureZoom.destroy)
   rebuildRows()
   resize()
   focusPitch(true)

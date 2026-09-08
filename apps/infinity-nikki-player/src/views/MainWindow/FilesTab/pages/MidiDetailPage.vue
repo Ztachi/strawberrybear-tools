@@ -14,6 +14,7 @@ import { formatDuration } from '../utils'
 import { adaptMidiToPianoRoll, applyPianoTrackEnabled } from './MidiDetailPage/pianoRollAdapter'
 import { usePianoDetailSeek } from './MidiDetailPage/usePianoDetailSeek'
 import { usePianoEditorResize } from './MidiDetailPage/usePianoEditorResize'
+import { usePianoEditorSelection } from './MidiDetailPage/usePianoEditorSelection'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -40,8 +41,6 @@ const detailAuthor = computed(() =>
   detailMidi.value ? getMidiDisplayArtist(detailMidi.value) : ''
 )
 const detailDescription = computed(() => detailMidi.value?.description?.trim() ?? '')
-const selectedTrackId = ref<string | null>(null)
-const isPianoEditorOpen = ref(false)
 const {
   matchesPlayback: currentPlaybackMatchesDetail,
   previewSeconds: pianoSeekPreviewSeconds,
@@ -58,7 +57,7 @@ const {
   move: moveEditorResize,
   end: endEditorResize,
   onKeydown: handleEditorResizeKey,
-} = usePianoEditorResize(closePianoEditor)
+} = usePianoEditorResize(() => closePianoEditor())
 
 const pianoRollLabels = computed(() => ({
   overview: t('midi.pianoRoll.overview'),
@@ -84,6 +83,16 @@ const pianoRollDocument = computed(() => {
   return applyPianoTrackEnabled(sourcePianoDocument.value, playerStore.detailDisabledTracks)
 })
 const pianoRollTracks = computed(() => pianoRollDocument.value.tracks)
+const {
+  selectedTrackId,
+  isOpen: isPianoEditorOpen,
+  select: selectPianoTrack,
+  activate: openPianoEditor,
+  close: closePianoEditor,
+} = usePianoEditorSelection(pianoRollTracks, () => {
+  endEditorResize()
+  previewPianoSeek(null)
+})
 
 const pianoRollTransport = computed(() => ({
   positionSeconds:
@@ -133,21 +142,6 @@ const detailStats = computed(() => [
   },
 ])
 
-function selectPianoTrack(trackId: string): void {
-  if (pianoRollTracks.value.some((track) => track.id === trackId)) selectedTrackId.value = trackId
-}
-
-function openPianoEditor(trackId: string): void {
-  selectPianoTrack(trackId)
-  isPianoEditorOpen.value = true
-}
-
-function closePianoEditor(): void {
-  endEditorResize()
-  previewPianoSeek(null)
-  isPianoEditorOpen.value = false
-}
-
 function togglePianoTrack(trackId: string): void {
   playerStore.toggleDetailTrackById(trackId)
 }
@@ -176,16 +170,6 @@ watch(
   () => {
     if (!filename.value) return
     void playerStore.loadMidiDetailByFilename(filename.value)
-  },
-  { immediate: true }
-)
-
-watch(
-  pianoRollTracks,
-  (tracks) => {
-    if (!tracks.some((track) => track.id === selectedTrackId.value)) {
-      selectedTrackId.value = tracks[0]?.id ?? null
-    }
   },
   { immediate: true }
 )

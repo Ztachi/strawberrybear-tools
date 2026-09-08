@@ -10,6 +10,7 @@ declare global {
       previews: (number | null)[]
       selections: string[]
       opened: string[]
+      openContexts: { trackId: string; selectedTrackIdAtGestureStart: string | null }[]
       setTime: (seconds: number, playing?: boolean) => void
       large: () => void
       paints: number
@@ -46,6 +47,7 @@ const seeks: number[] = []
 const previews: (number | null)[] = []
 const selections: string[] = []
 const opened: string[] = []
+const openContexts: { trackId: string; selectedTrackIdAtGestureStart: string | null }[] = []
 const overview = createTracksOverview({
   container: document.querySelector<HTMLElement>('#overview')!,
   document: documentModel,
@@ -56,8 +58,9 @@ const overview = createTracksOverview({
     overview.setSelectedTrack(id)
     editor.setSelectedTrack(id)
   },
-  onTrackOpen: (id) => {
+  onTrackOpen: (id, context) => {
     opened.push(id)
+    openContexts.push({ trackId: id, ...context })
     editor.setSelectedTrack(id)
   },
 })
@@ -75,6 +78,7 @@ window.fixture = {
   previews,
   selections,
   opened,
+  openContexts,
   paints: 0,
   setTime(seconds, playing = false) {
     const transport = { positionSeconds: seconds, isPlaying: playing, playbackRate: 1 }

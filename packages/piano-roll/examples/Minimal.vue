@@ -3,7 +3,7 @@
 import { computed, ref } from 'vue'
 import PianoRoll from '../src/PianoRoll.vue'
 import type { PianoRollDocument } from '../src/core'
-import type { PianoRollTransport } from '../src/browser'
+import type { PianoRollTrackOpenContext, PianoRollTransport } from '../src/browser'
 
 const document: PianoRollDocument = {
   ticksPerBeat: 480,
@@ -27,7 +27,11 @@ const preview = ref<number | null>(null)
 const transport = computed<PianoRollTransport>(() => ({
   positionSeconds: preview.value ?? seconds.value, isPlaying: false, playbackRate: 1,
 }))
-function openTrack(id: string): void { selected.value = id; open.value = true }
+function openTrack(id: string, context: PianoRollTrackOpenContext): void {
+  selected.value = id
+  // 双击另一轨时，先发生的 click 已改变 selected，因此要读取手势开始时的轨道。
+  open.value = !(open.value && context.selectedTrackIdAtGestureStart === id)
+}
 function seek(value: number): void { seconds.value = value }
 </script>
 

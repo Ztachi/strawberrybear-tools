@@ -13,6 +13,62 @@ export function zoomScrollLeft(
   return Math.max(0, ((scrollLeft + anchorX) / oldZoom) * newZoom - anchorX)
 }
 
+/**
+ * 以时间区域实际 clientWidth 计算统一缩放边界，不包含琴键、轨道栏或滚动条。
+ * 极短曲允许上限提高至整曲比例；空曲和首次隐藏布局使用有限默认值。
+ */
+export function timeZoomBounds(
+  width: number,
+  durationSeconds: number
+): { minTimeZoom: number; maxTimeZoom: number } {
+  const fit = width > 0 && durationSeconds > 0 ? width / durationSeconds : 0.001
+  const minTimeZoom = Number.isFinite(fit) && fit > 0 ? fit : 0.001
+  return { minTimeZoom, maxTimeZoom: Math.max(1200, minTimeZoom) }
+}
+
+/** 容器宽度改变时保留中心对应的原曲时间；边界由原生滚动容器裁剪。 */
+export function resizeScrollLeft(
+  scrollLeft: number,
+  oldZoom: number,
+  newZoom: number,
+  oldWidth: number,
+  newWidth: number
+): number {
+  if (oldWidth <= 0) return 0
+  return Math.max(0, ((scrollLeft + oldWidth / 2) / oldZoom) * newZoom - newWidth / 2)
+}
+
+/**
+ * 合并 ResizeObserver 的连续通知，同时限制等待上限，避免持续拖动容器时画面一直不更新。
+ * cancel 必须随视图销毁调用，防止延迟任务读取已移除的 DOM。
+ */
+export function createResizeScheduler(
+  callback: () => void,
+  delayMs = 60,
+  maxWaitMs = 180
+): { schedule: () => void; cancel: () => void } {
+  let trailing: ReturnType<typeof setTimeout> | undefined
+  let maximum: ReturnType<typeof setTimeout> | undefined
+  function cancel(): void {
+    clearTimeout(trailing)
+    clearTimeout(maximum)
+    trailing = undefined
+    maximum = undefined
+  }
+  function flush(): void {
+    cancel()
+    callback()
+  }
+  return {
+    schedule() {
+      clearTimeout(trailing)
+      trailing = setTimeout(flush, delayMs)
+      maximum ??= setTimeout(flush, maxWaitMs)
+    },
+    cancel,
+  }
+}
+
 /** 播放头离开安全范围后移到视口 25% 处；返回 null 表示无需移动。 */
 export function followScrollLeft(x: number, scrollLeft: number, width: number): number | null {
   if (width <= 0) return null

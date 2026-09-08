@@ -2,6 +2,18 @@ import { createView } from './browser/controller'
 import type { PianoRollView, PianoRollViewOptions } from './browser/types'
 
 export * from './browser/types'
+export {
+  applyPianoRollTheme,
+  defaultPianoRollTheme,
+  pianoRollThemeVariables,
+  resolvePianoRollTheme,
+} from './browser/theme'
+export type {
+  PianoRollTheme,
+  PianoRollThemeColors,
+  PianoRollThemeInput,
+  PianoRollThemeMetrics,
+} from './browser/theme'
 
 /** 创建只读多轨总览；container 的 CSS 高度决定可见视口，内容可双向滚动。 */
 export function createTracksOverview(options: PianoRollViewOptions): PianoRollView {

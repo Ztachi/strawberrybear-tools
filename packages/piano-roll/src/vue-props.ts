@@ -1,5 +1,6 @@
 import type { PianoRollDocument } from './core'
 import type { PianoRollLabels, PianoRollPlugin, PianoRollTransport } from './browser/types'
+import type { PianoRollThemeInput } from './browser/theme'
 
 /** Vue 适配层公共输入；时间单位一律为原曲秒。 */
 export interface PianoRollProps {
@@ -17,6 +18,8 @@ export interface PianoRollProps {
   pitchZoom?: number
   /** 文案本地化，默认中文。 */
   labels?: Partial<PianoRollLabels>
+  /** 语义主题 token 的局部覆盖；默认浅粉色，更新时保留视口和实例。 */
+  theme?: PianoRollThemeInput
   /** 实例生命周期插件，在 mount 时安装。 */
   plugins?: readonly PianoRollPlugin[]
 }

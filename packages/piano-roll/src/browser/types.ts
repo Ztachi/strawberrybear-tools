@@ -1,4 +1,7 @@
 import type { PianoRollDocument } from '../core'
+import type { PianoRollTheme, PianoRollThemeInput } from './theme'
+
+export type { PianoRollTheme, PianoRollThemeInput } from './theme'
 
 /** 外部权威时钟；所有位置均为原曲秒，倍速不改变音符 tick。 */
 export interface PianoRollTransport {
@@ -35,6 +38,10 @@ export interface PianoRollViewport {
   scrollTop: number
   /** 每原曲秒的像素数。 */
   timeZoom: number
+  /** 当前容器恰好容纳完整曲目的缩放下限，与所有缩放入口一致。 */
+  minTimeZoom: number
+  /** 当前缩放上限；极短曲目会随整曲下限提高。 */
+  maxTimeZoom: number
   /** 每个半音的像素高度。 */
   pitchZoom: number
   /** 当前是否启用播放跟随。 */
@@ -47,6 +54,12 @@ export interface PianoRollPlugin {
   id: string
   /** 安装入口；不应直接修改 document 中的音符。 */
   install(view: PianoRollView): void | (() => void)
+}
+
+/** 双击手势开始时的选择状态，避免前置 click 选轨造成错误的开关判断。 */
+export interface PianoRollTrackOpenContext {
+  /** 第一次 click 发生前选中的轨道。 */
+  selectedTrackIdAtGestureStart: string | null
 }
 
 /** 浏览器控制器选项。浮层布局由宿主负责。 */
@@ -69,6 +82,8 @@ export interface PianoRollViewOptions {
   trackHeights?: Readonly<Record<string, number>>
   /** 可本地化的无障碍和控制文案。 */
   labels?: Partial<PianoRollLabels>
+  /** 主题令牌；省略时使用播放器匹配的浅粉色默认主题。 */
+  theme?: PianoRollThemeInput
   /** 标尺点击或手柄松手时提交一次 seek，单位原曲秒。 */
   onSeek?: (seconds: number) => void
   /** 拖拽位置预览；null 表示完成或取消，不能直接用于音频 seek。 */
@@ -76,7 +91,7 @@ export interface PianoRollViewOptions {
   /** 单击轨道。 */
   onTrackSelect?: (trackId: string) => void
   /** 双击轨道；宿主决定浮层的打开方式。 */
-  onTrackOpen?: (trackId: string) => void
+  onTrackOpen?: (trackId: string, context: PianoRollTrackOpenContext) => void
   /** 启用状态切换意图；具体播放策略由宿主处理。 */
   onTrackToggle?: (trackId: string) => void
   /** Follow 状态变化，只作用于此视图。 */
@@ -97,6 +112,10 @@ export interface PianoRollView {
   setSelectedTrack(trackId: string | null): void
   /** 更新本地化文案，不重建实例或重置视口。 */
   setLabels(labels: Partial<PianoRollLabels>): void
+  /** 动态替换颜色与字体令牌，不重建视图，也不重置滚动和缩放。 */
+  setTheme(theme?: PianoRollThemeInput): void
+  /** 当前已解析的完整主题，供插件或自定义 Canvas 使用。 */
+  getTheme(): Readonly<PianoRollTheme>
   /** 设置每秒像素数。anchorX 是视口内锚点，默认可见播放头或中心。 */
   setTimeZoom(pixelsPerSecond: number, anchorX?: number): void
   /** 设置每半音像素数，以视口中心音高为锚。 */

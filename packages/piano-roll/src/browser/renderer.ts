@@ -1,4 +1,5 @@
 import type { createNoteIndex, PianoRollTimeline, PianoRollTrack } from '../core'
+import { defaultPianoRollTheme, type PianoRollTheme } from './theme'
 
 /** 一行轨道的内容坐标。 */
 export interface TrackRow {
@@ -20,6 +21,8 @@ export interface RenderFrame {
   scrollTop: number
   timeZoom: number
   pitchZoom: number
+  /** Canvas 与 DOM 共用的已解析主题；缺省时使用默认主题。 */
+  theme?: PianoRollTheme
 }
 
 /** 仅在视口或 DPR 改变时分配 backing store，绝不按整首歌尺寸分配。 */
@@ -71,7 +74,8 @@ export function drawGrid(
   const rulerContext = canvasContext(ruler, frame.width, 32)
   if (!context || !rulerContext) return
   const { width, height, scrollLeft, scrollTop, pitchZoom, timeline, timeZoom } = frame
-  context.fillStyle = '#202124'
+  const theme = frame.theme ?? defaultPianoRollTheme
+  context.fillStyle = theme.colors.surface
   context.fillRect(0, 0, width, height)
   if (frame.variant === 'editor') {
     const firstRow = Math.max(0, Math.floor(scrollTop / pitchZoom))
@@ -79,16 +83,23 @@ export function drawGrid(
     for (let row = firstRow; row <= lastRow; row += 1) {
       const pitch = 127 - row
       const y = row * pitchZoom - scrollTop
-      context.fillStyle = [1, 3, 6, 8, 10].includes(pitch % 12) ? '#202124' : '#2c2e31'
+      context.fillStyle = [1, 3, 6, 8, 10].includes(pitch % 12)
+        ? theme.colors.surface
+        : theme.colors.surfaceSubtle
       context.fillRect(0, y, width, pitchZoom)
-      context.fillStyle = pitch % 12 === 0 ? '#55575a' : '#35373b'
+      context.fillStyle = pitch % 12 === 0 ? theme.colors.gridMajor : theme.colors.gridMinor
       context.fillRect(0, y + pitchZoom - 1, width, 1)
     }
   } else {
     const endX = timeline.secondsToContentX(timeline.durationSeconds, timeZoom) - scrollLeft
     for (const row of frame.rows) {
       const y = row.top - scrollTop
-      context.fillStyle = row.track.id === frame.selectedTrackId ? '#387844' : '#285f33'
+      context.fillStyle =
+        row.track.id === frame.selectedTrackId
+          ? theme.colors.trackSelected
+          : row.track.enabled
+            ? theme.colors.trackEnabled
+            : theme.colors.trackDisabled
       context.globalAlpha = row.track.enabled ? 1 : 0.32
       context.fillRect(
         Math.max(0, -scrollLeft),
@@ -97,7 +108,7 @@ export function drawGrid(
         row.height - 6
       )
       context.globalAlpha = 1
-      context.fillStyle = '#131518'
+      context.fillStyle = theme.colors.border
       context.fillRect(0, y + row.height - 1, width, 1)
     }
   }
@@ -106,9 +117,9 @@ export function drawGrid(
     endSeconds: (scrollLeft + width) / timeZoom,
     pixelsPerSecond: timeZoom,
   })
-  rulerContext.fillStyle = '#36373b'
+  rulerContext.fillStyle = theme.colors.surfaceRaised
   rulerContext.fillRect(0, 0, width, 32)
-  rulerContext.font = '12px system-ui'
+  rulerContext.font = `12px ${theme.metrics.fontFamily}`
   let labelRight = Number.NEGATIVE_INFINITY
   const nextBarPositions: number[] = []
   let nextBarX = Number.POSITIVE_INFINITY
@@ -119,12 +130,16 @@ export function drawGrid(
   for (const [index, mark] of marks.entries()) {
     const x = Math.round(mark.x - scrollLeft) + 0.5
     const major = mark.kind === 'bar'
-    context.strokeStyle = major ? '#777b8066' : mark.kind === 'beat' ? '#73767b33' : '#73767b18'
+    context.strokeStyle = major
+      ? theme.colors.gridMajor
+      : mark.kind === 'beat'
+        ? theme.colors.gridBeat
+        : theme.colors.gridMinor
     context.beginPath()
     context.moveTo(x, 0)
     context.lineTo(x, height)
     context.stroke()
-    rulerContext.strokeStyle = major ? '#babcc3' : '#797b82'
+    rulerContext.strokeStyle = major ? theme.colors.gridMajor : theme.colors.gridBeat
     rulerContext.beginPath()
     rulerContext.moveTo(x, major ? 2 : 23)
     rulerContext.lineTo(x, 32)
@@ -132,7 +147,7 @@ export function drawGrid(
     const labelWidth = rulerContext.measureText(mark.label).width
     const fitsBeforeBar = major || x + 5 + labelWidth + 6 < nextBarPositions[index]!
     if (mark.label && x > labelRight + 6 && fitsBeforeBar) {
-      rulerContext.fillStyle = '#e4e4e7'
+      rulerContext.fillStyle = theme.colors.text
       rulerContext.fillText(mark.label, x + 5, 16)
       labelRight = x + 5 + labelWidth
     }
@@ -143,6 +158,7 @@ export function drawGrid(
 export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
   const context = canvasContext(canvas, frame.width, frame.height)
   if (!context) return
+  const theme = frame.theme ?? defaultPianoRollTheme
   const { timeline, scrollLeft, scrollTop, timeZoom, pitchZoom, width, height } = frame
   const startTick = timeline.secondsToTick(Math.max(0, (scrollLeft - 5) / timeZoom))
   const endTick = timeline.secondsToTick((scrollLeft + width) / timeZoom)
@@ -168,12 +184,15 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
       const w = Math.min(width + 2, Math.max(start + 2, end)) - x
       if (w <= 0) continue
       context.globalAlpha = row.track.enabled ? 1 : 0.28
-      context.fillStyle = frame.variant === 'overview' ? '#b4f2b9' : row.track.color || '#38b951'
+      context.fillStyle =
+        frame.variant === 'overview'
+          ? theme.colors.overviewNote
+          : row.track.color || theme.colors.editorNote
       context.fillRect(x, y, w, noteHeight)
       if (frame.variant === 'editor') {
-        context.strokeStyle = '#102d16'
+        context.strokeStyle = theme.colors.noteOutline
         context.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), noteHeight - 1)
-        context.fillStyle = '#c9ffd0'
+        context.fillStyle = theme.colors.noteVelocity
         context.fillRect(
           x + 2,
           y + 3,
@@ -184,8 +203,8 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
     }
     context.globalAlpha = 1
     if (frame.variant === 'overview') {
-      context.fillStyle = '#e0fce3'
-      context.font = '12px system-ui'
+      context.fillStyle = theme.colors.text
+      context.font = `12px ${theme.metrics.fontFamily}`
       context.fillText(row.track.name, 8, row.top - scrollTop + 17, width - 16)
     }
   }
@@ -196,27 +215,28 @@ export function drawKeyboard(
   canvas: HTMLCanvasElement,
   height: number,
   pitchZoom: number,
-  scrollTop: number
+  scrollTop: number,
+  theme: PianoRollTheme = defaultPianoRollTheme
 ): void {
   const context = canvasContext(canvas, 64, height)
   if (!context) return
   const first = Math.max(0, Math.floor(scrollTop / pitchZoom))
   const last = Math.min(127, Math.ceil((scrollTop + height) / pitchZoom))
-  context.font = '11px system-ui'
+  context.font = `11px ${theme.metrics.fontFamily}`
   for (let row = first; row <= last; row += 1) {
     const pitch = 127 - row
     const y = row * pitchZoom - scrollTop
     const black = [1, 3, 6, 8, 10].includes(pitch % 12)
-    context.fillStyle = '#e6e6e8'
+    context.fillStyle = theme.colors.keyWhite
     context.fillRect(0, y, 64, pitchZoom)
-    context.fillStyle = '#96969d'
+    context.fillStyle = theme.colors.keyBorder
     context.fillRect(0, y + pitchZoom - 1, 64, 1)
     if (black) {
-      context.fillStyle = '#141519'
+      context.fillStyle = theme.colors.keyBlack
       context.fillRect(0, y, 42, pitchZoom - 1)
     }
     if (pitch % 12 === 0) {
-      context.fillStyle = '#303138'
+      context.fillStyle = theme.colors.text
       context.fillText(`C${Math.floor(pitch / 12) - 1}`, 43, y + Math.min(pitchZoom - 2, 12))
     }
   }

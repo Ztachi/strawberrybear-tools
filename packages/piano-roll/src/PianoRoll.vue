@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /** @description: Vue 薄适配层；文档、时间、事件与持久浏览器控制器的生命周期桥接。 */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { createPianoRollEditor, createTracksOverview, defaultLabels, type PianoRollView, type PianoRollViewport } from './browser'
+import { createPianoRollEditor, createTracksOverview, defaultLabels, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
+import { pianoRollThemeVariables, resolvePianoRollTheme } from './browser/theme'
 import type { PianoRollProps } from './vue-props'
 
 const props = withDefaults(defineProps<PianoRollProps>(), {
@@ -9,7 +10,7 @@ const props = withDefaults(defineProps<PianoRollProps>(), {
 })
 const emit = defineEmits<{
   'select-track': [trackId: string]
-  'open-editor': [trackId: string]
+  'open-editor': [trackId: string, context: PianoRollTrackOpenContext]
   'toggle-track': [trackId: string]
   'seek-preview': [seconds: number | null]
   seek: [seconds: number]
@@ -18,8 +19,10 @@ const emit = defineEmits<{
 }>()
 const host = ref<HTMLDivElement | null>(null)
 const labels = computed(() => ({ ...defaultLabels, ...props.labels }))
+const themeVariables = computed(() => pianoRollThemeVariables(resolvePianoRollTheme(props.theme)))
 const viewport = shallowRef<Readonly<PianoRollViewport>>({
   scrollLeft: 0, scrollTop: 0, timeZoom: props.timeZoom ?? (props.variant === 'overview' ? 42 : 110),
+  minTimeZoom: 1, maxTimeZoom: 1200,
   pitchZoom: props.pitchZoom, follow: true,
 })
 const selectedTrack = computed(() => props.document.tracks.find((track) => track.id === props.selectedTrackId))
@@ -33,9 +36,9 @@ function mountView(): void {
     container: host.value, document: props.document, transport: props.transport,
     selectedTrackId: props.selectedTrackId, timeZoom: viewport.value.timeZoom,
     pitchZoom: viewport.value.pitchZoom, follow: viewport.value.follow,
-    labels: labels.value, plugins: props.plugins,
+    labels: labels.value, theme: props.theme, plugins: props.plugins,
     onTrackSelect: (id) => emit('select-track', id),
-    onTrackOpen: (id) => emit('open-editor', id),
+    onTrackOpen: (id, context) => emit('open-editor', id, context),
     onTrackToggle: (id) => emit('toggle-track', id),
     onSeek: (seconds) => emit('seek', seconds),
     onSeekPreview: (seconds) => emit('seek-preview', seconds),
@@ -58,6 +61,7 @@ watch(() => props.transport, (transport) => view?.setTransport(transport), { dee
 watch(() => props.selectedTrackId, (id) => view?.setSelectedTrack(id))
 watch(() => props.variant, mountView)
 watch(labels, (next) => view?.setLabels(next))
+watch(() => props.theme, (next) => view?.setTheme(next), { deep: true })
 watch(() => props.timeZoom, (zoom) => { if (zoom !== undefined) view?.setTimeZoom(zoom) })
 watch(() => props.pitchZoom, (zoom) => view?.setPitchZoom(zoom))
 defineExpose({ getView: () => view })
@@ -66,11 +70,13 @@ defineExpose({ getView: () => view })
 <template>
   <section
     class="piano-roll"
+    :style="themeVariables"
     :aria-label="variant === 'overview' ? labels.overview : labels.editor"
   >
     <header class="piano-roll-toolbar">
       <strong
         class="piano-roll-title"
+        :title="variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor)"
       >{{ variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor) }}</strong>
       <slot
         name="toolbar"
@@ -94,10 +100,11 @@ defineExpose({ getView: () => view })
         <span>{{ labels.timeZoom }}</span>
         <input
           type="range"
+          :min="viewport.minTimeZoom"
+          :max="viewport.maxTimeZoom"
           :value="viewport.timeZoom"
-          min="4"
-          max="600"
-          step="1"
+          :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
+          step="any"
           @input="updateTimeZoom"
         >
       </label>
@@ -131,11 +138,12 @@ defineExpose({ getView: () => view })
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid #505157;
+  border: 1px solid var(--pr-border);
   border-radius: 8px;
-  background: #202124;
-  color: #e4e4e7;
-  color-scheme: dark;
+  background: var(--pr-surface);
+  color: var(--pr-text);
+  color-scheme: light;
+  container: piano-roll / inline-size;
 }
 .piano-roll-toolbar {
   display: flex;
@@ -144,14 +152,26 @@ defineExpose({ getView: () => view })
   gap: 8px;
   padding: 7px 10px;
   min-height: 38px;
-  background: #36373b;
-  font: 12px system-ui, sans-serif;
+  flex-shrink: 0;
+  background: var(--pr-surface-raised);
+  border-bottom: 1px solid var(--pr-border);
+  font: 12px var(--pr-font-family);
 }
-.piano-roll-title { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.piano-roll-toolbar button { padding: 4px 8px; border: 1px solid #666872; border-radius: 5px; background: #45464d; color: inherit; cursor: pointer; font: inherit; }
-.piano-roll-toolbar button[aria-pressed=true] { background: #286daf; border-color: #6ea3dc; }
-.piano-roll-toolbar button:focus-visible, .piano-roll-toolbar input:focus-visible { outline: 2px solid #91c7ff; outline-offset: 2px; }
+.piano-roll-title { margin-right: auto; flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.piano-roll-toolbar button { flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--pr-border); border-radius: var(--pr-control-radius); background: var(--pr-surface); color: inherit; cursor: pointer; font: inherit; }
+.piano-roll-toolbar button:hover { background: var(--pr-primary-soft); }
+.piano-roll-toolbar button[aria-pressed=true] { background: var(--pr-primary-soft); border-color: var(--pr-primary); }
+.piano-roll-toolbar button:focus-visible, .piano-roll-toolbar input:focus-visible { outline: 2px solid var(--pr-focus); outline-offset: 2px; }
 .piano-roll-zoom { display: flex; align-items: center; gap: 6px; }
-.piano-roll-zoom input { width: clamp(60px, 8vw, 110px); accent-color: #7cb9f4; }
+.piano-roll-zoom input { width: clamp(60px, 12cqi, 110px); height: 18px; margin: 0; appearance: none; background: transparent; accent-color: var(--pr-primary); cursor: pointer; }
+.piano-roll-zoom input::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--pr-border); }
+.piano-roll-zoom input::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; border: 0; border-radius: 50%; appearance: none; background: var(--pr-primary); }
+.piano-roll-zoom input::-moz-range-track { height: 4px; border-radius: 999px; background: var(--pr-border); }
+.piano-roll-zoom input::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--pr-primary); }
+.piano-roll-zoom input:disabled { opacity: .5; cursor: default; }
 .piano-roll-host { flex: 1; min-width: 0; min-height: 0; position: relative; }
+@container piano-roll (max-width: 540px) {
+  .piano-roll-toolbar { gap: 6px; padding: 6px; }
+  .piano-roll-pitch-zoom { margin-left: auto; }
+}
 </style>

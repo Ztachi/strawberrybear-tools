@@ -37,18 +37,21 @@ function seek(seconds: number) {
 
 可运行的完整组合见 [examples/Minimal.vue](./examples/Minimal.vue)。双击主轨道的 `open-editor` 事件由 app 打开 `variant="editor"` 的第二个实例；主轨道单击只更新 `selectedTrackId`，使已打开详情切换内容。两个实例可以处在完全不同的滚动和缩放等级。`PianoRollOverview`、`PianoRollEditor` 是固定 variant 的具名便捷组件。根入口仍保留默认 Vue 导入。
 
-Vue props：`document`、`transport` 必填，`variant`、`selectedTrackId`、`timeZoom`、`pitchZoom`、`labels`、`plugins` 可选。`toolbar` slot 用于关闭按钮等宿主控件。容器必须通过 CSS 指定高度；组件使用完整容器高度，不用歌曲时长决定布局高度。
+Vue props：`document`、`transport` 必填，`variant`、`selectedTrackId`、`timeZoom`、`pitchZoom`、`labels`、`theme`、`plugins` 可选。`toolbar` slot 用于关闭按钮等宿主控件。容器必须通过 CSS 指定高度；组件使用完整容器高度，不用歌曲时长决定布局高度。
 
-| 事件                           | 参数          | 宿主处理                                      |
-| ------------------------------ | ------------- | --------------------------------------------- |
-| `select-track` / `open-editor` | 标准轨道 ID   | 选择轨道 / 打开非模态浮层                     |
-| `toggle-track`                 | 标准轨道 ID   | 更新自己的启用状态，再替换 document.tracks    |
-| `seek`                         | 原曲秒        | 点击标尺或手柄松手，仅提交一次音频 seek       |
-| `seek-preview`                 | 原曲秒或 null | 可选地预览另一个视图的指针；不能调用音频 seek |
-| `follow-change`                | boolean       | 当前实例的 Follow 状态                        |
-| `viewport-change`              | 只读视口快照  | 可选保存缩放/滚动或显示状态                   |
+| 事件              | 参数                | 宿主处理                                      |
+| ----------------- | ------------------- | --------------------------------------------- |
+| `select-track`    | 标准轨道 ID         | 选择轨道                                      |
+| `open-editor`     | 轨道 ID、手势上下文 | 打开、切换或关闭非模态浮层                    |
+| `toggle-track`    | 标准轨道 ID         | 更新自己的启用状态，再替换 document.tracks    |
+| `seek`            | 原曲秒              | 点击标尺或手柄松手，仅提交一次音频 seek       |
+| `seek-preview`    | 原曲秒或 null       | 可选地预览另一个视图的指针；不能调用音频 seek |
+| `follow-change`   | boolean             | 当前实例的 Follow 状态                        |
+| `viewport-change` | 只读视口快照        | 可选保存缩放/滚动或显示状态                   |
 
 文档使用不可变输入：音符变化时替换 `document.notes`，不要原地修改数组。每个音符和轨道都使用稳定字符串 ID。旧版 `notes/duration/currentTime/disabledTracks` props 已迁移为 `document/transport`；时间单位由旧毫秒改为明确的原曲秒。Rust 轨道索引与 MIDI 播放器 1-based 索引的换算属于 app adapter，不进入公共包。
+
+双击前会先发生两次单击，因此 `open-editor` / `onTrackOpen` 的第二参数提供 `selectedTrackIdAtGestureStart`。需要“再次双击当前轨道关闭”时，用这个字段与目标轨道比较，不能比较已经被单击更新的 `selectedTrackId`；双击另一轨道应切换并保持打开。只接收 ID 的既有回调仍然兼容，完整写法见最小组合示例。
 
 ## 原生 TypeScript 浏览器接入
 
@@ -68,7 +71,35 @@ overview.destroy()
 editor.destroy()
 ```
 
-`getViewport()` 返回滚动、时间/音高缩放和 Follow 的快照。`subscribe()` 返回取消订阅函数，`fitToSong()` 显示全曲，`setFollow(true)` 立即回到播放位置。插件通过 `{ id, install(view) => cleanup }` 安装并使用公开 API，卸载时统一清理；没有暴露可变 Canvas 或音符内部状态，未来编辑命令可复用相同稳定 ID。
+`getViewport()` 返回滚动、时间/音高缩放、`minTimeZoom` / `maxTimeZoom` 和 Follow 的快照。`subscribe()` 返回取消订阅函数，`fitToSong()` 显示全曲，`setFollow(true)` 立即回到播放位置。插件通过 `{ id, install(view) => cleanup }` 安装并使用公开 API，卸载时统一清理；没有暴露可变 Canvas 或音符内部状态，未来编辑命令可复用相同稳定 ID。
+
+## 主题定制
+
+默认提供浅粉主题：暖白背景、粉色轨道、深玫瑰音符与播放头。浏览器和 Vue 使用同一套语义 token，公共包不依赖宿主的 CSS 框架或应用主题模块。
+
+```ts
+import type { PianoRollThemeInput } from '@strawberrybear/piano-roll/browser'
+
+const theme: PianoRollThemeInput = {
+  colors: {
+    primary: '#7548a3',
+    primarySoft: '#eee3f8',
+    trackEnabled: '#e5d3f3',
+    trackSelected: '#f2e9fa',
+    overviewNote: '#583577',
+    editorNote: '#7548a3',
+    playhead: '#583577',
+    playheadHandle: '#583577',
+  },
+  metrics: { controlRadius: '8px' },
+}
+// 原生 TS：overview.setTheme(theme)。Vue：<PianoRoll :theme="theme" ... />。
+// 省略的字段沿用默认值；setTheme() 或移除 Vue theme prop 恢复默认主题。
+```
+
+颜色 token 包含背景/文字、轨道/音符、网格、播放头、琴键、滚动条与焦点；完整字段和中文说明见 [`PianoRollThemeInput`](./src/browser/theme.ts)。`defaultPianoRollTheme`、`resolvePianoRollTheme`、`pianoRollThemeVariables` 也从 `/browser` 导出。`getTheme()` 返回当前主题副本。动态换肤只重绘静态图层，保留 DOM、轨道选择、缩放、滚动及 Follow。
+
+Canvas 需要具体颜色值，例如十六进制、`rgb()` 或 `rgba()`，不能直接传 `var(--app-primary)`。从现有 CSS 变量接入时先通过 `getComputedStyle(element).getPropertyValue('--app-primary').trim()` 读取具体值，再传入 `theme`。不要仅覆盖 `--pr-*` CSS 变量来改变 Canvas 颜色。
 
 ## 精确时间轴与索引
 
@@ -86,6 +117,12 @@ editor.destroy()
 ## 交互边界
 
 Follow 默认开启。手动滚动只关闭当前实例的 Follow，点击 Follow 可恢复。滚轮在对应滚动容器内生效；Ctrl/Command + 滚轮以鼠标时间为锚缩放，工具栏缩放以可见播放头或视口中心为锚。详情支持完整 MIDI 0–127 琴键，初次进入居中于轨道音域，切换轨道仅在新音域不可见时调整纵向位置。
+
+滑块、双指缩放产生的 Ctrl+滚轮、WebKit `gesturestart/change/end`、`setTimeZoom()` 与“适合全曲”共用下限：**时间区实际可见宽度 ÷ 完整曲长秒数**。左侧轨道栏/琴键和纵向滚动条不计入时间区；不添加尾部 padding，最小缩放时 `scrollWidth === clientWidth`，全曲恰好铺满且不能继续缩小。MIDI 本身的尾部静音仍保留。上限通常为 1200 px/s，极短曲目至少容纳整曲下限；零时长文档使用有限默认值。
+
+WebKit 手势使用相对手势开始的 scale，锚点按右侧时间区计算，并抑制同一手势附带的重复 Ctrl+滚轮。原生页面缩放的阻止范围仅限当前卷帘；手势结束、取消、窗口失焦和实例销毁均释放状态。手势语义参考 [Apple 事件处理文档](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/HandlingEvents/HandlingEvents.html)。
+
+CSS 容器查询负责工具栏的响应式布局，`ResizeObserver` 根据当前滚动容器重新计算坐标与缩放边界，采用 60ms 防抖、180ms 最长等待。处于最小缩放时，调整容器后继续铺满；主动放大时尽量保留视口中心时间，必要时裁剪到新边界。隐藏容器不会以零宽覆盖已有状态，恢复显示后重新测量；销毁会取消待处理回调。两个视图分别计算，互不影响。
 
 标尺点击默认不吸附；顶部手柄使用 pointer capture，靠近边缘自动滚动。拖动只发预览，松手提交一次；pointercancel、Escape、失焦或销毁会取消预览。播放头支持键盘左右键（0.1s）、Shift+左右键（1s）及 Home/End。双击和轨道单击不触发 seek。
 
