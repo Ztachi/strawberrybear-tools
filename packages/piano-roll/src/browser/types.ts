@@ -1,4 +1,4 @@
-import type { PianoRollDocument } from '../core'
+import type { PianoRollDocument, PianoRollTrack } from '../core'
 import type { PianoRollTheme, PianoRollThemeInput } from './theme'
 
 export type { PianoRollTheme, PianoRollThemeInput } from './theme'
@@ -62,6 +62,16 @@ export interface PianoRollTrackOpenContext {
   selectedTrackIdAtGestureStart: string | null
 }
 
+/** 宿主可用自己的 UI 组件渲染总览开关；公共包不绑定具体组件库。 */
+export interface PianoRollTrackToggleContext {
+  /** 当前轨道。 */
+  track: PianoRollTrack
+  /** 当前启用状态。 */
+  checked: boolean
+  /** 提交一次切换意图，不直接修改文档。 */
+  onChange: () => void
+}
+
 /** 浏览器控制器选项。浮层布局由宿主负责。 */
 export interface PianoRollViewOptions {
   /** 渲染宿主，需由 CSS 提供非零高度。 */
@@ -94,6 +104,11 @@ export interface PianoRollViewOptions {
   onTrackOpen?: (trackId: string, context: PianoRollTrackOpenContext) => void
   /** 启用状态切换意图；具体播放策略由宿主处理。 */
   onTrackToggle?: (trackId: string) => void
+  /** 可选的宿主控件渲染器；返回清理函数，避免公共包依赖具体 UI 组件库。 */
+  renderTrackToggle?: (
+    container: HTMLElement,
+    context: PianoRollTrackToggleContext
+  ) => void | (() => void)
   /** Follow 状态变化，只作用于此视图。 */
   onFollowChange?: (enabled: boolean) => void
   /** 滚动或缩放变化的只读快照。 */

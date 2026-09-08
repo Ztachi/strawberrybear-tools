@@ -25,6 +25,7 @@ export function installStyles(document: Document): void {
 .pr-track-select{flex:1;min-width:0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;padding:0;font:inherit}
 .pr-track-select strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
 .pr-track-select small{display:block;opacity:.62;margin-top:3px}
+.pr-track-toggle-host{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .pr-track-toggle{position:relative;display:inline-flex;align-items:center;justify-content:flex-start;flex:0 0 auto;box-sizing:border-box;width:34px;height:20px;padding:2px;border:1px solid var(--pr-track-disabled,#f4e4e7);border-radius:999px;background:var(--pr-track-disabled,#f4e4e7);cursor:pointer;color:var(--pr-primary,#e36f86);font:inherit}
 .pr-track-toggle::after{content:"";display:block;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgb(74 63 63 / 22%);transform:translateX(0)}
 .pr-track-toggle[aria-checked=true]{border-color:var(--pr-primary,#e36f86);background:var(--pr-primary,#e36f86)}

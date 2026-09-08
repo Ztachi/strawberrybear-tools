@@ -40,6 +40,17 @@ describe('独立视口坐标和 Follow', () => {
     expect(followScrollLeft(0, 500, 800)).toBe(0)
     expect(followScrollLeft(1200, 500, 0)).toBeNull()
   })
+  it('播放头进入中心后保持居中，曲尾再释放到最右端', () => {
+    const width = 800
+    const content = 1000
+    expect(followScrollLeft(0, 0, width, content)).toBeNull()
+    expect(followScrollLeft(400, 0, width, content)).toBeNull()
+    expect(followScrollLeft(500, 0, width, content)).toBe(100)
+    expect(followScrollLeft(600, 100, width, content)).toBe(200)
+    expect(followScrollLeft(700, 200, width, content)).toBeNull()
+    expect(followScrollLeft(900, 200, width, content)).toBeNull()
+    expect(followScrollLeft(1000, 200, width, content)).toBeNull()
+  })
   it('边缘拖动支持左右方向且限速', () => {
     expect(dragScrollVelocity(200, 800)).toBe(0)
     expect(dragScrollVelocity(0, 800)).toBeLessThan(0)

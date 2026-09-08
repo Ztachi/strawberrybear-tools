@@ -7,6 +7,7 @@ import type { PianoRollProps } from './vue-props'
 
 const props = withDefaults(defineProps<PianoRollProps>(), {
   variant: 'overview', selectedTrackId: null, timeZoom: undefined, pitchZoom: 16,
+  showToolbarControls: true,
 })
 const emit = defineEmits<{
   'select-track': [trackId: string]
@@ -40,6 +41,7 @@ function mountView(): void {
     onTrackSelect: (id) => emit('select-track', id),
     onTrackOpen: (id, context) => emit('open-editor', id, context),
     onTrackToggle: (id) => emit('toggle-track', id),
+    renderTrackToggle: props.renderTrackToggle,
     onSeek: (seconds) => emit('seek', seconds),
     onSeekPreview: (seconds) => emit('seek-preview', seconds),
     onFollowChange: (enabled) => emit('follow-change', enabled),
@@ -74,59 +76,55 @@ defineExpose({ getView: () => view })
     :aria-label="variant === 'overview' ? labels.overview : labels.editor"
   >
     <header class="piano-roll-toolbar">
-      <strong
-        class="piano-roll-title"
-        :title="variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor)"
-      >{{ variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor) }}</strong>
       <slot
-        name="toolbar"
-        :view="view"
-        :viewport="viewport"
-      />
-      <button
-        type="button"
-        :aria-pressed="viewport.follow"
-        @click="view?.setFollow(!viewport.follow)"
+        name="title"
+        :label="variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor)"
       >
-        {{ viewport.follow ? labels.following : labels.follow }}
-      </button>
-      <button
-        type="button"
-        @click="view?.fitToSong()"
-      >
-        {{ labels.fit }}
-      </button>
-      <label class="piano-roll-zoom">
-        <span>{{ labels.timeZoom }}</span>
-        <input
-          type="range"
-          :min="viewport.minTimeZoom"
-          :max="viewport.maxTimeZoom"
-          :value="viewport.timeZoom"
-          :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
-          step="any"
-          @input="updateTimeZoom"
+        <strong
+          class="piano-roll-title"
+          :aria-label="variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor)"
+          >{{ variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor) }}</strong
         >
-      </label>
-      <label
-        v-if="variant === 'editor'"
-        class="piano-roll-zoom piano-roll-pitch-zoom"
-      >
-        <span>{{ labels.pitchZoom }}</span>
-        <input
-          type="range"
-          :value="viewport.pitchZoom"
-          min="8"
-          max="36"
-          step="1"
-          @input="updatePitchZoom"
+      </slot>
+      <slot name="toolbar" :view="view" :viewport="viewport" />
+      <template v-if="props.showToolbarControls">
+        <button
+          class="piano-roll-native-button"
+          type="button"
+          :aria-pressed="viewport.follow"
+          @click="view?.setFollow(!viewport.follow)"
         >
-      </label>
+          {{ viewport.follow ? labels.following : labels.follow }}
+        </button>
+        <button class="piano-roll-native-button" type="button" @click="view?.fitToSong()">
+          {{ labels.fit }}
+        </button>
+        <label class="piano-roll-zoom">
+          <span>{{ labels.timeZoom }}</span>
+          <input
+            type="range"
+            :min="viewport.minTimeZoom"
+            :max="viewport.maxTimeZoom"
+            :value="viewport.timeZoom"
+            :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
+            step="any"
+            @input="updateTimeZoom"
+          />
+        </label>
+        <label v-if="variant === 'editor'" class="piano-roll-zoom piano-roll-pitch-zoom">
+          <span>{{ labels.pitchZoom }}</span>
+          <input
+            type="range"
+            :value="viewport.pitchZoom"
+            min="8"
+            max="36"
+            step="1"
+            @input="updatePitchZoom"
+          />
+        </label>
+      </template>
     </header>
-    <div
-      ref="host"
-      class="piano-roll-host"
-    />
+    <div ref="host" class="piano-roll-host" />
   </section>
 </template>
 
@@ -159,9 +157,9 @@ defineExpose({ getView: () => view })
   font: 12px var(--pr-font-family);
 }
 .piano-roll-title { margin-right: auto; flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.piano-roll-toolbar button { flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--pr-border); border-radius: var(--pr-control-radius); background: var(--pr-surface); color: inherit; cursor: pointer; font: inherit; }
-.piano-roll-toolbar button:hover { background: var(--pr-primary-soft); }
-.piano-roll-toolbar button[aria-pressed=true] { background: var(--pr-primary-soft); border-color: var(--pr-primary); }
+.piano-roll-native-button { flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--pr-border); border-radius: var(--pr-control-radius); background: var(--pr-surface); color: inherit; cursor: pointer; font: inherit; }
+.piano-roll-native-button:hover { background: var(--pr-primary-soft); }
+.piano-roll-native-button[aria-pressed=true] { background: var(--pr-primary-soft); border-color: var(--pr-primary); }
 .piano-roll-toolbar button:focus-visible, .piano-roll-toolbar input:focus-visible { outline: 2px solid var(--pr-focus); outline-offset: 2px; }
 .piano-roll-zoom { display: flex; align-items: center; gap: 6px; }
 .piano-roll-zoom input { width: clamp(60px, 12cqi, 110px); height: 18px; margin: 0; appearance: none; background: transparent; accent-color: var(--pr-primary); cursor: pointer; }

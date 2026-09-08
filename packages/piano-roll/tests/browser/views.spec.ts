@@ -45,6 +45,57 @@ test('two instances keep zoom, scroll and Follow independent', async ({ page }) 
   expect(await page.evaluate(() => window.fixture.overview.getViewport().scrollLeft)).toBe(620)
 })
 
+test('Follow brings the playhead to center, holds it, then releases at the song end', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.fixture.overview.setDocument({
+      durationTicks: 9600,
+      ticksPerBeat: 480,
+      tempoMap: [{ tick: 0, microsecondsPerQuarter: 500000 }],
+      timeSignatureMap: [{ tick: 0, numerator: 4, denominator: 4 }],
+      tracks: [{ id: '0', name: 'Track', isPercussion: false, enabled: true }],
+      notes: [],
+    })
+    window.fixture.overview.setTimeZoom(150)
+    window.fixture.overview.setFollow(true)
+  })
+  const sample = async (seconds: number) => {
+    await page.evaluate((seconds) => window.fixture.setTime(seconds, true), seconds)
+    return page.evaluate(() => {
+      const scroll = document.querySelector<HTMLElement>('#overview .pr-scroll')!
+      const handle = document.querySelector<HTMLElement>('#overview .pr-handle')!
+      return {
+        scrollLeft: scroll.scrollLeft,
+        playheadX: Number(handle.style.transform.match(/-?\d+(?:\.\d+)?/)?.[0] ?? 0),
+        width: scroll.clientWidth,
+        contentWidth: scroll.scrollWidth,
+        timeZoom: window.fixture.overview.getViewport().timeZoom,
+      }
+    })
+  }
+  const start = await sample(2)
+  const beforeCenter = await sample(3)
+  const center = await sample(4)
+  const held = await sample(5)
+  const tail = await sample(7)
+  const end = await sample(10)
+  const centerLeft = (seconds: number, state: typeof center) =>
+    Math.min(
+      state.contentWidth - state.width,
+      Math.max(0, seconds * state.timeZoom - state.width / 2)
+    )
+  expect(start.scrollLeft).toBe(0)
+  expect(beforeCenter.scrollLeft).toBe(0)
+  expect(center.scrollLeft).toBeCloseTo(centerLeft(4, center), 0)
+  expect(center.playheadX).toBeCloseTo(center.width / 2, 0)
+  expect(held.scrollLeft).toBeCloseTo(centerLeft(5, held), 0)
+  expect(held.playheadX).toBeCloseTo(held.width / 2, 0)
+  expect(tail.scrollLeft).toBeCloseTo(centerLeft(7, tail), 0)
+  expect(end.scrollLeft).toBe(end.contentWidth - end.width)
+  expect(end.playheadX).toBeCloseTo(end.contentWidth - end.scrollLeft, 0)
+})
+
 test('rulers with different zoom and scroll seek the same source seconds', async ({ page }) => {
   await page.evaluate(() => {
     window.fixture.overview.setTimeZoom(80)

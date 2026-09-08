@@ -1,5 +1,10 @@
 import type { PianoRollDocument } from './core'
-import type { PianoRollLabels, PianoRollPlugin, PianoRollTransport } from './browser/types'
+import type {
+  PianoRollLabels,
+  PianoRollPlugin,
+  PianoRollTrackToggleContext,
+  PianoRollTransport,
+} from './browser/types'
 import type { PianoRollThemeInput } from './browser/theme'
 
 /** Vue 适配层公共输入；时间单位一律为原曲秒。 */
@@ -22,4 +27,11 @@ export interface PianoRollProps {
   theme?: PianoRollThemeInput
   /** 实例生命周期插件，在 mount 时安装。 */
   plugins?: readonly PianoRollPlugin[]
+  /** 是否显示公共包的原生工具栏控件；宿主可关闭后通过 toolbar 插槽接入自己的 UI 组件。 */
+  showToolbarControls?: boolean
+  /** 宿主使用自己的 UI 组件渲染音轨启用开关。 */
+  renderTrackToggle?: (
+    container: HTMLElement,
+    context: PianoRollTrackToggleContext
+  ) => void | (() => void)
 }

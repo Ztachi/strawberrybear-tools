@@ -98,6 +98,7 @@ export function createView(
   let pitchFocused = false
   const heights = new Map(Object.entries(options.trackHeights ?? {}))
   const subscribers = new Set<(viewport: Readonly<PianoRollViewport>) => void>()
+  const trackToggleCleanups = new WeakMap<HTMLElement, () => void>()
   const cleanups: (() => void)[] = []
   let drag: {
     pointerId: number
@@ -162,7 +163,12 @@ export function createView(
   }
   function catchPlayhead(): void {
     if (!follow || drag) return
-    const left = followScrollLeft(position() * timeZoom, scroll.scrollLeft, width)
+    const left = followScrollLeft(
+      position() * timeZoom,
+      scroll.scrollLeft,
+      width,
+      scroll.scrollWidth
+    )
     if (left !== null) setScroll(left)
     updatePlayhead()
   }
@@ -220,7 +226,10 @@ export function createView(
     // 只为可见轨道建立可键盘操作的控件，保持现有节点以保留焦点。
     const ids = new Set(visible.map((row) => row.track.id))
     for (const child of Array.from(gutter.children)) {
-      if (!ids.has((child as HTMLElement).dataset.trackId ?? '')) child.remove()
+      if (!ids.has((child as HTMLElement).dataset.trackId ?? '')) {
+        trackToggleCleanups.get(child.children[1] as HTMLElement)?.()
+        child.remove()
+      }
     }
     for (const row of visible) {
       let item = Array.from(gutter.children).find(
@@ -234,33 +243,54 @@ export function createView(
         select.append(make('strong', ''), make('small', ''))
         select.addEventListener('click', (event) => selectTrack(row.track.id, event))
         select.addEventListener('dblclick', () => openTrack(row.track.id))
-        const toggle = make('button', 'pr-track-toggle')
-        toggle.type = 'button'
-        toggle.setAttribute('role', 'switch')
-        // 开关是独立的交互目标，阻止事件继续冒泡，避免误触轨道选择或打开详情。
-        toggle.addEventListener('click', (event) => {
-          event.stopPropagation()
-          options.onTrackToggle?.(row.track.id)
-        })
-        item.append(select, toggle)
+        const toggleHost = make('span', 'pr-track-toggle-host')
+        if (!options.renderTrackToggle) {
+          const toggle = make('button', 'pr-track-toggle')
+          toggle.type = 'button'
+          toggle.setAttribute('role', 'switch')
+          // 开关是独立的交互目标，阻止事件继续冒泡，避免误触轨道选择或打开详情。
+          toggle.addEventListener('click', (event) => {
+            event.stopPropagation()
+            options.onTrackToggle?.(row.track.id)
+          })
+          toggleHost.append(toggle)
+        }
+        item.append(select, toggleHost)
         gutter.append(item)
       }
       item.dataset.selected = String(row.track.id === selected)
       item.style.top = `${row.top - scroll.scrollTop}px`
       item.style.height = `${row.height}px`
       const select = item.children[0] as HTMLButtonElement
-      select.title = row.track.name
+      select.removeAttribute('title')
+      select.setAttribute('aria-label', row.track.name)
       select.setAttribute('aria-pressed', String(row.track.id === selected))
       select.children[0]!.textContent = row.track.name
       const range = noteIndex.getPitchRange(row.track.id)
       select.children[1]!.textContent = range ? `${range.min}–${range.max} · MIDI` : labels.empty
-      const toggle = item.children[1] as HTMLButtonElement
-      toggle.setAttribute('aria-checked', String(row.track.enabled))
-      toggle.title = `${row.track.enabled ? labels.disableTrack : labels.enableTrack}: ${row.track.name}`
-      toggle.setAttribute(
-        'aria-label',
-        `${row.track.enabled ? labels.disableTrack : labels.enableTrack}: ${row.track.name}`
-      )
+      const toggleHost = item.children[1] as HTMLElement
+      if (options.renderTrackToggle) {
+        const stateKey = `${row.track.id}:${row.track.name}:${row.track.enabled}`
+        if (toggleHost.dataset.stateKey !== stateKey) {
+          trackToggleCleanups.get(toggleHost)?.()
+          const cleanup = options.renderTrackToggle(toggleHost, {
+            track: row.track,
+            checked: row.track.enabled,
+            onChange: () => options.onTrackToggle?.(row.track.id),
+          })
+          toggleHost.dataset.stateKey = stateKey
+          if (cleanup) trackToggleCleanups.set(toggleHost, cleanup)
+          else trackToggleCleanups.delete(toggleHost)
+        }
+      } else {
+        const toggle = toggleHost.firstElementChild as HTMLButtonElement
+        toggle.setAttribute('aria-checked', String(row.track.enabled))
+        toggle.removeAttribute('title')
+        toggle.setAttribute(
+          'aria-label',
+          `${row.track.enabled ? labels.disableTrack : labels.enableTrack}: ${row.track.name}`
+        )
+      }
     }
   }
   function render(): void {
@@ -590,6 +620,8 @@ export function createView(
       destroyed = true
       window!.cancelAnimationFrame(renderFrame)
       for (const cleanup of cleanups.reverse()) cleanup()
+      for (const child of Array.from(gutter.children))
+        trackToggleCleanups.get(child.children[1] as HTMLElement)?.()
       subscribers.clear()
       root.remove()
     },

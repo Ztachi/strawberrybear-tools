@@ -2,12 +2,16 @@
 /**
  * @description: MIDI 歌曲详情页
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, render, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Popover } from 'antdv-next'
+import { Button, Popover, Slider, Switch, Tooltip } from 'antdv-next'
 import { Clock3, Music2, Pause, Piano, Play, X } from 'lucide-vue-next'
 import PianoRoll from '@strawberrybear/piano-roll/vue'
+import type {
+  PianoRollTrackToggleContext,
+  PianoRollView,
+} from '@strawberrybear/piano-roll/browser'
 import { usePlayerStore } from '@/stores/player'
 import { getMidiDisplayArtist, getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
 import { formatDuration } from '../utils'
@@ -105,6 +109,49 @@ const pianoRollTransport = computed(() => ({
   playbackRate: playerStore.speed,
 }))
 
+/** PianoRoll 公共层只提供控制器；页面使用播放器统一的 antdv 控件完成工具栏装配。 */
+function setPianoRollFollow(view: PianoRollView | null | undefined, value: unknown): void {
+  view?.setFollow(value === true)
+}
+
+function setPianoRollTimeZoom(view: PianoRollView | null | undefined, value: unknown): void {
+  const next = Array.isArray(value) ? value[0] : value
+  if (typeof next === 'number' && Number.isFinite(next)) view?.setTimeZoom(next)
+}
+
+function setPianoRollPitchZoom(view: PianoRollView | null | undefined, value: unknown): void {
+  const next = Array.isArray(value) ? value[0] : value
+  if (typeof next === 'number' && Number.isFinite(next)) view?.setPitchZoom(next)
+}
+
+/** 在公共浏览器控制器提供的挂载点中渲染 antdv Switch，销毁时卸载 VNode。 */
+function renderPianoTrackToggle(
+  container: HTMLElement,
+  context: PianoRollTrackToggleContext
+): () => void {
+  render(
+    h(
+      Tooltip,
+      {
+        title: `${context.checked ? pianoRollLabels.value.disableTrack : pianoRollLabels.value.enableTrack}: ${context.track.name}`,
+      },
+      {
+        default: () =>
+          h(Switch, {
+            size: 'small',
+            checked: context.checked,
+            'aria-label': `${context.checked ? pianoRollLabels.value.disableTrack : pianoRollLabels.value.enableTrack}: ${context.track.name}`,
+            'onUpdate:checked': (value: unknown) => {
+              if (value !== context.checked) context.onChange()
+            },
+          }),
+      }
+    ),
+    container
+  )
+  return () => render(null, container)
+}
+
 const descriptionRef = ref<HTMLElement | null>(null)
 const isDescriptionOverflowing = ref(false)
 const isDescriptionPopoverOpen = ref(false)
@@ -197,20 +244,22 @@ onBeforeUnmount(() => {
   <section class="midi-detail-page">
     <template v-if="detailMidi">
       <header class="detail-summary">
-        <button
-          type="button"
-          class="detail-cover group/detail-cover"
-          :aria-label="isDetailPlaying ? t('player.pauseSong') : t('player.playSong')"
-          @click="playDetailMidi"
-        >
-          <Music2 class="detail-cover-icon" />
-          <span
-            class="absolute inset-0 flex items-center justify-center bg-slate-950/45 text-white opacity-0 transition-opacity group-hover/detail-cover:opacity-100"
+        <Tooltip :title="isDetailPlaying ? t('player.pauseSong') : t('player.playSong')">
+          <Button
+            type="text"
+            class="detail-cover group/detail-cover"
+            :aria-label="isDetailPlaying ? t('player.pauseSong') : t('player.playSong')"
+            @click="playDetailMidi"
           >
-            <Pause v-if="isDetailPlaying" class="size-7 stroke-0" fill="currentColor" />
-            <Play v-else class="ml-1 size-7 stroke-0" fill="currentColor" />
-          </span>
-        </button>
+            <Music2 class="detail-cover-icon" />
+            <span
+              class="absolute inset-0 flex items-center justify-center bg-slate-950/45 text-white opacity-0 transition-opacity group-hover/detail-cover:opacity-100"
+            >
+              <Pause v-if="isDetailPlaying" class="size-7 stroke-0" fill="currentColor" />
+              <Play v-else class="ml-1 size-7 stroke-0" fill="currentColor" />
+            </span>
+          </Button>
+        </Tooltip>
 
         <div class="detail-main">
           <Popover :content="detailDisplayName" placement="topLeft">
@@ -237,9 +286,9 @@ onBeforeUnmount(() => {
                   {{ detailDescription }}
                 </div>
               </template>
-              <button type="button" class="description-detail-link">
+              <Button type="link" class="description-detail-link">
                 {{ t('onlineLibrary.detail.actions.detail') }}
-              </button>
+              </Button>
             </Popover>
           </div>
           <div class="detail-stats">
@@ -269,12 +318,52 @@ onBeforeUnmount(() => {
             :transport="pianoRollTransport"
             :labels="pianoRollLabels"
             :selected-track-id="selectedTrackId"
+            :show-toolbar-controls="false"
+            :render-track-toggle="renderPianoTrackToggle"
             @select-track="selectPianoTrack"
             @open-editor="openPianoEditor"
             @toggle-track="togglePianoTrack"
             @seek="seekPianoRoll"
             @seek-preview="previewPianoSeek"
-          />
+          >
+            <template #title="{ label }">
+              <Tooltip :title="label" placement="topLeft">
+                <strong class="piano-roll-slot-title">{{ label }}</strong>
+              </Tooltip>
+            </template>
+            <template #toolbar="{ view, viewport }">
+              <div class="piano-roll-app-toolbar">
+                <Tooltip
+                  :title="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
+                >
+                  <Switch
+                    size="small"
+                    :checked="viewport.follow"
+                    :aria-label="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
+                    @update:checked="setPianoRollFollow(view, $event)"
+                  />
+                </Tooltip>
+                <Tooltip :title="pianoRollLabels.fit">
+                  <Button size="small" @click="view?.fitToSong()">
+                    {{ pianoRollLabels.fit }}
+                  </Button>
+                </Tooltip>
+                <Tooltip :title="pianoRollLabels.timeZoom">
+                  <span class="piano-roll-app-slider">
+                    <span>{{ pianoRollLabels.timeZoom }}</span>
+                    <Slider
+                      :value="viewport.timeZoom"
+                      :min="viewport.minTimeZoom"
+                      :max="viewport.maxTimeZoom"
+                      :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
+                      :tooltip="{ open: false }"
+                      @update:value="setPianoRollTimeZoom(view, $event)"
+                    />
+                  </span>
+                </Tooltip>
+              </div>
+            </template>
+          </PianoRoll>
         </div>
         <section
           v-if="isPianoEditorOpen"
@@ -309,23 +398,73 @@ onBeforeUnmount(() => {
             :transport="pianoRollTransport"
             :labels="pianoRollLabels"
             :selected-track-id="selectedTrackId"
+            :show-toolbar-controls="false"
             @select-track="selectPianoTrack"
             @toggle-track="togglePianoTrack"
             @seek="seekPianoRoll"
             @seek-preview="previewPianoSeek"
           >
-            <template #toolbar>
-              <Button
-                type="text"
-                size="small"
-                :aria-label="t('midi.pianoRoll.close')"
-                :title="t('midi.pianoRoll.close')"
-                @click="closePianoEditor"
-              >
-                <template #icon>
-                  <X class="size-4" :stroke-width="2" />
-                </template>
-              </Button>
+            <template #title="{ label }">
+              <Tooltip :title="label" placement="topLeft">
+                <strong class="piano-roll-slot-title">{{ label }}</strong>
+              </Tooltip>
+            </template>
+            <template #toolbar="{ view, viewport }">
+              <div class="piano-roll-app-toolbar">
+                <Tooltip
+                  :title="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
+                >
+                  <Switch
+                    size="small"
+                    :checked="viewport.follow"
+                    :aria-label="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
+                    @update:checked="setPianoRollFollow(view, $event)"
+                  />
+                </Tooltip>
+                <Tooltip :title="pianoRollLabels.fit">
+                  <Button size="small" @click="view?.fitToSong()">
+                    {{ pianoRollLabels.fit }}
+                  </Button>
+                </Tooltip>
+                <Tooltip :title="pianoRollLabels.timeZoom">
+                  <span class="piano-roll-app-slider">
+                    <span>{{ pianoRollLabels.timeZoom }}</span>
+                    <Slider
+                      :value="viewport.timeZoom"
+                      :min="viewport.minTimeZoom"
+                      :max="viewport.maxTimeZoom"
+                      :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
+                      :tooltip="{ open: false }"
+                      @update:value="setPianoRollTimeZoom(view, $event)"
+                    />
+                  </span>
+                </Tooltip>
+                <Tooltip :title="pianoRollLabels.pitchZoom">
+                  <span class="piano-roll-app-slider">
+                    <span>{{ pianoRollLabels.pitchZoom }}</span>
+                    <Slider
+                      :value="viewport.pitchZoom"
+                      :min="8"
+                      :max="36"
+                      :step="1"
+                      :tooltip="{ open: false }"
+                      @update:value="setPianoRollPitchZoom(view, $event)"
+                    />
+                  </span>
+                </Tooltip>
+                <Tooltip :title="pianoRollLabels.close">
+                  <Button
+                    type="text"
+                    size="small"
+                    :aria-label="pianoRollLabels.close"
+                    @click="closePianoEditor"
+                  >
+                    <template #icon>
+                      <X class="size-4" :stroke-width="2" />
+                    </template>
+                  </Button>
+                </Tooltip>
+              </div>
             </template>
           </PianoRoll>
         </section>
@@ -452,6 +591,22 @@ onBeforeUnmount(() => {
   @apply h-full w-full min-h-0;
   border: 0;
   border-radius: 0;
+}
+
+.piano-roll-slot-title {
+  @apply min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap;
+}
+
+.piano-roll-app-toolbar {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.piano-roll-app-slider {
+  @apply flex items-center gap-1;
+}
+
+.piano-roll-app-slider :deep(.ant-slider) {
+  @apply w-20;
 }
 
 .detail-piano-roll :deep(.pr-gutter),

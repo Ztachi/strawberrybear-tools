@@ -69,10 +69,26 @@ export function createResizeScheduler(
   }
 }
 
-/** 播放头离开安全范围后移到视口 25% 处；返回 null 表示无需移动。 */
-export function followScrollLeft(x: number, scrollLeft: number, width: number): number | null {
-  if (width <= 0) return null
-  return x < scrollLeft + 8 || x > scrollLeft + width * 0.8 ? Math.max(0, x - width * 0.25) : null
+/**
+ * 计算 Follow 的目标横向滚动位置。
+ *
+ * 播放头从曲首进入视口中心后，视口跟随内容而移动，播放头保持在中心；
+ * 接近曲尾时固定滚动到最右侧，让播放头自然从中心走到终点。`contentWidth`
+ * 缺省时保留旧的安全区行为，便于无 DOM 的调用方使用。
+ */
+export function followScrollLeft(
+  x: number,
+  scrollLeft: number,
+  width: number,
+  contentWidth = Number.POSITIVE_INFINITY
+): number | null {
+  if (width <= 0 || !Number.isFinite(x) || !Number.isFinite(scrollLeft)) return null
+  if (!Number.isFinite(contentWidth)) {
+    return x < scrollLeft + 8 || x > scrollLeft + width * 0.8 ? Math.max(0, x - width * 0.25) : null
+  }
+  const maxScroll = Math.max(0, contentWidth - width)
+  const target = Math.min(maxScroll, Math.max(0, x - width / 2))
+  return Math.abs(target - scrollLeft) < 1 ? null : target
 }
 
 /** 手柄在边缘 36px 内拖动时的平移速度（CSS px/s）。 */
