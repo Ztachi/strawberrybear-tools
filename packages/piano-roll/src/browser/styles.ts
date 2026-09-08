@@ -23,6 +23,8 @@ export function installStyles(document: Document): void {
 .pr-track{position:absolute;left:0;right:0;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--pr-border,#f1d9de);border-bottom-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 46%);background:transparent}
 .pr-track[data-selected=true]{background:color-mix(in srgb,var(--pr-track-selected,#ffe2e8),transparent 35%);box-shadow:inset 3px 0 var(--pr-primary,#e36f86)}
 .pr-track-select{flex:1;min-width:0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;padding:0;font:inherit}
+.pr-track-label-host{display:block;min-width:0;overflow:hidden}
+.piano-roll-track-name{display:block;width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pr-track-select strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
 .pr-track-select small{display:block;opacity:.62;margin-top:3px}
 .pr-track-toggle-host{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}

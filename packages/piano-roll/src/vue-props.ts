@@ -2,6 +2,7 @@ import type { PianoRollDocument } from './core'
 import type {
   PianoRollLabels,
   PianoRollPlugin,
+  PianoRollTrackLabelContext,
   PianoRollTrackToggleContext,
   PianoRollTransport,
 } from './browser/types'
@@ -33,5 +34,10 @@ export interface PianoRollProps {
   renderTrackToggle?: (
     container: HTMLElement,
     context: PianoRollTrackToggleContext
+  ) => void | (() => void)
+  /** 宿主使用自己的 UI 组件渲染音轨名称；只应对实际截断的名称提供 Tooltip。 */
+  renderTrackLabel?: (
+    container: HTMLElement,
+    context: PianoRollTrackLabelContext
   ) => void | (() => void)
 }

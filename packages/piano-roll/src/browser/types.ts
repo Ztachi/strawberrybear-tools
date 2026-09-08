@@ -72,6 +72,12 @@ export interface PianoRollTrackToggleContext {
   onChange: () => void
 }
 
+/** 宿主可为可能被截断的音轨名称提供按需提示；短名称应保持普通文本。 */
+export interface PianoRollTrackLabelContext {
+  /** 当前音轨。 */
+  track: PianoRollTrack
+}
+
 /** 浏览器控制器选项。浮层布局由宿主负责。 */
 export interface PianoRollViewOptions {
   /** 渲染宿主，需由 CSS 提供非零高度。 */
@@ -108,6 +114,11 @@ export interface PianoRollViewOptions {
   renderTrackToggle?: (
     container: HTMLElement,
     context: PianoRollTrackToggleContext
+  ) => void | (() => void)
+  /** 可选的音轨名称渲染器；宿主可在实际发生截断时挂载 Tooltip。 */
+  renderTrackLabel?: (
+    container: HTMLElement,
+    context: PianoRollTrackLabelContext
   ) => void | (() => void)
   /** Follow 状态变化，只作用于此视图。 */
   onFollowChange?: (enabled: boolean) => void

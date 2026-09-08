@@ -39,7 +39,7 @@ function seek(seconds: number) {
 
 Vue props：`document`、`transport` 必填，`variant`、`selectedTrackId`、`timeZoom`、`pitchZoom`、`labels`、`theme`、`plugins` 可选。`toolbar` slot 用于关闭按钮等宿主控件。容器必须通过 CSS 指定高度；组件使用完整容器高度，不用歌曲时长决定布局高度。
 
-公共 Vue 层不绑定 Ant Design、Element 或其它 UI 框架。需要与宿主设计系统一致时，将 `showToolbarControls` 设为 `false`，通过 `title` 和 `toolbar` slot 注入宿主的标题、开关、按钮和滑块；总览轨道开关通过 `renderTrackToggle(container, context)` 注入。渲染器只需把组件挂载到给定容器，并在返回的清理函数中卸载；`context.onChange()` 只提交切换意图，实际启用状态仍由宿主更新 `document.tracks[].enabled`。这样公共层保持框架无关，播放器可以统一使用 antdv-next 的 `Switch`、`Button`、`Slider`、`Tooltip`。
+公共 Vue 层不绑定 Ant Design、Element 或其它 UI 框架。需要与宿主设计系统一致时，将 `showToolbarControls` 设为 `false`，通过 `title` 和 `toolbar` slot 注入宿主的标题、按钮和滑块；总览轨道开关通过 `renderTrackToggle(container, context)` 注入，可能被省略的轨道名称通过 `renderTrackLabel(container, context)` 注入。渲染器只需把组件挂载到给定容器，并在返回的清理函数中卸载；`context.onChange()` 只提交切换意图，实际启用状态仍由宿主更新 `document.tracks[].enabled`。轨道名称渲染器应先测量 `scrollWidth > clientWidth`，只有发生省略时才显示 Tooltip。这样公共层保持框架无关，播放器可以统一使用 antdv-next 的 `Switch`、`Button`、`Slider`、`Tooltip`。
 
 Follow 的时间行为与 UI 无关：播放头从左侧进入视口后移动到视口中线，在剩余内容足够时保持中线，接近曲尾时逐渐让出中线并停在内容末端；总览和详情各自计算这一规则。手动滚动只暂停当前实例的 Follow。
 

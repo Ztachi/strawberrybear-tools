@@ -99,6 +99,7 @@ export function createView(
   const heights = new Map(Object.entries(options.trackHeights ?? {}))
   const subscribers = new Set<(viewport: Readonly<PianoRollViewport>) => void>()
   const trackToggleCleanups = new WeakMap<HTMLElement, () => void>()
+  const trackLabelCleanups = new WeakMap<HTMLElement, () => void>()
   const cleanups: (() => void)[] = []
   let drag: {
     pointerId: number
@@ -228,6 +229,7 @@ export function createView(
     for (const child of Array.from(gutter.children)) {
       if (!ids.has((child as HTMLElement).dataset.trackId ?? '')) {
         trackToggleCleanups.get(child.children[1] as HTMLElement)?.()
+        trackLabelCleanups.get(child.children[0] as HTMLElement)?.()
         child.remove()
       }
     }
@@ -240,7 +242,9 @@ export function createView(
         item.dataset.trackId = row.track.id
         const select = make('button', 'pr-track-select')
         select.type = 'button'
-        select.append(make('strong', ''), make('small', ''))
+        const labelHost = make('span', 'pr-track-label-host')
+        labelHost.append(make('strong', ''))
+        select.append(labelHost, make('small', ''))
         select.addEventListener('click', (event) => selectTrack(row.track.id, event))
         select.addEventListener('dblclick', () => openTrack(row.track.id))
         const toggleHost = make('span', 'pr-track-toggle-host')
@@ -265,7 +269,20 @@ export function createView(
       select.removeAttribute('title')
       select.setAttribute('aria-label', row.track.name)
       select.setAttribute('aria-pressed', String(row.track.id === selected))
-      select.children[0]!.textContent = row.track.name
+      const labelHost = select.children[0] as HTMLElement
+      if (options.renderTrackLabel) {
+        const stateKey = `${row.track.id}:${row.track.name}`
+        if (labelHost.dataset.stateKey !== stateKey) {
+          trackLabelCleanups.get(labelHost)?.()
+          const cleanup = options.renderTrackLabel(labelHost, { track: row.track })
+          labelHost.dataset.stateKey = stateKey
+          if (cleanup) trackLabelCleanups.set(labelHost, cleanup)
+          else trackLabelCleanups.delete(labelHost)
+        }
+      } else {
+        const strong = labelHost.firstElementChild as HTMLElement
+        strong.textContent = row.track.name
+      }
       const range = noteIndex.getPitchRange(row.track.id)
       select.children[1]!.textContent = range ? `${range.min}–${range.max} · MIDI` : labels.empty
       const toggleHost = item.children[1] as HTMLElement
@@ -620,8 +637,10 @@ export function createView(
       destroyed = true
       window!.cancelAnimationFrame(renderFrame)
       for (const cleanup of cleanups.reverse()) cleanup()
-      for (const child of Array.from(gutter.children))
+      for (const child of Array.from(gutter.children)) {
         trackToggleCleanups.get(child.children[1] as HTMLElement)?.()
+        trackLabelCleanups.get(child.children[0] as HTMLElement)?.()
+      }
       subscribers.clear()
       root.remove()
     },

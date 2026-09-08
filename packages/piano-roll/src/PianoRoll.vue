@@ -42,6 +42,7 @@ function mountView(): void {
     onTrackOpen: (id, context) => emit('open-editor', id, context),
     onTrackToggle: (id) => emit('toggle-track', id),
     renderTrackToggle: props.renderTrackToggle,
+    renderTrackLabel: props.renderTrackLabel,
     onSeek: (seconds) => emit('seek', seconds),
     onSeekPreview: (seconds) => emit('seek-preview', seconds),
     onFollowChange: (enabled) => emit('follow-change', enabled),
