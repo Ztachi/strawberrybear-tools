@@ -100,16 +100,19 @@ export function drawGrid(
           : row.track.enabled
             ? theme.colors.trackEnabled
             : theme.colors.trackDisabled
+      // 每一行与相邻行连续铺开，避免出现“卡片”式上下留白；轨道分隔线单独绘制。
       context.globalAlpha = row.track.enabled ? 1 : 0.32
       context.fillRect(
         Math.max(0, -scrollLeft),
-        y + 3,
+        y,
         Math.max(0, Math.min(width, endX)),
-        row.height - 6
+        row.height
       )
       context.globalAlpha = 1
       context.fillStyle = theme.colors.border
+      context.globalAlpha = 0.55
       context.fillRect(0, y + row.height - 1, width, 1)
+      context.globalAlpha = 1
     }
   }
   const marks = timeline.getRulerMarks({
@@ -130,15 +133,21 @@ export function drawGrid(
   for (const [index, mark] of marks.entries()) {
     const x = Math.round(mark.x - scrollLeft) + 0.5
     const major = mark.kind === 'bar'
-    context.strokeStyle = major
-      ? theme.colors.gridMajor
-      : mark.kind === 'beat'
-        ? theme.colors.gridBeat
-        : theme.colors.gridMinor
-    context.beginPath()
-    context.moveTo(x, 0)
-    context.lineTo(x, height)
-    context.stroke()
+    // 总览内容区只保留小节线，拍/细分线在缩放较小时会淹没音符；
+    // 标尺仍保留细分刻度，方便定位和拖拽。详情内容区保留完整细分线。
+    if (!(frame.variant === 'overview' && mark.kind !== 'bar')) {
+      context.strokeStyle = major
+        ? theme.colors.gridMajor
+        : mark.kind === 'beat'
+          ? theme.colors.gridBeat
+          : theme.colors.gridMinor
+      context.globalAlpha = major ? 0.72 : frame.variant === 'editor' ? 0.7 : 0.58
+      context.beginPath()
+      context.moveTo(x, 0)
+      context.lineTo(x, height)
+      context.stroke()
+      context.globalAlpha = 1
+    }
     rulerContext.strokeStyle = major ? theme.colors.gridMajor : theme.colors.gridBeat
     rulerContext.beginPath()
     rulerContext.moveTo(x, major ? 2 : 23)

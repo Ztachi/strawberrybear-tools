@@ -136,7 +136,13 @@ test.describe('Vue piano roll integration', () => {
       (window.vueFixture.getView() as PianoRollView).getViewport()
     )
     await page.evaluate(() =>
-      window.vueFixture.setTheme({ colors: { surface: '#102030', primary: '#ff0066' } })
+      window.vueFixture.setTheme({
+        colors: {
+          surface: '#102030',
+          trackSelected: '#102030',
+          primary: '#ff0066',
+        },
+      })
     )
     await expect
       .poll(() =>

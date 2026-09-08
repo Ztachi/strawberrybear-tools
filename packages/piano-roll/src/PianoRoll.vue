@@ -138,8 +138,9 @@ defineExpose({ getView: () => view })
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--pr-border);
-  border-radius: 8px;
+  /* 视图本身不是卡片；宿主决定浮层/页面边界，避免总览和详情叠加多层框线。 */
+  border: 0;
+  border-radius: 0;
   background: var(--pr-surface);
   color: var(--pr-text);
   color-scheme: light;
@@ -151,10 +152,10 @@ defineExpose({ getView: () => view })
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  min-height: 38px;
+  min-height: 36px;
   flex-shrink: 0;
   background: var(--pr-surface-raised);
-  border-bottom: 1px solid var(--pr-border);
+  border-bottom: 1px solid color-mix(in srgb, var(--pr-border), transparent 30%);
   font: 12px var(--pr-font-family);
 }
 .piano-roll-title { margin-right: auto; flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

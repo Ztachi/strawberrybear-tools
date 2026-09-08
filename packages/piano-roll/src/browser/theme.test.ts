@@ -6,6 +6,8 @@ describe('piano roll theme', () => {
     expect(defaultPianoRollTheme.colors.primarySoft).toBe('#f7b7be')
     expect(defaultPianoRollTheme.colors.text).toBe('#4a3f3f')
     expect(defaultPianoRollTheme.colors.overviewNote).toBe('#9b3754')
+    expect(defaultPianoRollTheme.colors.trackEnabled).toBe('#fce9ed')
+    expect(defaultPianoRollTheme.colors.trackSelected).toBe('#ffe8ee')
   })
 
   it('deep merges partial tokens without mutating the default', () => {

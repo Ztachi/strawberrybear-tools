@@ -44,7 +44,8 @@ export function createView(
   root.dataset.variant = variant
   root.style.setProperty('--pr-gutter', variant === 'overview' ? '160px' : '64px')
   const corner = make('div', 'pr-corner')
-  corner.textContent = variant === 'overview' ? labels.overview : labels.editor
+  // 总览左上角只作为轨道栏的留白，标题已经由 Vue 工具栏提供，避免重复占据视野。
+  corner.textContent = variant === 'overview' ? '' : labels.editor
   const ruler = make('div', 'pr-ruler')
   ruler.setAttribute('aria-label', labels.playhead)
   const rulerCanvas = make('canvas', 'pr-layer')
@@ -524,7 +525,7 @@ export function createView(
     },
     setLabels(next) {
       labels = { ...defaultLabels, ...next }
-      corner.textContent = variant === 'overview' ? labels.overview : labels.editor
+      corner.textContent = variant === 'overview' ? '' : labels.editor
       empty.textContent = labels.empty
       ruler.setAttribute('aria-label', labels.playhead)
       handle.setAttribute('aria-label', labels.playhead)

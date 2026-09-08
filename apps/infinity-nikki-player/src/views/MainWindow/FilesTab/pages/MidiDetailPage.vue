@@ -349,12 +349,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .midi-detail-page {
-  @apply flex h-full min-h-0 flex-col gap-3 rounded-2xl bg-white;
+  @apply flex h-full min-h-0 flex-col gap-2 bg-white;
 }
 
 .detail-summary {
-  @apply flex shrink-0 items-center gap-4 rounded-2xl bg-white p-4;
-  border: 1px solid var(--border-primary-15);
+  @apply flex shrink-0 items-center gap-4 bg-white px-2 py-3;
+  border-bottom: 1px solid var(--border-primary-15);
 }
 
 .detail-cover {
@@ -433,13 +433,13 @@ onBeforeUnmount(() => {
 }
 
 .detail-body {
-  @apply relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white;
-  --piano-editor-size: max(0px, min(var(--piano-editor-height), calc(100% - 6rem)));
+  @apply relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-white;
+  --piano-editor-size: max(0px, min(var(--piano-editor-height), calc(100% - 4rem)));
   border: 1px solid var(--border-primary-15);
 }
 
 .piano-overview-host {
-  @apply min-h-0 shrink-0 overflow-hidden p-3;
+  @apply min-h-0 shrink-0 overflow-hidden;
   height: 100%;
 }
 
@@ -450,23 +450,36 @@ onBeforeUnmount(() => {
 
 .detail-piano-roll {
   @apply h-full w-full min-h-0;
+  border: 0;
+  border-radius: 0;
+}
+
+.detail-piano-roll :deep(.pr-gutter),
+.detail-piano-editor :deep(.pr-gutter) {
+  border-right-color: var(--border-primary-10);
+}
+
+.detail-piano-roll :deep(.pr-track),
+.detail-piano-editor :deep(.pr-track) {
+  border-bottom-color: var(--border-primary-10);
 }
 
 .piano-editor-overlay {
   @apply absolute inset-x-0 bottom-0 z-20 flex min-h-0 flex-col overflow-hidden;
   height: var(--piano-editor-size);
-  background: var(--color-primary-light);
-  box-shadow: 0 -8px 24px var(--border-primary-15);
+  background: var(--bg-white-95);
+  border-top: 1px solid var(--border-primary-30);
 }
 
 .piano-editor-resize-handle {
-  @apply flex h-3 shrink-0 touch-none cursor-ns-resize items-center justify-center;
-  background: var(--bg-primary-15);
+  /* 触控命中区仍保持 12px，但视觉上只保留一条轻量分隔线。 */
+  @apply relative flex h-3 shrink-0 touch-none cursor-ns-resize items-center justify-center;
+  background: transparent;
 }
 
 .piano-editor-resize-handle span {
-  @apply h-1 w-10 rounded-full;
-  background: var(--color-primary-active);
+  @apply h-0.5 w-12 rounded-full;
+  background: var(--border-primary);
 }
 
 .piano-editor-resize-handle:focus-visible {
@@ -476,6 +489,8 @@ onBeforeUnmount(() => {
 
 .detail-piano-editor {
   @apply min-h-0 flex-1;
+  border: 0;
+  border-radius: 0;
 }
 
 .piano-seek-error {
