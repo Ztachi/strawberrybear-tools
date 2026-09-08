@@ -8,6 +8,14 @@ export interface PianoRollPitchRange {
   max: number
 }
 
+/** 单轨音符覆盖的时间区间。 */
+export interface PianoRollTimeRange {
+  /** 最早音符开始 tick。 */
+  startTick: number
+  /** 最晚音符结束 tick。 */
+  endTick: number
+}
+
 /** 不依赖渲染器的每轨静态音符区间索引。 */
 export interface PianoRollNoteIndex {
   /** 索引内有效音符总数。 */
@@ -21,6 +29,8 @@ export interface PianoRollNoteIndex {
   query(trackId: string, startTick: number, endTick: number): PianoRollNote[]
   /** 返回单轨音域的副本；没有有效音符时返回 null。 */
   getPitchRange(trackId: string): PianoRollPitchRange | null
+  /** 返回单轨音符时间区间的副本；没有有效音符时返回 null。 */
+  getTimeRange(trackId: string): PianoRollTimeRange | null
 }
 
 interface TrackIndex {
@@ -28,6 +38,7 @@ interface TrackIndex {
   maxEnd: Float64Array
   leafCount: number
   pitchRange: PianoRollPitchRange
+  timeRange: PianoRollTimeRange
 }
 
 /** 对单轨开始时间有序的音符建立最大结束时间区间树。 */
@@ -38,16 +49,19 @@ function buildTrackIndex(notes: PianoRollNote[]): TrackIndex {
   const maxEnd = new Float64Array(leafCount * 2)
   maxEnd.fill(Number.NEGATIVE_INFINITY)
   const pitchRange = { min: 127, max: 0 }
+  const timeRange = { startTick: Number.POSITIVE_INFINITY, endTick: Number.NEGATIVE_INFINITY }
   for (let index = 0; index < notes.length; index += 1) {
     const note = notes[index]!
     maxEnd[leafCount + index] = note.endTick
     pitchRange.min = Math.min(pitchRange.min, note.pitch)
     pitchRange.max = Math.max(pitchRange.max, note.pitch)
+    timeRange.startTick = Math.min(timeRange.startTick, note.startTick)
+    timeRange.endTick = Math.max(timeRange.endTick, note.endTick)
   }
   for (let node = leafCount - 1; node > 0; node -= 1) {
     maxEnd[node] = Math.max(maxEnd[node * 2]!, maxEnd[node * 2 + 1]!)
   }
-  return { notes, maxEnd, leafCount, pitchRange }
+  return { notes, maxEnd, leafCount, pitchRange, timeRange }
 }
 
 /**
@@ -121,6 +135,10 @@ export function createNoteIndex(notes: readonly PianoRollNote[]): PianoRollNoteI
     query,
     getPitchRange(trackId) {
       const range = tracks.get(trackId)?.pitchRange
+      return range ? { ...range } : null
+    },
+    getTimeRange(trackId) {
+      const range = tracks.get(trackId)?.timeRange
       return range ? { ...range } : null
     },
   }

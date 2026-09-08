@@ -238,7 +238,18 @@ describe('piano roll visible note index', () => {
     expect(index.query('track-900', 9000, 9010).map((item) => item.id)).toEqual(['long'])
     expect(index.query('empty', 0, 10000)).toEqual([])
     expect(index.getPitchRange('empty')).toBeNull()
+    expect(index.getTimeRange('track-900')).toEqual({ startTick: 0, endTick: 10000 })
+    expect(index.getTimeRange('empty')).toBeNull()
     expect(index.trackIds).toEqual(['track-900', 'drums'])
+  })
+
+  it('keeps a precomputed time range for short and leading-offset tracks', () => {
+    const index = createNoteIndex([
+      note('short', 'short', 240, 360),
+      note('tail', 'long', 1_000, 1_200),
+    ])
+    expect(index.getTimeRange('short')).toEqual({ startTick: 240, endTick: 360 })
+    expect(index.getTimeRange('long')).toEqual({ startTick: 1000, endTick: 1200 })
   })
 
   it('normalizes notes without changing source data and preserves stable IDs', () => {

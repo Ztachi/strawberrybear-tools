@@ -236,8 +236,12 @@ export function createView(
         select.addEventListener('dblclick', () => openTrack(row.track.id))
         const toggle = make('button', 'pr-track-toggle')
         toggle.type = 'button'
-        toggle.textContent = '♫'
-        toggle.addEventListener('click', () => options.onTrackToggle?.(row.track.id))
+        toggle.setAttribute('role', 'switch')
+        // 开关是独立的交互目标，阻止事件继续冒泡，避免误触轨道选择或打开详情。
+        toggle.addEventListener('click', (event) => {
+          event.stopPropagation()
+          options.onTrackToggle?.(row.track.id)
+        })
         item.append(select, toggle)
         gutter.append(item)
       }
@@ -251,7 +255,8 @@ export function createView(
       const range = noteIndex.getPitchRange(row.track.id)
       select.children[1]!.textContent = range ? `${range.min}–${range.max} · MIDI` : labels.empty
       const toggle = item.children[1] as HTMLButtonElement
-      toggle.setAttribute('aria-pressed', String(row.track.enabled))
+      toggle.setAttribute('aria-checked', String(row.track.enabled))
+      toggle.title = `${row.track.enabled ? labels.disableTrack : labels.enableTrack}: ${row.track.name}`
       toggle.setAttribute(
         'aria-label',
         `${row.track.enabled ? labels.disableTrack : labels.enableTrack}: ${row.track.name}`

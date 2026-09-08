@@ -51,12 +51,16 @@ export function adaptMidiToPianoRoll(
     .sort((a, b) => a - b)
     .map<PianoRollTrack>((index) => {
       const track = metadata.get(index)
+      const endTick = track?.end_tick
+      // MIDI 原轨从 0 开始，保留前导/尾部静音；旧数据缺少轨长时交给公共库按音符推导。
+      const hasTrackEnd = typeof endTick === 'number' && Number.isFinite(endTick) && endTick >= 0
       return {
         id: String(index),
         name: track?.name.trim() || trackName(index + 1),
         channel: track?.channel ?? channels.get(index),
         isPercussion: track?.is_percussion ?? percussion.has(index),
         enabled: true,
+        ...(hasTrackEnd ? { startTick: 0, endTick } : {}),
       }
     })
 

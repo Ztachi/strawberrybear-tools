@@ -46,6 +46,10 @@ export interface PianoRollTrack {
   color?: string
   /** 轨道是否启用；与轨道选择状态独立。 */
   enabled: boolean
+  /** 轨道内容区域的起始 tick（MIDI 轨道通常为 0，用于保留前导静音）。 */
+  startTick?: number
+  /** 轨道内容区域的结束 tick（来自 MIDI End Of Track，包含尾部静音）。 */
+  endTick?: number
 }
 
 /** 平台无关的钢琴卷帘文档；时间事实由 MIDI 原始数据提供。 */

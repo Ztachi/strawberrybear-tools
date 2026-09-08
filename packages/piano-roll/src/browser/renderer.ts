@@ -8,6 +8,70 @@ export interface TrackRow {
   height: number
 }
 
+/** 在轨道区域内以省略号裁剪名称，避免 Canvas 的 maxWidth 压缩长文本。 */
+function fitCanvasLabel(context: CanvasRenderingContext2D, value: string, maxWidth: number): string {
+  if (maxWidth <= 0) return ''
+  if (context.measureText(value).width <= maxWidth) return value
+  const ellipsis = '…'
+  if (context.measureText(ellipsis).width > maxWidth) return ''
+  const characters = Array.from(value)
+  let low = 0
+  let high = characters.length
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (context.measureText(`${characters.slice(0, middle).join('')}${ellipsis}`).width <= maxWidth)
+      low = middle
+    else high = middle - 1
+  }
+  return `${characters.slice(0, low).join('')}${ellipsis}`
+}
+
+/**
+ * 解析轨道在总览中的内容区域。
+ *
+ * MIDI 的 End Of Track 是最可信的区域边界；音符区间只用于补齐缺失或
+ * 错误的元数据，避免坏元数据把音符绘制到粉色区域之外。结果始终限制
+ * 在文档时间轴内，空轨道且没有边界时退化为零宽标记。
+ */
+export function getTrackTimeRange(
+  track: PianoRollTrack,
+  index: ReturnType<typeof createNoteIndex>,
+  durationTicks: number
+): { startTick: number; endTick: number } {
+  const duration = Number.isFinite(durationTicks) ? Math.max(0, durationTicks) : 0
+  const notes = index.getTimeRange(track.id)
+  const metadataStart = Number.isFinite(track.startTick) ? Math.max(0, track.startTick!) : null
+  const metadataEnd = Number.isFinite(track.endTick) ? Math.max(0, track.endTick!) : null
+  // 元数据与音符取并集，保证异常的 EOT 或导入器截断不会隐藏真实音符。
+  let start = metadataStart ?? notes?.startTick ?? 0
+  let end = metadataEnd ?? notes?.endTick ?? start
+  if (notes) {
+    start = Math.min(start, notes.startTick)
+    end = Math.max(end, notes.endTick)
+  }
+  start = Math.min(duration, Math.max(0, start))
+  end = Math.min(duration, Math.max(0, end))
+  if (end < start) end = start
+  return { startTick: start, endTick: end }
+}
+
+/** 将真实区间投射到视口，并为零长度区间保留可识别的视觉标记。 */
+function overviewRegionGeometry(
+  range: { startTick: number; endTick: number },
+  timeline: PianoRollTimeline,
+  timeZoom: number,
+  scrollLeft: number
+): { left: number; width: number } {
+  const startX = timeline.tickToSeconds(range.startTick) * timeZoom - scrollLeft
+  const endX = timeline.tickToSeconds(range.endTick) * timeZoom - scrollLeft
+  const width = Math.max(8, Math.abs(endX - startX))
+  let left = Math.min(startX, endX)
+  // 让结束于全曲末尾的空轨道在滚动到最右侧时仍完整可见。
+  const contentEnd = timeline.durationSeconds * timeZoom - scrollLeft
+  if (timeline.durationSeconds > 0 && left + width > contentEnd) left = contentEnd - width
+  return { left, width }
+}
+
 /** 一次静态层绘制的只读输入，不包含播放头时间。 */
 export interface RenderFrame {
   variant: 'overview' | 'editor'
@@ -91,24 +155,9 @@ export function drawGrid(
       context.fillRect(0, y + pitchZoom - 1, width, 1)
     }
   } else {
-    const endX = timeline.secondsToContentX(timeline.durationSeconds, timeZoom) - scrollLeft
+    // 网格先绘制，区域稍后覆盖在线条之上，保持音轨内容清晰。
     for (const row of frame.rows) {
       const y = row.top - scrollTop
-      context.fillStyle =
-        row.track.id === frame.selectedTrackId
-          ? theme.colors.trackSelected
-          : row.track.enabled
-            ? theme.colors.trackEnabled
-            : theme.colors.trackDisabled
-      // 每一行与相邻行连续铺开，避免出现“卡片”式上下留白；轨道分隔线单独绘制。
-      context.globalAlpha = row.track.enabled ? 1 : 0.32
-      context.fillRect(
-        Math.max(0, -scrollLeft),
-        y,
-        Math.max(0, Math.min(width, endX)),
-        row.height
-      )
-      context.globalAlpha = 1
       context.fillStyle = theme.colors.border
       context.globalAlpha = 0.55
       context.fillRect(0, y + row.height - 1, width, 1)
@@ -161,6 +210,49 @@ export function drawGrid(
       labelRight = x + 5 + labelWidth
     }
   }
+  if (frame.variant === 'overview') {
+    for (const row of frame.rows) {
+      const y = row.top - scrollTop
+      const range = getTrackTimeRange(row.track, frame.index, timeline.durationTicks)
+      const region = overviewRegionGeometry(range, timeline, timeZoom, scrollLeft)
+      const regionLeft = region.left
+      const regionWidth = region.width
+      const regionTop = y + 3
+      const regionHeight = Math.max(1, row.height - 6)
+      context.fillStyle =
+        row.track.id === frame.selectedTrackId
+          ? theme.colors.trackSelected
+          : row.track.enabled
+            ? theme.colors.trackEnabled
+            : theme.colors.trackDisabled
+      context.globalAlpha = row.track.enabled ? 1 : 0.32
+      const radius = Math.min(5, regionHeight / 2, regionWidth / 2)
+      const visibleLeft = Math.max(-radius, regionLeft)
+      const visibleRight = Math.min(width + radius, regionLeft + regionWidth)
+      if (visibleRight > visibleLeft) {
+        context.beginPath()
+        context.roundRect(visibleLeft, regionTop, visibleRight - visibleLeft, regionHeight, radius)
+        context.fill()
+        context.strokeStyle = theme.colors.border
+        context.globalAlpha = row.track.enabled ? 0.65 : 0.25
+        context.stroke()
+      }
+      context.globalAlpha = 1
+      if (regionWidth >= 16 && regionLeft < width && regionLeft + regionWidth > 0) {
+        context.save()
+        context.beginPath()
+        context.rect(regionLeft, regionTop, regionWidth, regionHeight)
+        context.clip()
+        context.fillStyle = theme.colors.text
+        context.font = `12px ${theme.metrics.fontFamily}`
+        const labelX = Math.max(4, regionLeft + 8)
+        const labelWidth = Math.max(0, Math.min(width, regionLeft + regionWidth) - labelX - 8)
+        const label = fitCanvasLabel(context, row.track.name, labelWidth)
+        context.fillText(label, labelX, regionTop + 17)
+        context.restore()
+      }
+    }
+  }
 }
 
 /** 绘制区间索引返回的可见音符，跨可见窗口的长音也保留。 */
@@ -211,11 +303,7 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
       }
     }
     context.globalAlpha = 1
-    if (frame.variant === 'overview') {
-      context.fillStyle = theme.colors.text
-      context.font = `12px ${theme.metrics.fontFamily}`
-      context.fillText(row.track.name, 8, row.top - scrollTop + 17, width - 16)
-    }
+    // 总览名称在 drawGrid 中随内容区域裁剪，避免长名称穿过轨道边界。
   }
 }
 

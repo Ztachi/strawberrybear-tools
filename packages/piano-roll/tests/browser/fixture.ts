@@ -10,6 +10,7 @@ declare global {
       previews: (number | null)[]
       selections: string[]
       opened: string[]
+      toggles: string[]
       openContexts: { trackId: string; selectedTrackIdAtGestureStart: string | null }[]
       setTime: (seconds: number, playing?: boolean) => void
       large: () => void
@@ -47,6 +48,7 @@ const seeks: number[] = []
 const previews: (number | null)[] = []
 const selections: string[] = []
 const opened: string[] = []
+const toggles: string[] = []
 const openContexts: { trackId: string; selectedTrackIdAtGestureStart: string | null }[] = []
 const overview = createTracksOverview({
   container: document.querySelector<HTMLElement>('#overview')!,
@@ -63,6 +65,7 @@ const overview = createTracksOverview({
     openContexts.push({ trackId: id, ...context })
     editor.setSelectedTrack(id)
   },
+  onTrackToggle: (id) => toggles.push(id),
 })
 const editor = createPianoRollEditor({
   container: document.querySelector<HTMLElement>('#editor')!,
@@ -78,6 +81,7 @@ window.fixture = {
   previews,
   selections,
   opened,
+  toggles,
   openContexts,
   paints: 0,
   setTime(seconds, playing = false) {

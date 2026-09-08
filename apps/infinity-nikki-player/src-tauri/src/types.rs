@@ -106,6 +106,13 @@ pub struct MidiTrackInfo {
     pub is_percussion: bool,
     /// 音符数量
     pub note_count: usize,
+    /// 该轨道在 MIDI 文件中的完整结束 tick（包含尾部元事件时间）。
+    ///
+    /// 与 `MidiInfo::duration_ticks` 分开保存：轨道可能只占全曲的一小段，
+    /// 也可能只有元事件而没有音符。`None` 仅用于兼容旧缓存中缺失此字段的
+    /// 数据；新解析结果始终提供该值（即使轨道结束于 tick 0）。
+    #[serde(default)]
+    pub end_tick: Option<u32>,
     /// 是否启用。解析结果默认为启用，禁用状态仍由应用配置管理。
     #[serde(default = "default_enabled")]
     pub enabled: bool,

@@ -5,4 +5,4 @@
 export * from './core/model'
 export { createTimeline } from './core/timeline'
 export { createNoteIndex } from './core/note-index'
-export type { PianoRollNoteIndex, PianoRollPitchRange } from './core/note-index'
+export type { PianoRollNoteIndex, PianoRollPitchRange, PianoRollTimeRange } from './core/note-index'

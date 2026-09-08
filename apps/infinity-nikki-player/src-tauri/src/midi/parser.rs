@@ -7,6 +7,7 @@ use crate::types::{MidiInfo, MidiTrackInfo, NoteEvent, TempoPoint, TimeSignature
 use midly::{MetaMessage, MidiMessage, Smf, TrackEventKind};
 use std::collections::HashMap;
 use std::path::Path;
+use std::str;
 
 /// 解析 MIDI 文件。
 pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String> {
@@ -95,7 +96,7 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
                 }
                 TrackEventKind::Meta(MetaMessage::TrackName(name)) => {
                     if track_name.is_empty() {
-                        track_name = String::from_utf8_lossy(name).trim().to_string();
+                        track_name = decode_midi_text(name);
                     }
                 }
                 TrackEventKind::Meta(MetaMessage::Tempo(tempo)) => {
@@ -133,6 +134,7 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
             channel: first_channel,
             is_percussion,
             note_count,
+            end_tick: Some(track_tick),
             enabled: true,
         });
     }
@@ -171,6 +173,25 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
     };
 
     Ok((info, events))
+}
+
+/// 解码 MIDI 文本元事件。
+///
+/// MIDI 规范没有强制 Track Name 的字符集。优先保留合法 UTF-8；许多旧的
+/// 日文 MIDI 文件使用 Shift-JIS（例如 `7m2.mid`），直接使用 UTF-8 lossy
+/// 会把每个双字节字符变成 `�`。仅当两者都无法无损解码时才回退到 UTF-8
+/// lossy，从而保留旧数据的可显示性，同时避免猜测任意本地编码。
+fn decode_midi_text(bytes: &[u8]) -> String {
+    if let Ok(text) = str::from_utf8(bytes) {
+        return text.trim().to_string();
+    }
+
+    let (text, _, had_errors) = encoding_rs::SHIFT_JIS.decode(bytes);
+    if !had_errors {
+        return text.trim().to_string();
+    }
+
+    String::from_utf8_lossy(bytes).trim().to_string()
 }
 
 /// 关闭指定通道和音高的最近一个未关闭音符。
@@ -263,7 +284,23 @@ pub fn pitch_to_name(pitch: u8) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ticks_to_millis, TempoPoint};
+    use super::{decode_midi_text, ticks_to_millis, TempoPoint};
+
+    #[test]
+    fn decodes_track_names_without_corrupting_utf8_or_shift_jis() {
+        assert_eq!(decode_midi_text("钢琴".as_bytes()), "钢琴");
+        // `7m2.mid` 的 TrackName 元事件原始 Shift-JIS 字节。
+        let shift_jis = [
+            0x83, 0x81, 0x83, 0x5e, 0x83, 0x8b, 0x83, 0x7d, 0x83, 0x62, 0x83, 0x4e, 0x83, 0x58,
+            0x81, 0x75, 0x97, 0xdc, 0x82, 0xcc, 0x37, 0x83, 0x7e, 0x83, 0x8a, 0x8b, 0x40, 0x8a,
+            0xd6, 0x96, 0x43, 0x81, 0x76,
+        ];
+        assert_eq!(
+            decode_midi_text(&shift_jis),
+            "メタルマックス「涙の7ミリ機関砲」"
+        );
+        assert_eq!(decode_midi_text(&[0xff]), "�");
+    }
 
     #[test]
     fn preserves_legacy_events_while_adding_complete_timeline() {
@@ -311,6 +348,8 @@ mod tests {
         assert_eq!(info.duration_ms, 1666);
         assert_eq!(info.tracks.len(), 2);
         assert_eq!(info.tracks[1].note_count, 0);
+        assert_eq!(info.tracks[0].end_tick, Some(480));
+        assert_eq!(info.tracks[1].end_tick, Some(1920));
         assert_eq!(info.tempo_map[0].microseconds_per_quarter, 500001);
         assert_eq!(events[0].id, "note-0-0-0");
         assert_eq!(events[1].id, "note-0-0-1");

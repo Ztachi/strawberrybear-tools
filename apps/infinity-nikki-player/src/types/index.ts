@@ -44,6 +44,8 @@ export interface MidiTrackInfo {
   channel?: number | null
   is_percussion: boolean
   note_count: number
+  /** 本轨完整结束 tick，包含尾部元事件；旧解析结果可能缺失。 */
+  end_tick?: number | null
   enabled: boolean
 }
 

@@ -51,6 +51,8 @@ Vue props：`document`、`transport` 必填，`variant`、`selectedTrackId`、`t
 
 文档使用不可变输入：音符变化时替换 `document.notes`，不要原地修改数组。每个音符和轨道都使用稳定字符串 ID。旧版 `notes/duration/currentTime/disabledTracks` props 已迁移为 `document/transport`；时间单位由旧毫秒改为明确的原曲秒。Rust 轨道索引与 MIDI 播放器 1-based 索引的换算属于 app adapter，不进入公共包。
 
+轨道左侧提供明确的启用开关，可用鼠标、空格或 Enter 操作。开关只发出 `toggle-track` 意图；宿主更新 `document.tracks[].enabled` 后，开关和两个视图同步反映状态。它不会选中轨道、打开详情或触发 seek。完整状态回传见最小示例的 `toggleTrack()`。
+
 双击前会先发生两次单击，因此 `open-editor` / `onTrackOpen` 的第二参数提供 `selectedTrackIdAtGestureStart`。需要“再次双击当前轨道关闭”时，用这个字段与目标轨道比较，不能比较已经被单击更新的 `selectedTrackId`；双击另一轨道应切换并保持打开。只接收 ID 的既有回调仍然兼容，完整写法见最小组合示例。
 
 ## 原生 TypeScript 浏览器接入
@@ -111,6 +113,10 @@ Canvas 需要具体颜色值，例如十六进制、`rgb()` 或 `rgba()`，不�
 - `getRulerMarks`：仅生成可见范围的小节/拍/细分标记，拍号变化处开始新小节。缩放过小时减少密度。
 
 完整时长来自 `durationTicks`，必须保留 MIDI End of Track 后的时间，不能从最后一个 NoteOff 推导。缺少 tempo/拍号时默认 500000µs、4/4；重复 tick 最后一个有效值生效。变速只改变外部时钟推进，不改音符 tick 或曲长。
+
+总览的轨道行与粉色内容区域分开：轨道行可滚动和选择，粉色区域只覆盖本轨的时间范围，区域之间保留窄间距。通过 `PianoRollTrack.startTick` / `endTick` 传入范围；原始 MIDI 轨道通常传 `startTick: 0`，`endTick` 使用该轨完整结束 tick，从而保留本轨的前导和尾部静音。两者不改变文档的全曲时长、标尺、缩放边界或 seek。
+
+没有范围元数据时，公共库按该轨音符的最早开始与最晚结束推导；空轨只显示起点标记。极短或零时长区域使用最小可见宽度，不把名称长度当作曲长，也不扩大全曲滚动范围。名称裁剪在区域内部，完整名称可在左侧轨道栏查看。显式范围不足以包含音符时，显示范围会包含有效音符并限制到文档时长。
 
 `createNoteIndex(notes)` 提供按轨道的闭区间重叠查询和音域查询。区间树包含跨过整个视口的长音；20 万音符不会使用参数展开求最大值。网格、音符与播放头分层，播放头更新不查询音符或重置 Canvas；backing store 只按可见宽高和 DPR 分配。滚动时仅绘制可见轨道与时间区间。
 

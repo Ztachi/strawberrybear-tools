@@ -71,6 +71,45 @@ describe('MIDI detail document adapter', () => {
     expect(first.durationTicks).toBe(1920)
   })
 
+  it('keeps each raw track end separate from song duration, including empty tracks', () => {
+    const metadata = midi.tracks![0]!
+    const source: MidiInfo = {
+      ...midi,
+      tracks: [
+        { ...metadata, id: 'track-0', index: 0, note_count: 0, end_tick: 0 },
+        { ...metadata, id: 'track-1', index: 1, note_count: 0, end_tick: 120 },
+        { ...metadata, end_tick: 2400 },
+      ],
+    }
+    const before = structuredClone(source)
+    const document = adaptMidiToPianoRoll(source, trackName)
+    expect(document.tracks.map(({ startTick, endTick }) => [startTick, endTick])).toEqual([
+      [0, 0],
+      [0, 120],
+      [0, 2400],
+    ])
+    expect(document.durationTicks).toBe(3000)
+    expect(document.notes[0]).toMatchObject({ startTick: 120, endTick: 480 })
+    expect(source).toEqual(before)
+    expect(applyPianoTrackEnabled(document, new Set([3])).tracks[2]).toMatchObject({
+      startTick: 0,
+      endTick: 2400,
+      enabled: false,
+    })
+  })
+
+  it('leaves absent or invalid legacy track ends for the public note-range fallback', () => {
+    for (const end_tick of [undefined, null, Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      const document = adaptMidiToPianoRoll(
+        { ...midi, tracks: [{ ...midi.tracks![0]!, end_tick }] },
+        trackName
+      )
+      expect(document.tracks[2]?.startTick).toBeUndefined()
+      expect(document.tracks[2]?.endTick).toBeUndefined()
+      expect(document.durationTicks).toBe(3000)
+    }
+  })
+
   it('maps 1-based disabled tracks without rebuilding notes or changing ticks', () => {
     const source = adaptMidiToPianoRoll(midi, trackName)
     const filtered = applyPianoTrackEnabled(source, new Set([1, 3]))
