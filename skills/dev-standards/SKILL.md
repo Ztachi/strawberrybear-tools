@@ -69,7 +69,7 @@ docs/standards/project-structure.md
 - **注释**：中文、贴近代码行；关键状态切换、异步顺序、平台分支、持久化与副作用必须说明「为什么」。
 - **国际化**：所有 app 必须 i18n，初始 zh-CN / en-US；key 用点号分隔，见 `docs/standards/i18n.md`。
 - **交付前校验**：改代码后运行 `pnpm type-check && pnpm lint`；涉及具体 app 时再跑该 app 的 test/build（以 app docs 为准）。
-- **提交**：Conventional Commits，中文 commit message；日常 PR 用 Squash merge；`main → develop` 发版后历史同步 PR 用 merge commit（见 branching 规范）。
+- **提交**：Conventional Commits，中文 commit message；PR 目标统一为 `main`，日常 PR 用 Squash merge（见 branching 规范）。
 
 ## 任务决策表
 
