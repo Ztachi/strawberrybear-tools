@@ -275,10 +275,10 @@ cd apps/web-vue && pnpm dev
 
 仓库级 skill 放在 [`skills/`](skills)，用于沉淀可复用的单仓库操作流程。Cursor 索引见 [`.cursor/skills/README.md`](.cursor/skills/README.md)。
 
-| Skill                                                                        | 说明                                                                                                   |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [`create-app`](skills/create-app/SKILL.md)                                   | 创建普通 app 的基础流程，覆盖目录、package、CI/CD 和内部规范                                           |
-| [`launch-cloudflare-pages-app`](skills/launch-cloudflare-pages-app/SKILL.md) | 从 feature 分支到 Cloudflare Pages 项目、情形三 CI/CD、develop 集成、main 发版和线上验证的完整上线流程 |
-| [`doc-architecture`](skills/doc-architecture/SKILL.md)                       | 文档分层、去重与重组流程                                                                               |
-| [`vue-1.0.1`](skills/vue-1.0.1/SKILL.md)                                     | Vue 3 Composition API、组件、composables、性能与响应式实践                                             |
-| [`rust-1.0.1`](skills/rust-1.0.1/SKILL.md)                                   | Rust 所有权、类型、错误处理、并发和高级陷阱参考                                                        |
+| Skill                                                                        | 说明                                                                                         |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [`create-app`](skills/create-app/SKILL.md)                                   | 创建普通 app 的基础流程，覆盖目录、package、CI/CD 和内部规范                                 |
+| [`launch-cloudflare-pages-app`](skills/launch-cloudflare-pages-app/SKILL.md) | 从 feature 分支到 Cloudflare Pages 项目、情形三 CI/CD、main 集成发版和线上验证的完整上线流程 |
+| [`doc-architecture`](skills/doc-architecture/SKILL.md)                       | 文档分层、去重与重组流程                                                                     |
+| [`vue-1.0.1`](skills/vue-1.0.1/SKILL.md)                                     | Vue 3 Composition API、组件、composables、性能与响应式实践                                   |
+| [`rust-1.0.1`](skills/rust-1.0.1/SKILL.md)                                   | Rust 所有权、类型、错误处理、并发和高级陷阱参考                                              |

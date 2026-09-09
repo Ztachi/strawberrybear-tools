@@ -1,316 +1,170 @@
-# Git 分支策略规范
+# Git 分支管理规范
 
-本仓库采用 **GitHub Flow 简化版** + **develop 集成分支** 的双层模型,所有新功能与修复必须遵循本文档约定的分支命名、生命周期与合并流程。
+本仓库采用 **GitHub Flow 简化版**：`main` 是唯一长期分支，所有功能和修复都从 `main` 创建短命分支，通过 Pull Request 合入 `main`。CI、代码审查和 PR 本身是合入前的安全边界，不再增加一个长期 `develop` 分支。
 
 ## 核心原则
 
-1. **`main` 是真相之源**:永远处于"可发布"状态,每个 commit 都可以直接打 tag 发版。
-2. **`develop` 是集成分支**:所有 feature 合到 develop,验证稳定后再向 main 发起 PR。
-3. **特性分支短命**:单个 feature/hotfix 分支存活时间不超过 1 周,超过 2 周的分支必须 rebase main。
-4. **永远不要在 main 或 develop 上直接开发**:所有改动都走分支 + PR 流程。
-5. **禁止长期落后 develop**:`develop` 与 `main` 的分叉时间不应超过 2 周。
+1. **`main` 始终保持可发布**：每个合入 `main` 的提交都应通过仓库要求的检查，并可以作为发布候选。
+2. **改动必须经过 PR**：禁止直接在 `main` 上开发或绕过保护规则推送。
+3. **分支从最新 `main` 创建**：开始工作前先获取远端最新提交；长时间开发的分支在提交 PR 前必须同步 `main`。
+4. **PR 负责集成验证**：PR 的 CI、review 和冲突检查共同验证改动，再决定是否合入。
+5. **分支短命**：PR 合入后立即删除对应 feature/fix/hotfix 分支，避免分支长期漂移。
 
 ## 分支模型
 
-```
-main (生产版本,打 tag 发版)
-  ↑
-  │  PR (发版前合并)
-  │
-develop (集成分支,日常开发)
-  ↑ ↑
-  │ │  PR (feature/xxx → develop)
-  │ └──────┐
-  │        │  PR (hotfix/xxx → develop,同时 cherry-pick 到 main)
-  feature/xxx  hotfix/xxx
+```text
+main (唯一长期分支，可发布、可打 tag)
+ ↑
+ │  PR + CI + Code Review
+ ├── feature/<name>
+ ├── fix/<name>
+ └── hotfix/<name>
 ```
 
-## 分支定义
+| 分支模式         | 用途                   | 从哪里创建  | 合到哪里 | 删除时机  |
+| ---------------- | ---------------------- | ----------- | -------- | --------- |
+| `feature/<name>` | 新功能、新应用、新模块 | 最新 `main` | `main`   | PR 合入后 |
+| `fix/<name>`     | 一般 bug 修复          | 最新 `main` | `main`   | PR 合入后 |
+| `hotfix/<name>`  | 线上紧急修复           | 最新 `main` | `main`   | PR 合入后 |
 
-### 长期分支
-
-| 分支      | 角色     | 谁可以推    | 保护规则                        |
-| --------- | -------- | ----------- | ------------------------------- |
-| `main`    | 生产版本 | 只能通过 PR | 必须 PR + Code Review + CI 全绿 |
-| `develop` | 集成分支 | 只能通过 PR | 必须 PR + CI 全绿               |
-
-### 临时分支
-
-| 模式                | 用途                     | 拉自    | 合到                         | 删除时机           |
-| ------------------- | ------------------------ | ------- | ---------------------------- | ------------------ |
-| `feature/<name>`    | 新功能、新应用、新模块   | develop | develop                      | PR 合并后立即删除  |
-| `fix/<name>`        | develop 上发现的一般 bug | develop | develop                      | PR 合并后立即删除  |
-| `hotfix/<name>`     | main 上的紧急修复        | main    | main(立即) + develop(同步)   | PR 合并后立即删除  |
-| `release/<version>` | 发版前的冻结分支(可选)   | develop | main(打 tag) + develop(回写) | tag 打完后立即删除 |
+`develop` 不再是新工作的来源或 PR 目标。旧分支已停用并删除，删除前的提交由 `archive/develop-before-main-only` tag 保留；不得重新创建或继续使用 `develop`。
 
 ## 命名规范
 
-分支名必须使用全英文 kebab-case,动词在前,功能模块在后:
+分支名使用全英文 kebab-case，按用途选择前缀：
 
-```bash
-# 正确
+```text
 feature/infinity-nikki-player-online-library
 feature/new-app-photo-watermark
 fix/template-editor-allow-clear
-fix/song-list-cover-cropper
 hotfix/auto-updater-cn-endpoint
-hotfix/1-1-5-midi-parser-crash
-
-# 错误
-feature_xxx              # 用下划线
-Feature-Online-Library   # 用了大写
-my-feature               # 没有功能动词/对象
-update                   # 名字不具体
 ```
 
-## 完整工作流
-
-### 场景 1:日常开发新功能
+## 日常开发流程
 
 ```bash
-# 1. 确认 develop 是最新的
-git checkout develop
-git pull origin develop
+# 1. 从最新 main 创建分支
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git switch -c feature/xxx
 
-# 2. 拉特性分支
-git checkout -b feature/xxx
-
-# 3. 提交(commit message 遵循仓库约定)
-git add .
-git commit -m "feat: 新增 xxx 功能"
+# 2. 开发、提交并推送
+git add <files>
+git commit -m "feat(scope): 新增 xxx 功能"
 git push -u origin feature/xxx
 
-# 4. 在 GitHub 上提 PR: feature/xxx → develop
+# 3. 创建 Pull Request：feature/xxx → main
+#    CI 全绿、review 通过且无冲突后，使用 Squash and merge
 
-# 5. CI 全绿 + Code Review 通过 → 合并
-
-# 6. 删除本地与远端分支
-git checkout develop
-git pull origin develop
+# 4. 合入后清理本地分支
+git switch main
+git pull --ff-only origin main
 git branch -d feature/xxx
-git push origin --delete feature/xxx
 ```
 
-### 场景 2:发版流程
+PR 可以在开发早期先创建为 Draft。不要为了“等集成”把未完成代码合入 `main`；需要提前验证时，应在 PR 中运行 CI 或在本地启动应用验收。
+
+## 合入前同步 `main`
+
+GitHub PR 的检查针对目标分支的合并结果运行。提交 PR 前和 PR 长时间打开期间，应将最新 `main` 合入自己的分支：
 
 ```bash
-# 1. 在 develop 上确认所有 feature 稳定后,提 PR: develop → main
-# 2. 合并后,在 main 上:
-git checkout main
-git pull origin main
-git tag -a v1.2.0 -m "Release 1.2.0"
-git push origin v1.2.0
-
-# 3. 发版完成后,必须把 main 的发版历史同步回 develop:
-git checkout develop
-git pull origin develop
-git checkout -b fix/sync-main-after-release
-git merge --no-ff main
-git push -u origin fix/sync-main-after-release
-
-# 4. 在 GitHub 上提 PR: fix/sync-main-after-release → develop
-#    该 PR 必须使用 Create a merge commit,禁止 Squash and merge。
-#    目的:让 develop 真正包含 main 的发版提交历史,避免 GitHub 显示 behind main,
-#    也避免下一次 develop → main 发版时反复出现重复 diff 或冲突。
+git fetch origin
+git switch feature/xxx
+git merge origin/main
+# 解决冲突后运行本地检查
+git add <files>
+git commit
+git push
 ```
 
-### 场景 3:线上紧急修复(hotfix)
+个人且无人基于其继续开发的分支也可以选择 `git rebase origin/main`，但已经共享给他人的分支不要改写历史；使用 merge 并推送即可。不要使用 `git reset --hard origin/main`、强推或重建分支来“同步”，这些操作可能丢失已有提交。
+
+## 合并规则
+
+- PR 目标统一为 `main`。
+- 必须通过仓库配置的 CI 检查，并满足所需 Code Review。
+- 常规 PR 使用 **Squash and merge**，将一个完整改动压成一个清晰提交，保持 `main` 线性历史。
+- 不要使用 `main → feature` 的反向 PR；同步时在 feature 分支执行 `git merge origin/main`。
+- 合入后删除远端 feature/fix/hotfix 分支，除非该分支仍有明确的后续工作。
+
+## Hotfix 流程
+
+Hotfix 与普通修复使用同一条路径：
 
 ```bash
-# 1. 从 main 拉 hotfix 分支
-git checkout main
-git pull origin main
-git checkout -b hotfix/urgent-fix
-
-# 2. 修复并提交
-git commit -m "fix: 紧急修复 xxx"
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git switch -c hotfix/urgent-fix
+# 修复、检查、推送
 git push -u origin hotfix/urgent-fix
-
-# 3. 同时提两个 PR:
-#    - hotfix/urgent-fix → main(立刻合并并发版)
-#    - hotfix/urgent-fix → develop(仅当 main 尚未产生额外发版提交时)
-#
-# 若 hotfix 合入 main 后已经产生发版提交,后续以 main → develop 的历史同步 PR 为准,
-# 不要再把同一个 hotfix 分支 Squash 到 develop,否则 develop 会出现内容等价但历史分叉。
+# 创建 hotfix/urgent-fix → main 的 PR，按常规规则合入
 ```
 
-## rebase 同步策略
+Hotfix 合入 `main` 后不需要再向 `develop` 回写；所有后续分支都从新的 `main` 创建。
 
-为避免长生命周期 feature 分支与 develop 产生大量冲突,必须 **频繁 rebase develop**:
+## 发版与 Changesets
+
+- 发布 workflow 只监听 `main`，合入 `main` 后按应用的 Changesets 流程生成版本、变更日志和发布产物。
+- 功能 PR 在自己的分支中提交对应的 `.changeset/*.md`；不要在 `main` 之外手动生成版本提交。
+- 发布产生的版本提交属于 `main` 的正常历史，不需要再同步到其他长期分支。
+
+## 现有分支迁移
+
+迁移期间不要改写已有分支历史。对于仍要继续开发、但基于旧 `develop` 的分支，先保留其全部提交，再同步最新 `main`：
 
 ```bash
-# 在 feature/xxx 分支上
-git fetch origin develop
-git rebase origin/develop
-
-# 如果 rebase 过程中出现冲突:
-# 1. 解决冲突
-# 2. git add <冲突文件>
-# 3. git rebase --continue
-# 4. 重复直到完成
+git fetch origin
+git switch feature/xxx
+git merge origin/main
+# 解决冲突并完成本地检查
+git push
 ```
 
-**频率建议**:
+然后把 PR 的 base 改为 `main`。如果冲突很多或分支包含已废弃的集成内容，可以从最新 `main` 创建新分支，只 cherry-pick 仍然需要的业务提交；这必须人工确认，不能批量覆盖原分支。
 
-- 每天开发前先 rebase
-- develop 上有新 PR 合并后立即 rebase
-- PR 提交前必须 rebase,确保无冲突
+`feature/infinity-nikki-player-piano-roll` 已包含最新 `main`，并且已有连续的 piano-roll 提交。继续在该分支提交即可，不要 reset、rebase、cherry-pick 这些已有提交，也不要强推覆盖远端历史。
 
-**禁止的行为**:
+## CI 与保护规则
 
-- 禁止对已经推送到远端并被他人基于此的分支执行 rebase(用 merge 代替)
-- 禁止在 main 上 rebase(只能 merge)
+当前 `.github/workflows/ci.yml` 对 `main` 的 push 和 Pull Request 运行变更包的 build、type-check、lint。应用的测试命令和设备/浏览器验收仍由对应 app 文档负责；新增或修复行为时必须补充有意义的测试。
 
-## commit message 规范
+建议 `main` 保持以下保护：
 
-沿用 Conventional Commits,与 Husky + commitlint 配合校验:
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**type 必须是以下之一**:
-
-| type       | 用途                                      | 触发版本变化 |
-| ---------- | ----------------------------------------- | ------------ |
-| `feat`     | 新功能                                    | minor        |
-| `fix`      | bug 修复                                  | patch        |
-| `docs`     | 仅文档变更                                | 无           |
-| `style`    | 不影响代码含义的格式变更(空格、分号等)    | 无           |
-| `refactor` | 既不修 bug 也不加功能的代码变更           | 无           |
-| `perf`     | 性能优化                                  | patch        |
-| `test`     | 添加/修改测试                             | 无           |
-| `chore`    | 构建过程、辅助工具、依赖库变更            | 无           |
-| `revert`   | 回滚之前的 commit                         | 视情况       |
-| `release`  | 发版提交(由 Changesets / release-it 生成) | 视情况       |
-
-**scope**:可选,标明影响的范围(应用名、模块名)。
-
-**示例**:
-
-```bash
-feat(infinity-nikki-player): 新增自建歌单功能
-fix(online-library): 修复详情页 404 问题
-docs(branch-strategy): 补充 hotfix 流程说明
-chore(deps): 升级 vite 到 5.4
-```
-
-## Pull Request 规范
-
-### PR 标题
-
-格式同 commit subject:`<type>(<scope>): <subject>`
-
-### PR 描述必须包含
-
-- **背景**:这个 PR 解决了什么问题 / 实现了什么功能
-- **改动点**:主要变更(可贴关键 diff)
-- **测试方式**:如何验证(手动步骤/单元测试/截图)
-- **影响范围**:是否影响其他模块/应用
-- **关联 Issue**:如有相关 issue,使用 `Closes #123` / `Fixes #456` 关联
-
-### PR 合并规则
-
-- 必须有 **至少 1 人 Code Review 通过**(自己 + 协作开发者均可,关键改动需 2 人)
-- CI 必须全绿(lint / type-check / test / build)
-- 与目标分支无冲突
-- 标题符合 Conventional Commits
-- **默认使用 Squash and merge** 合并(保持 main/develop 日常开发历史简洁)
-- **例外**:`main → develop` 的发版后历史同步 PR 必须使用 **Create a merge commit**,
-  不得 Squash。该 PR 的目的不是改代码,而是保留 main 的发版提交历史,让 develop 不再落后 main。
+- 必须通过 Pull Request，禁止直接推送。
+- 至少 1 人 Code Review（按仓库设置执行）。
+- 必须通过 `build` 检查，并要求分支与 `main` 最新提交保持同步后再合入。
+- 开启 Require linear history，配合 Squash and merge。
+- 禁止 force push。
 
 ## 禁止行为
 
-以下行为会显著增加冲突成本,**严格禁止**:
-
-1. ❌ **在 main 或 develop 上直接 commit**(必须走分支 + PR)
-2. ❌ **把长期集成分支(如 develop)落后于 main 超过 2 周**而不合并
-3. ❌ **存在超过 2 周的 feature 分支**不 rebase
-4. ❌ **用 `git push --force` 覆盖已经多人协作的分支**(个人分支可以 force-with-lease)
-5. ❌ **在 PR 合并前删除目标分支**(会丢失提交)
-6. ❌ **绕过 PR 直接推到 main 或 develop**(即使只有自己一个开发者)
-7. ❌ **普通 feature/fix PR 使用 merge --no-ff 到 main/develop**(日常改动用 Squash and merge 保持线性；仅 `main → develop` 发版后历史同步 PR 允许 merge commit)
-
-## CI 触发范围
-
-`ci.yml` 同时监听 `main` 和 `develop` 两个分支的 push 与 pull_request 事件:
-
-| 触发事件     | 触发对象                                 | 跑 CI? | 跑 release?         |
-| ------------ | ---------------------------------------- | ------ | ------------------- |
-| push         | `main`                                   | ✅     | ✅ (changelog 触发) |
-| push         | `develop`                                | ✅     | ❌                  |
-| push         | `feature/*` / `fix/*` / `hotfix/*`       | ❌     | ❌                  |
-| pull_request | `main` (任何源分支)                      | ✅     | ❌                  |
-| pull_request | `develop` (任何源分支,主要是 feature/\*) | ✅     | ❌                  |
-
-**关键点**:
-
-- **PR 阶段就跑 CI**:任何 PR 提出来(包括 `feature/xxx → develop`),CI 立即跑在 PR 源分支的代码上。无需等合入 develop。
-- **push 到 feature 不跑 CI**:节省 CI 资源。本地写代码时跑 lint/type-check 即可。
-- **release 永远只在 main 触发**:`release-*.yml` 不监听 develop,避免合入 develop 时误发版。
-- **changelog / version bump 只在 main 发生**:changeset 在 main 上被 release workflow 消费,生成 CHANGELOG.md 和 version bump;develop 上堆的 changeset 文件不会被消费,只是"积压"。
-
-## CI/CD 配套
-
-分支保护(在 GitHub Repository Settings → Branches 设置):
-
-- `main`:必须 PR 合入、必须 1 人 Review、必须 CI 全绿、禁止 force push、禁止直接 push
-- `develop`:必须 PR 合入、必须 CI 全绿、禁止 force push、禁止直接 push(单人开发可不勾选 Require approvals,避免自己卡自己)
+1. 在 `main` 上直接开发或提交。
+2. 创建新的 `develop` 分支或向现有 `develop` 提交 PR。
+3. 为同步而 reset、rebase 已共享分支或强制推送。
+4. 在 PR 合入前删除源分支。
+5. 把多个未完成 feature 先合入 `main` 充当临时集成区。
+6. 用手工复制文件或 cherry-pick 替代正常的 PR 集成；只有迁移旧分支时才按提交逐个、人工确认地 cherry-pick。
 
 ## 常见问题
 
-### Q: 为什么不直接用 main + 短命 feature 分支,还要加 develop?
+### 为什么没有 develop 保险？
 
-A: 本仓库是 monorepo + 桌面应用,有"发版前集成测试"和"按节奏发版"的需求。develop 提供了一个"准生产"环境,让多个 feature 并行集成、跑全量测试,稳定后再向 main 发版。这能避免"main 上有未测试的功能"。
+安全边界由短命分支、PR、CI、review 和 `main` 分支保护共同提供。`develop` 只是在合入前增加一个长期分叉点，并不能自动证明 feature 之间兼容；它还会带来同步、重复合并和历史分叉成本。需要集成验证时，在 PR 的合并结果上运行 CI 即可。
 
-### Q: 一个人开发也需要 develop 吗?
+### 多个 feature 如何验证互不影响？
 
-A: 需要。即使一个人,develop 也能起到"集成缓冲"和"发版节奏控制"的作用。main 上的 commit 永远等同于"已发版的版本",不会因为直接 push 而引入半成品。
+每个 PR 都以最新 `main` 为目标，CI 会检查该 PR 与 `main` 的合并结果。若多个功能必须一起验收，可以先把它们依次合入一个临时协作分支并运行完整测试，但该分支不能替代 `main`，验证完成后应按真实 PR 顺序合入或关闭。
 
-### Q: 老的 dev 分支已经废弃了,为什么?
+### 为什么以前会出现 ahead/behind？
 
-A: 老 dev 分支长期未与 main 同步,导致单次合并产生 110+ 冲突。详见 [CI/CD 规范](cicd.md) 中的发布历史。新 develop 分支以 main 为起点,采用本文档约定,避免重蹈覆辙。
+GitHub 比较的是提交图，不只是文件内容。即使两个分支最终文件完全相同，只要分别通过 Squash 产生了不同提交，仍会显示一方 ahead、另一方 behind。只有一个长期 `main` 后，这类双向同步就不再存在。
 
-### Q: 已经存在的 feature/codex-xxx 分支怎么办?
+## 文档边界
 
-A: 本文档生效后,所有不符合新规范的分支应:
-
-1. 提 PR 合到对应目标分支(develop 或 main)
-2. 合并后立即删除
-3. 不要保留任何"长期 feature 分支"
-
-### Q: develop 上集成多个 feature 后出问题,怎么修?
-
-A: **不要**在 develop 上直接 commit。**应该**走 PR 流程的两种方式:
-
-1. **退回对应 feature 分支改**(标准做法,适合"feature 之间的 API/类型不兼容"):
-   - 找到引入问题的 feature 分支
-   - 在该 feature 分支上修复
-   - 重新提 PR 到 develop
-
-2. **拉一个 `fix/integration-issues` 分支改**(集成问题属于"多 feature 互相影响"而非单个 feature 的问题):
-   ```bash
-   git checkout develop
-   git pull origin develop
-   git checkout -b fix/integration-issues
-   # 在这个分支上修复集成问题
-   git commit -m "fix: 修复 develop 上 A+B feature 集成冲突"
-   git push -u origin fix/integration-issues
-   # 提 PR: fix/integration-issues → develop
-   ```
-   这样既走 PR 流程保留 review,又避免退回某个 feature 改"不属于自己范畴"的问题。
-
-**禁止行为**:`git commit` 直接在 develop 上,即使只是"修一行小问题"。develop 必须保持"通过 CI 的稳定集成环境"。
-
-## 历史背景
-
-本文档首次落地时间: 2026-06-18
-
-落地原因: 老 dev 分支长期未同步 main,1.1.0 → 1.1.4 期间产生 110+ 合并冲突,
-为避免类似问题再次发生,采用更严格的分支规范。
-
-参考模型: GitHub Flow + Git Flow 简化版(只保留 main / develop 双层结构)。
+- 本文只定义分支、PR 和合并规则。
+- CI/CD 的 workflow、paths 和 Changesets 细节见 [CI/CD 规范](cicd.md)。
+- 开发命令、提交格式和基础编码要求见 [开发规范](development.md)。
+- 应用的构建、部署、设备和浏览器验收见对应 `apps/<app>/docs/`。
