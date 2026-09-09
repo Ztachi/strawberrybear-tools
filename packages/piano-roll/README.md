@@ -37,11 +37,13 @@ function seek(seconds: number) {
 
 可运行的完整组合见 [examples/Minimal.vue](./examples/Minimal.vue)。双击主轨道的 `open-editor` 事件由 app 打开 `variant="editor"` 的第二个实例；主轨道单击只更新 `selectedTrackId`，使已打开详情切换内容。两个实例可以处在完全不同的滚动和缩放等级。`PianoRollOverview`、`PianoRollEditor` 是固定 variant 的具名便捷组件。根入口仍保留默认 Vue 导入。
 
-Vue props：`document`、`transport` 必填，`variant`、`selectedTrackId`、`timeZoom`、`pitchZoom`、`labels`、`theme`、`plugins` 可选。`toolbar` slot 用于关闭按钮等宿主控件。容器必须通过 CSS 指定高度；组件使用完整容器高度，不用歌曲时长决定布局高度。
+Vue props：`document`、`transport` 必填，`variant`、`selectedTrackId`、`timeZoom`、`pitchZoom`、`hideEmptyTracks`、`labels`、`theme`、`plugins` 可选。`toolbar` slot 用于关闭按钮等宿主控件。容器必须通过 CSS 指定高度；组件使用完整容器高度，不用歌曲时长决定布局高度。
 
-公共 Vue 层不绑定 Ant Design、Element 或其它 UI 框架。需要与宿主设计系统一致时，将 `showToolbarControls` 设为 `false`，通过 `title` 和 `toolbar` slot 注入宿主的标题、按钮和滑块；总览轨道开关通过 `renderTrackToggle(container, context)` 注入，可能被省略的轨道名称通过 `renderTrackLabel(container, context)` 注入。渲染器只需把组件挂载到给定容器，并在返回的清理函数中卸载；`context.onChange()` 只提交切换意图，实际启用状态仍由宿主更新 `document.tracks[].enabled`。轨道名称渲染器应先测量 `scrollWidth > clientWidth`，只有发生省略时才显示 Tooltip。这样公共层保持框架无关，播放器可以统一使用 antdv-next 的 `Switch`、`Button`、`Slider`、`Tooltip`。
+公共 Vue 层不绑定 Ant Design、Element 或其它 UI 框架。需要与宿主设计系统一致时，将 `showToolbarControls` 设为 `false`，通过 `title` 和 `toolbar` slot 注入宿主的标题、按钮和滑块；总览轨道开关通过 `renderTrackToggle(container, context)` 注入，可能被省略的轨道名称通过 `renderTrackLabel(container, context)` 注入。渲染器把组件挂载到给定容器，并返回清理函数；虚拟行离开可见区域及视图销毁时都会清理。`context.onChange()` 只提交切换意图，实际启用状态仍由宿主更新 `document.tracks[].enabled`。轨道名称应先测量 `scrollWidth > clientWidth`，只有发生省略时才显示 Tooltip。
 
-Follow 的时间行为与 UI 无关：播放头从左侧进入视口后移动到视口中线，在剩余内容足够时保持中线，接近曲尾时逐渐让出中线并停在内容末端；总览和详情各自计算这一规则。手动滚动只暂停当前实例的 Follow。
+依赖主题或语言 Provider 的 Vue 控件应通过页面组件树中的 `Teleport` 放入挂载点，保留祖先的依赖注入。不要直接用独立的 `render(h(Component), container)` 代替，否则控件虽然来自 UI 库，却可能丢失宿主主题。挂载点回调可以登记 `{ container, context }`，由页面渲染对应 Teleport；更新状态时复用挂载点的稳定 key，清理时删除登记项。这样公共层保持框架无关，宿主 UI 控件继续继承页面的主题和语言。
+
+Follow 的时间行为与 UI 无关：播放头从左侧进入视口后移动到视口中线，在剩余内容足够时保持中线，接近曲尾时逐渐让出中线并停在内容末端；总览和详情各自计算这一规则。手动横向滚动只暂停当前实例的 Follow，纵向浏览音轨或音高保持跟随。
 
 | 事件              | 参数                | 宿主处理                                      |
 | ----------------- | ------------------- | --------------------------------------------- |
@@ -72,12 +74,23 @@ editor.setTimeZoom(180) // px / 原曲秒，只改变此实例
 editor.setPitchZoom(20) // px / 半音
 editor.setSelectedTrack('piano')
 overview.setTrackHeight('piano', 140)
+overview.setHideEmptyTracks(true) // 仅隐藏总览中的空轨，不删除轨道或改变播放数据
 // 宿主卸载时释放观察器、事件、RAF 和插件。
 overview.destroy()
 editor.destroy()
 ```
 
 `getViewport()` 返回滚动、时间/音高缩放、`minTimeZoom` / `maxTimeZoom` 和 Follow 的快照。`subscribe()` 返回取消订阅函数，`fitToSong()` 显示全曲，`setFollow(true)` 立即回到播放位置。插件通过 `{ id, install(view) => cleanup }` 安装并使用公开 API，卸载时统一清理；没有暴露可变 Canvas 或音符内部状态，未来编辑命令可复用相同稳定 ID。
+
+## 总览空轨筛选
+
+`hideEmptyTracks` 默认为 `false`，保持所有原始轨道可见。Vue 可通过 `<PianoRoll :hide-empty-tracks="true" ... />` 设置；原生浏览器通过 `createTracksOverview({ hideEmptyTracks: true, ... })` 初始化，或调用 `setHideEmptyTracks(enabled)` 动态切换。总览和详情均可接受此配置，但只有总览的显示行受到影响。
+
+空轨依据音符索引的有效音符判定：没有音符、只有非有限 tick/音高音符的轨道被隐藏；禁用但含有效音符的轨道仍然可见，继续使用原始轨道 ID 和启用状态。筛选不会修改传入文档、音符索引、全曲时长或当前选择，因此只含结束事件的长空轨被隐藏后，曲尾静音和 seek 范围仍保留。选中的空轨被隐藏时，已打开的详情仍显示该轨；恢复显示后选中状态也会恢复可见。
+
+切换筛选会在同一实例内重新分配行高、裁剪超出内容范围的纵向滚动，不重置 Follow 或用户缩放；纵向滚动条变化时仍按实际时间区宽度更新缩放下限。若全部轨道为空，总览显示 `labels.empty`，标尺、时间轴和宿主工具栏保留，用户可以直接取消筛选。文档更新后会重新判定有效音符，无须重新挂载组件。
+
+总览默认让音轨行均分时间区的可用高度，随容器伸缩，最低每行 56 px；只有所有轨道在最小高度下仍放不下时才产生纵向滚动条。有更多空间时，自动行可以继续增高。原生接入可用 `trackHeights` 或 `setTrackHeight()` 指定个别轨道高度（56–320 px），其余轨道均分剩余空间。行布局、音符渲染、左侧控件和命中测试共用同一份几何数据。
 
 ## 主题定制
 
@@ -126,7 +139,11 @@ Canvas 需要具体颜色值，例如十六进制、`rgb()` 或 `rgba()`，不�
 
 ## 交互边界
 
-Follow 默认开启。手动滚动只关闭当前实例的 Follow，点击 Follow 可恢复。滚轮在对应滚动容器内生效；Ctrl/Command + 滚轮以鼠标时间为锚缩放，工具栏缩放以可见播放头或视口中心为锚。详情支持完整 MIDI 0–127 琴键，初次进入居中于轨道音域，切换轨道仅在新音域不可见时调整纵向位置。
+Follow 默认开启，纵向浏览音轨或音高始终保持跟随。只有横向滚轮（包括 Shift+滚轮）或按住原生水平滚动条，才进入当前视图的临时横向浏览：保留 Follow 按钮选中态，暂缓自动平移，让用户移动视口。以本次操作开始时的视口为固定参照，实际横移达到 **可见时间区域宽度的四分之一** 才关闭 Follow；播放时间推进不会移动这个参照，也不参与距离判断。未达到时，滚轮停止 200ms 或松开滚动条后恢复自动跟随；纵向输入、缩放、seek、文档或尺寸变化会结束临时浏览。边缘剩余空间不足时，不会把少量触边位移降格认定为明显横向浏览。
+
+普通 `scroll` 通知仅用于更新绘制，不用于推断手动操作；自动跟随、布局裁剪、延迟通知和重复通知都不能关闭 Follow。聚焦时间区后，左右方向键是明确的横向导航，实际移动时直接关闭当前视图的 Follow；上下方向键继续浏览纵向内容。点击 Follow 可恢复。两个视图的状态与临时浏览完全独立。
+
+触控板按主导方向处理输入，纵向手势夹带的横向偏移会被过滤；滚轮仅作用于所在视图。Ctrl/Command + 滚轮以鼠标时间为锚缩放，工具栏缩放以可见播放头或视口中心为锚。详情支持完整 MIDI 0–127 琴键，初次进入居中于轨道音域，切换轨道仅在新音域不可见时调整纵向位置。
 
 滑块、双指缩放产生的 Ctrl+滚轮、WebKit `gesturestart/change/end`、`setTimeZoom()` 与“适合全曲”共用下限：**时间区实际可见宽度 ÷ 完整曲长秒数**。左侧轨道栏/琴键和纵向滚动条不计入时间区；不添加尾部 padding，最小缩放时 `scrollWidth === clientWidth`，全曲恰好铺满且不能继续缩小。MIDI 本身的尾部静音仍保留。上限通常为 1200 px/s，极短曲目至少容纳整曲下限；零时长文档使用有限默认值。
 
@@ -134,7 +151,7 @@ WebKit 手势使用相对手势开始的 scale，锚点按右侧时间区计算�
 
 CSS 容器查询负责工具栏的响应式布局，`ResizeObserver` 根据当前滚动容器重新计算坐标与缩放边界，采用 60ms 防抖、180ms 最长等待。处于最小缩放时，调整容器后继续铺满；主动放大时尽量保留视口中心时间，必要时裁剪到新边界。隐藏容器不会以零宽覆盖已有状态，恢复显示后重新测量；销毁会取消待处理回调。两个视图分别计算，互不影响。
 
-标尺点击默认不吸附；顶部手柄使用 pointer capture，靠近边缘自动滚动。拖动只发预览，松手提交一次；pointercancel、Escape、失焦或销毁会取消预览。播放头支持键盘左右键（0.1s）、Shift+左右键（1s）及 Home/End。双击和轨道单击不触发 seek。
+标尺点击默认不吸附；顶部手柄使用 pointer capture，靠近边缘自动滚动。手柄始终保持 18×25 px 的对称形状，中心与指针线共同指向真实时间；通过独立播放头图层和 CSS 层级覆盖轨道栏，不按边缘位置改变中心、宽度或尖端。音符和琴键各自在视口内裁剪；宿主不要在卷帘外层额外设置 `overflow: hidden`，以免裁掉跨过首尾边界的手柄。拖动保留按下时的抓取偏移，点击手柄边缘不会跳变时间。拖动只发预览，松手提交一次；pointercancel、Escape、失焦或销毁会取消预览。播放头支持键盘左右键（0.1s）、Shift+左右键（1s）及 Home/End。双击和轨道单击不触发 seek。
 
 公共库不会创建遮罩、锁定页面、决定浮层高度或启动音频。app 自行提供非模态浮层、顶部拖动调整、关闭按钮及当前歌曲校验。视图只读取 `transport`，没有独立壁钟，因此页面挂起、暂停和倍速都应由音频适配层回传权威原曲时间。
 

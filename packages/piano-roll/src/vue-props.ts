@@ -22,6 +22,8 @@ export interface PianoRollProps {
   timeZoom?: number
   /** 每 MIDI 半音像素高度。 */
   pitchZoom?: number
+  /** 仅在总览隐藏没有有效音符的轨道，默认 false；不影响文档、选轨或详情内容。 */
+  hideEmptyTracks?: boolean
   /** 文案本地化，默认中文。 */
   labels?: Partial<PianoRollLabels>
   /** 语义主题 token 的局部覆盖；默认浅粉色，更新时保留视口和实例。 */

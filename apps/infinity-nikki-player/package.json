@@ -16,7 +16,8 @@
     "tauri:build:msi": "node scripts/tauri-build-with-mirror.mjs --bundles msi",
     "tauri:build:nsis": "node scripts/tauri-build-with-mirror.mjs --bundles nsis",
     "nikki": "bash scripts/build-and-launch.sh",
-    "test": "vitest run --api false"
+    "test": "vitest run --api false",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@antdv-next/icons": "^1.0.8",
@@ -44,6 +45,7 @@
     "vue-router": "^4.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^22.19.17",
     "@vitejs/plugin-vue": "^6.0.5",

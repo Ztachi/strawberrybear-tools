@@ -2,15 +2,13 @@
 /**
  * @description: MIDI 歌曲详情页
  */
-import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, render, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Popover, Slider, Switch, Tooltip } from 'antdv-next'
-import { Clock3, Crosshair, Music2, Pause, Piano, Play, X } from 'lucide-vue-next'
+import { Button, Popover, Slider, Tooltip } from 'antdv-next'
+import { Clock3, Crosshair, ListFilter, Music2, Pause, Piano, Play, X } from 'lucide-vue-next'
 import PianoRoll from '@strawberrybear/piano-roll/vue'
 import type {
-  PianoRollTrackLabelContext,
-  PianoRollTrackToggleContext,
   PianoRollViewport,
   PianoRollView,
 } from '@strawberrybear/piano-roll/browser'
@@ -22,6 +20,10 @@ import { usePianoDetailSeek } from './MidiDetailPage/usePianoDetailSeek'
 import { usePianoEditorResize } from './MidiDetailPage/usePianoEditorResize'
 import { usePianoEditorSelection } from './MidiDetailPage/usePianoEditorSelection'
 import { usePianoRollZoomPersistence } from './MidiDetailPage/usePianoRollZoomPersistence'
+import { usePianoTrackHosts } from './MidiDetailPage/usePianoTrackHosts'
+import PianoTrackHosts from './MidiDetailPage/components/PianoTrackHosts/PianoTrackHosts.vue'
+import PianoTrackLabel from './MidiDetailPage/components/PianoTrackLabel.vue'
+import PianoRollHelpDialog from './MidiDetailPage/components/PianoRollHelpDialog.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -90,6 +92,14 @@ const pianoRollDocument = computed(() => {
   return applyPianoTrackEnabled(sourcePianoDocument.value, playerStore.detailDisabledTracks)
 })
 const pianoRollTracks = computed(() => pianoRollDocument.value.tracks)
+// 仅过滤总览的可见行，完整曲谱、选中轨道及播放启用状态仍保留。
+const hideEmptyPianoTracks = ref(true)
+const overviewPianoRollLabels = computed(() => ({
+  ...pianoRollLabels.value,
+  empty: hideEmptyPianoTracks.value
+    ? t('midi.pianoRoll.noTracksWithNotes')
+    : pianoRollLabels.value.empty,
+}))
 const {
   selectedTrackId,
   isOpen: isPianoEditorOpen,
@@ -142,71 +152,12 @@ function setPianoRollPitchZoom(view: PianoRollView | null | undefined, value: un
   if (typeof next === 'number' && Number.isFinite(next)) view?.setPitchZoom(next)
 }
 
-/** 在公共浏览器控制器提供的挂载点中渲染 antdv Switch，销毁时卸载 VNode。 */
-function renderPianoTrackToggle(
-  container: HTMLElement,
-  context: PianoRollTrackToggleContext
-): () => void {
-  render(
-    h(Switch, {
-      size: 'small',
-      checked: context.checked,
-      'aria-label': `${context.checked ? pianoRollLabels.value.disableTrack : pianoRollLabels.value.enableTrack}: ${context.track.name}`,
-      'onUpdate:checked': (value: unknown) => {
-        if (value !== context.checked) context.onChange()
-      },
-    }),
-    container
-  )
-  return () => render(null, container)
-}
-
-/** 音轨名称默认完整显示；仅在实际发生省略时才挂载 antdv Tooltip。 */
-function renderPianoTrackLabel(
-  container: HTMLElement,
-  context: PianoRollTrackLabelContext
-): () => void {
-  let overflowing = false
-  let frame = 0
-
-  const mount = (): void => {
-    const name = h(
-      'span',
-      { class: 'piano-roll-track-name' },
-      context.track.name
-    )
-    render(
-      overflowing
-        ? h(
-            Tooltip,
-            { title: context.track.name, placement: 'topLeft' },
-            { default: () => name }
-          )
-        : name,
-      container
-    )
-  }
-  const measure = (): void => {
-    const name = container.querySelector<HTMLElement>('.piano-roll-track-name')
-    const next = Boolean(name && name.scrollWidth > name.clientWidth + 1)
-    if (next !== overflowing) {
-      overflowing = next
-      mount()
-    }
-  }
-  mount()
-  const observer = new ResizeObserver(() => {
-    cancelAnimationFrame(frame)
-    frame = requestAnimationFrame(measure)
-  })
-  observer.observe(container)
-  frame = requestAnimationFrame(measure)
-  return () => {
-    observer.disconnect()
-    cancelAnimationFrame(frame)
-    render(null, container)
-  }
-}
+const {
+  labels: pianoTrackLabelHosts,
+  toggles: pianoTrackToggleHosts,
+  renderLabel: renderPianoTrackLabel,
+  renderToggle: renderPianoTrackToggle,
+} = usePianoTrackHosts()
 
 const descriptionRef = ref<HTMLElement | null>(null)
 const isDescriptionOverflowing = ref(false)
@@ -362,6 +313,10 @@ onBeforeUnmount(() => {
         class="detail-body"
         :style="{ '--piano-editor-height': `${editorHeightPercent}%` }"
       >
+        <PianoTrackHosts
+          :labels="pianoTrackLabelHosts"
+          :toggles="pianoTrackToggleHosts"
+        />
         <div
           class="piano-overview-host"
           :class="{ 'piano-overview-host--with-editor': isPianoEditorOpen }"
@@ -372,10 +327,11 @@ onBeforeUnmount(() => {
             variant="overview"
             :document="pianoRollDocument"
             :transport="pianoRollTransport"
-            :labels="pianoRollLabels"
+            :labels="overviewPianoRollLabels"
             :selected-track-id="selectedTrackId"
             :time-zoom="pianoOverviewTimeZoom"
             :show-toolbar-controls="false"
+            :hide-empty-tracks="hideEmptyPianoTracks"
             :render-track-label="renderPianoTrackLabel"
             :render-track-toggle="renderPianoTrackToggle"
             @select-track="selectPianoTrack"
@@ -386,7 +342,7 @@ onBeforeUnmount(() => {
             @viewport-change="persistOverviewViewport"
           >
             <template #title="{ label }">
-              <strong class="piano-roll-slot-title">{{ label }}</strong>
+              <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
             </template>
             <template #toolbar="{ view, viewport }">
               <div class="piano-roll-app-toolbar">
@@ -417,6 +373,21 @@ onBeforeUnmount(() => {
                     @update:value="setPianoRollTimeZoom(view, $event)"
                   />
                 </span>
+                <Tooltip :title="t('midi.pianoRoll.hideEmptyTracks')">
+                  <Button
+                    class="piano-roll-trailing-action"
+                    size="small"
+                    :type="hideEmptyPianoTracks ? 'primary' : 'default'"
+                    :aria-pressed="hideEmptyPianoTracks"
+                    :aria-label="t('midi.pianoRoll.hideEmptyTracks')"
+                    @click="hideEmptyPianoTracks = !hideEmptyPianoTracks"
+                  >
+                    <template #icon>
+                      <ListFilter class="size-4" :stroke-width="2" />
+                    </template>
+                  </Button>
+                </Tooltip>
+                <PianoRollHelpDialog />
               </div>
             </template>
           </PianoRoll>
@@ -464,7 +435,7 @@ onBeforeUnmount(() => {
             @viewport-change="persistEditorViewport"
           >
             <template #title="{ label }">
-              <strong class="piano-roll-slot-title">{{ label }}</strong>
+              <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
             </template>
             <template #toolbar="{ view, viewport }">
               <div class="piano-roll-app-toolbar">
@@ -508,8 +479,10 @@ onBeforeUnmount(() => {
                 </span>
                 <Tooltip :title="pianoRollLabels.close">
                   <Button
+                    class="piano-roll-trailing-action"
                     type="text"
                     size="small"
+                    danger
                     :aria-label="pianoRollLabels.close"
                     @click="closePianoEditor"
                   >
@@ -626,13 +599,14 @@ onBeforeUnmount(() => {
 }
 
 .detail-body {
-  @apply relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white;
-  --piano-editor-size: max(0px, min(var(--piano-editor-height), calc(100% - 4rem)));
+  @apply relative flex min-h-0 flex-1 flex-col bg-white;
+  /* 给总览工具栏、标尺和至少一行轨道留出空间；更小的宿主中浮层自动收缩。 */
+  --piano-editor-size: max(0px, min(var(--piano-editor-height), calc(100% - 9rem)));
   border: 1px solid var(--border-primary-15);
 }
 
 .piano-overview-host {
-  @apply min-h-0 shrink-0 overflow-hidden;
+  @apply min-h-0 shrink-0;
   height: 100%;
 }
 
@@ -648,20 +622,16 @@ onBeforeUnmount(() => {
 }
 
 .piano-roll-slot-title {
-  @apply min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap;
-}
-
-.detail-piano-roll :deep(.piano-roll-track-name),
-.detail-piano-editor :deep(.piano-roll-track-name) {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply mr-4 min-w-0 shrink overflow-hidden text-ellipsis whitespace-nowrap;
+  max-width: 30%;
 }
 
 .piano-roll-app-toolbar {
-  @apply flex min-w-0 items-center gap-2;
+  @apply flex min-w-0 flex-1 items-center gap-2;
+}
+
+.piano-roll-trailing-action {
+  @apply ml-auto shrink-0;
 }
 
 .piano-roll-app-slider {
@@ -683,7 +653,7 @@ onBeforeUnmount(() => {
 }
 
 .piano-editor-overlay {
-  @apply absolute inset-x-0 bottom-0 z-20 flex min-h-0 flex-col overflow-hidden;
+  @apply absolute inset-x-0 bottom-0 z-20 flex min-h-0 flex-col;
   height: var(--piano-editor-size);
   background: var(--bg-white-95);
   border-top: 1px solid var(--border-primary-30);

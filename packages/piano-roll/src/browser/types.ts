@@ -94,8 +94,10 @@ export interface PianoRollViewOptions {
   pitchZoom?: number
   /** 初始 Follow，默认开启。 */
   follow?: boolean
-  /** 每轨初始行高；省略时统一 104 px。 */
+  /** 每轨初始行高（56–320 px）；省略的轨道均分剩余视口高度，最低 56 px，溢出时纵向滚动。 */
   trackHeights?: Readonly<Record<string, number>>
+  /** 仅在总览隐藏没有有效音符的轨道，默认 false；不改变文档、选择或轨道启用状态。 */
+  hideEmptyTracks?: boolean
   /** 可本地化的无障碍和控制文案。 */
   labels?: Partial<PianoRollLabels>
   /** 主题令牌；省略时使用播放器匹配的浅粉色默认主题。 */
@@ -148,6 +150,8 @@ export interface PianoRollView {
   setPitchZoom(pixelsPerPitch: number): void
   /** 设置总览中某一轨道的行高，范围 56–320 px。 */
   setTrackHeight(trackId: string, height: number): void
+  /** 切换总览空轨筛选并重新分配行高；保留选择、Follow 和缩放，详情视图不受影响。 */
+  setHideEmptyTracks(enabled: boolean): void
   /** 开关跟随；开启后立即显示当前播放头。 */
   setFollow(enabled: boolean): void
   /** 缩放以显示全曲，保留纵向滚动。 */

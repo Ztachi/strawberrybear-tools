@@ -107,6 +107,51 @@ export default {
       playhead: '播放头：左右方向键微调播放位置',
       fit: '适合全曲',
       close: '关闭钢琴卷帘',
+      hideEmptyTracks: '隐藏没有音符的音轨',
+      noTracksWithNotes: '没有包含音符的音轨',
+      help: {
+        title: '钢琴卷帘操作说明',
+        done: '知道了',
+        groups: { tracks: '查看音轨', view: '缩放与跟随', position: '定位与详情窗口' },
+        items: {
+          selection: {
+            label: '选择与详情',
+            description: '单击选择音轨，双击打开详情；详情打开后单击其它音轨即可切换，再次双击当前音轨可关闭。',
+          },
+          enabled: {
+            label: '音轨开关',
+            description: '左侧开关控制音轨是否参与播放；切换开关不会选择音轨或跳转播放位置。',
+          },
+          filter: {
+            label: '隐藏空轨',
+            description: '默认隐藏没有音符的音轨。点击筛选按钮可显示全部音轨；筛选不改变音轨开关或已打开的详情。',
+          },
+          zoom: {
+            label: '独立缩放',
+            description: '用滑块、触控板捏合或 Ctrl/Command + 滚轮调整时间缩放，详情还可调整音高缩放。两个视图独立，缩放按歌曲保存并恢复；时间缩放最小铺满一屏。',
+          },
+          scroll: {
+            label: '滚动',
+            description: '在对应区域内滚动。横向浏览达到四分之一屏会暂停该视图的自动跟随，少量横移停止后会恢复跟随；上下滚动不会暂停，两个视图互不影响。',
+          },
+          follow: {
+            label: '跟随播放头',
+            description: '主题色按钮表示开启。播放头先走到中间，再保持居中让音符滚动，接近曲尾后走向终点；点击按钮可重新开启跟随。',
+          },
+          seek: {
+            label: '跳转位置',
+            description: '点击标尺或拖动播放头顶部手柄定位。拖动时只预览，松手后提交一次跳转；拖到边缘自动滚动，Esc 取消拖动。',
+          },
+          resize: {
+            label: '调整与关闭',
+            description: '拖动详情顶部细线调整高度。聚焦细线后可用上下方向键调整；点击右侧红色关闭按钮，或在详情内按 Esc 关闭。',
+          },
+          readOnly: {
+            label: '当前版本',
+            description: '音符只读，可查看和定位，暂不支持新增、删除、移动音符或修改时长、力度。',
+          },
+        },
+      },
       resize: '调整钢琴卷帘高度：上下方向键调整，Home 最小，End 最大',
       heightPercent: '高度 {value}%',
       seekFailed: '跳转播放位置失败：{error}',

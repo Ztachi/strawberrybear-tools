@@ -13,19 +13,20 @@ export function installStyles(document: Document): void {
     document.createElement('style')
   style.dataset.pianoRoll = ''
   style.textContent = `
-.pr-view{display:grid;grid-template-columns:var(--pr-gutter,160px) minmax(0,1fr);grid-template-rows:32px minmax(0,1fr);height:100%;min-height:0;overflow:hidden;color:var(--pr-text,#4a3f3f);background:var(--pr-surface,#fff9fa);position:relative;font:12px var(--pr-font-family,system-ui,sans-serif);color-scheme:light;contain:layout paint}
+.pr-view{display:grid;grid-template-columns:var(--pr-gutter,160px) minmax(0,1fr);grid-template-rows:32px minmax(0,1fr);height:100%;min-height:0;overflow:visible;color:var(--pr-text,#4a3f3f);background:var(--pr-surface,#fff9fa);position:relative;font:12px var(--pr-font-family,system-ui,sans-serif);color-scheme:light;contain:layout}
 .pr-corner{border-right:1px solid var(--pr-border,#f1d9de);border-bottom:1px solid var(--pr-border,#f1d9de);border-right-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);border-bottom-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);display:flex;align-items:center;padding:0 10px;overflow:hidden;white-space:nowrap}
-.pr-ruler{position:relative;min-width:0;overflow:hidden;background:var(--pr-surface-raised,#fff1f4);touch-action:none;cursor:crosshair}
+.pr-ruler{position:relative;min-width:0;overflow:visible;z-index:4;background:var(--pr-surface-raised,#fff1f4);touch-action:none;cursor:crosshair}
+.pr-ruler-grid{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .pr-gutter{position:relative;min-height:0;overflow:hidden;background:var(--pr-surface-subtle,#fffafb);border-right:1px solid var(--pr-border,#f1d9de);border-right-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);overscroll-behavior:contain}
 .pr-pane{position:relative;min-width:0;min-height:0;overflow:hidden}
-.pr-scroll{position:absolute;inset:0;z-index:2;overflow-x:auto;overflow-y:scroll;overscroll-behavior:contain;outline-offset:-2px;scrollbar-width:auto;scrollbar-color:var(--pr-scrollbar-thumb,#e6a3af) var(--pr-surface-subtle,#fffafb)}
+.pr-scroll{position:absolute;inset:0;z-index:2;overflow-x:auto;overflow-y:auto;overscroll-behavior:contain;outline-offset:-2px;scrollbar-width:auto;scrollbar-color:var(--pr-scrollbar-thumb,#e6a3af) var(--pr-surface-subtle,#fffafb)}
 .pr-scroll::-webkit-scrollbar{width:12px;height:12px}
 .pr-scroll::-webkit-scrollbar-track,.pr-scroll::-webkit-scrollbar-corner{background:var(--pr-surface-subtle,#fffafb)}
 .pr-scroll::-webkit-scrollbar-thumb{background:var(--pr-scrollbar-thumb,#e6a3af);border:3px solid var(--pr-surface-subtle,#fffafb);border-radius:var(--pr-control-radius,6px)}
 .pr-scroll::-webkit-scrollbar-thumb:hover{background:var(--pr-scrollbar-thumb-hover,#d97f91)}
 .pr-spacer{pointer-events:none;min-width:100%;min-height:100%}
 .pr-layer{position:absolute;left:0;top:0;pointer-events:none;display:block}
-.pr-line{position:absolute;top:0;bottom:0;width:1px;background:var(--pr-playhead,#c9516b);pointer-events:none;z-index:3;box-shadow:0 0 2px var(--pr-border,#f1d9de)}
+.pr-line{position:absolute;grid-column:2;grid-row:2;left:0;top:0;bottom:0;width:1px;max-height:100%;background:var(--pr-playhead,#c9516b);pointer-events:none;z-index:3;box-shadow:0 0 2px var(--pr-border,#f1d9de)}
 .pr-handle{position:absolute;top:6px;left:0;margin-left:-9px;width:18px;height:25px;border:0;border-radius:4px 4px 1px 1px;background:var(--pr-playhead-handle,#fff);clip-path:polygon(0 0,100% 0,100% 65%,50% 100%,0 65%);cursor:ew-resize;touch-action:none;z-index:4;padding:0}
 .pr-handle:focus-visible{background:var(--pr-primary-soft,#f7b7be);outline:2px solid var(--pr-focus,#c9516b)}
 .pr-track{position:absolute;left:0;right:0;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--pr-border,#f1d9de);border-bottom-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 46%);background:transparent}

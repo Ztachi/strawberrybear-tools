@@ -7,6 +7,7 @@ import type { PianoRollProps } from './vue-props'
 
 const props = withDefaults(defineProps<PianoRollProps>(), {
   variant: 'overview', selectedTrackId: null, timeZoom: undefined, pitchZoom: 16,
+  hideEmptyTracks: false,
   showToolbarControls: true,
 })
 const emit = defineEmits<{
@@ -37,6 +38,7 @@ function mountView(): void {
     container: host.value, document: props.document, transport: props.transport,
     selectedTrackId: props.selectedTrackId, timeZoom: viewport.value.timeZoom,
     pitchZoom: viewport.value.pitchZoom, follow: viewport.value.follow,
+    hideEmptyTracks: props.hideEmptyTracks,
     labels: labels.value, theme: props.theme, plugins: props.plugins,
     onTrackSelect: (id) => emit('select-track', id),
     onTrackOpen: (id, context) => emit('open-editor', id, context),
@@ -67,6 +69,7 @@ watch(labels, (next) => view?.setLabels(next))
 watch(() => props.theme, (next) => view?.setTheme(next), { deep: true })
 watch(() => props.timeZoom, (zoom) => { if (zoom !== undefined) view?.setTimeZoom(zoom) })
 watch(() => props.pitchZoom, (zoom) => view?.setPitchZoom(zoom))
+watch(() => props.hideEmptyTracks, (enabled) => view?.setHideEmptyTracks(enabled))
 defineExpose({ getView: () => view })
 </script>
 
@@ -136,7 +139,8 @@ defineExpose({ getView: () => view })
   height: 100%;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  /* 标尺手柄可在首尾跨过边界；音轨、琴键及音符由各自视口负责裁剪。 */
+  overflow: visible;
   /* 视图本身不是卡片；宿主决定浮层/页面边界，避免总览和详情叠加多层框线。 */
   border: 0;
   border-radius: 0;

@@ -107,6 +107,51 @@ export default {
       playhead: 'Playhead: use Left and Right arrows to seek',
       fit: 'Fit Song',
       close: 'Close Piano Roll',
+      hideEmptyTracks: 'Hide tracks without notes',
+      noTracksWithNotes: 'No tracks contain notes',
+      help: {
+        title: 'Piano Roll Guide',
+        done: 'Got it',
+        groups: { tracks: 'Browse tracks', view: 'Zoom and follow', position: 'Seek and manage details' },
+        items: {
+          selection: {
+            label: 'Select and open',
+            description: 'Click to select a track; double-click to open its details. While details are open, click another track to switch, or double-click the current track to close.',
+          },
+          enabled: {
+            label: 'Track switches',
+            description: 'The left switch controls whether a track plays. Toggling it does not select the track or seek.',
+          },
+          filter: {
+            label: 'Empty tracks',
+            description: 'Tracks without notes are hidden by default. Click the filter to show all tracks; filtering preserves track switches and open details.',
+          },
+          zoom: {
+            label: 'Independent zoom',
+            description: 'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Views zoom independently, save per song, and restore when you return. Minimum time zoom fills one screen.',
+          },
+          scroll: {
+            label: 'Scrolling',
+            description: 'Scroll inside the view you want to move. Panning horizontally by a quarter of the visible width pauses Follow; smaller pans return to Follow when you stop. Vertical scrolling keeps Follow on. Each view is independent.',
+          },
+          follow: {
+            label: 'Follow Playhead',
+            description: 'A filled button means Follow is on. The playhead moves to the center, stays there as notes scroll, then moves to the end near the song’s tail. Click the button to resume Follow.',
+          },
+          seek: {
+            label: 'Seek',
+            description: 'Click the ruler or drag the top playhead handle. Dragging previews the position; releasing commits one seek. Edges scroll automatically. Press Esc to cancel a drag.',
+          },
+          resize: {
+            label: 'Resize and close',
+            description: 'Drag the thin top edge of details to resize, or focus it and use Up/Down. Click the red close button on the right, or press Esc within details, to close.',
+          },
+          readOnly: {
+            label: 'Current version',
+            description: 'Notes are read-only. You can inspect and seek, but cannot yet add, delete, move, resize, or change the velocity of notes.',
+          },
+        },
+      },
       resize: 'Resize piano roll: use Up and Down, Home for minimum, End for maximum',
       heightPercent: 'Height {value}%',
       seekFailed: 'Could not seek: {error}',

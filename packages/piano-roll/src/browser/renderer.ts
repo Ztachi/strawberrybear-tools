@@ -8,6 +8,51 @@ export interface TrackRow {
   height: number
 }
 
+/**
+ * @description 计算总览轨道行的统一内容坐标，供 Canvas、轨道栏与命中测试共用。
+ * @param tracks 当前文档按显示顺序排列的轨道。
+ * @param viewportHeight CSS 布局完成后的内容视口高度，不包含工具栏或标尺。
+ * @param explicitHeights 宿主显式设置的行高；这些行保留原有 56–320px 限制。
+ * @return 按顺序连续排列的轨道行。自动行均分剩余空间，低于 56px 后产生溢出。
+ */
+export function layoutTrackRows(
+  tracks: readonly PianoRollTrack[],
+  viewportHeight: number,
+  explicitHeights?: ReadonlyMap<string, number>
+): TrackRow[] {
+  const minimumHeight = 56
+  let fixedHeight = 0
+  let automaticCount = 0
+  const resolvedHeights: (number | undefined)[] = []
+  for (const track of tracks) {
+    const value = explicitHeights?.get(track.id)
+    if (value === undefined) {
+      resolvedHeights.push(undefined)
+      automaticCount += 1
+    } else {
+      // 显式行高延续既有 API 的边界；非法输入不能污染后续所有轨道的坐标。
+      const height = Math.min(
+        320,
+        Math.max(minimumHeight, Number.isFinite(value) ? value : minimumHeight)
+      )
+      resolvedHeights.push(height)
+      fixedHeight += height
+    }
+  }
+  const availableHeight = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0
+  const automaticHeight =
+    automaticCount > 0
+      ? Math.max(minimumHeight, (availableHeight - fixedHeight) / automaticCount)
+      : minimumHeight
+  let top = 0
+  return tracks.map((track, index) => {
+    const height = resolvedHeights[index] ?? automaticHeight
+    const row = { track, top, height }
+    top += height
+    return row
+  })
+}
+
 /** 在轨道区域内以省略号裁剪名称，避免 Canvas 的 maxWidth 压缩长文本。 */
 function fitCanvasLabel(context: CanvasRenderingContext2D, value: string, maxWidth: number): string {
   if (maxWidth <= 0) return ''

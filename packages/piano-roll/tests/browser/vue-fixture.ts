@@ -1,4 +1,4 @@
-import { createApp, defineComponent, h, ref } from 'vue'
+import { createApp, defineComponent, h, ref, shallowRef } from 'vue'
 import PianoRoll from '../../src/PianoRoll.vue'
 import Minimal from '../../examples/Minimal.vue'
 import type { PianoRollDocument } from '../../src/core'
@@ -27,6 +27,8 @@ let roll: {
 } | null = null
 const theme = ref<PianoRollThemeInput | undefined>(undefined)
 const width = ref('760px')
+const currentDocument = shallowRef(documentModel)
+const hideEmptyTracks = ref(false)
 
 const Harness = defineComponent({
   setup() {
@@ -36,9 +38,10 @@ const Harness = defineComponent({
           ref: (value: unknown) => {
             roll = value as typeof roll
           },
-          document: documentModel,
+          document: currentDocument.value,
           transport,
           theme: theme.value,
+          hideEmptyTracks: hideEmptyTracks.value,
         }),
       ])
   },
@@ -65,6 +68,8 @@ declare global {
       mountMinimal: () => void
       setWidth: (value: string) => void
       setTheme: (value: PianoRollThemeInput | undefined) => void
+      setDocument: (value: PianoRollDocument) => void
+      setHideEmptyTracks: (value: boolean) => void
       getTheme: () => unknown
       getView: () => unknown
       unmount: () => void
@@ -80,6 +85,12 @@ window.vueFixture = {
   },
   setTheme(value) {
     theme.value = value
+  },
+  setDocument(value) {
+    currentDocument.value = value
+  },
+  setHideEmptyTracks(value) {
+    hideEmptyTracks.value = value
   },
   getTheme() {
     return roll?.getView?.()?.getTheme() ?? null
