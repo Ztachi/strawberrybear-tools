@@ -542,11 +542,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .midi-detail-page {
-  @apply flex h-full min-h-0 flex-col gap-2 bg-white;
+  @apply flex h-full min-h-0 flex-col bg-white rounded-xl;
 }
 
 .detail-summary {
-  @apply flex shrink-0 items-center gap-4 bg-white px-2 py-3;
+  @apply flex shrink-0 items-center gap-4 px-2 py-3;
   border-bottom: 1px solid var(--border-primary-15);
 }
 
@@ -626,7 +626,7 @@ onBeforeUnmount(() => {
 }
 
 .detail-body {
-  @apply relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-white;
+  @apply relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white;
   --piano-editor-size: max(0px, min(var(--piano-editor-height), calc(100% - 4rem)));
   border: 1px solid var(--border-primary-15);
 }

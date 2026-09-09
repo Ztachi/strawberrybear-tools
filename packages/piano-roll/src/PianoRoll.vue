@@ -153,7 +153,6 @@ defineExpose({ getView: () => view })
   padding: 7px 10px;
   min-height: 36px;
   flex-shrink: 0;
-  background: var(--pr-surface-raised);
   border-bottom: 1px solid color-mix(in srgb, var(--pr-border), transparent 30%);
   font: 12px var(--pr-font-family);
 }

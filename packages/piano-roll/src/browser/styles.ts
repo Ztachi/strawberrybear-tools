@@ -1,3 +1,11 @@
+/*
+ * @Author: ztachi(legendryztachi@gmail.com)
+ * @Date: 2026-09-08 00:57:07
+ * @LastEditors: ztachi(legendryztachi@gmail.com)
+ * @LastEditTime: 2026-09-09 00:36:01
+ * @FilePath: /strawberrybear-tools/packages/piano-roll/src/browser/styles.ts
+ * @Description: 
+ */
 /** 浏览器控制器默认布局；每个 ownerDocument 只持有一个节点，热更新时同步最新样式。 */
 export function installStyles(document: Document): void {
   const style =
@@ -6,7 +14,7 @@ export function installStyles(document: Document): void {
   style.dataset.pianoRoll = ''
   style.textContent = `
 .pr-view{display:grid;grid-template-columns:var(--pr-gutter,160px) minmax(0,1fr);grid-template-rows:32px minmax(0,1fr);height:100%;min-height:0;overflow:hidden;color:var(--pr-text,#4a3f3f);background:var(--pr-surface,#fff9fa);position:relative;font:12px var(--pr-font-family,system-ui,sans-serif);color-scheme:light;contain:layout paint}
-.pr-corner{background:var(--pr-surface-raised,#fff1f4);border-right:1px solid var(--pr-border,#f1d9de);border-bottom:1px solid var(--pr-border,#f1d9de);border-right-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);border-bottom-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);display:flex;align-items:center;padding:0 10px;overflow:hidden;white-space:nowrap}
+.pr-corner{border-right:1px solid var(--pr-border,#f1d9de);border-bottom:1px solid var(--pr-border,#f1d9de);border-right-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);border-bottom-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);display:flex;align-items:center;padding:0 10px;overflow:hidden;white-space:nowrap}
 .pr-ruler{position:relative;min-width:0;overflow:hidden;background:var(--pr-surface-raised,#fff1f4);touch-action:none;cursor:crosshair}
 .pr-gutter{position:relative;min-height:0;overflow:hidden;background:var(--pr-surface-subtle,#fffafb);border-right:1px solid var(--pr-border,#f1d9de);border-right-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);overscroll-behavior:contain}
 .pr-pane{position:relative;min-width:0;min-height:0;overflow:hidden}
