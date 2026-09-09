@@ -27,7 +27,7 @@ main (唯一长期分支，可发布、可打 tag)
 | `fix/<name>`     | 一般 bug 修复          | 最新 `main` | `main`   | PR 合入后 |
 | `hotfix/<name>`  | 线上紧急修复           | 最新 `main` | `main`   | PR 合入后 |
 
-`develop` 不再是新工作的来源或 PR 目标。远端现有 `develop` 可以在迁移期间保留作为历史分支，但不得继续向它提交新 PR；确认没有遗留工作后再单独删除。
+`develop` 不再是新工作的来源或 PR 目标。旧分支已停用并删除，删除前的提交由 `archive/develop-before-main-only` tag 保留；不得重新创建或继续使用 `develop`。
 
 ## 命名规范
 
