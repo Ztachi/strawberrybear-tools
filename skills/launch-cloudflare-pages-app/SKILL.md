@@ -1,16 +1,16 @@
 ---
 name: launch-cloudflare-pages-app
 description: >-
-  在 strawberrybear-tools monorepo 中从 0 到 1 创建、部署并发布一个需要 Cloudflare Pages 的 Web 应用。Use when user asks to add/create/scaffold/launch a new web app that matches docs/standards/cicd.md "情形三：需同时部署到 Cloudflare Pages 的 Web 应用", or asks for the full feature branch →规范阅读→app folder→CI/CD→Cloudflare Pages project→develop→main release workflow.
+  在 strawberrybear-tools monorepo 中从 0 到 1 创建、部署并发布一个需要 Cloudflare Pages 的 Web 应用。Use when user asks to add/create/scaffold/launch a new web app that matches docs/standards/cicd.md "情形三：需同时部署到 Cloudflare Pages 的 Web 应用", or asks for the full feature branch →规范阅读→app folder→CI/CD→Cloudflare Pages project→main release workflow.
 ---
 
 # Cloudflare Pages Web App 上线流程
 
-本 skill 适用于本仓库 `apps/<app-name>` 下需要同时走 GitHub Release 和 Cloudflare Pages 部署的 Web 应用。目标不是只写代码，而是把 feature 分支、规范、目录、CI/CD、Cloudflare Pages 项目、PR、develop 集成、main 发版和线上验证串成一套闭环。
+本 skill 适用于本仓库 `apps/<app-name>` 下需要同时走 GitHub Release 和 Cloudflare Pages 部署的 Web 应用。目标不是只写代码，而是把 feature 分支、规范、目录、CI/CD、Cloudflare Pages 项目、PR、main 集成发版和线上验证串成一套闭环。
 
 ## 总原则
 
-- 从 `develop` 拉 `feature/<app-name>`，不要直接在 `develop` 或 `main` 上开发。
+- 从最新 `main` 拉 `feature/<app-name>`，不要直接在 `main` 上开发。
 - 先读规范，再动代码；规范冲突时以仓库文档和现有可工作的 workflow 为准。
 - Cloudflare Pages 项目名、app 目录名、package scope、workflow 文件名保持一致：`<app-name>` / `apps/<app-name>` / `@strawberrybear/<app-name>` / `release-<app-name>.yml`。
 - Cloudflare Pages deploy job 和 release job 并行，不互相依赖。
@@ -63,12 +63,12 @@ apps/infinity-nikki-stylist-office/package.json
 ## Step 2：建立 feature 分支
 
 ```bash
-git checkout develop
-git pull origin develop
+git checkout main
+git pull --ff-only origin main
 git checkout -b feature/<app-name>
 ```
 
-如果本地没有 `develop`，先 `git fetch origin develop`；如果远端也没有，暂停并向用户说明分支策略与仓库实际状态不一致。
+如果本地没有 `main`，先 `git fetch origin main`；如果远端也没有，暂停并向用户说明仓库状态异常。
 
 ## Step 3：创建 app 目录
 
@@ -260,7 +260,7 @@ deploy-pages:
 - 初始化 <app-name> Web 应用，并接入 Cloudflare Pages 部署。
 ```
 
-## Step 8：feature → develop
+## Step 8：feature → main
 
 提交并推送：
 
@@ -270,7 +270,7 @@ git commit -m "feat(<app-name>): initialize cloudflare pages app"
 git push -u origin feature/<app-name>
 ```
 
-创建 PR：`feature/<app-name>` → `develop`。PR 描述必须包含：
+创建 PR：`feature/<app-name>` → `main`。PR 描述必须包含：
 
 ```markdown
 ## 背景
@@ -290,11 +290,11 @@ git push -u origin feature/<app-name>
 
 合并后删除 feature 分支。
 
-## Step 9：develop → main 发版
+## Step 9：main 发版
 
-从 `develop` 向 `main` 创建 release PR。合并前确认：
+目标 app 的 PR 合入 `main` 后，release workflow 会按 `main` 的变更触发。合并前确认：
 
-- `develop` 已包含目标 app 全部代码和 workflow。
+- `main` 已包含目标 app 全部代码和 workflow。
 - 版本号 / changeset 与目标发版类型一致。
 - `release-<app-name>.yml` 只会被目标 app 变化触发。
 - GitHub secrets 已配置。
