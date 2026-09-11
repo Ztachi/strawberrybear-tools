@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core'
 import type { AudioPlayerPort, MediaItem, Player, PlayerState } from '@strawberrybear/player'
 import type { MidiInfo } from '@/types'
 import { getMidiDisplayTitle } from '@/lib/midiDisplay'
+import { startPreviewProgress } from './previewProgress'
 import {
   getTotalDuration,
   getMidiSourceDurationMs,
@@ -69,8 +70,8 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   private loadedMediaId: string | null = null
   /** 递增加载令牌，防止较早的异步读取在切歌后覆盖新媒体。 */
   private loadRequestId = 0
-  /** 预览进度刷新定时器，播放中按约 60fps 推进 Player 进度。 */
-  private previewTimer: number | null = null
+  /** 预览进度采样清理函数；可见时对齐显示帧，后台继续低频检测曲终。 */
+  private stopPreviewProgress: (() => void) | null = null
   /** 暂停或拖拽时记录的播放位置，单位毫秒。 */
   private pausedAtTime = 0
   /** 拖拽进度条时暂停音频时钟回写，避免 UI 被计时器抢回去。 */
@@ -395,7 +396,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   private async loadMedia(media: MediaItem, transportId: number): Promise<void> {
     const requestId = ++this.loadRequestId
     stopPreviewAudio()
-    this.stopPreviewTimer()
+    this.stopPreviewSampling()
     this.audioPrepared = false
     this.loadedMidiData = null
     this.loadedMidiInfo = null
@@ -428,7 +429,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
       await resumePreviewAudio()
       if (requestId !== this.transportRequestId) return
       this.resumePending = false
-      this.startPreviewTimer()
+      this.startPreviewSampling()
       return
     }
     if (!this.loadedMidiData || !this.loadedMidiInfo) {
@@ -448,7 +449,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     setPreviewSpeed(this.getPlaybackSpeed())
     this.resumePending = false
     this.player?.updateProgress(getPreviewAudioTime() / 1000, getTotalDuration() / 1000)
-    this.startPreviewTimer()
+    this.startPreviewSampling()
   }
 
   /**
@@ -461,7 +462,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     pausePreviewAudio()
     this.pausedAtTime = getPreviewAudioTime()
     this.resumePending = this.audioPrepared
-    this.stopPreviewTimer()
+    this.stopPreviewSampling()
     this.player?.updateProgress(this.pausedAtTime / 1000, this.getDurationMs() / 1000)
   }
 
@@ -473,7 +474,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     this.loadRequestId += 1
     this.transportRequestId += 1
     stopPreviewAudio()
-    this.stopPreviewTimer()
+    this.stopPreviewSampling()
     this.loadedMidiData = null
     this.loadedMidiInfo = null
     this.loadedMediaId = null
@@ -508,7 +509,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
         return
     }
     if (!this.loadedMidiData || !this.loadedMidiInfo) return
-    this.stopPreviewTimer()
+    this.stopPreviewSampling()
     if (!this.audioPrepared) {
       await playMidiAudio(this.loadedMidiData, this.getPlaybackSpeed(), {
         midi: this.loadedMidiInfo,
@@ -524,7 +525,7 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
     this.pausedAtTime = getPreviewAudioTime()
     this.resumePending = !shouldContinuePlaying
     if (shouldContinuePlaying) {
-      this.startPreviewTimer()
+      this.startPreviewSampling()
       this.player?.handlePlaying()
     } else {
       this.player?.handlePaused()
@@ -601,31 +602,30 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
    * @description: 开始本地进度刷新
    * @return {void} 无返回值
    */
-  private startPreviewTimer(): void {
-    this.stopPreviewTimer()
-    this.previewTimer = window.setInterval(() => {
+  private startPreviewSampling(): void {
+    this.stopPreviewSampling()
+    this.stopPreviewProgress = startPreviewProgress(() => {
       if (this.dragging) return
-      // 定时器只读取，不生成音乐时间；AudioContext 暂停或设备挂起时，指针与声音一起停止。
+      // 采样器只读取，不生成音乐时间；AudioContext 暂停或设备挂起时，指针与声音一起停止。
       this.pausedAtTime = getPreviewAudioTime()
       const durationMs = getTotalDuration()
       if (this.pausedAtTime >= durationMs) {
-        this.stopPreviewTimer()
+        this.stopPreviewSampling()
         this.player?.updateProgress(durationMs / 1000, durationMs / 1000)
         void this.player?.handleEnded()
         return
       }
       this.player?.updateProgress(this.pausedAtTime / 1000, durationMs / 1000)
-    }, 16)
+    })
   }
 
   /**
    * @description: 停止本地进度刷新
    * @return {void} 无返回值
    */
-  private stopPreviewTimer(): void {
-    if (!this.previewTimer) return
-    clearInterval(this.previewTimer)
-    this.previewTimer = null
+  private stopPreviewSampling(): void {
+    this.stopPreviewProgress?.()
+    this.stopPreviewProgress = null
   }
 }
 

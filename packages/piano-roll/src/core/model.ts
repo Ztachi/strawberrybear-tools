@@ -139,6 +139,6 @@ export interface PianoRollTimeline {
   secondsToContentX(seconds: number, pixelsPerSecond: number): number
   /** 内容像素转原曲秒数；无效缩放值回退为 1 像素/秒。 */
   contentXToSeconds(x: number, pixelsPerSecond: number): number
-  /** 生成可见秒区间内的小节、拍和细分刻度，位置由 tick 投射到秒。 */
+  /** 生成可见区间内的音乐刻度；密度以全曲最快 tempo 为基准，滚动不改变刻度相位。 */
   getRulerMarks(options: RulerMarkOptions): RulerMark[]
 }

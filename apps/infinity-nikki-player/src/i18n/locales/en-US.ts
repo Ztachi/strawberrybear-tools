@@ -132,7 +132,7 @@ export default {
           },
           scroll: {
             label: 'Scrolling',
-            description: 'Scroll inside the view you want to move. Panning horizontally by a quarter of the visible width pauses Follow; smaller pans return to Follow when you stop. Vertical scrolling keeps Follow on. Each view is independent.',
+            description: 'Scroll inside the view you want to move. With Follow on, a horizontal gesture of a quarter of the visible width switches to manual browsing; small movements and vertical scrolling keep Follow on. With Follow off, browse freely even if the playhead leaves the view. Each view is independent.',
           },
           follow: {
             label: 'Follow Playhead',

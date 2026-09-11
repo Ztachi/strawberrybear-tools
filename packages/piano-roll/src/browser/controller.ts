@@ -5,6 +5,7 @@ import {
   drawNotes,
   layoutTrackRows,
   visibleRows,
+  type RenderFrame,
   type TrackRow,
 } from './renderer'
 import { installStyles } from './styles'
@@ -22,7 +23,7 @@ import {
   clamp,
   createResizeScheduler,
   dragScrollVelocity,
-  followScrollLeft,
+  projectPlaybackViewport,
   resizeScrollLeft,
   timeZoomBounds,
   zoomScrollLeft,
@@ -107,6 +108,16 @@ export function createView(
   let layoutDirty = true
   let destroyed = false
   let renderFrame = 0
+  /** 上一帧已提交的输入；按图层依赖失效，横向播放不会反复清空左侧琴键。 */
+  let painted:
+    | {
+        frame: RenderFrame
+        seconds: number
+        rows: readonly TrackRow[]
+        labels: typeof labels
+        dpr: number
+      }
+    | undefined
   let navigation: ReturnType<typeof installFollowNavigation> | undefined
   let pitchFocused = false
   const heights = new Map(Object.entries(options.trackHeights ?? {}))
@@ -121,6 +132,8 @@ export function createView(
     grabOffsetX: number
     /** 实际横向移动后才允许边缘滚动，静止点击或长按不改变播放位置。 */
     hasMoved: boolean
+    /** 抓取时接管已绘制的逻辑视口，拖动期间保留原生滚动条无法表示的亚像素部分。 */
+    scrollLeft: number
     seconds: number
     lastFrame: number
     raf: number
@@ -166,33 +179,53 @@ export function createView(
       changed()
     }
     if (enabled) catchPlayhead()
+    else scheduleRender()
   }
   function position(): number {
     return clamp(pointerPreview ?? transport.positionSeconds, 0, timeline.durationSeconds)
   }
-  function setScroll(left: number, top = scroll.scrollTop): void {
+  /**
+   * @description 只写入调用方明确改变的轴，避免横向 Follow 干扰纵向浏览。
+   * @param left 横向目标；undefined 表示不写横轴。
+   * @param top 纵向目标；省略表示不写纵轴。
+   * @return 无返回值。
+   */
+  function setScroll(left: number | undefined, top?: number): void {
     const oldLeft = scroll.scrollLeft
     const oldTop = scroll.scrollTop
-    // 同时写入两轴并强制即时生效，不受宿主 smooth 样式影响；读取浏览器实际裁剪后的坐标。
-    scroll.scrollTo({ left: Math.max(0, left), top: Math.max(0, top), behavior: 'instant' })
+    if (drag && left !== undefined) {
+      drag.scrollLeft = clamp(left, 0, Math.max(0, timeline.durationSeconds * timeZoom - width))
+      scheduleRender()
+    }
+    const target: ScrollToOptions = { behavior: 'instant' }
+    if (left !== undefined && Math.max(0, left) !== oldLeft) target.left = Math.max(0, left)
+    if (top !== undefined && Math.max(0, top) !== oldTop) target.top = Math.max(0, top)
+    if (target.left === undefined && target.top === undefined) return
+    // 显式 instant 不受宿主 smooth 样式影响；未修改的轴不做读后回写。
+    scroll.scrollTo(target)
     if (oldLeft === scroll.scrollLeft && oldTop === scroll.scrollTop) return
     scheduleRender()
     changed()
   }
   function catchPlayhead(): void {
     if (!follow || drag || navigation?.isBrowsing()) return
-    const left = followScrollLeft(
+    const projection = projectPlaybackViewport(
       position() * timeZoom,
-      scroll.scrollLeft,
       width,
-      scroll.scrollWidth
+      timeline.durationSeconds * timeZoom,
+      scroll.scrollLeft,
+      true
     )
-    if (left !== null) setScroll(left)
-    updatePlayhead()
+    setScroll(projection.scrollLeft)
+    scheduleRender()
   }
-  function updatePlayhead(): void {
-    const seconds = position()
-    const x = timeline.secondsToContentX(seconds, timeZoom) - scroll.scrollLeft
+  /**
+   * @description 与音符及网格使用同一帧的播放时间和滚动快照，不混用后续事件的新坐标。
+   * @param seconds 本帧权威播放时间或拖动预览时间。
+   * @param x 本帧投影确定的播放头横坐标；自动居中阶段保持常量。
+   * @return 无返回值。
+   */
+  function paintPlayhead(seconds: number, x: number): void {
     // 原生滚动宽度会取整，边缘允许 1px 可见容差；坐标及手柄中心始终保持真实时间映射。
     const visible = x >= -1 && x <= width + 1
     line.hidden = !visible
@@ -226,7 +259,7 @@ export function createView(
     const top = (127 - range.max) * pitchZoom
     const bottom = (128 - range.min) * pitchZoom
     if (force || bottom < scroll.scrollTop || top > scroll.scrollTop + height) {
-      setScroll(scroll.scrollLeft, (top + bottom) / 2 - height / 2)
+      setScroll(undefined, (top + bottom) / 2 - height / 2)
     }
   }
   function trackAt(clientY: number): TrackRow | undefined {
@@ -235,9 +268,9 @@ export function createView(
     const y = localY + scroll.scrollTop
     return visibleRows(rows, y, 0)[0]
   }
-  function renderGutter(visible: TrackRow[]): void {
+  function renderGutter(visible: TrackRow[], top: number): void {
     if (variant === 'editor') {
-      drawKeyboard(keyboard, height, pitchZoom, scroll.scrollTop, theme)
+      drawKeyboard(keyboard, height, pitchZoom, top, theme)
       return
     }
     // 只为可见轨道建立可键盘操作的控件，保持现有节点以保留焦点。
@@ -279,7 +312,7 @@ export function createView(
         gutter.append(item)
       }
       item.dataset.selected = String(row.track.id === selected)
-      item.style.top = `${row.top - scroll.scrollTop}px`
+      item.style.top = `${row.top - top}px`
       item.style.height = `${row.height}px`
       const select = item.children[0] as HTMLButtonElement
       select.removeAttribute('title')
@@ -329,11 +362,23 @@ export function createView(
   function render(): void {
     renderFrame = 0
     if (destroyed || width <= 0 || height <= 0) return
+    // 每次提交只取一份坐标。浏览器滚动、transport 和交互先合并，再绘制所有依赖层。
+    const top = scroll.scrollTop
+    const seconds = position()
+    const projection = projectPlaybackViewport(
+      timeline.secondsToContentX(seconds, timeZoom),
+      width,
+      timeline.durationSeconds * timeZoom,
+      drag?.scrollLeft ?? scroll.scrollLeft,
+      follow && transport.isPlaying && !drag && !navigation?.isBrowsing()
+    )
+    const left = projection.scrollLeft
+    const dpr = window!.devicePixelRatio || 1
     const visible =
       variant === 'overview'
-        ? visibleRows(rows, scroll.scrollTop, height)
+        ? visibleRows(rows, top, height)
         : rows.filter((row) => row.track.id === selected)
-    const frame = {
+    const frame: RenderFrame = {
       variant,
       timeline,
       index: noteIndex,
@@ -341,17 +386,44 @@ export function createView(
       selectedTrackId: selected,
       width,
       height,
-      scrollLeft: scroll.scrollLeft,
-      scrollTop: scroll.scrollTop,
+      scrollLeft: left,
+      scrollTop: top,
       timeZoom,
       pitchZoom,
       theme,
     }
-    drawGrid(grid, rulerCanvas, frame)
-    drawNotes(notes, frame)
-    renderGutter(visible)
+    const previous = painted?.frame
+    const commonChanged = !previous || previous.theme !== theme || painted?.dpr !== dpr
+    const verticalChanged =
+      commonChanged ||
+      previous?.height !== height ||
+      previous?.scrollTop !== top ||
+      previous?.pitchZoom !== pitchZoom
+    const contentChanged =
+      commonChanged ||
+      painted?.rows !== rows ||
+      previous?.timeline !== timeline ||
+      previous?.index !== noteIndex ||
+      previous?.selectedTrackId !== selected
+    const horizontalChanged =
+      commonChanged ||
+      previous?.width !== width ||
+      previous?.scrollLeft !== left ||
+      previous?.timeZoom !== timeZoom
+    if (horizontalChanged || verticalChanged || contentChanged) {
+      drawGrid(grid, rulerCanvas, frame)
+      drawNotes(notes, frame)
+    }
+    // 琴键不依赖横向缩放、播放时间或选中轨道；总览控件也不依赖横向平移。
+    if (
+      verticalChanged ||
+      (variant === 'overview' && (contentChanged || painted?.labels !== labels))
+    ) {
+      renderGutter(visible, top)
+    }
     empty.hidden = rows.length > 0
-    updatePlayhead()
+    paintPlayhead(seconds, projection.playheadX)
+    painted = { frame, seconds, rows, labels, dpr }
   }
   function scheduleRender(): void {
     if (!destroyed && !renderFrame) renderFrame = window!.requestAnimationFrame(render)
@@ -384,20 +456,23 @@ export function createView(
       fitting ? 0 : resizeScrollLeft(previousLeft, previousZoom, timeZoom, previousWidth, width)
     )
     if (!pitchFocused) focusPitch(true)
+    if (transport.isPlaying) catchPlayhead()
     scheduleRender()
-    updatePlayhead()
     changed()
   }
   function eventSeconds(clientX: number): number {
-    const x = clientX - ruler.getBoundingClientRect().left + scroll.scrollLeft
-    return clamp(timeline.contentXToSeconds(x, timeZoom), 0, timeline.durationSeconds)
+    // 点击以用户实际看到的标尺定位；抓取后由 drag 接管同一逻辑视口，边缘平移同步更新它。
+    const left = drag?.scrollLeft ?? painted?.frame.scrollLeft ?? scroll.scrollLeft
+    const zoom = drag ? timeZoom : (painted?.frame.timeZoom ?? timeZoom)
+    const x = clientX - ruler.getBoundingClientRect().left + left
+    return clamp(timeline.contentXToSeconds(x, zoom), 0, timeline.durationSeconds)
   }
   function previewDrag(): void {
     if (!drag) return
     drag.seconds = eventSeconds(drag.clientX - drag.grabOffsetX)
     pointerPreview = drag.seconds
     options.onSeekPreview?.(drag.seconds)
-    updatePlayhead()
+    scheduleRender()
   }
   function stepDrag(now: number): void {
     if (!drag) return
@@ -406,7 +481,7 @@ export function createView(
     const elapsed = Math.min(0.05, (now - drag.lastFrame) / 1000)
     drag.lastFrame = now
     if (velocity) {
-      setScroll(scroll.scrollLeft + velocity * elapsed)
+      setScroll(drag.scrollLeft + velocity * elapsed)
       previewDrag()
     }
     drag.raf = window!.requestAnimationFrame(stepDrag)
@@ -421,7 +496,8 @@ export function createView(
     pointerPreview = null
     if (commit) options.onSeek?.(finished.seconds)
     options.onSeekPreview?.(null)
-    updatePlayhead()
+    if (transport.isPlaying) catchPlayhead()
+    scheduleRender()
   }
 
   function listen(
@@ -439,7 +515,6 @@ export function createView(
     () => {
       // scroll 只报告画面变化；它无法证明输入来源，因此永远不改变 Follow。
       scheduleRender()
-      updatePlayhead()
       changed()
     },
     { passive: true }
@@ -483,15 +558,18 @@ export function createView(
     handle.focus()
     handle.setPointerCapture(event.pointerId)
     navigation?.cancel()
+    const initialLeft = painted?.frame.scrollLeft ?? scroll.scrollLeft
+    const initialSeconds = painted?.seconds ?? position()
     drag = {
       pointerId: event.pointerId,
       clientX: event.clientX,
       grabOffsetX:
         event.clientX -
         ruler.getBoundingClientRect().left -
-        (timeline.secondsToContentX(position(), timeZoom) - scroll.scrollLeft),
+        (timeline.secondsToContentX(initialSeconds, timeZoom) - initialLeft),
       hasMoved: false,
-      seconds: position(),
+      scrollLeft: initialLeft,
+      seconds: initialSeconds,
       lastFrame: window!.performance.now(),
       raf: 0,
     }
@@ -580,7 +658,7 @@ export function createView(
       if (destroyed) return
       transport = next
       if (transport.isPlaying) catchPlayhead()
-      updatePlayhead()
+      scheduleRender()
     },
     setSelectedTrack(trackId) {
       if (destroyed || selected === trackId) return
@@ -615,6 +693,7 @@ export function createView(
       fitting = next === minTimeZoom
       resizeContent()
       setScroll(fitting ? 0 : left)
+      if (transport.isPlaying) catchPlayhead()
       scheduleRender()
       changed()
     },
@@ -624,7 +703,7 @@ export function createView(
       const top = ((scroll.scrollTop + height / 2) / pitchZoom) * next - height / 2
       pitchZoom = next
       resizeContent()
-      setScroll(scroll.scrollLeft, top)
+      setScroll(undefined, top)
       scheduleRender()
       changed()
     },

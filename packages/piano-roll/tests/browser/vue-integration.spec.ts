@@ -99,6 +99,12 @@ test.describe('Vue piano roll integration', () => {
           playbackRate: 1,
         })
       }, seconds)
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
+      )
       const box = (await handle.boundingBox())!
       expect(box.width).toBe(18)
       expect(box.height).toBe(25)

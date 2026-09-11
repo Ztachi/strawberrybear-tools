@@ -3,7 +3,7 @@ import {
   clamp,
   createResizeScheduler,
   dragScrollVelocity,
-  followScrollLeft,
+  projectPlaybackViewport,
   resizeScrollLeft,
   timeZoomBounds,
   zoomScrollLeft,
@@ -34,22 +34,49 @@ describe('独立视口坐标和 Follow', () => {
       expect(timeZoomBounds(width!, duration!)).toEqual({ minTimeZoom: 0.001, maxTimeZoom: 1200 })
     }
   })
-  it('Follow 只在播放头离开安全范围后调整滚动', () => {
-    expect(followScrollLeft(600, 500, 800)).toBeNull()
-    expect(followScrollLeft(1200, 500, 800)).toBe(1000)
-    expect(followScrollLeft(0, 500, 800)).toBe(0)
-    expect(followScrollLeft(1200, 500, 0)).toBeNull()
+  it('自动播放分三段：开头指针移动，中段指针固定，曲尾指针再次移动', () => {
+    const positions = [0, 200, 400, 500, 600, 700, 1000]
+    expect(positions.map((x) => projectPlaybackViewport(x, 800, 1000, 73, true))).toEqual([
+      { scrollLeft: 0, playheadX: 0 },
+      { scrollLeft: 0, playheadX: 200 },
+      { scrollLeft: 0, playheadX: 400 },
+      { scrollLeft: 100, playheadX: 400 },
+      { scrollLeft: 200, playheadX: 400 },
+      { scrollLeft: 200, playheadX: 500 },
+      { scrollLeft: 200, playheadX: 800 },
+    ])
   })
-  it('播放头进入中心后保持居中，曲尾再释放到最右端', () => {
-    const width = 800
-    const content = 1000
-    expect(followScrollLeft(0, 0, width, content)).toBeNull()
-    expect(followScrollLeft(400, 0, width, content)).toBeNull()
-    expect(followScrollLeft(500, 0, width, content)).toBe(100)
-    expect(followScrollLeft(600, 100, width, content)).toBe(200)
-    expect(followScrollLeft(700, 200, width, content)).toBeNull()
-    expect(followScrollLeft(900, 200, width, content)).toBeNull()
-    expect(followScrollLeft(1000, 200, width, content)).toBeNull()
+  it('高缩放及小数视口中线不受原生 scrollLeft 取整或陈旧坐标影响', () => {
+    for (const x of [12_000.125, 12_020.75, 12_083.01, 13_500.42]) {
+      for (const nativeLeft of [0, Math.round(x - 400.25), x - 412, 20_000]) {
+        const projected = projectPlaybackViewport(x, 800.5, 30_000.75, nativeLeft, true)
+        expect(projected.playheadX).toBe(400.25)
+        expect(projected.scrollLeft + projected.playheadX).toBe(x)
+      }
+    }
+  })
+  it('手动浏览完全保留视口，播放头允许在左右两侧不可见', () => {
+    expect(projectPlaybackViewport(20, 800, 5000, 2000, false)).toEqual({
+      scrollLeft: 2000,
+      playheadX: -1980,
+    })
+    expect(projectPlaybackViewport(4500, 800, 5000, 2000, false)).toEqual({
+      scrollLeft: 2000,
+      playheadX: 2500,
+    })
+  })
+  it('空曲和全曲一屏时内容保持静止，首尾衔接不跳变', () => {
+    expect(projectPlaybackViewport(0, 800, 0, 0, true)).toEqual({ scrollLeft: 0, playheadX: 0 })
+    expect(projectPlaybackViewport(640, 800, 800, 0, true)).toEqual({
+      scrollLeft: 0,
+      playheadX: 640,
+    })
+    for (const x of [400 - 0.001, 400, 400 + 0.001, 600 - 0.001, 600, 600 + 0.001]) {
+      const projected = projectPlaybackViewport(x, 800, 1000, 0, true)
+      expect(projected.scrollLeft + projected.playheadX).toBeCloseTo(x, 9)
+      expect(projected.scrollLeft).toBeGreaterThanOrEqual(0)
+      expect(projected.scrollLeft).toBeLessThanOrEqual(200)
+    }
   })
   it('边缘拖动支持左右方向且限速', () => {
     expect(dragScrollVelocity(200, 800)).toBe(0)

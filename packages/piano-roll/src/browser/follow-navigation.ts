@@ -11,17 +11,17 @@ interface FollowNavigationOptions {
   gutter: HTMLElement
   /** 外部权威 Follow 开关。 */
   isFollowing: () => boolean
-  /** 同步写入真实滚动坐标；调用方应使用 instant，不能异步平滑滚动。 */
-  onScroll: (left: number, top: number) => void
+  /** 同步写入指定轴；省略的轴保持原样，避免横向 Follow 中断纵向滚动。 */
+  onScroll: (left: number | undefined, top?: number) => void
   /** 已确认横向浏览时关闭 Follow。 */
   onSuspend: () => void
-  /** 未确认的浏览结束后重新跟随当前位置。 */
+  /** 未确认的滚动条拖动结束后重新跟随当前位置。 */
   onCatch: () => void
 }
 
 /** 每个视图独享的输入导航生命周期。 */
 interface FollowNavigation {
-  /** 是否暂缓自动平移，等待横向浏览意图确认。 */
+  /** 是否正在抓住原生水平滚动条；仅这种操作暂缓自动平移。 */
   isBrowsing(): boolean
   /** 清空候选、计时器与采样任务；不回调 onCatch，便于外部安全重置。 */
   cancel(): void
@@ -29,11 +29,13 @@ interface FollowNavigation {
   destroy(): void
 }
 
-/** 一个来源已知的横向浏览手势；起点固定，不累计自动滚动或往返路程。 */
+/** 来源已知的横向输入；滚轮只记录意图，原生滚动条才实际移动视口。 */
 interface Pan {
   source: 'wheel' | 'scrollbar'
+  /** 原生滚动条按下时的固定起点，供实际拖动距离判定。 */
   originLeft: number
-  currentLeft: number
+  /** 只累计明确横向滚轮的净输入，播放推进和 DOM scroll 不得修改。 */
+  wheelOffset: number
   width: number
   maxLeft: number
 }
@@ -61,9 +63,9 @@ export function installFollowNavigation(options: FollowNavigationOptions): Follo
     pan = undefined
   }
 
-  /** 仅未确认的候选结束后恢复平移；显式 cancel 本身不触发外部状态。 */
+  /** 滚轮候选未改变画面，结束时直接丢弃；仅实际拖过滚动条才需要恢复位置。 */
   function finish(): void {
-    const wasBrowsing = pan !== undefined
+    const wasBrowsing = pan?.source === 'scrollbar'
     cancel()
     if (wasBrowsing && options.isFollowing()) options.onCatch()
   }
@@ -83,14 +85,14 @@ export function installFollowNavigation(options: FollowNavigationOptions): Follo
   }
 
   /**
-   * 只在自己的滚轮写入后或已按住原生滚动条时读取实际位移。
+   * 仅在已按住原生滚动条时读取实际位移，普通 scroll 不得进入此路径。
    * @return 是否仍有待确认的候选。
    */
   function sample(): boolean {
     const current = validatePanGeometry()
-    if (!current) return false
-    current.currentLeft = Math.min(current.maxLeft, Math.max(0, viewport.scrollLeft))
-    if (Math.abs(current.currentLeft - current.originLeft) >= current.width * PAN_VIEWPORT_RATIO) {
+    if (current?.source !== 'scrollbar') return false
+    const left = Math.min(current.maxLeft, Math.max(0, viewport.scrollLeft))
+    if (Math.abs(left - current.originLeft) >= current.width * PAN_VIEWPORT_RATIO) {
       cancel()
       options.onSuspend()
       return false
@@ -109,11 +111,11 @@ export function installFollowNavigation(options: FollowNavigationOptions): Follo
     const maxLeft = Math.max(0, viewport.scrollWidth - width)
     if (!options.isFollowing() || width <= 0 || maxLeft <= 0) return
     const left = Math.min(maxLeft, Math.max(0, viewport.scrollLeft))
-    pan = { source, originLeft: left, currentLeft: left, width, maxLeft }
+    pan = { source, originLeft: left, wheelOffset: 0, width, maxLeft }
   }
 
   /**
-   * 横向滚轮由这里同步写入，纵向滚轮不获得关闭 Follow 的权限。
+   * Follow 开启时只记录横向意图，确认后一次进入手动浏览；纵向事件只写 Y。
    * @param event 浏览器滚轮事件。
    * @return 无返回值。
    */
@@ -125,22 +127,38 @@ export function installFollowNavigation(options: FollowNavigationOptions): Follo
     if (dx === 0 && dy === 0) return
     const horizontal = event.shiftKey || Math.abs(dx) > Math.abs(dy)
     if (!horizontal) {
+      event.preventDefault()
       finish()
-      // 含横向噪声的纵向事件由我们只写 Y；纯纵向事件保留浏览器原生滚动。
-      if (event.currentTarget === gutter || dx !== 0) {
-        event.preventDefault()
-        options.onScroll(viewport.scrollLeft, viewport.scrollTop + dy)
-      }
+      // 浏览器已给出触控板惯性 delta；同步只写 Y，避免原生异步滚动与每帧 Follow 竞争。
+      options.onScroll(undefined, viewport.scrollTop + dy)
       return
     }
 
     event.preventDefault()
     const distance = event.shiftKey && dx === 0 ? dy : dx
+    if (!options.isFollowing()) {
+      cancel()
+      options.onScroll(viewport.scrollLeft + distance)
+      return
+    }
     if (pan?.source !== 'wheel') begin('wheel')
     else if (!validatePanGeometry()) begin('wheel')
-    const left = pan?.currentLeft ?? viewport.scrollLeft
-    options.onScroll(left + distance, viewport.scrollTop)
-    if (!sample()) return
+    const current = pan
+    if (!current) return
+    const left = Math.min(current.maxLeft, Math.max(0, viewport.scrollLeft))
+    // 候选期间始终正常播放，不偏移视口或播放头；边界外无法发生的位移不计入意图。
+    current.wheelOffset = Math.min(
+      current.maxLeft - left,
+      Math.max(-left, current.wheelOffset + distance)
+    )
+    if (Math.abs(current.wheelOffset) >= current.width * PAN_VIEWPORT_RATIO) {
+      const target = left + current.wheelOffset
+      cancel()
+      // 先切换模式再写目标，保证后续渲染不会将本次明确的浏览重新拉回播放位置。
+      options.onSuspend()
+      options.onScroll(target)
+      return
+    }
     window!.clearTimeout(idle)
     idle = window!.setTimeout(finish, WHEEL_IDLE_MS)
   }
@@ -165,10 +183,10 @@ export function installFollowNavigation(options: FollowNavigationOptions): Follo
     }
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
-    const wasBrowsing = pan !== undefined
+    const wasBrowsing = pan?.source === 'scrollbar'
     cancel()
     const before = viewport.scrollLeft
-    options.onScroll(before + (event.key === 'ArrowLeft' ? -40 : 40), viewport.scrollTop)
+    options.onScroll(before + (event.key === 'ArrowLeft' ? -40 : 40))
     if (viewport.scrollLeft !== before && options.isFollowing()) options.onSuspend()
     else if (wasBrowsing && options.isFollowing()) options.onCatch()
   }
@@ -239,7 +257,7 @@ export function installFollowNavigation(options: FollowNavigationOptions): Follo
   }
 
   return {
-    isBrowsing: () => pan !== undefined,
+    isBrowsing: () => pan?.source === 'scrollbar',
     cancel,
     destroy() {
       destroyed = true

@@ -69,26 +69,38 @@ export function createResizeScheduler(
   }
 }
 
+/** 同一帧中内容和播放头的横向投影，均使用 CSS 像素。 */
+export interface PlaybackViewportProjection {
+  /** 网格、音符、标尺共同减去的内容偏移，保留亚像素精度。 */
+  scrollLeft: number
+  /** 播放头在当前视口中的位置；手动模式下允许落在视口外。 */
+  playheadX: number
+}
+
 /**
- * 计算 Follow 的目标横向滚动位置。
- *
- * 播放头从曲首进入视口中心后，视口跟随内容而移动，播放头保持在中心；
- * 接近曲尾时固定滚动到最右侧，让播放头自然从中心走到终点。`contentWidth`
- * 缺省时保留旧的安全区行为，便于无 DOM 的调用方使用。
+ * @description 自动模式直接确定三段播放画面，手动模式保留用户视口，不反推或吸附播放头。
+ * @param x 播放时间对应的完整内容坐标。
+ * @param width 实际时间视口宽度。
+ * @param contentWidth 完整曲目的逻辑宽度，不使用原生滚动条取整后的 scrollWidth。
+ * @param scrollLeft 手动模式的实际浏览位置；自动模式不依赖此值。
+ * @param follow 是否由自动播放控制横向视口。
+ * @return 本帧内容与播放头共同使用的投影。
  */
-export function followScrollLeft(
+export function projectPlaybackViewport(
   x: number,
-  scrollLeft: number,
   width: number,
-  contentWidth = Number.POSITIVE_INFINITY
-): number | null {
-  if (width <= 0 || !Number.isFinite(x) || !Number.isFinite(scrollLeft)) return null
-  if (!Number.isFinite(contentWidth)) {
-    return x < scrollLeft + 8 || x > scrollLeft + width * 0.8 ? Math.max(0, x - width * 0.25) : null
-  }
-  const maxScroll = Math.max(0, contentWidth - width)
-  const target = Math.min(maxScroll, Math.max(0, x - width / 2))
-  return Math.abs(target - scrollLeft) < 1 ? null : target
+  contentWidth: number,
+  scrollLeft: number,
+  follow: boolean
+): PlaybackViewportProjection {
+  if (!follow) return { scrollLeft, playheadX: x - scrollLeft }
+  const middle = width / 2
+  const maximum = Math.max(0, contentWidth - width)
+  // 全曲已在一屏内时没有居中平移阶段；开头和曲尾都保持内容边界固定。
+  if (maximum === 0 || x <= middle) return { scrollLeft: 0, playheadX: x }
+  if (x >= maximum + middle) return { scrollLeft: maximum, playheadX: x - maximum }
+  // 居中阶段的指针是常量。内容自行平移，不再用会取整、延迟更新的 DOM 偏移反算指针。
+  return { scrollLeft: x - middle, playheadX: middle }
 }
 
 /** 手柄在边缘 36px 内拖动时的平移速度（CSS px/s）。 */

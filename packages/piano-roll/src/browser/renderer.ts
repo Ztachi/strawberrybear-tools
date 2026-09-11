@@ -1,5 +1,6 @@
 import type { createNoteIndex, PianoRollTimeline, PianoRollTrack } from '../core'
 import { defaultPianoRollTheme, type PianoRollTheme } from './theme'
+import { rulerLabels } from './ruler-layout'
 
 /** 一行轨道的内容坐标。 */
 export interface TrackRow {
@@ -54,7 +55,11 @@ export function layoutTrackRows(
 }
 
 /** 在轨道区域内以省略号裁剪名称，避免 Canvas 的 maxWidth 压缩长文本。 */
-function fitCanvasLabel(context: CanvasRenderingContext2D, value: string, maxWidth: number): string {
+function fitCanvasLabel(
+  context: CanvasRenderingContext2D,
+  value: string,
+  maxWidth: number
+): string {
   if (maxWidth <= 0) return ''
   if (context.measureText(value).width <= maxWidth) return value
   const ellipsis = '…'
@@ -210,22 +215,17 @@ export function drawGrid(
     }
   }
   const marks = timeline.getRulerMarks({
-    startSeconds: scrollLeft / timeZoom,
-    endSeconds: (scrollLeft + width) / timeZoom,
+    // 保留跨过裁剪边缘的线宽，避免尚未完全离开的刻度突然消失。
+    startSeconds: Math.max(0, scrollLeft - 1) / timeZoom,
+    endSeconds: (scrollLeft + width + 1) / timeZoom,
     pixelsPerSecond: timeZoom,
   })
   rulerContext.fillStyle = theme.colors.surfaceRaised
   rulerContext.fillRect(0, 0, width, 32)
   rulerContext.font = `12px ${theme.metrics.fontFamily}`
-  let labelRight = Number.NEGATIVE_INFINITY
-  const nextBarPositions: number[] = []
-  let nextBarX = Number.POSITIVE_INFINITY
-  for (let index = marks.length - 1; index >= 0; index -= 1) {
-    nextBarPositions[index] = nextBarX
-    if (marks[index]!.kind === 'bar') nextBarX = marks[index]!.x - scrollLeft
-  }
-  for (const [index, mark] of marks.entries()) {
-    const x = Math.round(mark.x - scrollLeft) + 0.5
+  for (const mark of marks) {
+    // 与音符使用同一亚像素坐标；按视口取整会让慢速滚动产生整像素跳步。
+    const x = mark.x - scrollLeft
     const major = mark.kind === 'bar'
     // 总览内容区只保留小节线，拍/细分线在缩放较小时会淹没音符；
     // 标尺仍保留细分刻度，方便定位和拖拽。详情内容区保留完整细分线。
@@ -247,13 +247,16 @@ export function drawGrid(
     rulerContext.moveTo(x, major ? 2 : 23)
     rulerContext.lineTo(x, 32)
     rulerContext.stroke()
-    const labelWidth = rulerContext.measureText(mark.label).width
-    const fitsBeforeBar = major || x + 5 + labelWidth + 6 < nextBarPositions[index]!
-    if (mark.label && x > labelRight + 6 && fitsBeforeBar) {
-      rulerContext.fillStyle = theme.colors.text
-      rulerContext.fillText(mark.label, x + 5, 16)
-      labelRight = x + 5 + labelWidth
-    }
+  }
+  rulerContext.fillStyle = theme.colors.text
+  for (const mark of rulerLabels(
+    timeline,
+    timeZoom,
+    scrollLeft,
+    width,
+    (text) => rulerContext.measureText(text).width
+  )) {
+    rulerContext.fillText(mark.label, mark.x - scrollLeft + 5, 16)
   }
   if (frame.variant === 'overview') {
     for (const row of frame.rows) {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
 import type {} from './fixture'
@@ -7,6 +7,15 @@ import type {} from './fixture'
 test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 let bundle: string
+/** 公共控制器在 RAF 中统一提交图层；读取命中位置之前等待真实绘制完成。 */
+async function waitForPaint(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  )
+}
 // fixture.ts 只在浏览器执行；此处仅为 evaluate 提供 Window 类型。
 test.beforeAll(async () => {
   bundle = (
@@ -210,16 +219,20 @@ test('vertical intent at scroll boundaries preserves Follow and mixed modifier w
       await surface.hover()
       for (const deltaY of id === 'overview' ? [80, -80] : [-80]) {
         // 记录真实 wheel 的完成帧，因为边界上不滚动，不会产生可等待的 scroll 事件。
-        const handled = surface.evaluate(
-          (element) =>
-            new Promise<void>((resolve) => {
-              element.addEventListener('wheel', () => requestAnimationFrame(() => resolve()), {
-                once: true,
-              })
-            })
-        )
+        await surface.evaluate((element) => {
+          const target = element as HTMLElement
+          target.dataset.wheelHandled = 'false'
+          target.addEventListener(
+            'wheel',
+            () =>
+              requestAnimationFrame(() => {
+                target.dataset.wheelHandled = 'true'
+              }),
+            { once: true }
+          )
+        })
         await page.mouse.wheel(6, deltaY)
-        await handled
+        await expect(surface).toHaveAttribute('data-wheel-handled', 'true')
         const after = await page.evaluate((id) => window.fixture[id].getViewport(), id)
         expect(after.scrollTop).toBe(0)
         expect(after.scrollLeft).toBe(initial.scrollLeft)
@@ -297,7 +310,7 @@ test('horizontal and Shift wheel suspend only the corresponding view Follow', as
   }
 })
 
-test('only a significant explicit horizontal pan disables Follow, while short pans return to playback', async ({
+test('only a significant explicit horizontal pan disables Follow, while short pans leave playback steady', async ({
   page,
 }) => {
   for (const id of ['overview', 'editor'] as const) {
@@ -326,21 +339,38 @@ test('only a significant explicit horizontal pan disables Follow, while short pa
         )
         expect(await page.evaluate((id) => window.fixture[id].getViewport().follow, id)).toBe(true)
       }
-      // 杂量候选结束后自动回到播放位置，Follow状态没有开关闪烁。
+      // 杂量候选不改变播放画面，Follow状态没有开关闪烁。
       await expect
         .poll(() => page.evaluate((id) => window.fixture[id].getViewport().scrollLeft, id))
         .toBe(initial.scrollLeft)
       await page.mouse.wheel(width * 0.1, 0)
-      await expect
-        .poll(() => page.evaluate((id) => window.fixture[id].getViewport().scrollLeft, id))
-        .toBeGreaterThan(initial.scrollLeft + width * 0.08)
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
+      )
+      expect(await page.evaluate((id) => window.fixture[id].getViewport().scrollLeft, id)).toBe(
+        initial.scrollLeft
+      )
       const duringPan = await page.evaluate((id) => window.fixture[id].getViewport(), id)
       await page.evaluate(() => window.fixture.setTime(50.05, true))
-      expect(await page.evaluate((id) => window.fixture[id].getViewport().scrollLeft, id)).toBe(
-        duringPan.scrollLeft
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
       )
+      // 候选仅记录输入净位移，播放仍连续推进，不能暂停平移后在手势结束时突然追赶。
+      const advancedLeft = await page.evaluate(
+        (id) => window.fixture[id].getViewport().scrollLeft,
+        id
+      )
+      expect(
+        Math.abs(advancedLeft - (duringPan.scrollLeft + duringPan.timeZoom * 0.05))
+      ).toBeLessThanOrEqual(1)
       expect(await page.evaluate((id) => window.fixture[id].getViewport().follow, id)).toBe(true)
-      // 返回起始视口不算离开播放区域；用固定pan起点度量，播放时间的推进不能制造手动位移。
+      // 反向输入抵消候选位移；播放时间的推进不能制造手动位移。
       await page.mouse.wheel(-width * 0.1, 0)
       await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 230)))
       expect(await page.evaluate((id) => window.fixture[id].getViewport().follow, id)).toBe(true)
@@ -380,19 +410,37 @@ test('a small owned wheel pan never adopts an unrelated native scroll jump', asy
   await scroll.hover()
   const origin = await page.evaluate(() => window.fixture.overview.getViewport().scrollLeft)
   await page.mouse.wheel(6, 0)
-  await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBe(origin + 6)
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  )
+  expect(await scroll.evaluate((element) => element.scrollLeft)).toBe(origin)
   await scroll.evaluate((element) => {
     element.scrollLeft += 500
     element.dispatchEvent(new Event('scroll'))
   })
   expect(await page.evaluate(() => window.fixture.overview.getViewport().follow)).toBe(true)
   await page.mouse.wheel(6, 0)
-  // 继续用户输入应从自己持有的pan目标增加6px，不能把未知500px当作用户已移动的距离。
-  await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBe(origin + 12)
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  )
+  // 继续输入只有 12px 候选，不能把未知 500px 当成已确认的用户位移。
   expect(await page.evaluate(() => window.fixture.overview.getViewport().follow)).toBe(true)
+  await page.evaluate(() => window.fixture.setTime(50, true))
   await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBe(origin)
   await page.mouse.wheel(6, 0)
-  await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBe(origin + 6)
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  )
+  expect(await scroll.evaluate((element) => element.scrollLeft)).toBe(origin)
   await scroll.evaluate((element) => {
     element.scrollLeft += 500
     element.dispatchEvent(new Event('scroll'))
@@ -461,6 +509,7 @@ test.describe('native scrollbar input', () => {
     const scroll = page.locator('#overview .pr-scroll')
     await scroll.hover()
     // macOS overlay滚动条先通过真实滚轮唤显，再恢复Follow，使测试操作真实thumb而非底部画布。
+    await page.evaluate(() => window.fixture.overview.setFollow(false))
     await page.mouse.wheel(80, 0)
     await expect
       .poll(() => page.evaluate(() => window.fixture.overview.getViewport().scrollLeft))
@@ -556,6 +605,7 @@ test('Follow brings the playhead to center, holds it, then releases at the song 
   })
   const sample = async (seconds: number) => {
     await page.evaluate((seconds) => window.fixture.setTime(seconds, true), seconds)
+    await waitForPaint(page)
     return page.evaluate(() => {
       const scroll = document.querySelector<HTMLElement>('#overview .pr-scroll')!
       const handle = document.querySelector<HTMLElement>('#overview .pr-handle')!
@@ -608,6 +658,7 @@ test('rulers with different zoom and scroll seek the same source seconds', async
 
 test('handle previews while dragging and commits once on release', async ({ page }) => {
   await page.evaluate(() => window.fixture.setTime(2))
+  await waitForPaint(page)
   const handle = page.locator('#overview .pr-handle')
   const box = (await handle.boundingBox())!
   await page.mouse.move(box.x + 9, box.y + 8)
@@ -636,6 +687,7 @@ test('holding an edge handle without moving preserves its scroll position and se
     await expect
       .poll(() => page.evaluate((id) => window.fixture[id].getViewport().scrollLeft, id))
       .toBe(320)
+    await waitForPaint(page)
     const box = (await page.locator(`#${id} .pr-handle`).boundingBox())!
     // 点击盖在轨道栏上的左半手柄并停留多帧；普通按住不能被当作边缘拖动。
     await page.mouse.move(box.x + 3, box.y + 8)
@@ -663,6 +715,7 @@ test('symmetric handles remain centered and hittable across both timeline edges'
       window.fixture.setTime(0)
       window.fixture.seeks.length = 0
     }, id)
+    await waitForPaint(page)
     const handle = page.locator(`#${id} .pr-handle`)
     const ruler = (await page.locator(`#${id} .pr-ruler`).boundingBox())!
     const start = (await handle.boundingBox())!
@@ -688,6 +741,7 @@ test('symmetric handles remain centered and hittable across both timeline edges'
     expect(await page.evaluate(() => window.fixture.seeks.at(-1))).toBeCloseTo(50 / zoom, 8)
     const duration = Number(await handle.getAttribute('aria-valuemax'))
     await page.evaluate((duration) => window.fixture.setTime(duration), duration)
+    await waitForPaint(page)
     const end = (await handle.boundingBox())!
     expect(end.width).toBe(18)
     expect(end.height).toBe(25)
@@ -710,6 +764,7 @@ test('fractional source positions stay visible at rounded viewport edges without
   for (const id of ['overview', 'editor'] as const) {
     const handle = page.locator(`#${id} .pr-handle`)
     const assertVisibleAtEdge = async (sourceSeconds: number) => {
+      await waitForPaint(page)
       await expect(handle).toBeVisible()
       const state = await page.evaluate((id) => {
         const handle = document.querySelector<HTMLElement>(`#${id} .pr-handle`)!
@@ -720,7 +775,12 @@ test('fractional source positions stay visible at rounded viewport edges without
         const lineBox = line.getBoundingClientRect()
         return {
           seconds,
-          sourceX: seconds * window.fixture[id].getViewport().timeZoom - scroll.scrollLeft,
+          // 自动跟随曲首/尾使用逻辑端点，不能由取整后的 DOM scrollLeft 反推。
+          sourceX: window.fixture[id].getViewport().follow
+            ? seconds === 0
+              ? 0
+              : scroll.clientWidth
+            : seconds * window.fixture[id].getViewport().timeZoom - scroll.scrollLeft,
           displayX: Number(handle.style.transform.match(/-?\d+(?:\.\d+)?/)?.[0]),
           lineTransform: line.style.transform,
           handleTransform: handle.style.transform,
@@ -865,6 +925,7 @@ test('overview rows fill available height, shrink to the minimum, then scroll', 
 test('pointercancel and blur cancel drag without seeking', async ({ page }) => {
   for (const cancel of ['pointercancel', 'blur']) {
     await page.evaluate(() => window.fixture.setTime(2))
+    await waitForPaint(page)
     const box = (await page.locator('#overview .pr-handle').boundingBox())!
     await page.mouse.move(box.x + 9, box.y + 8)
     await page.mouse.down()
@@ -879,6 +940,7 @@ test('pointercancel and blur cancel drag without seeking', async ({ page }) => {
 
 test('drag near right edge scrolls with pointer captured', async ({ page }) => {
   await page.evaluate(() => window.fixture.setTime(2))
+  await waitForPaint(page)
   const box = (await page.locator('#overview .pr-handle').boundingBox())!
   const ruler = (await page.locator('#overview .pr-ruler').boundingBox())!
   await page.mouse.move(box.x + 9, box.y + 8)

@@ -112,14 +112,17 @@ export function createTimeline(document: PianoRollDocument): PianoRollTimeline {
   const timeSignatureMap = normalizeMeterMap(document.timeSignatureMap)
   const durationTicks = nonnegative(document.durationTicks)
   const tempos: TempoSegment[] = []
+  let smallestSecondsPerTick = Number.POSITIVE_INFINITY
   for (const point of tempoMap) {
     const previous = tempos[tempos.length - 1]
+    const secondsPerTick = point.microsecondsPerQuarter / 1_000_000 / ticksPerBeat
+    smallestSecondsPerTick = Math.min(smallestSecondsPerTick, secondsPerTick)
     tempos.push({
       ...point,
       seconds: previous
         ? previous.seconds + (point.tick - previous.tick) * previous.secondsPerTick
         : 0,
-      secondsPerTick: point.microsecondsPerQuarter / 1_000_000 / ticksPerBeat,
+      secondsPerTick,
     })
   }
   const meters: MeterSegment[] = []
@@ -175,15 +178,8 @@ export function createTimeline(document: PianoRollDocument): PianoRollTimeline {
       2 ** Math.floor(Math.log2(Math.min(64, Math.max(1, positive(options.subdivisions, 4)))))
     const startTick = secondsToTick(startSeconds)
     const endTick = secondsToTick(endSeconds)
-    const firstTempo = segmentIndex(tempos, startTick, (point) => point.tick)
-    let smallestSecondsPerTick = tempos[firstTempo]!.secondsPerTick
-    for (
-      let index = firstTempo + 1;
-      index < tempos.length && tempos[index]!.tick <= endTick;
-      index += 1
-    ) {
-      smallestSecondsPerTick = Math.min(smallestSecondsPerTick, tempos[index]!.secondsPerTick)
-    }
+    // 密度以整份时间轴的最快 tempo 为基准；速度点进出视口不能改变已有刻度。
+    // 较慢段允许更疏，换取滚动期间稳定的拍/小节序列。
     // 将可见区间宽度纳入密度选择；循环量与视口刻度数有关，不与整曲 tick 数有关。
     const spacing = Math.max(
       minSpacing,

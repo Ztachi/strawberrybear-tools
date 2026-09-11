@@ -208,6 +208,16 @@ describe('piano roll timeline', () => {
     expect(marks.length).toBeLessThanOrEqual(40)
     expect(marks.every((mark) => mark.kind === 'bar')).toBe(true)
   })
+
+  it('keeps overlapping ruler marks identical when a faster tempo leaves the viewport', () => {
+    const timeline = createTimeline({ ...createDocument(), durationTicks: 96000 })
+    const marks = (startSeconds: number) =>
+      timeline.getRulerMarks({ startSeconds, endSeconds: startSeconds + 5, pixelsPerSecond: 32 })
+    const before = marks(0.99).filter((mark) => mark.seconds >= 1.01)
+    const after = marks(1.01).filter((mark) => mark.seconds <= 5.99)
+    expect(before.length).toBeGreaterThan(2)
+    expect(after).toEqual(before)
+  })
 })
 
 function note(
