@@ -15,7 +15,7 @@ pub const RETRY_DELAY: Duration = Duration::from_secs(2);
 pub const RESUME_COOLDOWN_MS: u64 = 5 * 60 * 1000;
 pub const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
-/// 清单来源同时决定默认下载顺序；相同版本优先代理。
+/// 标识清单或下载线路；检查结果按版本选择，下载顺序始终独立地保持代理优先。
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Source {
@@ -58,6 +58,7 @@ impl UpdateError {
     pub fn from_plugin(stage: &str, error: &Error, source: Source) -> Self {
         let code = match error {
             Error::Reqwest(e) if e.is_timeout() => "timeout",
+            // 下载正文截断也可能被 Reqwest 标为 decode；只有清单阶段按解析错误处理。
             Error::Reqwest(e) if stage == "check" && e.is_decode() => "invalidManifest",
             Error::Reqwest(_) | Error::Network(_) => "network",
             Error::Minisign(_) | Error::Base64(_) | Error::SignatureUtf8(_) => "signature",

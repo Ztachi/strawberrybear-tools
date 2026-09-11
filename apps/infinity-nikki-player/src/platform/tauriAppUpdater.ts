@@ -9,6 +9,7 @@ export const tauriAppUpdater: UpdaterAdapter = {
   subscribe: (listener) =>
     listen<UpdateSnapshot>('app-update-state', ({ payload }) => listener(payload)),
   onResume(listener) {
+    // 原生焦点和页面事件可能重复触发；这里只转发，统一由 Rust 按最近尝试时间节流。
     let disposed = false
     let removeNativeFocus: (() => void) | undefined
     void getCurrentWindow()
@@ -16,6 +17,7 @@ export const tauriAppUpdater: UpdaterAdapter = {
         if (payload && !disposed) listener()
       })
       .then((unlisten) => {
+        // 注册是异步的，页面可能已卸载；迟到的监听必须立即释放，不能重新挂回旧页面。
         if (disposed) unlisten()
         else removeNativeFocus = unlisten
       })

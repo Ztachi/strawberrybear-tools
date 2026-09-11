@@ -283,6 +283,7 @@ pub async fn download<R: Runtime>(app: AppHandle<R>) -> Snapshot {
     };
     let (update, generation, cancellation) = prepared;
     let result = tokio::select! {
+        // 优先处理取消；即使下载恰好完成，也不能把用户已取消的任务重新推进到待安装。
         biased;
         _ = cancellation.cancelled() => return snapshot(&app),
         result = download_sources(&app, update, generation) => result,
@@ -488,6 +489,8 @@ pub async fn install<R: Runtime>(app: AppHandle<R>) -> Result<Snapshot, UpdateEr
     let result =
         tauri::async_runtime::spawn_blocking(move || update.install(bytes.as_slice())).await;
     match result {
+        // Windows 官方安装流程通常会直接退出旧进程；其他平台安装返回后再由框架重启。
+        // 此处不记录成功，必须等下一次启动用实际版本核对安装记录。
         Ok(Ok(())) => app.restart(),
         error => {
             let error = UpdateError::new(

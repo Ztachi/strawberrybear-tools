@@ -208,6 +208,7 @@ export function createUpdaterController(
       }
       if (state.value.phase !== 'ready') return
       isPreparing.value = true
+      // 确认留在下载之后，避免等待网络期间用户再次编辑；取消确认不丢弃原生已验证的安装包。
       // 未挂载主窗口时不能绕过编辑保护调用安装器。
       if (!preparation || !(await preparation()) || currentGeneration !== generation) return
       accept(await adapter.install())
@@ -231,7 +232,7 @@ export function createUpdaterController(
     }
   }
 
-  /** @param source 手动下载线路；优先指向已知目标的版本发布页。 */
+  /** @param source 手动下载线路；原生层优先打开候选资产，再回退到历史目标版本页或官网。 */
   async function openReleasePage(source: UpdateSource = 'github') {
     try {
       await adapter.openDownload(source)

@@ -99,6 +99,7 @@ export function proxyManifest(manifest) {
 
 /** 官方 action v1 使用资产 API 地址；按已上传的同一资产转换为无需 API 请求头的公开地址。 */
 export function publicManifest(manifest, version, releaseAssets) {
+  // 使用 GitHub 返回的资产身份匹配，不按平台猜文件名，防止签名与安装包意外错配。
   return {
     ...manifest,
     platforms: Object.fromEntries(
@@ -288,6 +289,7 @@ export async function publishChannel({
   existingDirect,
   existingMirror,
 }) {
+  // 工作流串行不能保证任务按版本先后执行，因此入口推进仍必须独立检查版本回退。
   if (currentVersion && semver.gt(requireVersion(currentVersion), requireVersion(version)))
     throw new Error('固定入口已有更新版本，拒绝覆盖')
   // 上次代理替换失败后可能只剩直连；先恢复备用，不能删除唯一有效入口。
