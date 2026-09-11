@@ -6,6 +6,7 @@ mod commands;
 mod keyboard;
 mod midi;
 mod types;
+mod updater;
 mod window_state;
 
 use commands::frame_rate::FrameRateCaptureState;
@@ -154,35 +155,28 @@ fn seed_bundled_midi(app: &tauri::App) {
 ///
 /// 初始化日志、检测权限、配置菜单、注册命令和插件
 pub fn run() {
-    // 初始化日志系统（从环境变量读取日志级别）
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    log::info!("Starting InfinityNikkiPlayer...");
-
-    // Windows 管理员权限检测
-    #[cfg(target_os = "windows")]
-    {
-        if !is_running_as_admin() {
-            log::warn!("应用未以管理员权限运行，驱动级键盘模拟可能无法工作");
-            log::warn!("建议：以管理员权限运行以启用完整的键盘模拟功能");
-        } else {
-            log::info!("管理员权限检测: 已获得");
-        }
-    }
-
-    // 检测系统语言
-    let is_zh = get_system_lang().starts_with("zh");
-    log::info!("is_zh = {}", is_zh);
-
     // 构建并运行 Tauri 应用
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("updater".into()),
+                    }),
+                ])
+                .max_file_size(1_048_576)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
+                .build(),
+        )
+        .plugin(tauri_plugin_store::Builder::new().build())
         // 注册 shell 插件（用于打开 URL 等）
         .plugin(tauri_plugin_shell::init())
         // 注册 dialog 插件（用于文件选择对话框）
         .plugin(tauri_plugin_dialog::init())
         // 注册 updater 插件（用于官方自动更新）
         .plugin(tauri_plugin_updater::Builder::new().build())
-        // 注册 process 插件（用于更新完成后重启应用）
-        .plugin(tauri_plugin_process::init())
         // 注册 MCP 桥接插件
         .plugin(tauri_plugin_mcp_bridge::init())
         // 管理应用状态
@@ -193,6 +187,16 @@ pub fn run() {
         .manage(FrameRateCaptureState::default())
         // 应用初始化设置
         .setup(move |app| {
+            // 插件日志已初始化后再记录系统信息，确保诊断能看到启动身份。
+            #[cfg(target_os = "windows")]
+            log::info!("管理员身份：{}", is_running_as_admin());
+            let is_zh = get_system_lang().starts_with("zh");
+            log::info!(
+                "启动播放器，版本={}，运行路径={:?}",
+                app.package_info().version,
+                std::env::current_exe()
+            );
+            updater::initialize(app.handle());
             // 根据语言生成菜单
             let menu = if is_zh {
                 let app_name = "无限暖暖自动演奏";
@@ -355,7 +359,13 @@ pub fn run() {
         })
         // 注册所有 Tauri 命令
         .invoke_handler(tauri::generate_handler![
-            commands::get_app_version,
+            commands::updater::get_update_state,
+            commands::updater::check_app_update,
+            commands::updater::download_app_update,
+            commands::updater::cancel_app_update,
+            commands::updater::install_app_update,
+            commands::updater::export_update_diagnostics,
+            commands::updater::open_manual_update_download,
             commands::get_system_locale,
             commands::open_url,
             commands::midi::parse_midi_file,

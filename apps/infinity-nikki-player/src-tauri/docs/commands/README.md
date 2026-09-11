@@ -8,8 +8,23 @@
 
 | 命令                | 参数 | 返回值   | 功能                       |
 | ------------------- | ---- | -------- | -------------------------- |
-| `get_app_version`   | -    | `String` | 获取应用版本               |
 | `get_system_locale` | -    | `String` | 获取系统语言（如 "zh-CN"） |
+
+应用版本使用 `@tauri-apps/api/app` 的官方 `getVersion()`，与更新器统一来源。
+
+### 自动更新命令
+
+| 命令                          | 参数                      | 用途                           |
+| ----------------------------- | ------------------------- | ------------------------------ |
+| `get_update_state`            | 无                        | 获取带 revision 的状态快照     |
+| `check_app_update`            | `reason: manual / resume` | 检查双源，原生层统一去重与节流 |
+| `download_app_update`         | 无                        | 下载并校验当前候选版本         |
+| `cancel_app_update`           | 无                        | 取消下载并丢弃未校验字节       |
+| `install_app_update`          | 无                        | 编辑确认后调用官方安装器       |
+| `open_manual_update_download` | `source: mirror / github` | 打开同一候选版本的手动下载     |
+| `export_update_diagnostics`   | 无                        | 用户选择路径后导出本地诊断     |
+
+状态事件为 `app-update-state`。结构化错误包含阶段、错误码、原因和来源；详情见[自动更新机制](../../../docs/auto-update.md)。
 
 ### MIDI 命令
 
@@ -98,12 +113,13 @@ pub struct KeyMapping {
 
 ```typescript
 import { invoke } from '@tauri-apps/api/core'
+import { getVersion } from '@tauri-apps/api/app'
 
 // 获取系统语言
 const locale = await invoke<string>('get_system_locale')
 
 // 获取应用版本
-const version = await invoke<string>('get_app_version')
+const version = await getVersion()
 
 // 开始播放
 await invoke('start_playback', {
@@ -118,7 +134,7 @@ await invoke('start_playback', {
 
 ```rust
 .invoke_handler(tauri::generate_handler![
-    commands::get_app_version,
+    commands::updater::get_update_state,
     commands::get_system_locale,
     commands::midi::parse_midi_file,
     // ... 更多命令

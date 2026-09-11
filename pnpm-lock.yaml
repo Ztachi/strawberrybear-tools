@@ -43,6 +43,9 @@ importers:
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
+      semver:
+        specifier: ^7.7.2
+        version: 7.7.4
       turbo:
         specifier: ^2.0.0
         version: 2.9.3
@@ -113,12 +116,6 @@ importers:
       '@tauri-apps/plugin-dialog':
         specifier: ^2.2.0
         version: 2.7.0
-      '@tauri-apps/plugin-process':
-        specifier: ^2.3.1
-        version: 2.3.1
-      '@tauri-apps/plugin-updater':
-        specifier: ^2.10.1
-        version: 2.10.1
       '@tonejs/piano':
         specifier: ^0.2.1
         version: 0.2.1(tone@14.9.17)(webmidi@2.5.3)

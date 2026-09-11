@@ -23,6 +23,7 @@ import GlobalMusicPlayer from '@/components/GlobalMusicPlayer/index.vue'
 import { isSupportedLocale } from '@/i18n'
 import { midiImportActionsKey } from './importActions'
 import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
+import { useAppUpdater } from '@/composables/useAppUpdater'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -31,6 +32,19 @@ const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 const songListStore = useSongListStore()
+const updater = useAppUpdater()
+/** 当前路由页面复用自身编辑保护，避免依赖进程退出时的 beforeunload。 */
+const activePage = ref<{ confirmLeaveIfNeeded?: () => Promise<boolean> } | null>(null)
+const removeInstallPreparation = updater.setPrepareInstall(async () => {
+  if (activePage.value?.confirmLeaveIfNeeded && !(await activePage.value.confirmLeaveIfNeeded())) {
+    return false
+  }
+  await playerStore.stopPreviewPlayback()
+  // 安装准备必须传播停止失败，不能使用会吞掉错误的普通停止按钮方法。
+  await invoke('stop_playback')
+  return true
+})
+onUnmounted(removeInstallPreparation)
 
 /** 主窗口支持的页签路由值。 */
 type MainWindowTab = 'files' | 'templates' | 'online'
@@ -621,7 +635,7 @@ provide(midiImportActionsKey, {
               <RouterView v-slot="{ Component, route: pageRoute }">
                 <Transition name="main-page">
                   <section :key="pageRoute.fullPath" class="route-page-host">
-                    <component :is="Component" />
+                    <component :is="Component" ref="activePage" />
                   </section>
                 </Transition>
               </RouterView>

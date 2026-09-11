@@ -112,43 +112,56 @@ export default {
       help: {
         title: 'Piano Roll Guide',
         done: 'Got it',
-        groups: { tracks: 'Browse tracks', view: 'Zoom and follow', position: 'Seek and manage details' },
+        groups: {
+          tracks: 'Browse tracks',
+          view: 'Zoom and follow',
+          position: 'Seek and manage details',
+        },
         items: {
           selection: {
             label: 'Select and open',
-            description: 'Click to select a track; double-click to open its details. While details are open, click another track to switch, or double-click the current track to close.',
+            description:
+              'Click to select a track; double-click to open its details. While details are open, click another track to switch, or double-click the current track to close.',
           },
           enabled: {
             label: 'Track switches',
-            description: 'The left switch controls whether a track plays. Toggling it does not select the track or seek.',
+            description:
+              'The left switch controls whether a track plays. Toggling it does not select the track or seek.',
           },
           filter: {
             label: 'Empty tracks',
-            description: 'Tracks without notes are hidden by default. Click the filter to show all tracks; filtering preserves track switches and open details.',
+            description:
+              'Tracks without notes are hidden by default. Click the filter to show all tracks; filtering preserves track switches and open details.',
           },
           zoom: {
             label: 'Independent zoom',
-            description: 'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Views zoom independently, save per song, and restore when you return. Minimum time zoom fills one screen.',
+            description:
+              'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Views zoom independently, save per song, and restore when you return. Minimum time zoom fills one screen.',
           },
           scroll: {
             label: 'Scrolling',
-            description: 'Scroll inside the view you want to move. Panning horizontally by a quarter of the visible width pauses Follow; smaller pans return to Follow when you stop. Vertical scrolling keeps Follow on. Each view is independent.',
+            description:
+              'Scroll inside the view you want to move. Panning horizontally by a quarter of the visible width pauses Follow; smaller pans return to Follow when you stop. Vertical scrolling keeps Follow on. Each view is independent.',
           },
           follow: {
             label: 'Follow Playhead',
-            description: 'A filled button means Follow is on. The playhead moves to the center, stays there as notes scroll, then moves to the end near the song’s tail. Click the button to resume Follow.',
+            description:
+              'A filled button means Follow is on. The playhead moves to the center, stays there as notes scroll, then moves to the end near the song’s tail. Click the button to resume Follow.',
           },
           seek: {
             label: 'Seek',
-            description: 'Click the ruler or drag the top playhead handle. Dragging previews the position; releasing commits one seek. Edges scroll automatically. Press Esc to cancel a drag.',
+            description:
+              'Click the ruler or drag the top playhead handle. Dragging previews the position; releasing commits one seek. Edges scroll automatically. Press Esc to cancel a drag.',
           },
           resize: {
             label: 'Resize and close',
-            description: 'Drag the thin top edge of details to resize, or focus it and use Up/Down. Click the red close button on the right, or press Esc within details, to close.',
+            description:
+              'Drag the thin top edge of details to resize, or focus it and use Up/Down. Click the red close button on the right, or press Esc within details, to close.',
           },
           readOnly: {
             label: 'Current version',
-            description: 'Notes are read-only. You can inspect and seek, but cannot yet add, delete, move, resize, or change the velocity of notes.',
+            description:
+              'Notes are read-only. You can inspect and seek, but cannot yet add, delete, move, resize, or change the velocity of notes.',
           },
         },
       },
@@ -536,15 +549,53 @@ export default {
     downloading: 'Downloading',
     downloadingProgress: 'Downloading {progress}%',
     installing: 'Installing',
-    installedTitle: 'Update installed',
-    relaunching: 'Relaunching the app',
     noUpdateTitle: 'You are up to date',
     noUpdateDescription: 'No update is available for this version',
     checkFailed: 'Update check failed',
     installFailed: 'Update failed',
-    installFailedDescription: 'Please try again later. Details were logged to the console.',
+    installFailedDescription:
+      'Retry or install manually. Export local diagnostics for troubleshooting.',
     openRelease: 'Open releases',
     retry: 'Check again',
+    preparing: 'Confirming unsaved changes',
+    installNow: 'Install and restart',
+    retryDownload: 'Retry update',
+    cancelDownload: 'Cancel download',
+    manualGithub: 'Download (GitHub)',
+    manualDownload: 'Download manually',
+    manualMirror: 'Download (mirror)',
+    exportDiagnostics: 'Export diagnostics',
+    diagnosticsExported: 'Diagnostics exported',
+    lastChecked: 'Last attempt: {time}',
+    notApplied: 'Previous update has not taken effect',
+    notAppliedDescription:
+      'The target was {version}; you are running {current}. Retry or install manually, and check which installation you opened.',
+    applied: 'Confirmed running version {version}',
+    sources: { mirror: 'Mirror', github: 'GitHub direct' },
+    phases: {
+      idle: 'Updates have not been checked',
+      checking: 'Checking for updates',
+      upToDate: 'No newer version found',
+      available: 'An update is available',
+      downloading: 'Downloading and verifying',
+      ready: 'Download verified. Ready to install and restart',
+      installing: 'Installing. Version will be verified after restart',
+      error: 'Update failed',
+    },
+    errors: {
+      timeout: 'The update source timed out. Retry or download manually.',
+      network:
+        'Update sources are unavailable. Check your connection, retry, or download manually.',
+      invalidManifest:
+        'The source returned invalid version information. Retry later or download manually.',
+      signature:
+        'Signature verification failed. Installation was blocked. Download again or install manually.',
+      unsupportedPlatform: 'The source has no package for this platform. Check the release page.',
+      storage:
+        'Could not save the installation record. Check disk space and permissions, then retry.',
+      operationFailed:
+        'The operation could not finish. You can retry, install manually, or export diagnostics.',
+    },
   },
   about: {
     title: 'About',

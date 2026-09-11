@@ -116,7 +116,8 @@ export default {
         items: {
           selection: {
             label: '选择与详情',
-            description: '单击选择音轨，双击打开详情；详情打开后单击其它音轨即可切换，再次双击当前音轨可关闭。',
+            description:
+              '单击选择音轨，双击打开详情；详情打开后单击其它音轨即可切换，再次双击当前音轨可关闭。',
           },
           enabled: {
             label: '音轨开关',
@@ -124,27 +125,33 @@ export default {
           },
           filter: {
             label: '隐藏空轨',
-            description: '默认隐藏没有音符的音轨。点击筛选按钮可显示全部音轨；筛选不改变音轨开关或已打开的详情。',
+            description:
+              '默认隐藏没有音符的音轨。点击筛选按钮可显示全部音轨；筛选不改变音轨开关或已打开的详情。',
           },
           zoom: {
             label: '独立缩放',
-            description: '用滑块、触控板捏合或 Ctrl/Command + 滚轮调整时间缩放，详情还可调整音高缩放。两个视图独立，缩放按歌曲保存并恢复；时间缩放最小铺满一屏。',
+            description:
+              '用滑块、触控板捏合或 Ctrl/Command + 滚轮调整时间缩放，详情还可调整音高缩放。两个视图独立，缩放按歌曲保存并恢复；时间缩放最小铺满一屏。',
           },
           scroll: {
             label: '滚动',
-            description: '在对应区域内滚动。横向浏览达到四分之一屏会暂停该视图的自动跟随，少量横移停止后会恢复跟随；上下滚动不会暂停，两个视图互不影响。',
+            description:
+              '在对应区域内滚动。横向浏览达到四分之一屏会暂停该视图的自动跟随，少量横移停止后会恢复跟随；上下滚动不会暂停，两个视图互不影响。',
           },
           follow: {
             label: '跟随播放头',
-            description: '主题色按钮表示开启。播放头先走到中间，再保持居中让音符滚动，接近曲尾后走向终点；点击按钮可重新开启跟随。',
+            description:
+              '主题色按钮表示开启。播放头先走到中间，再保持居中让音符滚动，接近曲尾后走向终点；点击按钮可重新开启跟随。',
           },
           seek: {
             label: '跳转位置',
-            description: '点击标尺或拖动播放头顶部手柄定位。拖动时只预览，松手后提交一次跳转；拖到边缘自动滚动，Esc 取消拖动。',
+            description:
+              '点击标尺或拖动播放头顶部手柄定位。拖动时只预览，松手后提交一次跳转；拖到边缘自动滚动，Esc 取消拖动。',
           },
           resize: {
             label: '调整与关闭',
-            description: '拖动详情顶部细线调整高度。聚焦细线后可用上下方向键调整；点击右侧红色关闭按钮，或在详情内按 Esc 关闭。',
+            description:
+              '拖动详情顶部细线调整高度。聚焦细线后可用上下方向键调整；点击右侧红色关闭按钮，或在详情内按 Esc 关闭。',
           },
           readOnly: {
             label: '当前版本',
@@ -520,15 +527,47 @@ export default {
     downloading: '下载中',
     downloadingProgress: '下载中 {progress}%',
     installing: '安装中',
-    installedTitle: '更新已安装',
-    relaunching: '正在重启应用',
     noUpdateTitle: '已是最新版本',
     noUpdateDescription: '当前版本无需更新',
     checkFailed: '检查更新失败',
     installFailed: '更新失败',
-    installFailedDescription: '请稍后重试，详细错误已记录到控制台',
+    installFailedDescription: '请重试或手动安装，可导出本机诊断帮助排查',
     openRelease: '打开发布页',
     retry: '重试检查更新',
+    preparing: '正在确认编辑内容',
+    installNow: '安装并重启',
+    retryDownload: '重试更新',
+    cancelDownload: '取消下载',
+    manualGithub: '手动下载（GitHub）',
+    manualDownload: '手动下载',
+    manualMirror: '手动下载（加速）',
+    exportDiagnostics: '导出诊断',
+    diagnosticsExported: '诊断文件已导出',
+    lastChecked: '最近尝试：{time}',
+    notApplied: '上次更新尚未生效',
+    notAppliedDescription:
+      '上次目标为 {version}，当前运行 {current}。请重试或手动安装，并确认打开的是正确的安装目录。',
+    applied: '已确认运行新版本 {version}',
+    sources: { mirror: '加速线路', github: 'GitHub 直连' },
+    phases: {
+      idle: '尚未检查更新',
+      checking: '正在检查更新',
+      upToDate: '未发现新版本',
+      available: '发现可用更新',
+      downloading: '正在下载并校验更新',
+      ready: '下载与签名校验完成，可安装并重启',
+      installing: '正在安装，重启后将确认版本',
+      error: '更新失败',
+    },
+    errors: {
+      timeout: '更新源连接超时，请稍后重试或手动下载。',
+      network: '更新线路暂时不可用，请检查网络后重试或手动下载。',
+      invalidManifest: '更新源返回的版本信息无效，请稍后重试或手动下载。',
+      signature: '更新包未通过签名校验，已阻止安装。请重新下载或手动安装。',
+      unsupportedPlatform: '更新源未提供适合本机的安装包，请手动检查发布页。',
+      storage: '无法保存安装记录，请检查磁盘空间和目录权限后重试。',
+      operationFailed: '操作未完成，已保留可恢复的更新状态。可重试、手动安装或导出诊断。',
+    },
   },
   about: {
     title: '关于',

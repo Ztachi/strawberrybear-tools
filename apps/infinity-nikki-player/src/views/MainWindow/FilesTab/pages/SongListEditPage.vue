@@ -181,6 +181,9 @@ watch(
 
 onBeforeRouteLeave(async () => confirmLeaveIfNeeded())
 
+// 原生安装前与路由离开复用同一套保存、丢弃、取消确认。
+defineExpose({ confirmLeaveIfNeeded })
+
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
 })

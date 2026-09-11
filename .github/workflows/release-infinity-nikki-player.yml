@@ -2,8 +2,7 @@ name: 'Release: infinity-nikki-player'
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/workflows/release-infinity-nikki-player.yml'
       - 'apps/infinity-nikki-player/**'
@@ -13,92 +12,85 @@ on:
       - 'packages/player/**'
   workflow_dispatch:
 
+# 发布全过程串行，不取消正在上传的任务；脚本仍拒绝旧版本晚到覆盖。
+concurrency:
+  group: infinity-nikki-player-release
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   LC_ALL: C.UTF-8
   LANG: en_US.UTF-8
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  # 版本必须通过 Changesets 版本 PR 预先写入 main，发布工作流不直接写受保护分支。
-  version:
+  prepare:
+    if: github.ref == 'refs/heads/main'
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      has_changes: ${{ steps.changeset.outputs.has_changes }}
-      version: ${{ steps.version.outputs.version }}
-      release_sha: ${{ steps.version.outputs.release_sha }}
+      mode: ${{ steps.release.outputs.mode }}
+      version: ${{ steps.release.outputs.version }}
+      release_id: ${{ steps.release.outputs.release_id }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm install -g pnpm@10
+      - run: pnpm install --frozen-lockfile
+      - name: 校验发布策略
+        run: node --test apps/infinity-nikki-player/scripts/updater-release.test.mjs
+      - name: 比较版本并创建或恢复草稿
+        id: release
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node apps/infinity-nikki-player/scripts/updater-release.mjs prepare
 
-      - name: Detect version release
-        id: changeset
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- apps/infinity-nikki-player/package.json; then
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Skip release (no changeset)
-        if: steps.changeset.outputs.has_changes != 'true'
-        run: 'echo "Skip release: no changeset version change detected"'
-
-      - name: Get app version
-        id: version
-        if: steps.changeset.outputs.has_changes == 'true'
-        run: |
-          VERSION=$(node -p "require('./apps/infinity-nikki-player/package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "release_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
-
-  # 构建 Tauri 应用
-  build-tauri:
-    needs: version
-    if: needs.version.outputs.has_changes == 'true'
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.mode == 'build'
     timeout-minutes: 60
-    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
-      fail-fast: false
+      fail-fast: true
+      # 官方 action 会读取并合并 latest.json，两个平台不能同时更新它。
+      max-parallel: 1
       matrix:
         include:
           - os: macos-latest
-            args: '--bundles app,dmg'
-            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle'
+            target: aarch64-apple-darwin
+            bundles: app,dmg
           - os: windows-latest
-            args: '--bundles nsis'
-            artifact_path: 'apps/infinity-nikki-player/src-tauri/target/release/bundle'
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.version.outputs.release_sha }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+          ref: ${{ needs.prepare.outputs.release_sha }}
+      - uses: actions/setup-node@v6
         with:
           node-version: '24'
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install pnpm
-        run: npm install -g pnpm@10
-
-      - name: Install frontend deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Import Apple Developer certificate
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'apps/infinity-nikki-player/src-tauri -> target'
+      - run: npm install -g pnpm@10
+      - run: pnpm install --frozen-lockfile
+      - name: 校验前端及原生更新流程
+        run: |
+          pnpm --filter @strawberrybear/infinity-nikki-player test
+          cargo test --locked --manifest-path apps/infinity-nikki-player/src-tauri/Cargo.toml updater::
+      - name: 导入 Apple Developer 证书
         if: runner.os == 'macOS'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_INFINITY_NIKKI_PLAYER }}
@@ -106,10 +98,9 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD_INFINITY_NIKKI_PLAYER }}
         run: |
           if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ]; then
-            echo "Skip Apple Developer certificate import: signing secrets are not configured."
+            echo "未配置 Apple 签名证书，沿用现有签名策略。"
             exit 0
           fi
-
           KEYCHAIN_PASSWORD="${KEYCHAIN_PASSWORD:-$(openssl rand -hex 16)}"
           echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
@@ -118,180 +109,47 @@ jobs:
           security set-keychain-settings -t 3600 -u build.keychain
           security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-
           CERT_ID=$(security find-identity -v -p codesigning build.keychain | awk -F'"' '/Developer ID Application/ { print $2; exit }')
           if [ -z "$CERT_ID" ]; then
-            CERT_ID=$(security find-identity -v -p codesigning build.keychain | awk -F'"' '/"/ { print $2; exit }')
-          fi
-          if [ -z "$CERT_ID" ]; then
-            echo "Apple Developer certificate was imported, but no valid code signing identity was found."
+            echo "未找到有效的 Developer ID Application 签名身份。"
             exit 1
           fi
-
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
-          echo "Using Apple signing identity: $CERT_ID"
-
-      - name: Build Tauri app
+      - name: 官方构建、签名及合并更新清单
+        uses: tauri-apps/tauri-action@action-v1.0.0
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_INFINITY_NIKKI_PLAYER }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
-        run: pnpm --filter @strawberrybear/infinity-nikki-player tauri build ${{ matrix.args }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
         with:
-          name: infinity-nikki-player-${{ matrix.os }}
-          path: ${{ matrix.artifact_path }}
-          if-no-files-found: error
-          retention-days: 3
+          projectPath: apps/infinity-nikki-player
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          tagName: infinity-nikki-player@v${{ needs.prepare.outputs.version }}
+          releaseDraft: true
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+          updaterJsonPreferNsis: true
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: 校验实际包内版本并上传凭据
+        run: node apps/infinity-nikki-player/scripts/updater-release.mjs verify-bundle
 
-  # 发布 GitHub Release 和 updater latest.json
-  release:
-    needs:
-      - version
-      - build-tauri
-    if: needs.version.outputs.has_changes == 'true'
+  publish:
+    needs: [prepare, build]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.build.result == 'success' || needs.prepare.outputs.mode == 'repair') }}
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.version.outputs.release_sha }}
-
-      - name: Get changelog entry
-        id: changelog
-        run: |
-          VERSION=${{ needs.version.outputs.version }}
-          CONTENT=$(awk "/^## ${VERSION}/{flag=1; next} /^## [0-9]/{if(flag) exit} flag" apps/infinity-nikki-player/CHANGELOG.md)
-          echo "content<<EOF" >> $GITHUB_OUTPUT
-          echo "$CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+          ref: ${{ needs.prepare.outputs.release_sha }}
+      - uses: actions/setup-node@v6
         with:
-          name: infinity-nikki-player-macos-latest
-          path: ./macos
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: infinity-nikki-player-windows-latest
-          path: ./windows
-
-      - name: Generate latest.json and latest-cn.json
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          node <<'NODE'
-          const fs = require('fs')
-          const path = require('path')
-
-          const version = process.env.VERSION
-          const repository = process.env.GITHUB_REPOSITORY
-          const tagName = `infinity-nikki-player@v${version}`
-          // 国内加速代理前缀：用于 latest-cn.json 中的下载 URL。
-          // gh-proxy.com 是国内公共 GitHub 加速服务（流式透传，签名校验仍然有效）。
-          const GH_PROXY_PREFIX = 'https://gh-proxy.com/'
-
-          function walk(dir) {
-            if (!fs.existsSync(dir)) return []
-            return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-              const fullPath = path.join(dir, entry.name)
-              return entry.isDirectory() ? walk(fullPath) : [fullPath]
-            })
-          }
-
-          const windowsFiles = walk('windows').sort()
-          const macosFiles = walk('macos').sort()
-          const installerPath = windowsFiles.find((file) => file.toLowerCase().endsWith('.exe'))
-          if (!installerPath) {
-            throw new Error('Windows NSIS installer was not found')
-          }
-
-          const signaturePath =
-            windowsFiles.find((file) => file === `${installerPath}.sig`) ||
-            windowsFiles.find((file) => file.toLowerCase().endsWith('.exe.sig')) ||
-            windowsFiles.find((file) => file.toLowerCase().endsWith('.sig'))
-          if (!signaturePath) {
-            throw new Error('Windows updater signature was not found')
-          }
-
-          const macosUpdaterPath = macosFiles.find((file) => file.toLowerCase().endsWith('.app.tar.gz'))
-          if (!macosUpdaterPath) {
-            throw new Error('macOS updater archive was not found')
-          }
-
-          const macosSignaturePath =
-            macosFiles.find((file) => file === `${macosUpdaterPath}.sig`) ||
-            macosFiles.find((file) => file.toLowerCase().endsWith('.app.tar.gz.sig'))
-          if (!macosSignaturePath) {
-            throw new Error('macOS updater signature was not found')
-          }
-
-          const assetName = path.basename(installerPath)
-          const macosAssetName = path.basename(macosUpdaterPath)
-          const githubBaseUrl = `https://github.com/${repository}/releases/download/${tagName}`
-
-          /**
-           * @description: 构造 updater latest.json 对象
-           * @param {(assetName: string) => string} urlBuilder - 根据 asset 名生成下载 URL
-           * @return {object} latest.json 结构
-           */
-          function buildLatestJson(urlBuilder) {
-            return {
-              version,
-              pub_date: new Date().toISOString(),
-              platforms: {
-                'darwin-aarch64': {
-                  signature: fs.readFileSync(macosSignaturePath, 'utf8').trim(),
-                  url: urlBuilder(macosAssetName),
-                },
-                'windows-x86_64': {
-                  signature: fs.readFileSync(signaturePath, 'utf8').trim(),
-                  url: urlBuilder(assetName),
-                },
-              },
-            }
-          }
-
-          // 海外 / 兜底：URL 直接指向 GitHub Releases。
-          const latestJson = buildLatestJson((name) => `${githubBaseUrl}/${encodeURIComponent(name)}`)
-          // 国内加速：URL 走 gh-proxy.com 中转，签名不变，Tauri 校验仍然通过。
-          const latestCnJson = buildLatestJson((name) => `${GH_PROXY_PREFIX}${githubBaseUrl}/${encodeURIComponent(name)}`)
-
-          fs.writeFileSync('latest.json', `${JSON.stringify(latestJson, null, 2)}\n`)
-          fs.writeFileSync('latest-cn.json', `${JSON.stringify(latestCnJson, null, 2)}\n`)
-          NODE
-
-      - name: List artifacts
-        run: |
-          find ./macos -maxdepth 4 -type f -print
-          find ./windows -maxdepth 4 -type f -print
-          cat ./latest.json
-          echo '--- latest-cn.json ---'
-          cat ./latest-cn.json
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: false
-          generate_release_notes: false
-          tag_name: infinity-nikki-player@v${{ needs.version.outputs.version }}
-          name: infinity-nikki-player@v${{ needs.version.outputs.version }}
-          body: ${{ steps.changelog.outputs.content }}
-          files: |
-            ./macos/**/*.dmg
-            ./macos/**/*.tar.gz
-            ./macos/**/*.sig
-            ./windows/**/*.exe
-            ./windows/**/*.sig
-            ./latest.json
-            ./latest-cn.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          node-version: '24'
+      - run: npm install -g pnpm@10
+      - run: pnpm install --frozen-lockfile
+      - name: 安装官方签名验证工具
+        run: sudo apt-get update && sudo apt-get install -y minisign
+      - name: 校验完整产物、公开版本并推进固定更新入口
+        run: node apps/infinity-nikki-player/scripts/updater-release.mjs publish

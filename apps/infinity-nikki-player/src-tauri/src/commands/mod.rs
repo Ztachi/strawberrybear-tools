@@ -10,24 +10,11 @@ pub mod player;
 pub mod settings;
 pub mod song_lists;
 pub mod templates;
+pub mod updater;
 pub mod window;
 pub mod window_controls;
 
 use std::process::Command;
-
-/// 获取应用版本号
-///
-/// # Returns
-///
-/// 当前应用版本字符串（如 "1.0.0"）
-///
-/// # Notes
-///
-/// 版本号从 Cargo.toml 的 package.version 字段读取
-#[tauri::command]
-pub fn get_app_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
 
 /// 获取系统语言/区域设置
 ///

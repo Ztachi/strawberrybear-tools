@@ -216,10 +216,11 @@ jobs:
 
 ### 情形二：Tauri 桌面应用（需构建多平台产物）
 
-参考 [release-infinity-nikki-player.yml](../.github/workflows/release-infinity-nikki-player.yml)，完整流程为：
+参考 [release-infinity-nikki-player.yml](../../.github/workflows/release-infinity-nikki-player.yml)，完整流程为：
 
-1. `build-tauri` job：在 macOS 和 Windows 上并行构建，上传 artifacts
-2. `release` job：需要 `build-tauri` 完成后才运行，下载 artifacts → changeset 发版 → 创建 Release 并附带安装包
+1. 版本 PR 先写入版本与中文 CHANGELOG；`prepare` 比较版本值并创建或恢复草稿。
+2. `build` 使用官方 `tauri-apps/tauri-action`，两个平台串行上传同一草稿，避免标准更新清单的合并竞争。
+3. `publish` 校验全部平台、包内版本、签名及下载链接，再公开正式 Release，最后逐个推进应用独立更新入口。
 
 关键差异点（相比普通 Web 应用）：
 
@@ -230,46 +231,15 @@ jobs:
 - Release 需要 `files` 字段附带构建产物
 - `upload-artifact` 必须设置 `retention-days: 3`
 
-#### 国内更新加速（双清单方案）
+#### 桌面更新发布边界
 
-Tauri updater 依赖 [tauri-plugin-updater](https://v2.tauri.app/plugin/updater/)，它通过请求 `endpoints` 数组里的 URL 拉取 `latest.json`，再根据 JSON 里的 `url` 字段下载安装包。**关键点**：endpoint 只能影响"检测更新"这一步；安装包的实际下载链接来自 JSON 内容本身。
+保留 [Tauri 官方更新器](https://v2.tauri.app/plugin/updater/) 和官方发布 Action。检查清单与下载产物是两个不同阶段，配置多个 endpoints 不代表下载失败会自动切源，也不保证正文解析失败时继续尝试另一入口。
 
-为解决国内用户访问 GitHub Releases 慢的问题，release workflow 会同时生成两份 manifest：
+同仓库多个应用应使用各自固定的清单入口，安装包链接指向不可变的版本 tag。多个来源必须引用同版本、同产物、同签名；不能通过关闭签名校验解决网络失败。发布任务串行，禁止公开版本覆盖、版本回退或部分平台尚未上传就公开清单。
 
-| 文件名           | 用途            | url 字段指向                                          |
-| ---------------- | --------------- | ----------------------------------------------------- |
-| `latest.json`    | 海外用户 / 兜底 | GitHub Releases 原地址                                |
-| `latest-cn.json` | 国内用户        | `https://gh-proxy.com/` 前缀 + GitHub Releases 原地址 |
+播放器目前需要兼容使用全仓库 `releases/latest` 的旧客户端，因此播放器正式 Release 显式设置 `make_latest: true`，其他应用和固定清单 Release 设置 `make_latest: false`。后续应用发版必须保留此约定。
 
-**实现要点**：
-
-1. 在 release workflow 的 `Generate latest.json` 步骤中，把构造 URL 的逻辑抽成一个函数，调用两次分别生成两份 JSON。`latest-cn.json` 的 `platforms[*].url` 字段都加 `https://gh-proxy.com/` 前缀；签名字段保持原值，minisign 签名校验仍然有效。
-2. `softprops/action-gh-release` 的 `files` 列表里同时上传 `latest.json` 和 `latest-cn.json`，两者平铺在 GitHub Release 的 `latest/download/` 路径下。
-3. `tauri.conf.json` 的 `plugins.updater.endpoints` 数组里把 `latest-cn.json` 放第一位（原版 `latest.json` 留作 fallback）。Tauri 会按顺序请求，任一返回 2xx 即采用。
-4. 前端 `useAppUpdater.ts` 调用 `check()` 时显式传 `timeout`（如 8000ms），避免 endpoint 在国内跨境请求时长时间挂住。
-
-```jsonc
-// tauri.conf.json
-"updater": {
-  "endpoints": [
-    "https://gh-proxy.com/https://github.com/<owner>/<repo>/releases/latest/download/latest-cn.json",
-    "https://github.com/<owner>/<repo>/releases/latest/download/latest.json"
-  ]
-}
-```
-
-```ts
-// src/composables/useAppUpdater.ts
-import { check } from '@tauri-apps/plugin-updater'
-const CHECK_TIMEOUT_MS = 8_000
-const update = await check({ timeout: CHECK_TIMEOUT_MS })
-```
-
-**注意事项**：
-
-- `latest-cn.json` 内的 `url` 必须使用**固定 tag 名**（如 `infinity-nikki-player@v1.1.2`），不能用 `latest` —— gh-proxy 是流式代理，不会跟随 GitHub 的 `latest` 重定向链。
-- gh-proxy.com 是第三方公共服务，没有 SLA，存在被墙/限流/失效风险。任何时候都可以直接把 `endpoints` 数组的第一条换成自建镜像（Cloudflare Workers / 阿里云 OSS）而无需改动前端代码。
-- Tauri 的 fallback 仅在 endpoint 返回**非 2xx 状态码**时触发；若 endpoint 成功返回 JSON 但 JSON 内 url 下载失败，**不会**回退到下一个 endpoint。这是设计如此，不是 bug。
+代理选择、超时、重试、跨重启确认及操作入口属于应用策略，详见[播放器自动更新机制](../../apps/infinity-nikki-player/docs/auto-update.md)及[升级验收记录](../../apps/infinity-nikki-player/docs/update-validation.md)。
 
 ---
 
