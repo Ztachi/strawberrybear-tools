@@ -158,6 +158,12 @@ export interface PianoRollView {
   fitToSong(): void
   /** 获取独立视口快照。 */
   getViewport(): Readonly<PianoRollViewport>
+  /** 将另一展示宿主保存的视口恢复到当前尺寸；越界值裁剪，开启 Follow 时遵循当前播放位置。 */
+  restoreViewport(
+    viewport: Readonly<
+      Pick<PianoRollViewport, 'scrollLeft' | 'scrollTop' | 'timeZoom' | 'pitchZoom' | 'follow'>
+    >
+  ): void
   /** 为插件订阅视口变化，返回取消订阅函数。 */
   subscribe(listener: (viewport: Readonly<PianoRollViewport>) => void): () => void
   /** 移除监听器、RAF、ResizeObserver、插件与本实例 DOM；可重复调用。 */

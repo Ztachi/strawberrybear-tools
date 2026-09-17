@@ -70,6 +70,12 @@ export const infinityNikkiTheme: ThemeConfig = {
       '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
   },
   components: {
+    Slider: {
+      railBg: '#EEC6CF',
+      railHoverBg: '#E5AAB9',
+      trackBg: NIKKI_PRIMARY_ACTIVE_COLOR,
+      trackHoverBg: NIKKI_PRIMARY_HOVER_COLOR,
+    },
     Button: {
       colorPrimary: NIKKI_PRIMARY_COLOR,
       colorPrimaryHover: NIKKI_PRIMARY_HOVER_COLOR,

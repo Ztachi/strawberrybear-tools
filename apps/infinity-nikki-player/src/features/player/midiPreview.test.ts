@@ -122,6 +122,32 @@ describe('MIDI 试听平台适配', () => {
     expect(progress).toHaveBeenCalledTimes(4)
   })
 
+  it('samples real audio when a visible but occluded window stops receiving frames', async () => {
+    await player.play()
+    const progress = vi.spyOn(player, 'updateProgress')
+    const staleFrame = [...frames.values()][0]!
+    // 独立窗口全屏时，主 WebView 可能仍报告 visible，却不再收到 RAF。
+    platform.position = 1250
+    vi.advanceTimersByTime(250)
+    expect(player.getState().positionSeconds).toBe(1.25)
+    platform.position = 1500
+    vi.advanceTimersByTime(250)
+    expect(player.getState().positionSeconds).toBe(1.5)
+    expect(progress).toHaveBeenCalledTimes(2)
+    staleFrame(0)
+    expect(progress).toHaveBeenCalledTimes(2)
+    // 恢复绘制后只有一个 RAF 循环，兜底不另建逐帧采样器。
+    platform.position = 1516
+    renderFrame()
+    expect(player.getState().positionSeconds).toBe(1.516)
+    expect(frames.size).toBe(1)
+    await player.pause()
+    progress.mockClear()
+    vi.advanceTimersByTime(1000)
+    expect(progress).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('preserves local drag previews and samples the audio clock again after release', async () => {
     await player.play()
     feature.setDragging(true)
@@ -153,7 +179,7 @@ describe('MIDI 试听平台适配', () => {
     setVisibility('visible')
     platform.position = 2200
     staleBackgroundTick()
-    vi.advanceTimersByTime(250)
+    vi.advanceTimersByTime(249)
     expect(progress).toHaveBeenCalledTimes(1)
     renderFrame()
     expect(progress).toHaveBeenCalledTimes(2)

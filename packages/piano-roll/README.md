@@ -163,6 +163,8 @@ CSS 容器查询负责工具栏的响应式布局，`ResizeObserver` 根据当�
 
 公共库不会创建遮罩、锁定页面、决定浮层高度或启动音频。app 自行提供非模态浮层、顶部拖动调整、关闭按钮及当前歌曲校验。视图只读取 `transport`，没有独立壁钟，因此页面挂起、暂停和倍速都应由音频适配层回传权威原曲时间。
 
+宿主迁移面板到其它容器或独立窗口时，可保存 `view.getViewport()`，在新实例挂载后调用 `view.restoreViewport(saved)`。该方法恢复时间／音高缩放、双轴滚动和 Follow，裁剪到新容器边界并取消旧手势；开启 Follow 且正在播放时按当前播放位置恢复自动视口。它不会改变歌曲、播放状态或触发 seek。窗口创建、通信、关闭和视口保存由宿主负责。
+
 ## 验证
 
 ```bash
@@ -177,3 +179,9 @@ pnpm --filter @strawberrybear/piano-roll test:browser
 包级 type-check 使用 vue-tsc，包含 TS、Vue 和最小示例。测试覆盖分段 tempo、非整数 BPM、拍号变化、首尾静音、长音和 20 万音符索引，以及缩放/跟随边界。设备验收还应检查实际音频输出延迟；显示时间正确并不等同于声卡延迟校准。
 
 浏览器回归使用 Playwright，覆盖独立双视图、不同缩放的 seek 一致性、拖拽单次提交、取消与失焦、边缘滚动和 20 万音符分层渲染。已有系统 Chrome 时可使用 `PIANO_ROLL_BROWSER_CHANNEL=chrome pnpm --filter @strawberrybear/piano-roll test:browser`。
+
+### 倍率滑块与琴键布局
+
+`browser` 入口导出 `timeZoomToSlider(zoom, min, max)` 与 `sliderToTimeZoom(value, min, max)`，将控制器唯一的真实 px/s 值可逆映射到 0–100 的对数滑块刻度；等倍缩放对应等距移动，0/100 精确对应一屏全曲／最大缩放。宿主只做显示转换，不保存第二份滑块状态。最小值和最大值始终读取当前 `getViewport()`，容器变化后重新映射。内置 Vue 滑块采用同样刻度。
+
+WebKit 手势按相邻采样倍率更新当前实际缩放；在边界外继续捏合后反向，无需抵消隐藏的超界值。琴键白键层连续铺满 MIDI 0–127，黑键覆盖两个白键的接缝；E/F、B/C 无黑键。琴键中心仍与等高半音网格对应，时间缩放不改变琴键几何。

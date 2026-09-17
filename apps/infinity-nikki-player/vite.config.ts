@@ -19,6 +19,12 @@ export default defineConfig({
   },
   envPrefix: ['VITE_', 'TAURI_'],
   build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        pianoEditor: resolve(__dirname, 'piano-editor.html'),
+      },
+    },
     target: 'esnext',
     minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
     sourcemap: !!process.env.TAURI_DEBUG,

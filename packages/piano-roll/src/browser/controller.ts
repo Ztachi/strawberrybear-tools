@@ -730,6 +730,35 @@ export function createView(
       setScroll(0)
     },
     getViewport: snapshot,
+    restoreViewport(saved) {
+      if (destroyed) return
+      finishDrag(false)
+      navigation?.cancel()
+      resize()
+      timeZoom = clamp(saved.timeZoom, minTimeZoom, maxTimeZoom, timeZoom)
+      pitchZoom = clamp(saved.pitchZoom, 8, 36, pitchZoom)
+      fitting = timeZoom === minTimeZoom
+      follow = saved.follow === true
+      resizeContent()
+      setScroll(
+        clamp(
+          saved.scrollLeft,
+          0,
+          Math.max(0, scroll.scrollWidth - scroll.clientWidth),
+          scroll.scrollLeft
+        ),
+        clamp(
+          saved.scrollTop,
+          0,
+          Math.max(0, scroll.scrollHeight - scroll.clientHeight),
+          scroll.scrollTop
+        )
+      )
+      if (transport.isPlaying) catchPlayhead()
+      scheduleRender()
+      changed()
+      options.onFollowChange?.(follow)
+    },
     subscribe(listener) {
       subscribers.add(listener)
       return () => subscribers.delete(listener)

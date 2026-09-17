@@ -7,7 +7,7 @@ import type {
   PianoRollTrackToggleContext,
 } from '@strawberrybear/piano-roll/browser'
 import type { PianoTrackHost } from '../../usePianoTrackHosts'
-import PianoTrackLabel from '../PianoTrackLabel.vue'
+import PianoTrackLabel from '@/components/PianoTrackLabel.vue'
 
 defineProps<{
   labels: ReadonlyMap<HTMLElement, PianoTrackHost<PianoRollTrackLabelContext>>

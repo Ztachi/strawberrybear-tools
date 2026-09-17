@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** @description: Vue 薄适配层；文档、时间、事件与持久浏览器控制器的生命周期桥接。 */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { createPianoRollEditor, createTracksOverview, defaultLabels, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
+import { createPianoRollEditor, createTracksOverview, defaultLabels, sliderToTimeZoom, timeZoomToSlider, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
 import { pianoRollThemeVariables, resolvePianoRollTheme } from './browser/theme'
 import type { PianoRollProps } from './vue-props'
 
@@ -53,7 +53,7 @@ function mountView(): void {
   viewport.value = view.getViewport()
 }
 function updateTimeZoom(event: Event): void {
-  view?.setTimeZoom(Number((event.target as HTMLInputElement).value))
+  view?.setTimeZoom(sliderToTimeZoom(Number((event.target as HTMLInputElement).value), viewport.value.minTimeZoom, viewport.value.maxTimeZoom))
 }
 function updatePitchZoom(event: Event): void {
   view?.setPitchZoom(Number((event.target as HTMLInputElement).value))
@@ -87,10 +87,13 @@ defineExpose({ getView: () => view })
         <strong
           class="piano-roll-title"
           :aria-label="variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor)"
-          >{{ variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor) }}</strong
-        >
+        >{{ variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor) }}</strong>
       </slot>
-      <slot name="toolbar" :view="view" :viewport="viewport" />
+      <slot
+        name="toolbar"
+        :view="view"
+        :viewport="viewport"
+      />
       <template v-if="props.showToolbarControls">
         <button
           class="piano-roll-native-button"
@@ -100,22 +103,29 @@ defineExpose({ getView: () => view })
         >
           {{ viewport.follow ? labels.following : labels.follow }}
         </button>
-        <button class="piano-roll-native-button" type="button" @click="view?.fitToSong()">
+        <button
+          class="piano-roll-native-button"
+          type="button"
+          @click="view?.fitToSong()"
+        >
           {{ labels.fit }}
         </button>
         <label class="piano-roll-zoom">
           <span>{{ labels.timeZoom }}</span>
           <input
             type="range"
-            :min="viewport.minTimeZoom"
-            :max="viewport.maxTimeZoom"
-            :value="viewport.timeZoom"
+            :min="0"
+            :max="100"
+            :value="timeZoomToSlider(viewport.timeZoom, viewport.minTimeZoom, viewport.maxTimeZoom)"
             :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
             step="any"
             @input="updateTimeZoom"
-          />
+          >
         </label>
-        <label v-if="variant === 'editor'" class="piano-roll-zoom piano-roll-pitch-zoom">
+        <label
+          v-if="variant === 'editor'"
+          class="piano-roll-zoom piano-roll-pitch-zoom"
+        >
           <span>{{ labels.pitchZoom }}</span>
           <input
             type="range"
@@ -124,11 +134,14 @@ defineExpose({ getView: () => view })
             max="36"
             step="1"
             @input="updatePitchZoom"
-          />
+          >
         </label>
       </template>
     </header>
-    <div ref="host" class="piano-roll-host" />
+    <div
+      ref="host"
+      class="piano-roll-host"
+    />
   </section>
 </template>
 

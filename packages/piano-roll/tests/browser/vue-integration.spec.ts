@@ -128,13 +128,19 @@ test.describe('Vue piano roll integration', () => {
 
   test('a fit view recomputes its minimum after a container resize', async ({ page }) => {
     await page.getByRole('button', { name: '适合全曲' }).click()
-    const before = await page.locator('.piano-roll-zoom input').getAttribute('min')
+    const before = await page.evaluate(
+      () => (window.vueFixture.getView() as PianoRollView).getViewport().minTimeZoom
+    )
     await page.evaluate(() => {
       ;(window as unknown as { viewBefore: unknown }).viewBefore = window.vueFixture.getView()
       window.vueFixture.setWidth('520px')
     })
     await expect
-      .poll(() => page.locator('.piano-roll-zoom input').getAttribute('min'))
+      .poll(() =>
+        page.evaluate(
+          () => (window.vueFixture.getView() as PianoRollView).getViewport().minTimeZoom
+        )
+      )
       .not.toBe(before)
     const result = await page.locator('#mount').evaluate(() => {
       const scroll = document.querySelector<HTMLElement>('.piano-roll .pr-scroll')!

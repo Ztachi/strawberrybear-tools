@@ -132,6 +132,44 @@ test('horizontal Follow leaves the vertical scroll axis and keyboard raster unto
   expect.soft(result.keyboardPaints, '纯横向播放不改变琴键图像，不能每帧清空重绘').toBe(0)
 })
 
+test('restoring a detached viewport keeps manual browsing and clamps it to the new host', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const view = window.fixture.editor
+    window.fixture.setTime(50, false)
+    view.restoreViewport({
+      scrollLeft: 321.25,
+      scrollTop: 400,
+      timeZoom: 123.456789,
+      pitchZoom: 22,
+      follow: false,
+    })
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+    const restored = view.getViewport()
+    view.restoreViewport({ ...restored, scrollLeft: Number.MAX_VALUE, scrollTop: Number.MAX_VALUE })
+    const bounded = view.getViewport()
+    const scroll = document.querySelector<HTMLElement>('#editor .pr-scroll')!
+    return {
+      restored,
+      bounded,
+      maxLeft: scroll.scrollWidth - scroll.clientWidth,
+      maxTop: scroll.scrollHeight - scroll.clientHeight,
+    }
+  })
+  expect(result.restored).toMatchObject({
+    scrollTop: 400,
+    timeZoom: 123.456789,
+    pitchZoom: 22,
+    follow: false,
+  })
+  expect(Math.abs(result.restored.scrollLeft - 321.25)).toBeLessThan(1)
+  expect(result.bounded.scrollLeft).toBeLessThanOrEqual(result.maxLeft)
+  expect(result.bounded.scrollTop).toBeLessThanOrEqual(result.maxTop)
+})
+
 test('playhead and note canvas present the same viewport snapshot in each animation frame', async ({
   page,
 }) => {

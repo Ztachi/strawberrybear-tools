@@ -9,7 +9,7 @@ export interface GestureZoomOptions {
   getZoom: () => number
   /** 时间视口元素；根节点通常还包含左侧轨道栏，锚点必须相对该元素。 */
   viewportElement?: HTMLElement
-  /** 缩放倍率相对 gesturestart.scale=1，交由控制器统一 clamp。 */
+  /** 相邻采样倍率作用于实际缩放，交由控制器统一 clamp。 */
   onZoom: (scale: number, anchorX: number) => void
   /** 手势是否处于活动状态，用于屏蔽同一手势派发的 Ctrl+wheel。 */
   onActiveChange?: (active: boolean) => void
@@ -24,8 +24,7 @@ export function installGestureZoom(
   options: GestureZoomOptions
 ): { isActive: () => boolean; destroy: () => void } {
   let active = false
-  let initialScale = 1
-  let initialZoom = 1
+  let previousScale = 1
   let anchorX = 0
 
   const start = (event: Event): void => {
@@ -34,10 +33,7 @@ export function installGestureZoom(
     const scale = Number.isFinite(gesture.scale) && gesture.scale! > 0 ? gesture.scale! : 1
     const rect = (options.viewportElement ?? root).getBoundingClientRect()
     anchorX = Number.isFinite(gesture.clientX) ? gesture.clientX! - rect.left : rect.width / 2
-    initialScale = scale
-    // 在 gesturestart 读取最新缩放；后续容器 resize 会由 setTimeZoom 统一重新 clamp。
-    initialZoom =
-      Number.isFinite(options.getZoom()) && options.getZoom() > 0 ? options.getZoom() : 1
+    previousScale = scale
     active = true
     options.onActiveChange?.(true)
   }
@@ -46,7 +42,11 @@ export function installGestureZoom(
     event.preventDefault()
     const scale = Number((event as WebKitGestureEvent).scale)
     if (!Number.isFinite(scale) || scale <= 0) return
-    options.onZoom((initialZoom * scale) / initialScale, anchorX)
+    // 每一步从控制器已裁剪的真实值继续。越过上下限后的反向手势立即响应，
+    // 不必先抵消一个藏在边界外的虚拟缩放量；容器中途 resize 也使用新边界。
+    const currentZoom = options.getZoom()
+    options.onZoom((currentZoom * scale) / previousScale, anchorX)
+    previousScale = scale
   }
   const end = (event: Event): void => {
     if (!active) return

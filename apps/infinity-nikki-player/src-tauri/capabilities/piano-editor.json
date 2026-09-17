@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "piano-editor",
+  "description": "Read-only piano editor presentation and targeted window events",
+  "windows": ["piano-editor"],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-show",
+    "core:window:allow-set-title",
+    "core:window:allow-destroy"
+  ]
+}

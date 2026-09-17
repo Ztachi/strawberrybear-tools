@@ -5,32 +5,28 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Popover, Slider, Tooltip } from 'antdv-next'
-import { Clock3, Crosshair, ListFilter, Music2, Pause, Piano, Play, X } from 'lucide-vue-next'
-import PianoRoll from '@strawberrybear/piano-roll/vue'
-import type {
-  PianoRollViewport,
-  PianoRollView,
-} from '@strawberrybear/piano-roll/browser'
+import { Button, Popover, Tooltip } from 'antdv-next'
+import { Clock3, Music2, Pause, Piano, Play, ExternalLink, ArrowRightLeft } from 'lucide-vue-next'
+import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
+import type { PianoWorkspaceState } from '@/features/piano-editor'
 import { usePlayerStore } from '@/stores/player'
 import { getMidiDisplayArtist, getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
 import { formatDuration } from '../utils'
 import { adaptMidiToPianoRoll, applyPianoTrackEnabled } from './MidiDetailPage/pianoRollAdapter'
 import { usePianoDetailSeek } from './MidiDetailPage/usePianoDetailSeek'
-import { usePianoEditorResize } from './MidiDetailPage/usePianoEditorResize'
-import { usePianoEditorSelection } from './MidiDetailPage/usePianoEditorSelection'
-import { usePianoRollZoomPersistence } from './MidiDetailPage/usePianoRollZoomPersistence'
-import { usePianoTrackHosts } from './MidiDetailPage/usePianoTrackHosts'
-import PianoTrackHosts from './MidiDetailPage/components/PianoTrackHosts/PianoTrackHosts.vue'
-import PianoTrackLabel from './MidiDetailPage/components/PianoTrackLabel.vue'
-import PianoRollHelpDialog from './MidiDetailPage/components/PianoRollHelpDialog.vue'
+import { usePianoEditorWindow } from './MidiDetailPage/usePianoEditorWindow'
+import { useAutoSwitchDetail } from './MidiDetailPage/useAutoSwitchDetail'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const playerStore = usePlayerStore()
 
 const filename = computed(() => String(route.params.filename ?? ''))
+// 区分路由换曲的中间态与加载已结束但没有数据；失效文件不能让浮窗永久停在加载中。
+const resolvedDetailFilename = ref<string | null>(null)
+let detailLoadRequest = 0
+const autoSwitchDetail = useAutoSwitchDetail(filename)
 const detailMidi = computed(() => {
   const midi = playerStore.detailMidi
   return midi?.filename === filename.value ? midi : null
@@ -58,16 +54,6 @@ const {
   seek: seekPianoRoll,
   getQueue: getDetailQueue,
 } = usePianoDetailSeek(detailMidi, filename)
-const {
-  heightPercent: editorHeightPercent,
-  handleRef: editorResizeHandleRef,
-  containerRef: detailBodyRef,
-  begin: beginEditorResize,
-  move: moveEditorResize,
-  end: endEditorResize,
-  onKeydown: handleEditorResizeKey,
-} = usePianoEditorResize(() => closePianoEditor())
-
 const pianoRollLabels = computed(() => ({
   overview: t('midi.pianoRoll.overview'),
   editor: t('midi.pianoRoll.editor'),
@@ -91,26 +77,6 @@ const pianoRollDocument = computed(() => {
   void playerStore.detailDisabledTracksVersion
   return applyPianoTrackEnabled(sourcePianoDocument.value, playerStore.detailDisabledTracks)
 })
-const pianoRollTracks = computed(() => pianoRollDocument.value.tracks)
-// 仅过滤总览的可见行，完整曲谱、选中轨道及播放启用状态仍保留。
-const hideEmptyPianoTracks = ref(true)
-const overviewPianoRollLabels = computed(() => ({
-  ...pianoRollLabels.value,
-  empty: hideEmptyPianoTracks.value
-    ? t('midi.pianoRoll.noTracksWithNotes')
-    : pianoRollLabels.value.empty,
-}))
-const {
-  selectedTrackId,
-  isOpen: isPianoEditorOpen,
-  select: selectPianoTrack,
-  activate: openPianoEditor,
-  close: closePianoEditor,
-} = usePianoEditorSelection(pianoRollTracks, () => {
-  endEditorResize()
-  previewPianoSeek(null)
-})
-
 const pianoRollTransport = computed(() => ({
   positionSeconds:
     pianoSeekPreviewSeconds.value ??
@@ -121,43 +87,33 @@ const pianoRollTransport = computed(() => ({
     pianoSeekPreviewSeconds.value === null,
   playbackRate: playerStore.speed,
 }))
-const {
-  overviewTimeZoom: pianoOverviewTimeZoom,
-  editorTimeZoom: pianoEditorTimeZoom,
-  editorPitchZoom: pianoEditorPitchZoom,
-  persistOverview: persistPianoOverviewZoom,
-  persistEditor: persistPianoEditorZoom,
-} = usePianoRollZoomPersistence(filename)
-
-function persistOverviewViewport(viewport: Readonly<PianoRollViewport>): void {
-  persistPianoOverviewZoom(viewport)
+const workspace = ref<{ getState: () => PianoWorkspaceState } | null>(null)
+const editorWindow = usePianoEditorWindow(
+  computed(() => ({
+    filename: filename.value,
+    title: detailDisplayName.value || filename.value,
+    document: pianoRollDocument.value,
+    labels: pianoRollLabels.value,
+    locale: locale.value,
+    error: pianoSeekError.value || (!detailMidi.value && resolvedDetailFilename.value === filename.value ? t('midi.notFound') : ''),
+    loading: !detailMidi.value && resolvedDetailFilename.value !== filename.value,
+  })),
+  pianoRollTransport,
+  seekPianoRoll,
+  previewPianoSeek,
+  togglePianoTrack
+)
+const isEditorDetached = editorWindow.detached
+const editorWindowStatus = editorWindow.status
+const editorWindowError = editorWindow.error
+const workspaceRestore = editorWindow.restore
+function rememberWorkspace(state: PianoWorkspaceState): void {
+  editorWindow.latestViewport.value = state
 }
-
-function persistEditorViewport(viewport: Readonly<PianoRollViewport>): void {
-  persistPianoEditorZoom(viewport)
+async function detachPianoWorkspace(): Promise<void> {
+  editorWindow.latestViewport.value = workspace.value?.getState()
+  await editorWindow.open()
 }
-
-/** PianoRoll 公共层只提供控制器；页面使用播放器统一的 antdv 控件完成工具栏装配。 */
-function togglePianoRollFollow(view: PianoRollView | null | undefined, enabled: boolean): void {
-  view?.setFollow(!enabled)
-}
-
-function setPianoRollTimeZoom(view: PianoRollView | null | undefined, value: unknown): void {
-  const next = Array.isArray(value) ? value[0] : value
-  if (typeof next === 'number' && Number.isFinite(next)) view?.setTimeZoom(next)
-}
-
-function setPianoRollPitchZoom(view: PianoRollView | null | undefined, value: unknown): void {
-  const next = Array.isArray(value) ? value[0] : value
-  if (typeof next === 'number' && Number.isFinite(next)) view?.setPitchZoom(next)
-}
-
-const {
-  labels: pianoTrackLabelHosts,
-  toggles: pianoTrackToggleHosts,
-  renderLabel: renderPianoTrackLabel,
-  renderToggle: renderPianoTrackToggle,
-} = usePianoTrackHosts()
 
 const descriptionRef = ref<HTMLElement | null>(null)
 const isDescriptionOverflowing = ref(false)
@@ -223,7 +179,12 @@ watch(
   [filename, () => playerStore.midiLibrary.map((midi) => midi.filename).join('\n')],
   () => {
     if (!filename.value) return
-    void playerStore.loadMidiDetailByFilename(filename.value)
+    const target = filename.value
+    const request = ++detailLoadRequest
+    resolvedDetailFilename.value = null
+    void playerStore.loadMidiDetailByFilename(target).finally(() => {
+      if (request === detailLoadRequest && filename.value === target) resolvedDetailFilename.value = target
+    })
   },
   { immediate: true }
 )
@@ -242,6 +203,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  detailLoadRequest += 1
   descriptionResizeObserver?.disconnect()
   descriptionResizeObserver = null
 })
@@ -262,23 +224,43 @@ onBeforeUnmount(() => {
             <span
               class="absolute inset-0 flex items-center justify-center bg-slate-950/45 text-white opacity-0 transition-opacity group-hover/detail-cover:opacity-100"
             >
-              <Pause v-if="isDetailPlaying" class="size-7 stroke-0" fill="currentColor" />
-              <Play v-else class="ml-1 size-7 stroke-0" fill="currentColor" />
+              <Pause
+                v-if="isDetailPlaying"
+                class="size-7 stroke-0"
+                fill="currentColor"
+              />
+              <Play
+                v-else
+                class="ml-1 size-7 stroke-0"
+                fill="currentColor"
+              />
             </span>
           </Button>
         </Tooltip>
 
         <div class="detail-main">
-          <Popover :content="detailDisplayName" placement="topLeft">
+          <Popover
+            :content="detailDisplayName"
+            placement="topLeft"
+          >
             <h1 class="detail-title">
               {{ detailDisplayTitle }}
             </h1>
           </Popover>
-          <p v-if="detailAuthor" class="detail-author">
+          <p
+            v-if="detailAuthor"
+            class="detail-author"
+          >
             {{ detailAuthor }}
           </p>
-          <div v-if="detailDescription" class="description-row">
-            <p ref="descriptionRef" class="detail-description">
+          <div
+            v-if="detailDescription"
+            class="description-row"
+          >
+            <p
+              ref="descriptionRef"
+              class="detail-description"
+            >
               {{ detailDescription }}
             </p>
             <Popover
@@ -293,219 +275,112 @@ onBeforeUnmount(() => {
                   {{ detailDescription }}
                 </div>
               </template>
-              <Button type="link" class="description-detail-link">
+              <Button
+                type="link"
+                class="description-detail-link"
+              >
                 {{ t('onlineLibrary.detail.actions.detail') }}
               </Button>
             </Popover>
           </div>
           <div class="detail-stats">
-            <div v-for="stat in detailStats" :key="stat.key" class="detail-stat">
-              <component :is="stat.icon" class="detail-stat-icon" />
+            <div
+              v-for="stat in detailStats"
+              :key="stat.key"
+              class="detail-stat"
+            >
+              <component
+                :is="stat.icon"
+                class="detail-stat-icon"
+              />
               <span class="detail-stat-value">{{ stat.value }}</span>
               <span class="detail-stat-label">{{ stat.label }}</span>
             </div>
+            <Tooltip :title="t('midi.pianoRoll.autoSwitchHint')">
+              <Button
+                class="ml-auto"
+                size="small"
+                :type="autoSwitchDetail ? 'primary' : 'default'"
+                :aria-pressed="autoSwitchDetail"
+                @click="autoSwitchDetail = !autoSwitchDetail"
+              >
+                <template #icon>
+                  <ArrowRightLeft
+                    class="size-4"
+                    :stroke-width="2"
+                  />
+                </template>
+                {{ t('midi.pianoRoll.autoSwitch') }}
+              </Button>
+            </Tooltip>
           </div>
         </div>
       </header>
 
-      <div
-        ref="detailBodyRef"
-        class="detail-body"
-        :style="{ '--piano-editor-height': `${editorHeightPercent}%` }"
-      >
-        <PianoTrackHosts
-          :labels="pianoTrackLabelHosts"
-          :toggles="pianoTrackToggleHosts"
+      <div class="detail-body">
+        <PianoWorkspace
+          v-if="!isEditorDetached"
+          :key="filename"
+          ref="workspace"
+          :filename="filename"
+          :document="pianoRollDocument"
+          :transport="pianoRollTransport"
+          :labels="pianoRollLabels"
+          :restore="workspaceRestore"
+          :opening="editorWindowStatus === 'opening'"
+          @state-change="rememberWorkspace"
+          @toggle-track="togglePianoTrack"
+          @seek="seekPianoRoll"
+          @seek-preview="previewPianoSeek"
+          @migrate="detachPianoWorkspace"
         />
         <div
-          class="piano-overview-host"
-          :class="{ 'piano-overview-host--with-editor': isPianoEditorOpen }"
+          v-else
+          class="m-auto flex items-center gap-3"
         >
-          <PianoRoll
-            :key="detailMidi.filename"
-            class="detail-piano-roll"
-            variant="overview"
-            :document="pianoRollDocument"
-            :transport="pianoRollTransport"
-            :labels="overviewPianoRollLabels"
-            :selected-track-id="selectedTrackId"
-            :time-zoom="pianoOverviewTimeZoom"
-            :show-toolbar-controls="false"
-            :hide-empty-tracks="hideEmptyPianoTracks"
-            :render-track-label="renderPianoTrackLabel"
-            :render-track-toggle="renderPianoTrackToggle"
-            @select-track="selectPianoTrack"
-            @open-editor="openPianoEditor"
-            @toggle-track="togglePianoTrack"
-            @seek="seekPianoRoll"
-            @seek-preview="previewPianoSeek"
-            @viewport-change="persistOverviewViewport"
+          <Button
+            type="primary"
+            :aria-label="t('midi.pianoRoll.focusWindow')"
+            @click="editorWindow.open"
           >
-            <template #title="{ label }">
-              <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
+            <template #icon>
+              <ExternalLink
+                class="size-4"
+                :stroke-width="2"
+              />
             </template>
-            <template #toolbar="{ view, viewport }">
-              <div class="piano-roll-app-toolbar">
-                <Tooltip
-                  :title="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
-                >
-                  <Button
-                    size="small"
-                    shape="circle"
-                    :type="viewport.follow ? 'primary' : 'default'"
-                    :aria-pressed="viewport.follow"
-                    :aria-label="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
-                    @click="togglePianoRollFollow(view, viewport.follow)"
-                  >
-                    <template #icon>
-                      <Crosshair class="size-4" :stroke-width="2.2" />
-                    </template>
-                  </Button>
-                </Tooltip>
-                <span class="piano-roll-app-slider">
-                  <span>{{ pianoRollLabels.timeZoom }}</span>
-                  <Slider
-                    :value="viewport.timeZoom"
-                    :min="viewport.minTimeZoom"
-                    :max="viewport.maxTimeZoom"
-                    :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
-                    :tooltip="{ open: false }"
-                    @update:value="setPianoRollTimeZoom(view, $event)"
-                  />
-                </span>
-                <Tooltip :title="t('midi.pianoRoll.hideEmptyTracks')">
-                  <Button
-                    class="piano-roll-trailing-action"
-                    size="small"
-                    :type="hideEmptyPianoTracks ? 'primary' : 'default'"
-                    :aria-pressed="hideEmptyPianoTracks"
-                    :aria-label="t('midi.pianoRoll.hideEmptyTracks')"
-                    @click="hideEmptyPianoTracks = !hideEmptyPianoTracks"
-                  >
-                    <template #icon>
-                      <ListFilter class="size-4" :stroke-width="2" />
-                    </template>
-                  </Button>
-                </Tooltip>
-                <PianoRollHelpDialog />
-              </div>
-            </template>
-          </PianoRoll>
+            {{ t('midi.pianoRoll.focusWindow') }}
+          </Button>
+          <Button
+            class="nikki-outline-btn"
+            @click="editorWindow.dock"
+          >
+            {{ t('midi.pianoRoll.dock') }}
+          </Button>
         </div>
-        <section
-          v-if="isPianoEditorOpen"
-          class="piano-editor-overlay"
-          :aria-label="t('midi.pianoRoll.editor')"
-          @keydown.esc.stop="closePianoEditor"
+        <p
+          v-if="editorWindowError"
+          class="piano-seek-error"
+          role="alert"
         >
-          <div
-            ref="editorResizeHandleRef"
-            class="piano-editor-resize-handle"
-            role="separator"
-            tabindex="0"
-            aria-orientation="horizontal"
-            :aria-label="t('midi.pianoRoll.resize')"
-            :aria-valuenow="Math.round(editorHeightPercent)"
-            :aria-valuemin="25"
-            :aria-valuemax="82"
-            :aria-valuetext="t('midi.pianoRoll.heightPercent', { value: Math.round(editorHeightPercent) })"
-            @pointerdown="beginEditorResize"
-            @pointermove="moveEditorResize"
-            @pointerup="endEditorResize"
-            @pointercancel="endEditorResize"
-            @lostpointercapture="endEditorResize"
-            @keydown="handleEditorResizeKey"
-          >
-            <span aria-hidden="true" />
-          </div>
-          <PianoRoll
-            class="detail-piano-editor"
-            variant="editor"
-            :document="pianoRollDocument"
-            :transport="pianoRollTransport"
-            :labels="pianoRollLabels"
-            :selected-track-id="selectedTrackId"
-            :time-zoom="pianoEditorTimeZoom"
-            :pitch-zoom="pianoEditorPitchZoom"
-            :show-toolbar-controls="false"
-            @select-track="selectPianoTrack"
-            @toggle-track="togglePianoTrack"
-            @seek="seekPianoRoll"
-            @seek-preview="previewPianoSeek"
-            @viewport-change="persistEditorViewport"
-          >
-            <template #title="{ label }">
-              <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
-            </template>
-            <template #toolbar="{ view, viewport }">
-              <div class="piano-roll-app-toolbar">
-                <Tooltip
-                  :title="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
-                >
-                  <Button
-                    size="small"
-                    shape="circle"
-                    :type="viewport.follow ? 'primary' : 'default'"
-                    :aria-pressed="viewport.follow"
-                    :aria-label="viewport.follow ? pianoRollLabels.following : pianoRollLabels.follow"
-                    @click="togglePianoRollFollow(view, viewport.follow)"
-                  >
-                    <template #icon>
-                      <Crosshair class="size-4" :stroke-width="2.2" />
-                    </template>
-                  </Button>
-                </Tooltip>
-                <span class="piano-roll-app-slider">
-                  <span>{{ pianoRollLabels.timeZoom }}</span>
-                  <Slider
-                    :value="viewport.timeZoom"
-                    :min="viewport.minTimeZoom"
-                    :max="viewport.maxTimeZoom"
-                    :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
-                    :tooltip="{ open: false }"
-                    @update:value="setPianoRollTimeZoom(view, $event)"
-                  />
-                </span>
-                <span class="piano-roll-app-slider">
-                  <span>{{ pianoRollLabels.pitchZoom }}</span>
-                  <Slider
-                    :value="viewport.pitchZoom"
-                    :min="8"
-                    :max="36"
-                    :step="1"
-                    :tooltip="{ open: false }"
-                    @update:value="setPianoRollPitchZoom(view, $event)"
-                  />
-                </span>
-                <Tooltip :title="pianoRollLabels.close">
-                  <Button
-                    class="piano-roll-trailing-action"
-                    type="text"
-                    size="small"
-                    danger
-                    :aria-label="pianoRollLabels.close"
-                    @click="closePianoEditor"
-                  >
-                    <template #icon>
-                      <X class="size-4" :stroke-width="2" />
-                    </template>
-                  </Button>
-                </Tooltip>
-              </div>
-            </template>
-          </PianoRoll>
-        </section>
-        <p v-if="pianoSeekError" class="piano-seek-error" role="status">
+          {{ t('midi.pianoRoll.windowFailed', { error: editorWindowError }) }}
+        </p>
+        <p
+          v-if="pianoSeekError"
+          class="piano-seek-error"
+          role="status"
+        >
           {{ pianoSeekError }}
         </p>
       </div>
     </template>
 
-    <section v-else class="missing-state">
+    <section
+      v-else
+      class="missing-state"
+    >
       <Music2 class="missing-icon" />
-      <span
-        >{{ playerStore.isDetailLoading ? t('onlineLibrary.loading') : t('midi.notFound') }}</span
-      >
+      <span>{{ playerStore.isDetailLoading ? t('onlineLibrary.loading') : t('midi.notFound') }}</span>
       <Button @click="navigateBack">
         {{ t('songList.allSongs') }}
       </Button>
@@ -598,88 +473,7 @@ onBeforeUnmount(() => {
   color: var(--color-primary-active);
 }
 
-.detail-body {
-  @apply relative flex min-h-0 flex-1 flex-col bg-white;
-  /* 给总览工具栏、标尺和至少一行轨道留出空间；更小的宿主中浮层自动收缩。 */
-  --piano-editor-size: max(0px, min(var(--piano-editor-height), calc(100% - 9rem)));
-  border: 1px solid var(--border-primary-15);
-}
-
-.piano-overview-host {
-  @apply min-h-0 shrink-0;
-  height: 100%;
-}
-
-.piano-overview-host--with-editor {
-  /* 浮层按需出现时保留总览滚动条的可见区域，实例、缩放与滚动策略保持独立。 */
-  height: calc(100% - var(--piano-editor-size));
-}
-
-.detail-piano-roll {
-  @apply h-full w-full min-h-0;
-  border: 0;
-  border-radius: 0;
-}
-
-.piano-roll-slot-title {
-  @apply mr-4 min-w-0 shrink overflow-hidden text-ellipsis whitespace-nowrap;
-  max-width: 30%;
-}
-
-.piano-roll-app-toolbar {
-  @apply flex min-w-0 flex-1 items-center gap-2;
-}
-
-.piano-roll-trailing-action {
-  @apply ml-auto shrink-0;
-}
-
-.piano-roll-app-slider {
-  @apply flex items-center gap-1;
-}
-
-.piano-roll-app-slider :deep(.ant-slider) {
-  @apply w-20;
-}
-
-.detail-piano-roll :deep(.pr-gutter),
-.detail-piano-editor :deep(.pr-gutter) {
-  border-right-color: var(--border-primary-10);
-}
-
-.detail-piano-roll :deep(.pr-track),
-.detail-piano-editor :deep(.pr-track) {
-  border-bottom-color: var(--border-primary-10);
-}
-
-.piano-editor-overlay {
-  @apply absolute inset-x-0 bottom-0 z-20 flex min-h-0 flex-col;
-  height: var(--piano-editor-size);
-  background: var(--bg-white-95);
-  border-top: 1px solid var(--border-primary-30);
-}
-
-.piano-editor-resize-handle {
-  /* 触控命中区仍保持 12px，但视觉上只保留一条轻量分隔线。 */
-  @apply relative flex h-3 shrink-0 touch-none cursor-ns-resize items-center justify-center;
-  background: transparent;
-}
-
-.piano-editor-resize-handle span {
-  @apply h-0.5 w-12 rounded-full;
-  background: var(--border-primary);
-}
-
-.piano-editor-resize-handle:focus-visible {
-  @apply outline-none;
-  box-shadow: inset 0 0 0 2px var(--color-primary-active);
-}
-
-.detail-piano-editor {
-  @apply min-h-0 flex-1;
-  border: 0;
-  border-radius: 0;
-}
+.detail-body { @apply relative flex min-h-0 flex-1 flex-col; }
 
 .piano-seek-error {
   @apply pointer-events-none absolute right-4 top-4 z-30 max-w-md rounded-lg px-3 py-2 text-sm;

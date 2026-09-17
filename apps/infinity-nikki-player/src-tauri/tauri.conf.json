@@ -37,7 +37,7 @@
     ],
     "security": {
       "csp": null,
-      "capabilities": ["default"]
+      "capabilities": ["default", "piano-editor"]
     }
   },
   "bundle": {

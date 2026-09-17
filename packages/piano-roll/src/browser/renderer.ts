@@ -1,6 +1,7 @@
 import type { createNoteIndex, PianoRollTimeline, PianoRollTrack } from '../core'
 import { defaultPianoRollTheme, type PianoRollTheme } from './theme'
 import { rulerLabels } from './ruler-layout'
+import { layoutPianoKeys } from './keyboard-layout'
 
 /** 一行轨道的内容坐标。 */
 export interface TrackRow {
@@ -365,24 +366,24 @@ export function drawKeyboard(
 ): void {
   const context = canvasContext(canvas, 64, height)
   if (!context) return
-  const first = Math.max(0, Math.floor(scrollTop / pitchZoom))
-  const last = Math.min(127, Math.ceil((scrollTop + height) / pitchZoom))
   context.font = `11px ${theme.metrics.fontFamily}`
-  for (let row = first; row <= last; row += 1) {
-    const pitch = 127 - row
-    const y = row * pitchZoom - scrollTop
-    const black = [1, 3, 6, 8, 10].includes(pitch % 12)
-    context.fillStyle = theme.colors.keyWhite
-    context.fillRect(0, y, 64, pitchZoom)
-    context.fillStyle = theme.colors.keyBorder
-    context.fillRect(0, y + pitchZoom - 1, 64, 1)
-    if (black) {
-      context.fillStyle = theme.colors.keyBlack
-      context.fillRect(0, y, 42, pitchZoom - 1)
+  for (const key of layoutPianoKeys(pitchZoom)) {
+    const { pitch, black } = key
+    const y = key.top - scrollTop
+    if (y + key.height < 0 || y > height) continue
+    context.fillStyle = black ? theme.colors.keyBlack : theme.colors.keyWhite
+    context.fillRect(0, y, black ? 42 : 64, key.height)
+    if (!black) {
+      context.fillStyle = theme.colors.keyBorder
+      context.fillRect(0, y + key.height - 1, 64, 1)
     }
     if (pitch % 12 === 0) {
       context.fillStyle = theme.colors.text
-      context.fillText(`C${Math.floor(pitch / 12) - 1}`, 43, y + Math.min(pitchZoom - 2, 12))
+      context.fillText(
+        `C${Math.floor(pitch / 12) - 1}`,
+        43,
+        (127 - pitch) * pitchZoom - scrollTop + Math.min(pitchZoom - 2, 12)
+      )
     }
   }
 }

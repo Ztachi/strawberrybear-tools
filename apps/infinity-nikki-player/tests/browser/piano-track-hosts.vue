@@ -5,8 +5,8 @@ import { Button, ConfigProvider, Switch, Tooltip } from 'antdv-next'
 import PianoRoll from '@strawberrybear/piano-roll/vue'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
-import { usePianoTrackHosts } from '@/views/MainWindow/FilesTab/pages/MidiDetailPage/usePianoTrackHosts'
-import PianoTrackHosts from '@/views/MainWindow/FilesTab/pages/MidiDetailPage/components/PianoTrackHosts/PianoTrackHosts.vue'
+import { usePianoTrackHosts } from '@/components/PianoWorkspace/usePianoTrackHosts'
+import PianoTrackHosts from '@/components/PianoWorkspace/components/PianoTrackHosts/PianoTrackHosts.vue'
 
 const hosts = usePianoTrackHosts()
 const visible = ref(true)

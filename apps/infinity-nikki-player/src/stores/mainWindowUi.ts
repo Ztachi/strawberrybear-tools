@@ -19,6 +19,8 @@ export type FloatingActionRegistration = (() => void) & {
 }
 
 export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
+  /** 仅当前应用会话的详情跟随偏好，首次关闭；不参与 Player 状态机。 */
+  const autoSwitchDetail = ref(false)
   const canBackToTop = ref(false)
   const canLocateCurrent = ref(false)
 
@@ -124,6 +126,7 @@ export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
   }
 
   return {
+    autoSwitchDetail,
     canBackToTop,
     canLocateCurrent,
     registerBackToTop,
