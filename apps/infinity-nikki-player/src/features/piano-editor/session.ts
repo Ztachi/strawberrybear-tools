@@ -1,3 +1,7 @@
+import {
+  isPreviewControlCommand,
+  type PreviewControlState,
+} from '@/features/player/previewControls'
 import type { PianoRollTransport } from '@strawberrybear/piano-roll/browser'
 import type {
   EditorCommand,
@@ -14,6 +18,7 @@ import { presentationNow } from './presentation-clock'
 interface SessionOptions {
   port: EditorWindowPort
   state: () => EditorPresentation
+  playback: () => PreviewControlState
   transport: () => PianoRollTransport
   viewport: () => PianoWorkspaceState | undefined
   onCommand: (command: EditorCommand) => void
@@ -35,6 +40,7 @@ export class PianoEditorSession {
   private timer?: ReturnType<typeof setTimeout>
   private ready = false
   private statePending = false
+  private playbackPending = false
   private transportPending = false
   private sending = false
   private lastDocument?: EditorPresentation['document']
@@ -95,6 +101,12 @@ export class PianoEditorSession {
     this.revision += 1
     this.statePending = true
     this.restorePending ||= restoreViewport
+    void this.flush()
+  }
+
+  /** 全局播放控件与详情文档分别同步，模式／播放状态变化不重建音轨和时间锚点。 */
+  updatePlayback(): void {
+    this.playbackPending = true
     void this.flush()
   }
 
@@ -168,6 +180,7 @@ export class PianoEditorSession {
       this.lastDocument = undefined
       this.restorePending = true
       this.statePending = true
+      this.playbackPending = true
       this.transportPending = true
       void this.flush()
       return
@@ -178,6 +191,17 @@ export class PianoEditorSession {
       // 心跳只续约，不是音频采样。重发时保留原始时刻，否则缓存进度会周期性拉回显示时钟。
       this.transportPending = true
       void this.flush()
+      return
+    }
+    if (request.kind === 'playback') {
+      // 播放控件属于全局当前曲，不受“正在查看哪首详情”约束；切歌后拒绝旧歌曲的点击。
+      const playback = this.options.playback()
+      if (
+        request.mediaId === playback.mediaId &&
+        isPreviewControlCommand(request.command) &&
+        (playback.mediaId !== null || request.command.action === 'mode')
+      )
+        this.options.onCommand(request)
       return
     }
     // 还原窗口是会话操作，切歌中的 dock 也应响应；其它动作必须匹配当前数据身份。
@@ -212,7 +236,7 @@ export class PianoEditorSession {
       while (
         this.session === session &&
         this.ready &&
-        (this.statePending || this.transportPending)
+        (this.statePending || this.playbackPending || this.transportPending)
       ) {
         let update: EditorUpdate
         if (this.statePending) {
@@ -238,6 +262,15 @@ export class PianoEditorSession {
           if (!state.loading && this.session === session && this.readiness === readiness)
             this.lastDocument = state.document
           this.transportPending = true
+        } else if (this.playbackPending) {
+          this.playbackPending = false
+          await this.options.port.send({
+            kind: 'playback',
+            session,
+            revision: this.revision,
+            sequence: ++this.sequence,
+            playback: { ...this.options.playback() },
+          })
         } else {
           this.transportPending = false
           // 首次握手也保存样本，保证没有新采样时的心跳／元数据更新不会重新生成时间戳。

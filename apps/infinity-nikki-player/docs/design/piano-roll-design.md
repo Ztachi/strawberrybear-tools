@@ -8,9 +8,13 @@
 
 ### 独立音轨窗口
 
-总览工具栏的主题色“在独立窗口中打开”按钮将整个“总览＋详情”工作区分离为可移动、缩放、最小化的原生桌面窗口（pop-out / detachable panel）。窗口默认 1100×640，最小 720×480，不强制置顶；使用原生窗口装饰。子窗口确认数据就绪后，主页面才收起整个内嵌工作区，仅保留唤起／还原入口，不在两个窗口重复绘制。重复打开只唤起现有窗口；创建失败或 10 秒未就绪会恢复内嵌状态并显示具体错误。
+总览工具栏的主题色“在独立窗口中打开”按钮将整个“总览＋详情”工作区分离为可移动、缩放、最小化的原生桌面窗口（pop-out / detachable panel）。窗口默认 1100×640，最小 720×480，不强制置顶；复用主窗口的 `WindowTitleBar` 沉浸式标题栏。macOS 使用 Overlay 与隐藏原生文字标题，保留系统交通灯；Windows 使用共享窗口控制按钮。子窗口确认数据就绪后，主页面才收起整个内嵌工作区，仅保留唤起／还原入口，不在两个窗口重复绘制。重复打开只唤起现有窗口；创建失败或 10 秒未就绪会恢复内嵌状态并显示具体错误。
 
 内嵌和独立模式共用 `components/PianoWorkspace`，其中包含原有总览、轨道 Switch/Tooltip、筛选、操作帮助、选轨、详情高度手柄和 `PianoEditorPanel`；缩放控件使用同一个 antdv `PianoRollControls`。`features/piano-editor` 管理会话协议，`platform/tauri/pianoEditorWindow.ts` 适配 [Tauri WebviewWindow](https://v2.tauri.app/zh-cn/reference/javascript/api/namespacewebviewwindow/) 和定向事件。`piano-editor.html` 是专用轻量入口，不挂载主页面、不创建 Player、音频引擎、键盘模拟器或更新检查。
+
+标题栏左侧只展示正在查看的歌曲名，与全局播放器共用 `PlayerSongTitle`（antdv Tooltip + `MarqueeText`），不追加“钢琴卷帘”后缀，也不保留总览上方重复的歌曲名行。居中的 `PreviewPlaybackControls` 与全局播放器共用播放模式、上一曲、播放／暂停、下一曲和停止按钮；音量与进度条仍留在全局播放器。窄窗口通过 CSS 压缩曲名区域，按钮与窗口拖动区域分离。
+
+预览控件状态通过独立的 `playback` 消息同步，不能混入逐帧 transport 或触发文档重建。控件始终操作全局当前曲；查看另一首详情或详情加载中也可暂停、停止当前试听。动作带当前媒体身份，主窗口校验 session、序号、媒体身份、动作和播放模式后，交给与全局播放器相同的 `dispatchPreviewControl` 执行。旧曲目的点击不作用到新曲目。临时在线试听的停止恢复原队列、暂停后继续复用既有会话；音轨独立窗口不持有 Pinia、Player 或音频实例。
 
 主页面始终拥有歌曲、预览时间和 seek 权威。选轨及布局属于唯一挂载的工作区；在独立窗口单击／双击轨道与主界面行为一致。切换详情歌曲会同步到现有独立窗口；切歌恢复对应歌曲的缩放偏好，切轨保留当前视口并沿用公共库的音域定位策略。异步加载期间覆盖旧工作区并禁用旧数据交互，新数据就绪后恢复面板布局；加载中的空文档不按空曲目关闭详情。窗口消息带 session、数据 revision 和递增序号，旧歌曲、旧窗口与重复操作不能提交到新歌曲。文档只在变化时发送，连续播放更新最多每 50ms 发送最新 transport，并携带采样时刻（performance.timeOrigin + performance.now）；暂停、倍速与 seek 立即发送。独立窗口按自己的 requestAnimationFrame 外推只读显示时间，并在两个控制器上直接绘制，不让 IPC 到达节奏决定显示帧率；不创建音频时钟或音频实例。两秒心跳只重发最近样本及其原始采样时刻，不重新读取 UI 缓存并生成新时间戳，避免主窗口后台采样较慢时周期性回退。没有新权威样本超过两秒时冻结展示；收到新样本后恢复，心跳不能延长过期样本的外推期限。视口回报每 100ms 合并一次，关闭时提交最终完整快照。不逐帧复制音符数组。拖拽只预览，松手通过原有 `usePianoDetailSeek` 提交一次。
 
@@ -101,3 +105,5 @@ Follow 的三段自动视口、手动浏览及切换由公共库负责，页面�
 原生冒烟宿主位于 `src-tauri/examples/piano_editor_smoke.rs`，不调用应用 `run()` 或初始化按键模块。保持桌面解锁，先执行 `pnpm dev --port 1432`，再执行 `cargo run --manifest-path src-tauri/Cargo.toml --example piano_editor_smoke`；成功输出 `PIANO_EDITOR_SMOKE: ok` 并退出。该宿主使用实际窗口 API、权限配置、子窗口入口和关闭事件，仅 MIDI 数据使用 fixture。macOS/Windows 应分别运行，并人工检查跨屏缩放、最小化恢复及关闭主窗口。锁屏或无法展示 WebView 时不能将超时视为验收通过。
 
 独立窗口时钟回归覆盖主窗口 RAF 停止但 visibilityState 仍为 visible、连续两秒心跳保留样本时刻、2800px 宽窗口跨多个心跳周期的跟随／不跟随模式；同时验证低频兜底读取真实音频、迟到 RAF 失效，以及暂停后的全部回调清理。
+
+沉浸式标题栏回归覆盖 720px 最小宽度下的居中控件、长标题跑马灯与 Tooltip、播放状态双向同步、模式菜单、上一曲／下一曲、停止和关闭还原。平台端口单元测试检查 macOS Overlay／交通灯和 Windows 无系统标题栏的创建选项；原生拖动、交通灯、全屏及 Windows 最小化／最大化仍需设备验收。

@@ -5,7 +5,10 @@ import { App as AntApp, ConfigProvider, Spin } from 'antdv-next'
 import type { PianoRollTransport, PianoRollView } from '@strawberrybear/piano-roll/browser'
 import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
 import { createTimeline } from '@strawberrybear/piano-roll/core'
-import PianoTrackLabel from '@/components/PianoTrackLabel.vue'
+import PlayerSongTitle from '@/components/PlayerSongTitle.vue'
+import PreviewPlaybackControls from '@/components/PreviewPlayer/PreviewPlaybackControls.vue'
+import WindowTitleBar from '@/components/WindowTitleBar/WindowTitleBar.vue'
+import type { PreviewControlState } from '@/features/player/previewControls'
 import { getAntdvLocale, isSupportedLocale } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import { createPianoEditorClientPort } from '@/platform/tauri/pianoEditorWindow'
@@ -25,6 +28,7 @@ const port =
   createPianoEditorClientPort()
 const session = new URLSearchParams(location.search).get('session') ?? ''
 const state = shallowRef<EditorPresentation>()
+const playback = shallowRef<PreviewControlState>({ mediaId: null, isPlaying: false, isPaused: false, mode: 'sequential', error: '' })
 const transport = shallowRef<PianoRollTransport>({
   positionSeconds: 0,
   isPlaying: false,
@@ -70,7 +74,7 @@ const cleanups: (() => void)[] = []
 
 /** 子窗口不连接 Player、Pinia 或键盘；所有动作按发送顺序回到主窗口验证。 */
 function send(command: EditorCommand): Promise<void> {
-  if (loading.value && !['ready', 'shown', 'dock', 'ping'].includes(command.kind))
+  if (loading.value && !['ready', 'shown', 'dock', 'ping', 'playback'].includes(command.kind))
     return Promise.resolve()
   const request = { ...command, session, revision, sequence: ++sequence }
   sending = sending
@@ -98,7 +102,9 @@ onMounted(async () => {
       if (!active || payload.session !== session || payload.sequence <= received) return
       lastContact = Date.now()
       received = payload.sequence
-      if (payload.kind === 'state') {
+      if (payload.kind === 'playback') {
+        playback.value = payload.playback
+      } else if (payload.kind === 'state') {
         if (payload.revision < revision) return
         revision = payload.revision
         loading.value = payload.state.loading
@@ -136,7 +142,7 @@ onMounted(async () => {
         if (isSupportedLocale(payload.state.locale)) locale.value = payload.state.locale
         await nextTick()
         if (!active || payload.revision !== revision) return
-        await port.setTitle(`${payload.state.title} · ${payload.state.labels.editor}`)
+        await port.setTitle(payload.state.title)
         if (!shown) {
           await port.show()
           shown = true
@@ -192,9 +198,22 @@ onBeforeUnmount(() => {
     <AntApp>
       <main class="detached-editor">
         <template v-if="state">
-          <div class="detached-song-title">
-            <PianoTrackLabel :name="state.title" />
-          </div>
+          <WindowTitleBar :snap-layouts="false">
+            <template #title>
+              <PlayerSongTitle
+                class="detached-song-title"
+                :title="state.title"
+                :media-id="state.filename"
+              />
+            </template>
+            <template #center>
+              <PreviewPlaybackControls
+                :state="playback"
+                :show-volume="false"
+                @command="send({ kind: 'playback', mediaId: playback.mediaId, command: $event })"
+              />
+            </template>
+          </WindowTitleBar>
           <PianoWorkspace
             :key="state.filename"
             ref="panel"
@@ -221,11 +240,11 @@ onBeforeUnmount(() => {
           class="absolute inset-0 flex items-center justify-center bg-white/60"
         />
         <p
-          v-if="error || state?.error"
+          v-if="error || playback.error || state?.error"
           role="status"
           class="detached-error"
         >
-          {{ error || state?.error }}
+          {{ error || playback.error || state?.error }}
         </p>
       </main>
     </AntApp>
@@ -234,6 +253,6 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detached-editor { @apply relative flex h-screen min-h-0 flex-col bg-white; }
-.detached-song-title { @apply shrink-0 border-b px-3 py-2 text-sm; border-color: var(--border-primary-20); color: var(--color-muted-dark); }
+
 .detached-error { @apply m-0 px-3 py-1 text-sm; color: var(--color-error); }
 </style>

@@ -1,3 +1,4 @@
+import { LogicalPosition } from '@tauri-apps/api/dpi'
 import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import type {
   EditorClientPort,
@@ -46,7 +47,11 @@ export function createPianoEditorWindowPort(): EditorWindowPort {
         minHeight: 480,
         center: true,
         visible: false,
-        decorations: true,
+        // 与主窗口一致：macOS 沉浸式系统交通灯，Windows 自定义窗口按钮。
+        decorations: !/Windows/i.test(navigator.userAgent),
+        titleBarStyle: 'overlay',
+        hiddenTitle: true,
+        trafficLightPosition: new LogicalPosition(10, 20),
         resizable: true,
         dragDropEnabled: false,
       })

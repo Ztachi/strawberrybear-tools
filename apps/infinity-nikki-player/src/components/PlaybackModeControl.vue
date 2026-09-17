@@ -6,7 +6,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, CircleStop, RotateCwSquare, Repeat, Repeat1, Shuffle } from 'lucide-vue-next'
-import { Popover, Tooltip } from 'antdv-next'
+import { Button, Popover, Tooltip } from 'antdv-next'
 import type { Component } from 'vue'
 import type { PlaybackMode } from '@strawberrybear/player'
 
@@ -91,7 +91,10 @@ function selectPlaybackMode(mode: PlaybackMode) {
 </script>
 
 <template>
-  <Tooltip :title="popoverOpen ? '' : currentModeLabel" :placement="tooltipPlacement">
+  <Tooltip
+    :title="popoverOpen ? '' : currentModeLabel"
+    :placement="tooltipPlacement"
+  >
     <Popover
       v-model:open="popoverOpen"
       trigger="click"
@@ -99,31 +102,47 @@ function selectPlaybackMode(mode: PlaybackMode) {
       :overlay-class-name="popoverClassName"
     >
       <template #content>
-        <div class="mode-menu" :class="{ compact: isCompact }">
-          <button
+        <div
+          class="mode-menu"
+          :class="{ compact: isCompact }"
+        >
+          <Button
             v-for="option in playbackModeOptions"
             :key="option.value"
             class="mode-option"
             :class="{ active: option.value === mode }"
-            type="button"
+            type="text"
             @click="selectPlaybackMode(option.value)"
           >
-            <component :is="option.icon" class="mode-option-icon" />
+            <template #icon>
+              <component
+                :is="option.icon"
+                class="mode-option-icon"
+              />
+            </template>
             <span class="mode-option-label">{{ t(`overlay.playbackModes.${option.value}`) }}</span>
-            <Check v-if="option.value === mode" class="mode-option-check" />
-          </button>
+            <Check
+              v-if="option.value === mode"
+              class="mode-option-check"
+            />
+          </Button>
         </div>
       </template>
 
-      <button
+      <Button
         class="mode-trigger"
         :class="variant"
-        type="button"
+        type="text"
         :aria-label="currentModeLabel"
         @click.stop
       >
-        <component :is="currentOption.icon" class="mode-trigger-icon" />
-      </button>
+        <template #icon>
+          <component
+            :is="currentOption.icon"
+            class="mode-trigger-icon"
+          />
+        </template>
+      </Button>
     </Popover>
   </Tooltip>
 </template>
@@ -170,12 +189,12 @@ function selectPlaybackMode(mode: PlaybackMode) {
 }
 
 .mode-option {
-  @apply grid h-8 grid-cols-[18px_minmax(0,1fr)_16px] items-center gap-2 rounded-md px-2 text-left text-sm transition-colors;
+  @apply flex h-8 w-full justify-start items-center gap-2 rounded-md px-2 text-left text-sm transition-colors;
   color: var(--color-foreground);
 }
 
 .mode-menu.compact .mode-option {
-  @apply h-[26px] grid-cols-[14px_minmax(0,1fr)_12px] gap-1 rounded px-1.5 text-xs;
+  @apply h-[26px] gap-1 rounded px-1.5 text-xs;
 }
 
 .mode-option:hover,
@@ -191,7 +210,7 @@ function selectPlaybackMode(mode: PlaybackMode) {
 }
 
 .mode-option-label {
-  @apply truncate;
+  @apply min-w-0 flex-1 truncate text-left;
 }
 
 .mode-menu.compact .mode-option-icon,

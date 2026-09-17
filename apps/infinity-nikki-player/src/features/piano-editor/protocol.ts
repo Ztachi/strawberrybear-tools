@@ -1,3 +1,4 @@
+import type { PreviewControlCommand, PreviewControlState } from '@/features/player/previewControls'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type {
   PianoRollLabels,
@@ -33,6 +34,7 @@ export type EditorCommand =
   | { kind: 'preview'; seconds: number | null }
   | { kind: 'viewport'; viewport: PianoWorkspaceState }
   | { kind: 'toggle-track'; trackId: string }
+  | { kind: 'playback'; mediaId: string | null; command: PreviewControlCommand }
 
 /** 每次打开一个 session，每次切换数据一个 revision；旧窗口与旧曲目的回包均失效。 */
 export type EditorRequest = EditorCommand & { session: string; revision: number; sequence: number }
@@ -47,6 +49,7 @@ export type EditorUpdate = {
       viewport?: PianoWorkspaceState
     }
   | { kind: 'transport'; transport: PianoRollTransport; sampledAt: number }
+  | { kind: 'playback'; playback: PreviewControlState }
 )
 
 export interface EditorWindowHandle {

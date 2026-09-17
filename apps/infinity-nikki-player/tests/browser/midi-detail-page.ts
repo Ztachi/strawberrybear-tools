@@ -16,6 +16,7 @@ import { startPreviewProgress } from '@/features/player/previewProgress'
 const query = new URLSearchParams(location.search)
 i18n.global.locale.value = query.get('locale') === 'en-US' ? 'en-US' : 'zh-CN'
 const calls: string[] = []
+const playbackActions: string[] = []
 const empty = query.has('empty')
 const events: NoteEvent[] = empty
   ? []
@@ -34,7 +35,9 @@ const events: NoteEvent[] = empty
 const midi: MidiInfo = {
   filename: 'piano-detail-fixture.mid',
   file_path: '/fixture/piano-detail-fixture.mid',
-  title: '钢琴卷帘界面验收',
+  title: query.has('longTitle')
+    ? '钢琴卷帘界面验收：一首非常长的曲名，用于验证完整名称提示和自动往返滚动'
+    : '钢琴卷帘界面验收',
   duration_ms: 10000,
   duration_ticks: 9600,
   ticks_per_beat: 480,
@@ -116,6 +119,7 @@ declare global {
       play: (filename: string | null) => void
       startClock: () => void
       snapshot: () => {
+        playbackActions: string[]
         disabledTracks: number[]
         nativeCalls: string[]
         currentMidi: string | null
@@ -153,6 +157,7 @@ window.midiDetailFixture = {
     })
   },
   snapshot: () => ({
+    playbackActions: [...playbackActions],
     disabledTracks: [...player.detailDisabledTracks],
     nativeCalls: [...calls],
     currentMidi: player.currentMidi?.filename ?? null,
@@ -161,6 +166,41 @@ window.midiDetailFixture = {
     eventCount: player.detailMidi?.events.length ?? 0,
     loading: player.isDetailLoading,
   }),
+}
+
+// 仅标题栏交互验收替换播放动作端口，不加载音色或初始化模拟按键。
+if (query.has('controls')) {
+  player.pausePreviewPlayback = () => {
+    playbackActions.push('pause')
+    player.isPreviewPlaying = false
+    player.isPreviewPaused = true
+  }
+  player.resumePreviewPlayback = () => {
+    playbackActions.push('resume')
+    player.isPreviewPaused = false
+    player.isPreviewPlaying = true
+  }
+  player.stopPreviewPlayback = async () => {
+    playbackActions.push('stop')
+    player.isPreviewPlaying = false
+    player.isPreviewPaused = false
+  }
+  player.startPreview = async () => {
+    playbackActions.push('play')
+    player.isPreviewPlaying = true
+  }
+  player.playNext = async () => {
+    playbackActions.push('next')
+    window.midiDetailFixture.play('second.mid')
+  }
+  player.playPrev = async () => {
+    playbackActions.push('previous')
+    window.midiDetailFixture.play(midi.filename)
+  }
+  player.setPlaylistPlaybackMode = async (mode) => {
+    playbackActions.push(`mode:${mode}`)
+    player.previewState = { ...player.previewState, playbackMode: mode }
+  }
 }
 
 createApp(Fixture)

@@ -7,9 +7,10 @@ import { computed } from 'vue'
 import { Switch, Tooltip } from 'antdv-next'
 import { HelpCircle } from 'lucide-vue-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
-import PlaybackModeControl from '@/components/PlaybackModeControl.vue'
 import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
-import PreviewTransportControls from '@/components/PreviewPlayer/PreviewTransportControls.vue'
+import PreviewPlaybackControls from '@/components/PreviewPlayer/PreviewPlaybackControls.vue'
+import { usePreviewPlaybackControls } from '@/composables/usePreviewPlaybackControls'
+import type { PreviewControlCommand } from '@/features/player/previewControls'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -49,20 +50,16 @@ const controlVariant = computed(() =>
   props.variant === 'overlay' ? 'overlay' : props.variant === 'compact' ? 'compact' : 'default'
 )
 
-function togglePlay(): void {
-  if (props.variant === 'overlay') {
-    emit('togglePlay')
+const controls = usePreviewPlaybackControls()
+function handleCommand(command: PreviewControlCommand): void {
+  if (props.variant === 'overlay' && command.action !== 'mode') {
+    if (command.action === 'toggle-play') emit('togglePlay')
+    else if (command.action === 'previous') emit('previous')
+    else if (command.action === 'next') emit('next')
+    else emit('stop')
     return
   }
-  if (playerStore.isPreviewPlaying && !playerStore.isPreviewPaused) {
-    playerStore.pausePreviewPlayback()
-    return
-  }
-  if (playerStore.isPreviewPaused) {
-    playerStore.resumePreviewPlayback()
-    return
-  }
-  void playerStore.startPreview()
+  void controls.execute(command)
 }
 
 function handleModeSwitch(isPiano: unknown): void {
@@ -70,35 +67,6 @@ function handleModeSwitch(isPiano: unknown): void {
   if (playerStore.isPreviewPlaying) {
     playerStore.applyPlayModeFilter()
   }
-}
-
-function stopPlayback(): void {
-  if (props.variant === 'overlay') {
-    emit('stop')
-    return
-  }
-  if (playerStore.currentTemporaryOnlineSongId) {
-    void playerStore.restoreTemporaryOnlinePreview()
-    return
-  }
-  void playerStore.stopPreviewPlayback()
-  playerStore.setPreviewTime(0)
-}
-
-function playPrevious(): void {
-  if (props.variant === 'overlay') {
-    emit('previous')
-    return
-  }
-  void playerStore.playPrev()
-}
-
-function playNext(): void {
-  if (props.variant === 'overlay') {
-    emit('next')
-    return
-  }
-  void playerStore.playNext()
 }
 
 function toggleMute(): void {
@@ -131,36 +99,41 @@ function handleSeek(time: number): void {
 </script>
 
 <template>
-  <div class="music-player-core" :class="props.variant">
-    <div class="core-control-row" :class="{ 'no-template': !props.showTemplate }">
-      <PlaybackModeControl
-        :mode="playerStore.previewPlaybackMode"
-        :variant="controlVariant"
-        @change="playerStore.setPlaylistPlaybackMode"
-      />
-
-      <PreviewTransportControls
+  <div
+    class="music-player-core"
+    :class="props.variant"
+  >
+    <div
+      class="core-control-row"
+      :class="{ 'no-template': !props.showTemplate }"
+    >
+      <PreviewPlaybackControls
         class="core-transport"
+        :state="controls.state.value"
         :variant="controlVariant"
-        :is-playing="playerStore.isPreviewPlaying && !playerStore.isPreviewPaused"
-        :is-paused="playerStore.isPreviewPaused"
-        :has-media="!!playerStore.currentMidi"
         :volume="props.volume ?? playerStore.previewVolume"
         :muted="props.muted ?? playerStore.isPreviewMuted"
         :countdown="props.countdown"
-        @previous="playPrevious"
-        @next="playNext"
-        @toggle-play="togglePlay"
-        @stop="stopPlayback"
+        @command="handleCommand"
         @toggle-mute="toggleMute"
         @set-volume="setVolume"
       />
 
-      <div v-if="props.showTemplate" class="core-template-wrap">
+      <div
+        v-if="props.showTemplate"
+        class="core-template-wrap"
+      >
         <KeyTemplateSelect class="core-template-select" />
       </div>
     </div>
 
+    <p
+      v-if="controls.state.value.error"
+      role="status"
+      class="text-xs text-red-600"
+    >
+      {{ controls.state.value.error }}
+    </p>
     <PreviewProgressBar
       :variant="controlVariant"
       :current-time="playerStore.previewCurrentTime"
@@ -170,9 +143,15 @@ function handleSeek(time: number): void {
       @seek="handleSeek"
     />
 
-    <div v-if="props.showModeRow" class="core-mode-row">
+    <div
+      v-if="props.showModeRow"
+      class="core-mode-row"
+    >
       <div class="mode-toggle">
-        <Switch :checked="settingsStore.playMode === 'piano'" @update:checked="handleModeSwitch" />
+        <Switch
+          :checked="settingsStore.playMode === 'piano'"
+          @update:checked="handleModeSwitch"
+        />
         <span class="mode-label">{{ t('player.pianoMode') }}</span>
       </div>
       <div class="mode-toggle">
@@ -181,7 +160,10 @@ function handleSeek(time: number): void {
           :disabled="settingsStore.playMode !== 'piano'"
           @update:checked="(v) => settingsStore.setEnableKeyboardSim(!!v)"
         />
-        <span class="mode-label" :class="{ disabled: settingsStore.playMode !== 'piano' }">
+        <span
+          class="mode-label"
+          :class="{ disabled: settingsStore.playMode !== 'piano' }"
+        >
           {{ t('player.keyboardSim') }}
         </span>
         <Tooltip :title="t('player.keyboardSimTip')">

@@ -1,3 +1,4 @@
+import { usePreviewPlaybackControls } from '@/composables/usePreviewPlaybackControls'
 import { computed, inject, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import type { PianoRollTransport } from '@strawberrybear/piano-roll/browser'
 import { PianoEditorSession } from '@/features/piano-editor'
@@ -25,11 +26,13 @@ export function usePianoEditorWindow(
   onPreview: (seconds: number | null) => void,
   onToggleTrack: (trackId: string) => void
 ) {
+  const playback = usePreviewPlaybackControls()
   const status = ref<'docked' | 'opening' | 'detached'>('docked')
   const error = ref('')
   const latestViewport = shallowRef<PianoWorkspaceState>()
   const restore = shallowRef<PianoWorkspaceState>()
   const session = new PianoEditorSession({
+    playback: () => playback.state.value,
     port:
       inject<EditorWindowPort | undefined>(EDITOR_WINDOW_PORT, undefined) ??
       createPianoEditorWindowPort(),
@@ -44,6 +47,7 @@ export function usePianoEditorWindow(
       error.value = String(cause)
     },
     onCommand(command) {
+      if (command.kind === 'playback') void playback.execute(command.command)
       if (command.kind === 'toggle-track') onToggleTrack(command.trackId)
       if (command.kind === 'seek') onSeek(command.seconds)
       if (command.kind === 'preview') onPreview(command.seconds)
@@ -64,6 +68,7 @@ export function usePianoEditorWindow(
     },
     { flush: 'sync' }
   )
+  watch(playback.state, () => session.updatePlayback(), { flush: 'sync' })
   watch(transport, () => session.updateTransport(), { flush: 'sync' })
   onBeforeUnmount(() => {
     void session.dock()

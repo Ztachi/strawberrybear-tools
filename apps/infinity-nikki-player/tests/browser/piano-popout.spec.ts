@@ -288,3 +288,60 @@ for (const follow of [true, false]) {
     await expect.poll(() => popup.isClosed()).toBe(true)
   })
 }
+
+test('immersive header reuses the global title and playback controls, with one authoritative player', async ({
+  page,
+}) => {
+  await page.goto('/tests/browser/midi-detail-page.html?controls=1&longTitle=1')
+  await page.evaluate(() => window.midiDetailFixture.play('piano-detail-fixture.mid'))
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  await popup.setViewportSize({ width: 720, height: 600 })
+  const header = popup.locator('.window-title-bar')
+  await expect(header).toBeVisible()
+  const title = header.locator('.current-title.marquee-text')
+  await expect(title).toHaveClass(/is-overflowing/)
+  await expect(popup.locator('.detached-song-title')).toHaveCount(1)
+  await expect(popup).not.toHaveTitle(/钢琴卷帘$/)
+  await title.hover()
+  await expect(popup.getByRole('tooltip')).toHaveText(await title.innerText())
+  const center = await header.locator('.preview-playback-controls').boundingBox()
+  expect(Math.abs(center!.x + center!.width / 2 - 360)).toBeLessThan(1)
+  const nameBox = await title.boundingBox()
+  expect(nameBox!.x + nameBox!.width).toBeLessThan(center!.x)
+  await header.getByRole('button', { name: '暂停', exact: true }).click()
+  await expect(header.getByRole('button', { name: '播放', exact: true })).toBeVisible()
+  await expect(
+    page.locator('.global-music-player').getByRole('button', { name: '播放', exact: true })
+  ).toBeVisible()
+  await header.getByRole('button', { name: '播放', exact: true }).click()
+  await expect(header.getByRole('button', { name: '暂停', exact: true })).toBeVisible()
+  await header.getByRole('button', { name: '顺序播放', exact: true }).click()
+  await popup.getByRole('button', { name: '单曲循环', exact: true }).click()
+  await expect(
+    page.locator('.global-music-player').getByRole('button', { name: '单曲循环', exact: true })
+  ).toBeVisible()
+  await header.getByRole('button', { name: '下一曲', exact: true }).click()
+  await expect
+    .poll(async () => (await page.evaluate(() => window.midiDetailFixture.snapshot())).currentMidi)
+    .toBe('second.mid')
+  // 全局当前曲改变，但未开启自动切换时，正在查看的文档保持不变。
+  await expect(title).toContainText('一首非常长的曲名')
+  await header.getByRole('button', { name: '上一曲', exact: true }).click()
+  await expect
+    .poll(async () => (await page.evaluate(() => window.midiDetailFixture.snapshot())).currentMidi)
+    .toBe('piano-detail-fixture.mid')
+  await header.getByRole('button', { name: '停止', exact: true }).click()
+  await expect(header.getByRole('button', { name: '播放', exact: true })).toBeVisible()
+  expect((await page.evaluate(() => window.midiDetailFixture.snapshot())).playbackActions).toEqual([
+    'pause',
+    'resume',
+    'mode:repeat-one',
+    'next',
+    'previous',
+    'stop',
+  ])
+  await popup.screenshot({ path: test.info().outputPath('immersive-header.png') })
+  await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+})

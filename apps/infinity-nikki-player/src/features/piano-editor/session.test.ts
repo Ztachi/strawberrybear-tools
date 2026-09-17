@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultLabels } from '@strawberrybear/piano-roll/browser'
+import type { PreviewControlState } from '@/features/player/previewControls'
 import { PianoEditorSession } from './session'
 import { PianoPresentationClock, presentationNow } from './presentation-clock'
 import type {
@@ -57,7 +58,15 @@ function fixture() {
     }),
   }
   const transport = { positionSeconds: 1, isPlaying: true, playbackRate: 1 }
+  const playback: PreviewControlState = {
+    mediaId: 'a.mid',
+    isPlaying: true,
+    isPaused: false,
+    mode: 'sequential',
+    error: '',
+  }
   const host = new PianoEditorSession({
+    playback: () => playback,
     port,
     state: () => state,
     transport: () => transport,
@@ -88,6 +97,7 @@ function fixture() {
   ) => receive({ ...command, session, revision, sequence: requestSequence })
   return {
     host,
+    playback,
     transport,
     port,
     state,
@@ -107,6 +117,40 @@ const flush = async () => {
 afterEach(() => vi.useRealTimers())
 
 describe('detached piano editor session', () => {
+  it('validates playback identity separately from the viewed document and rejects malformed commands', async () => {
+    const f = fixture()
+    await f.host.open()
+    f.request({ kind: 'ready' })
+    await flush()
+    expect(f.updates.some((update) => update.kind === 'playback')).toBe(true)
+    f.state.loading = true
+    f.host.updateState(true)
+    f.request({ kind: 'playback', mediaId: 'a.mid', command: { action: 'toggle-play' } }, 0)
+    expect(f.commands).toHaveLength(1)
+    f.playback.mediaId = 'b.mid'
+    f.host.updatePlayback()
+    f.request({ kind: 'playback', mediaId: 'a.mid', command: { action: 'stop' } }, 1)
+    f.request(
+      {
+        kind: 'playback',
+        mediaId: 'b.mid',
+        command: { action: 'mode', mode: 'invalid' },
+      } as unknown as EditorCommand,
+      1
+    )
+    expect(f.commands).toHaveLength(1)
+    f.request(
+      { kind: 'playback', mediaId: 'b.mid', command: { action: 'mode', mode: 'shuffle' } },
+      1
+    )
+    expect(f.commands).toHaveLength(2)
+    await flush()
+    expect(f.updates.filter((update) => update.kind === 'playback').at(-1)).toMatchObject({
+      playback: { mediaId: 'b.mid' },
+    })
+    await f.host.dock()
+  })
+
   it('heartbeats preserve the audio sample timestamp instead of rewinding the rendered position', async () => {
     vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
     const f = fixture()

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Button, Popover, Slider } from 'antdv-next'
+import { useI18n } from 'vue-i18n'
+import { Button, Popover, Slider, Tooltip } from 'antdv-next'
 import { Pause, Play, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -10,11 +11,13 @@ const props = withDefaults(
     hasMedia: boolean
     volume: number
     muted: boolean
+    showVolume?: boolean
     countdown?: number
     variant?: 'default' | 'compact' | 'overlay'
   }>(),
   {
     countdown: 0,
+    showVolume: true,
     variant: 'default',
   }
 )
@@ -28,77 +31,111 @@ const emit = defineEmits<{
   setVolume: [volume: number]
 }>()
 
+const { t } = useI18n()
 const volumePercent = computed(() => Math.round(props.volume * 100))
 const isOverlay = computed(() => props.variant === 'overlay')
 const isCompact = computed(() => props.variant === 'compact')
 </script>
 
 <template>
-  <div class="transport-controls" :class="variant">
-    <Button
-      type="text"
-      :class="['transport-btn', 'prev', { overlay: isOverlay, compact: isCompact }]"
-      :disabled="!hasMedia"
-      @click="emit('previous')"
-    >
-      <template #icon>
-        <SkipBack :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]" />
-      </template>
-    </Button>
-
-    <Button
-      :type="isOverlay ? 'text' : 'primary'"
-      :class="['transport-btn', 'play', { overlay: isOverlay, compact: isCompact }]"
-      :disabled="!hasMedia"
-      :aria-pressed="isPlaying || isPaused"
-      @click="emit('togglePlay')"
-    >
-      <template #icon>
-        <span v-if="countdown > 0" class="countdown-text">{{ countdown }}</span>
-        <Pause
-          v-else-if="isPlaying"
-          :class="['transport-icon', 'play-icon', { overlay: isOverlay, compact: isCompact }]"
-        />
-        <Play
-          v-else
-          :class="['transport-icon', 'play-icon', { overlay: isOverlay, compact: isCompact }]"
-        />
-      </template>
-    </Button>
-
-    <Button
-      type="text"
-      :class="['transport-btn', 'next', { overlay: isOverlay, compact: isCompact }]"
-      :disabled="!hasMedia"
-      @click="emit('next')"
-    >
-      <template #icon>
-        <SkipForward :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]" />
-      </template>
-    </Button>
-
-    <div class="right-controls">
+  <div
+    class="transport-controls"
+    :class="variant"
+  >
+    <Tooltip :title="t('overlay.playPrev')">
       <Button
+        :aria-label="t('overlay.playPrev')"
         type="text"
-        :class="['transport-btn', 'stop', { overlay: isOverlay, compact: isCompact }]"
+        :class="['transport-btn', 'prev', { overlay: isOverlay, compact: isCompact }]"
         :disabled="!hasMedia"
-        @click="emit('stop')"
+        @click="emit('previous')"
       >
         <template #icon>
-          <Square
-            :class="['transport-icon', 'stop-icon', { overlay: isOverlay, compact: isCompact }]"
-            fill="currentColor"
+          <SkipBack :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]" />
+        </template>
+      </Button>
+    </Tooltip>
+
+    <Tooltip :title="t(isPlaying ? 'player.pause' : 'player.play')">
+      <Button
+        :aria-label="t(isPlaying ? 'player.pause' : 'player.play')"
+        :type="isOverlay ? 'text' : 'primary'"
+        :class="['transport-btn', 'play', { overlay: isOverlay, compact: isCompact }]"
+        :disabled="!hasMedia"
+        :aria-pressed="isPlaying || isPaused"
+        @click="emit('togglePlay')"
+      >
+        <template #icon>
+          <span
+            v-if="countdown > 0"
+            class="countdown-text"
+          >{{ countdown }}</span>
+          <Pause
+            v-else-if="isPlaying"
+            :class="['transport-icon', 'play-icon', { overlay: isOverlay, compact: isCompact }]"
+          />
+          <Play
+            v-else
+            :class="['transport-icon', 'play-icon', { overlay: isOverlay, compact: isCompact }]"
           />
         </template>
       </Button>
+    </Tooltip>
 
-      <Popover trigger="click" placement="top" overlay-class-name="volume-popover-overlay">
+    <Tooltip :title="t('overlay.playNext')">
+      <Button
+        :aria-label="t('overlay.playNext')"
+        type="text"
+        :class="['transport-btn', 'next', { overlay: isOverlay, compact: isCompact }]"
+        :disabled="!hasMedia"
+        @click="emit('next')"
+      >
+        <template #icon>
+          <SkipForward :class="['transport-icon', { overlay: isOverlay, compact: isCompact }]" />
+        </template>
+      </Button>
+    </Tooltip>
+
+    <div class="right-controls">
+      <Tooltip :title="t('player.stop')">
+        <Button
+          :aria-label="t('player.stop')"
+          type="text"
+          :class="['transport-btn', 'stop', { overlay: isOverlay, compact: isCompact }]"
+          :disabled="!hasMedia"
+          @click="emit('stop')"
+        >
+          <template #icon>
+            <Square
+              :class="['transport-icon', 'stop-icon', { overlay: isOverlay, compact: isCompact }]"
+              fill="currentColor"
+            />
+          </template>
+        </Button>
+      </Tooltip>
+
+      <Popover
+        v-if="showVolume"
+        trigger="click"
+        placement="top"
+        overlay-class-name="volume-popover-overlay"
+      >
         <template #content>
           <div class="volume-popover">
-            <Button type="text" class="mute-btn" @click="emit('toggleMute')">
+            <Button
+              type="text"
+              class="mute-btn"
+              @click="emit('toggleMute')"
+            >
               <template #icon>
-                <VolumeX v-if="muted" class="volume-popover-icon" />
-                <Volume2 v-else class="volume-popover-icon" />
+                <VolumeX
+                  v-if="muted"
+                  class="volume-popover-icon"
+                />
+                <Volume2
+                  v-else
+                  class="volume-popover-icon"
+                />
               </template>
             </Button>
             <Slider
