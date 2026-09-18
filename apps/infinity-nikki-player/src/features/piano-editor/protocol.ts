@@ -8,6 +8,8 @@ import type {
 
 /** 独立窗口只消费视图数据；协议中不包含音频实例、队列或游戏按键命令。 */
 export interface EditorPresentation {
+  /** 主窗口拥有的详情跟曲偏好，浮窗只发送修改请求。 */
+  autoSwitchDetail: boolean
   filename: string
   title: string
   document: PianoRollDocument
@@ -30,6 +32,7 @@ export interface PianoWorkspaceState {
 
 export type EditorCommand =
   | { kind: 'ready' | 'shown' | 'dock' | 'ping' }
+  | { kind: 'auto-switch'; enabled: boolean }
   | { kind: 'seek'; seconds: number }
   | { kind: 'preview'; seconds: number | null }
   | { kind: 'viewport'; viewport: PianoWorkspaceState }

@@ -5,6 +5,7 @@ import { App as AntApp, ConfigProvider, Spin } from 'antdv-next'
 import type { PianoRollTransport, PianoRollView } from '@strawberrybear/piano-roll/browser'
 import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
 import { createTimeline } from '@strawberrybear/piano-roll/core'
+import AutoSwitchDetailButton from '@/components/AutoSwitchDetailButton.vue'
 import PlayerSongTitle from '@/components/PlayerSongTitle.vue'
 import PreviewPlaybackControls from '@/components/PreviewPlayer/PreviewPlaybackControls.vue'
 import WindowTitleBar from '@/components/WindowTitleBar/WindowTitleBar.vue'
@@ -40,6 +41,7 @@ const panel = ref<{
   setTransport: PianoRollView['setTransport']
 } | null>(null)
 const error = ref('')
+const autoSwitchDetail = ref(false)
 const loading = ref(false)
 let pendingViewport: PianoWorkspaceState | undefined
 let viewportTimer: ReturnType<typeof setTimeout> | undefined
@@ -74,7 +76,7 @@ const cleanups: (() => void)[] = []
 
 /** 子窗口不连接 Player、Pinia 或键盘；所有动作按发送顺序回到主窗口验证。 */
 function send(command: EditorCommand): Promise<void> {
-  if (loading.value && !['ready', 'shown', 'dock', 'ping', 'playback'].includes(command.kind))
+  if (loading.value && !['ready', 'shown', 'dock', 'ping', 'playback', 'auto-switch'].includes(command.kind))
     return Promise.resolve()
   const request = { ...command, session, revision, sequence: ++sequence }
   sending = sending
@@ -107,6 +109,7 @@ onMounted(async () => {
       } else if (payload.kind === 'state') {
         if (payload.revision < revision) return
         revision = payload.revision
+        autoSwitchDetail.value = payload.state.autoSwitchDetail
         loading.value = payload.state.loading
         if (loading.value) {
           clearTimeout(viewportTimer)
@@ -211,6 +214,12 @@ onBeforeUnmount(() => {
                 :state="playback"
                 :show-volume="false"
                 @command="send({ kind: 'playback', mediaId: playback.mediaId, command: $event })"
+              />
+            </template>
+            <template #actions>
+              <AutoSwitchDetailButton
+                :active="autoSwitchDetail"
+                @change="send({ kind: 'auto-switch', enabled: $event })"
               />
             </template>
           </WindowTitleBar>

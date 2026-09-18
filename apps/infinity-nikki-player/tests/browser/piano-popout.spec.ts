@@ -144,7 +144,8 @@ test('slider endpoints and low-factor pinches share exact bounds without a left 
       return selector.includes('editor') ? saved.editorTimeZoom : saved.overviewTimeZoom
     }, selector)
     const width = await scroll.evaluate((el) => el.clientWidth)
-    expect(zoom).toBeCloseTo((width / 10) * 2, 6)
+    // 手指放大 2 倍，默认倍率指数为 2，真实时间轴展开 4 倍并原样持久化。
+    expect(zoom).toBeCloseTo((width / 10) * 4, 6)
     await pinch(2)
     await expect
       .poll(async () => Number(await slider.getAttribute('aria-valuenow')))
@@ -308,6 +309,9 @@ test('immersive header reuses the global title and playback controls, with one a
   await expect(popup.getByRole('tooltip')).toHaveText(await title.innerText())
   const center = await header.locator('.preview-playback-controls').boundingBox()
   expect(Math.abs(center!.x + center!.width / 2 - 360)).toBeLessThan(1)
+  const autoSwitchBox = await header.getByRole('button', { name: '自动切换', exact: true }).boundingBox()
+  expect(autoSwitchBox!.x).toBeGreaterThan(center!.x + center!.width)
+  expect(720 - autoSwitchBox!.x - autoSwitchBox!.width).toBeLessThan(17)
   const nameBox = await title.boundingBox()
   expect(nameBox!.x + nameBox!.width).toBeLessThan(center!.x)
   await header.getByRole('button', { name: '暂停', exact: true }).click()
@@ -344,4 +348,33 @@ test('immersive header reuses the global title and playback controls, with one a
   ])
   await popup.screenshot({ path: test.info().outputPath('immersive-header.png') })
   await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+})
+
+
+test('auto switching keeps the existing detached session and synchronizes both header buttons', async ({ page }) => {
+  await page.locator('.detail-piano-roll .pr-track[data-track-id="1"] .pr-track-select').dblclick()
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  await expect(popup.locator('.detail-piano-editor')).toBeVisible()
+  const originalUrl = popup.url()
+  const hostButton = page.getByRole('button', { name: '自动切换', exact: true })
+  await hostButton.click()
+  await page.evaluate(() => window.midiDetailFixture.play('second.mid'))
+  await expect(page.locator('.detail-title')).toHaveText('第二首验收歌曲')
+  await expect(popup.locator('.detached-song-title')).toHaveText('第二首验收歌曲')
+  expect(popup.url()).toBe(originalUrl)
+  await expect(popup.locator('.detail-piano-editor')).toBeVisible()
+  const childButton = popup.getByRole('button', { name: '自动切换', exact: true })
+  await expect(childButton).toHaveAttribute('aria-pressed', 'true')
+  await childButton.click()
+  await expect(hostButton).toHaveAttribute('aria-pressed', 'false')
+  await page.evaluate(() => window.midiDetailFixture.play('piano-detail-fixture.mid'))
+  await expect(popup.locator('.detached-song-title')).toHaveText('第二首验收歌曲')
+  await childButton.click()
+  await expect(popup.locator('.detached-song-title')).toHaveText('钢琴卷帘界面验收')
+  expect(popup.url()).toBe(originalUrl)
+  await popup.evaluate(() => window.dispatchEvent(new Event('test-native-close')))
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  await expect(page.locator('.detail-piano-editor')).toBeVisible()
 })

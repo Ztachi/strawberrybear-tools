@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** @description: Vue 薄适配层；文档、时间、事件与持久浏览器控制器的生命周期桥接。 */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { createPianoRollEditor, createTracksOverview, defaultLabels, sliderToTimeZoom, timeZoomToSlider, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
+import { TIME_ZOOM_CONFIG, createPianoRollEditor, createTracksOverview, defaultLabels, sliderToTimeZoom, timeZoomToSlider, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
 import { pianoRollThemeVariables, resolvePianoRollTheme } from './browser/theme'
 import type { PianoRollProps } from './vue-props'
 
@@ -24,7 +24,7 @@ const labels = computed(() => ({ ...defaultLabels, ...props.labels }))
 const themeVariables = computed(() => pianoRollThemeVariables(resolvePianoRollTheme(props.theme)))
 const viewport = shallowRef<Readonly<PianoRollViewport>>({
   scrollLeft: 0, scrollTop: 0, timeZoom: props.timeZoom ?? (props.variant === 'overview' ? 42 : 110),
-  minTimeZoom: 1, maxTimeZoom: 1200,
+  minTimeZoom: 1, maxTimeZoom: TIME_ZOOM_CONFIG.maxPixelsPerSecond,
   pitchZoom: props.pitchZoom, follow: true,
 })
 const selectedTrack = computed(() => props.document.tracks.find((track) => track.id === props.selectedTrackId))

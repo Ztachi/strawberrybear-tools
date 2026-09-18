@@ -1,3 +1,4 @@
+import { TIME_ZOOM_CONFIG } from './zoom-config'
 import { createNoteIndex, createTimeline } from '../core'
 import {
   drawGrid,
@@ -529,7 +530,7 @@ export function createView(
         if (gestureActive) return
         const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1
         view.setTimeZoom(
-          timeZoom * Math.exp(clamp(-event.deltaY * unit * 0.01, -100, 100)),
+          timeZoom * Math.exp(clamp(-event.deltaY * unit * TIME_ZOOM_CONFIG.wheelLogScalePerPixel * TIME_ZOOM_CONFIG.gestureExponent, -100, 100)),
           event.clientX - scroll.getBoundingClientRect().left
         )
       }

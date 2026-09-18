@@ -195,3 +195,5 @@ unsafe extern "C" {
 fn check_accessibility_impl() -> bool {
     true
 }
+
+pub mod piano_window;

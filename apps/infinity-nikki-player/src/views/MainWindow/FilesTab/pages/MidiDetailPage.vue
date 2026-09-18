@@ -6,7 +6,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, Popover, Tooltip } from 'antdv-next'
-import { Clock3, Music2, Pause, Piano, Play, ExternalLink, ArrowRightLeft } from 'lucide-vue-next'
+import { Clock3, Music2, Pause, Piano, Play, ExternalLink } from 'lucide-vue-next'
+import AutoSwitchDetailButton from '@/components/AutoSwitchDetailButton.vue'
 import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import { usePlayerStore } from '@/stores/player'
@@ -91,6 +92,7 @@ const workspace = ref<{ getState: () => PianoWorkspaceState } | null>(null)
 const editorWindow = usePianoEditorWindow(
   computed(() => ({
     filename: filename.value,
+    autoSwitchDetail: autoSwitchDetail.value,
     title: detailDisplayName.value || filename.value,
     document: pianoRollDocument.value,
     labels: pianoRollLabels.value,
@@ -296,23 +298,11 @@ onBeforeUnmount(() => {
               <span class="detail-stat-value">{{ stat.value }}</span>
               <span class="detail-stat-label">{{ stat.label }}</span>
             </div>
-            <Tooltip :title="t('midi.pianoRoll.autoSwitchHint')">
-              <Button
-                class="ml-auto"
-                size="small"
-                :type="autoSwitchDetail ? 'primary' : 'default'"
-                :aria-pressed="autoSwitchDetail"
-                @click="autoSwitchDetail = !autoSwitchDetail"
-              >
-                <template #icon>
-                  <ArrowRightLeft
-                    class="size-4"
-                    :stroke-width="2"
-                  />
-                </template>
-                {{ t('midi.pianoRoll.autoSwitch') }}
-              </Button>
-            </Tooltip>
+            <AutoSwitchDetailButton
+              class="ml-auto"
+              :active="autoSwitchDetail"
+              @change="autoSwitchDetail = $event"
+            />
           </div>
         </div>
       </header>

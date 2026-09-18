@@ -3,6 +3,7 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
+import { mainPageIdentity } from '@/router/pageIdentity'
 import { computed, nextTick, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, isNavigationFailure, useRoute, useRouter } from 'vue-router'
@@ -620,7 +621,7 @@ provide(midiImportActionsKey, {
             <section class="route-page-stage">
               <RouterView v-slot="{ Component, route: pageRoute }">
                 <Transition name="main-page">
-                  <section :key="pageRoute.fullPath" class="route-page-host">
+                  <section :key="mainPageIdentity(pageRoute)" class="route-page-host">
                     <component :is="Component" />
                   </section>
                 </Transition>

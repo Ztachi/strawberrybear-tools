@@ -46,8 +46,10 @@ const slots = useSlots()
 .window-title-bar.windows { @apply pl-4 pr-0; }
 .window-title-bar__title { @apply flex min-w-0 items-center gap-2.5; }
 .window-title-bar__actions { @apply flex h-full shrink-0 items-center justify-end gap-3; }
-.window-title-bar.has-center { @apply grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] pr-[90px]; }
-.window-title-bar.has-center.windows { @apply px-0; }
+.window-title-bar.has-center { @apply grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] px-0; }
+.window-title-bar.has-center .window-title-bar__title { @apply pl-[90px]; }
+.window-title-bar.has-center .window-title-bar__actions { @apply gap-2 pr-3; }
+.window-title-bar.has-center.windows .window-title-bar__actions { @apply pr-0; }
 .window-title-bar.has-center.windows .window-title-bar__title { @apply pl-4; }
 .window-title-bar__center { @apply flex items-center justify-center; -webkit-app-region: no-drag; }
 </style>

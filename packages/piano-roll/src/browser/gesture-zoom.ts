@@ -1,3 +1,5 @@
+import { TIME_ZOOM_CONFIG } from './zoom-config'
+
 /** WebKit 手势事件没有被所有 TypeScript DOM 库声明，使用最小兼容形状避免依赖平台类型。 */
 interface WebKitGestureEvent extends Event {
   scale?: number
@@ -45,7 +47,7 @@ export function installGestureZoom(
     // 每一步从控制器已裁剪的真实值继续。越过上下限后的反向手势立即响应，
     // 不必先抵消一个藏在边界外的虚拟缩放量；容器中途 resize 也使用新边界。
     const currentZoom = options.getZoom()
-    options.onZoom((currentZoom * scale) / previousScale, anchorX)
+    options.onZoom(currentZoom * (scale / previousScale) ** TIME_ZOOM_CONFIG.gestureExponent, anchorX)
     previousScale = scale
   }
   const end = (event: Event): void => {

@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core'
 import { LogicalPosition } from '@tauri-apps/api/dpi'
 import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import type {
@@ -19,7 +20,7 @@ export function createPianoEditorClientPort(): EditorClientPort {
       current.listen<EditorUpdate>(PIANO_EDITOR_UPDATE, (event) => callback(event.payload)),
     send: async (request) => current.emitTo('main', PIANO_EDITOR_REQUEST, request),
     setTitle: async (title) => current.setTitle(title),
-    show: async () => current.show(),
+    show: async () => invoke('show_piano_editor'),
     destroy: async () => current.destroy(),
     onCloseRequested: async (callback) =>
       current.onCloseRequested((event) => {

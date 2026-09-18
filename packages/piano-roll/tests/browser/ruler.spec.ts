@@ -45,7 +45,7 @@ for (const dpr of [1, 2]) {
           const view = window.fixture[id]
           const width = document.querySelector<HTMLElement>(`#${id} .pr-scroll`)!.clientWidth
           const results: { zoom: number; maximumError: number; flashes: number }[] = []
-          for (const zoom of [9, 23.999, 24.001, 70.63, 1200]) {
+          for (const zoom of [9, 23.999, 24.001, 70.63, 1200, 4800]) {
             view.setTimeZoom(zoom)
             view.setFollow(true)
             let previousLines: number[] = []

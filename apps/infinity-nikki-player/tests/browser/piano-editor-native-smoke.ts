@@ -26,6 +26,7 @@ export async function runNativeEditorSmoke(): Promise<void> {
     await wait(() => !!document.querySelector('[aria-label="在独立窗口中打开"]'))
     ;(document.querySelector('[aria-label="在独立窗口中打开"]') as HTMLElement).click()
     await wait(() => !!document.querySelector('[aria-label="显示音轨独立窗口"]'))
+    await invoke('smoke_check_titlebar')
     await invoke('smoke_probe')
     await wait(() => probe?.song === '钢琴卷帘界面验收')
     await invoke('smoke_select_track')

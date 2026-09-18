@@ -22,6 +22,7 @@ function fixture() {
   const statuses: string[] = []
   const errors: unknown[] = []
   const state: EditorPresentation = {
+    autoSwitchDetail: false,
     filename: 'a.mid',
     title: 'A',
     labels: defaultLabels,
@@ -117,6 +118,20 @@ const flush = async () => {
 afterEach(() => vi.useRealTimers())
 
 describe('detached piano editor session', () => {
+  it('accepts auto switch during a document transition but rejects stale sessions and malformed values', async () => {
+    const f = fixture()
+    await f.host.open()
+    f.request({ kind: 'ready' })
+    await flush()
+    f.state.loading = true
+    f.host.updateState(true)
+    f.request({ kind: 'auto-switch', enabled: true }, 0)
+    f.request({ kind: 'auto-switch', enabled: false }, 0, 'old-session')
+    f.request({ kind: 'auto-switch', enabled: 'yes' as unknown as boolean })
+    expect(f.commands).toEqual([{ kind: 'auto-switch', enabled: true, session: expect.any(String), revision: 0, sequence: expect.any(Number) }])
+    await f.host.dock()
+  })
+
   it('validates playback identity separately from the viewed document and rejects malformed commands', async () => {
     const f = fixture()
     await f.host.open()

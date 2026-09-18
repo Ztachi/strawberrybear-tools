@@ -20,7 +20,7 @@ describe('独立视口坐标和 Follow', () => {
     expect(resizeScrollLeft(0, 120, 200, 0, 800)).toBe(0)
   })
   it('整曲下限使用实际时间视口宽度，不添加尾部空白', () => {
-    expect(timeZoomBounds(936, 120)).toEqual({ minTimeZoom: 7.8, maxTimeZoom: 1200 })
+    expect(timeZoomBounds(936, 120)).toEqual({ minTimeZoom: 7.8, maxTimeZoom: 4800 })
     expect(timeZoomBounds(800, 10_000_000).minTimeZoom).toBe(0.00008)
     expect(timeZoomBounds(800, 0.01)).toEqual({ minTimeZoom: 80000, maxTimeZoom: 80000 })
   })
@@ -31,7 +31,7 @@ describe('独立视口坐标和 Follow', () => {
       [800, Number.NaN],
       [Number.POSITIVE_INFINITY, 1],
     ]) {
-      expect(timeZoomBounds(width!, duration!)).toEqual({ minTimeZoom: 0.001, maxTimeZoom: 1200 })
+      expect(timeZoomBounds(width!, duration!)).toEqual({ minTimeZoom: 0.001, maxTimeZoom: 4800 })
     }
   })
   it('自动播放分三段：开头指针移动，中段指针固定，曲尾指针再次移动', () => {

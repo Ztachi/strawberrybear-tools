@@ -386,6 +386,7 @@ pub fn run() {
             commands::frame_rate::start_frame_rate_capture,
             commands::frame_rate::get_frame_rate_snapshot,
             commands::frame_rate::stop_frame_rate_capture,
+            commands::piano_window::show_piano_editor,
             commands::window::enter_overlay_mode,
             commands::window::exit_overlay_mode,
             commands::window::has_saved_overlay_window_state,

@@ -1,3 +1,4 @@
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePreviewPlaybackControls } from '@/composables/usePreviewPlaybackControls'
 import { computed, inject, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import type { PianoRollTransport } from '@strawberrybear/piano-roll/browser'
@@ -26,6 +27,7 @@ export function usePianoEditorWindow(
   onPreview: (seconds: number | null) => void,
   onToggleTrack: (trackId: string) => void
 ) {
+  const ui = useMainWindowUiStore()
   const playback = usePreviewPlaybackControls()
   const status = ref<'docked' | 'opening' | 'detached'>('docked')
   const error = ref('')
@@ -47,6 +49,7 @@ export function usePianoEditorWindow(
       error.value = String(cause)
     },
     onCommand(command) {
+      if (command.kind === 'auto-switch') ui.autoSwitchDetail = command.enabled
       if (command.kind === 'playback') void playback.execute(command.command)
       if (command.kind === 'toggle-track') onToggleTrack(command.trackId)
       if (command.kind === 'seek') onSeek(command.seconds)

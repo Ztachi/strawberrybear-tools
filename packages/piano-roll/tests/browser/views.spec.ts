@@ -1306,12 +1306,12 @@ test('WebKit gesture pinch uses one controller zoom path and cleans up after end
   expect(result.endAllowed).toBe(false)
   expect(result.wheelAllowed).toBe(false)
   expect(result.wheelDefaultPrevented).toBe(true)
-  expect(result.zoomDuringGesture).toBe(160)
-  expect(result.zoomAfterWheel).toBe(160)
-  expect(result.afterEnd).toBe(160)
+  expect(result.zoomDuringGesture).toBe(320)
+  expect(result.zoomAfterWheel).toBe(320)
+  expect(result.afterEnd).toBe(320)
   expect(result.sourceAtAnchorAfter).toBeCloseTo(result.sourceAtAnchorBefore, 8)
   // blur 取消手势；后续 change 不能再缩放。
-  expect(result.afterBlur).toBe(160)
+  expect(result.afterBlur).toBe(320)
 })
 
 test('gesture change after a mid-pinch resize is clamped to the new viewport bounds', async ({

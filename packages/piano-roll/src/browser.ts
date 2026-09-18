@@ -2,6 +2,7 @@ import { createView } from './browser/controller'
 import type { PianoRollView, PianoRollViewOptions } from './browser/types'
 
 export * from './browser/types'
+export { TIME_ZOOM_CONFIG } from './browser/zoom-config'
 export { sliderToTimeZoom, timeZoomToSlider } from './browser/zoom-scale'
 export {
   applyPianoRollTheme,

@@ -193,6 +193,10 @@ export class PianoEditorSession {
       void this.flush()
       return
     }
+    if (request.kind === 'auto-switch') {
+      if (typeof request.enabled === 'boolean') this.options.onCommand(request)
+      return
+    }
     if (request.kind === 'playback') {
       // 播放控件属于全局当前曲，不受“正在查看哪首详情”约束；切歌后拒绝旧歌曲的点击。
       const playback = this.options.playback()

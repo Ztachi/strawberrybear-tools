@@ -1,3 +1,5 @@
+import { TIME_ZOOM_CONFIG } from './zoom-config'
+
 /** 将有限数限制到范围内，非法值使用 fallback。 */
 export function clamp(value: number, min: number, max: number, fallback = min): number {
   return Math.min(max, Math.max(min, Number.isFinite(value) ? value : fallback))
@@ -23,7 +25,7 @@ export function timeZoomBounds(
 ): { minTimeZoom: number; maxTimeZoom: number } {
   const fit = width > 0 && durationSeconds > 0 ? width / durationSeconds : 0.001
   const minTimeZoom = Number.isFinite(fit) && fit > 0 ? fit : 0.001
-  return { minTimeZoom, maxTimeZoom: Math.max(1200, minTimeZoom) }
+  return { minTimeZoom, maxTimeZoom: Math.max(TIME_ZOOM_CONFIG.maxPixelsPerSecond, minTimeZoom) }
 }
 
 /** 容器宽度改变时保留中心对应的原曲时间；边界由原生滚动容器裁剪。 */

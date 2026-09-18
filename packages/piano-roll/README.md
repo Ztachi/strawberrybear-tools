@@ -185,3 +185,15 @@ pnpm --filter @strawberrybear/piano-roll test:browser
 `browser` 入口导出 `timeZoomToSlider(zoom, min, max)` 与 `sliderToTimeZoom(value, min, max)`，将控制器唯一的真实 px/s 值可逆映射到 0–100 的对数滑块刻度；等倍缩放对应等距移动，0/100 精确对应一屏全曲／最大缩放。宿主只做显示转换，不保存第二份滑块状态。最小值和最大值始终读取当前 `getViewport()`，容器变化后重新映射。内置 Vue 滑块采用同样刻度。
 
 WebKit 手势按相邻采样倍率更新当前实际缩放；在边界外继续捏合后反向，无需抵消隐藏的超界值。琴键白键层连续铺满 MIDI 0–127，黑键覆盖两个白键的接缝；E/F、B/C 无黑键。琴键中心仍与等高半音网格对应，时间缩放不改变琴键几何。
+
+### 调整时间放大比例
+
+总览和详情统一使用 `src/browser/zoom-config.ts` 中的 `TIME_ZOOM_CONFIG`（也从 `/browser` 导出）。修改源码中的这三个参数即可调整交互：
+
+| 常量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `maxPixelsPerSecond` | `4800` | 最大 CSS 像素/秒。原值为 1200，现最大展开距离为原来的 4 倍；同一滑块中点对应的距离约为原来的 2 倍。 |
+| `gestureExponent` | `2` | 手势倍率指数，原效果为 1；手指放大 1.5 倍时，视图放大 2.25 倍。WebKit pinch 和 Ctrl/Meta+wheel 共用。 |
+| `wheelLogScalePerPixel` | `0.01` | wheel 原始像素转换成对数倍率的系数，再乘 `gestureExponent`。只需进一步调节滚轮设备时修改。 |
+
+增大这些正数会提高最大展开比例或手势灵敏度。最小缩放仍严格适合一屏；滑块始终反映控制器的真实 px/s，手势到达边界后反向立即响应。音符、标尺和播放头共同展开，真实音符时长与间隔比例保持不变。无休止、首尾相接的音符不会凭空出现时间空隙。已保存的 px/s 保持原值，下一次缩放才按新参数响应；音高缩放不受影响。
