@@ -1,0 +1,42 @@
+.play-queue-drawer .queue-title-wrap {
+  @apply flex min-w-0 items-center gap-3;
+}
+
+.play-queue-drawer .queue-title-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--color-primary-active);
+}
+
+.play-queue-drawer .queue-title {
+  @apply truncate text-base font-semibold;
+  color: var(--color-foreground);
+}
+
+.play-queue-drawer .queue-subtitle {
+  @apply truncate text-xs;
+  color: var(--color-muted);
+}
+
+.play-queue-drawer .drawer-close-btn {
+  @apply h-9 w-9 rounded-lg;
+}
+
+.play-queue-drawer .drawer-close-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.35;
+}
+
+.play-queue-drawer .ant-drawer-content {
+  background: var(--bg-white-95);
+}
+
+.play-queue-drawer .ant-drawer-header {
+  border-bottom-color: var(--border-primary-15);
+}
+
+.play-queue-drawer .ant-drawer-body {
+  min-height: 0;
+  padding: 0;
+}

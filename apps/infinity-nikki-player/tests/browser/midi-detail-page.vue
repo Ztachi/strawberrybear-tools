@@ -15,11 +15,14 @@ const showGlobalPlayer = new URLSearchParams(location.search).has('controls')
     :locale="getAntdvLocale(i18n.global.locale.value)"
   >
     <AntApp>
-      <main style="height: 100vh; padding: 12px; background: var(--color-background)">
+      <main
+        class="relative flex h-screen min-h-0 flex-col overflow-hidden"
+        style="padding: 12px; background: var(--color-background)"
+      >
         <RouterView v-slot="{ Component, route }">
           <section
             :key="mainPageIdentity(route)"
-            style="height: 100%"
+            class="min-h-0 flex-1"
           >
             <component :is="Component" />
           </section>

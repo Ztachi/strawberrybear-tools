@@ -41,6 +41,7 @@ const emit = defineEmits<{
       @toggle-mute="emit('toggleMute')"
       @set-volume="emit('setVolume', $event)"
     />
+    <slot name="actions" />
   </div>
 </template>
 

@@ -6,6 +6,9 @@ import type { PianoRollTransport, PianoRollView } from '@strawberrybear/piano-ro
 import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
 import { createTimeline } from '@strawberrybear/piano-roll/core'
 import AutoSwitchDetailButton from '@/components/AutoSwitchDetailButton.vue'
+import PianoQueueDrawer from './PianoQueueDrawer.vue'
+import PreviewQueueButton from '@/components/PreviewPlayer/PreviewQueueButton.vue'
+import type { PreviewQueueState } from '@/features/player/previewQueue'
 import PlayerSongTitle from '@/components/PlayerSongTitle.vue'
 import PreviewPlaybackControls from '@/components/PreviewPlayer/PreviewPlaybackControls.vue'
 import WindowTitleBar from '@/components/WindowTitleBar/WindowTitleBar.vue'
@@ -29,6 +32,10 @@ const port =
   createPianoEditorClientPort()
 const session = new URLSearchParams(location.search).get('session') ?? ''
 const state = shallowRef<EditorPresentation>()
+const queuePortal = ref<HTMLElement | null>(null)
+const queueOpen = ref(false)
+const queue = shallowRef<PreviewQueueState>({ title: '', items: [], error: '' })
+let queueRevision = 0
 const playback = shallowRef<PreviewControlState>({ mediaId: null, isPlaying: false, isPaused: false, mode: 'sequential', error: '' })
 const transport = shallowRef<PianoRollTransport>({
   positionSeconds: 0,
@@ -76,7 +83,7 @@ const cleanups: (() => void)[] = []
 
 /** 子窗口不连接 Player、Pinia 或键盘；所有动作按发送顺序回到主窗口验证。 */
 function send(command: EditorCommand): Promise<void> {
-  if (loading.value && !['ready', 'shown', 'dock', 'ping', 'playback', 'auto-switch'].includes(command.kind))
+  if (loading.value && !['ready', 'shown', 'dock', 'ping', 'playback', 'auto-switch', 'queue-play'].includes(command.kind))
     return Promise.resolve()
   const request = { ...command, session, revision, sequence: ++sequence }
   sending = sending
@@ -104,7 +111,10 @@ onMounted(async () => {
       if (!active || payload.session !== session || payload.sequence <= received) return
       lastContact = Date.now()
       received = payload.sequence
-      if (payload.kind === 'playback') {
+      if (payload.kind === 'queue') {
+        queue.value = payload.queue
+        queueRevision = payload.queueRevision
+      } else if (payload.kind === 'playback') {
         playback.value = payload.playback
       } else if (payload.kind === 'state') {
         if (payload.revision < revision) return
@@ -214,7 +224,14 @@ onBeforeUnmount(() => {
                 :state="playback"
                 :show-volume="false"
                 @command="send({ kind: 'playback', mediaId: playback.mediaId, command: $event })"
-              />
+              >
+                <template #actions>
+                  <PreviewQueueButton
+                    :open="queueOpen"
+                    @click="queueOpen = true"
+                  />
+                </template>
+              </PreviewPlaybackControls>
             </template>
             <template #actions>
               <AutoSwitchDetailButton
@@ -244,6 +261,18 @@ onBeforeUnmount(() => {
           v-else
           class="m-auto"
         />
+        <div
+          ref="queuePortal"
+          class="detached-editor-popup-root"
+        />
+        <PianoQueueDrawer
+          v-if="queuePortal"
+          v-model:open="queueOpen"
+          :container="queuePortal"
+          :state="queue"
+          :current-id="playback.mediaId"
+          @select="send({ kind: 'queue-play', queueRevision, mediaId: $event })"
+        />
         <Spin
           v-if="loading"
           class="absolute inset-0 flex items-center justify-center bg-white/60"
@@ -262,6 +291,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detached-editor { @apply relative flex h-screen min-h-0 flex-col bg-white; }
+
+.detached-editor-popup-root {
+  @apply pointer-events-none absolute inset-x-0 bottom-0 z-40;
+  top: var(--global-menu-height, 46px);
+}
+.detached-editor-popup-root :deep(.ant-drawer-root),
+.detached-editor-popup-root :deep(.ant-drawer-mask),
+.detached-editor-popup-root :deep(.ant-drawer-content-wrapper) { pointer-events: auto; }
 
 .detached-error { @apply m-0 px-3 py-1 text-sm; color: var(--color-error); }
 </style>

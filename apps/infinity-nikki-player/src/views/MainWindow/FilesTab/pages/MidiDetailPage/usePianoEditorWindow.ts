@@ -1,3 +1,4 @@
+import { usePreviewQueue } from '@/composables/usePreviewQueue'
 import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePreviewPlaybackControls } from '@/composables/usePreviewPlaybackControls'
 import { computed, inject, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
@@ -28,12 +29,14 @@ export function usePianoEditorWindow(
   onToggleTrack: (trackId: string) => void
 ) {
   const ui = useMainWindowUiStore()
+  const queue = usePreviewQueue()
   const playback = usePreviewPlaybackControls()
   const status = ref<'docked' | 'opening' | 'detached'>('docked')
   const error = ref('')
   const latestViewport = shallowRef<PianoWorkspaceState>()
   const restore = shallowRef<PianoWorkspaceState>()
   const session = new PianoEditorSession({
+    queue: () => queue.state.value,
     playback: () => playback.state.value,
     port:
       inject<EditorWindowPort | undefined>(EDITOR_WINDOW_PORT, undefined) ??
@@ -49,6 +52,7 @@ export function usePianoEditorWindow(
       error.value = String(cause)
     },
     onCommand(command) {
+      if (command.kind === 'queue-play') void queue.play(command.mediaId)
       if (command.kind === 'auto-switch') ui.autoSwitchDetail = command.enabled
       if (command.kind === 'playback') void playback.execute(command.command)
       if (command.kind === 'toggle-track') onToggleTrack(command.trackId)
@@ -71,6 +75,7 @@ export function usePianoEditorWindow(
     },
     { flush: 'sync' }
   )
+  watch(queue.state, () => session.updateQueue(), { flush: 'sync' })
   watch(playback.state, () => session.updatePlayback(), { flush: 'sync' })
   watch(transport, () => session.updateTransport(), { flush: 'sync' })
   onBeforeUnmount(() => {
@@ -84,6 +89,8 @@ export function usePianoEditorWindow(
     detached: computed(() => status.value === 'detached'),
     open: async () => {
       error.value = ''
+      // 每次从内嵌打开浮窗时启用跟曲；已打开时仅唤起，不覆盖用户之后手动关闭的选择。
+      if (status.value === 'docked') ui.autoSwitchDetail = true
       onPreview(null)
       await session.open()
     },

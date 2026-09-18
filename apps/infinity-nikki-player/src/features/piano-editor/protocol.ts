@@ -1,3 +1,4 @@
+import type { PreviewQueueState } from '@/features/player/previewQueue'
 import type { PreviewControlCommand, PreviewControlState } from '@/features/player/previewControls'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type {
@@ -32,6 +33,7 @@ export interface PianoWorkspaceState {
 
 export type EditorCommand =
   | { kind: 'ready' | 'shown' | 'dock' | 'ping' }
+  | { kind: 'queue-play'; queueRevision: number; mediaId: string }
   | { kind: 'auto-switch'; enabled: boolean }
   | { kind: 'seek'; seconds: number }
   | { kind: 'preview'; seconds: number | null }
@@ -53,6 +55,7 @@ export type EditorUpdate = {
     }
   | { kind: 'transport'; transport: PianoRollTransport; sampledAt: number }
   | { kind: 'playback'; playback: PreviewControlState }
+  | { kind: 'queue'; queue: PreviewQueueState; queueRevision: number }
 )
 
 export interface EditorWindowHandle {

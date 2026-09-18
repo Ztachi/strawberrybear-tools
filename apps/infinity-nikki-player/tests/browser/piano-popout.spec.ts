@@ -301,6 +301,8 @@ test('immersive header reuses the global title and playback controls, with one a
   await popup.setViewportSize({ width: 720, height: 600 })
   const header = popup.locator('.window-title-bar')
   await expect(header).toBeVisible()
+  // 打开浮窗自动开启；用户仍可关闭以独立查看其他详情。
+  await header.getByRole('button', { name: '自动切换', exact: true }).click()
   const title = header.locator('.current-title.marquee-text')
   await expect(title).toHaveClass(/is-overflowing/)
   await expect(popup.locator('.detached-song-title')).toHaveCount(1)
@@ -359,7 +361,7 @@ test('auto switching keeps the existing detached session and synchronizes both h
   await expect(popup.locator('.detail-piano-editor')).toBeVisible()
   const originalUrl = popup.url()
   const hostButton = page.getByRole('button', { name: '自动切换', exact: true })
-  await hostButton.click()
+  await expect(hostButton).toHaveAttribute('aria-pressed', 'true')
   await page.evaluate(() => window.midiDetailFixture.play('second.mid'))
   await expect(page.locator('.detail-title')).toHaveText('第二首验收歌曲')
   await expect(popup.locator('.detached-song-title')).toHaveText('第二首验收歌曲')
@@ -377,4 +379,70 @@ test('auto switching keeps the existing detached session and synchronizes both h
   await popup.evaluate(() => window.dispatchEvent(new Event('test-native-close')))
   await expect.poll(() => popup.isClosed()).toBe(true)
   await expect(page.locator('.detail-piano-editor')).toBeVisible()
+})
+
+
+test('detached queue reuses the player drawer and selects songs through the host while keeping its window', async ({ page }) => {
+  await page.goto('/tests/browser/midi-detail-page.html?controls=1')
+  await expect(page.locator('.detail-piano-roll')).toBeVisible()
+  await page.evaluate(() => window.midiDetailFixture.play('piano-detail-fixture.mid'))
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  await expect(popup.locator('.detail-piano-roll')).toBeVisible()
+  const url = popup.url()
+  await expect(popup.getByRole('button', { name: '自动切换', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await popup.getByRole('button', { name: '打开播放队列', exact: true }).click()
+  const drawer = popup.locator('.play-queue-drawer')
+  await expect(drawer.locator('.queue-item')).toHaveCount(2)
+  await expect(drawer.locator('.queue-item.active')).toContainText('钢琴卷帘界面验收')
+  await drawer.locator('.queue-item').filter({ hasText: '第二首验收歌曲' }).click()
+  await expect(popup.locator('.detached-song-title')).toHaveText('第二首验收歌曲')
+  await expect(drawer.locator('.queue-item.active')).toContainText('第二首验收歌曲')
+  await popup.screenshot({ path: test.info().outputPath('detached-queue.png') })
+  expect(popup.url()).toBe(url)
+  expect((await page.evaluate(() => window.midiDetailFixture.snapshot())).playbackActions).toEqual(['queue:second.mid'])
+  await page.evaluate(() => window.midiDetailFixture.setQueue(['second.mid']))
+  await expect(drawer.locator('.queue-item')).toHaveCount(1)
+  await drawer.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(popup.getByRole('button', { name: '打开播放队列', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  // 主窗口仍使用同一展示组件、同一实时队列。
+  await page.getByRole('button', { name: '打开播放队列', exact: true }).click()
+  await expect(page.locator('.play-queue-drawer .queue-item')).toHaveCount(1)
+  await popup.evaluate(() => window.dispatchEvent(new Event('test-native-close')))
+  await expect.poll(() => popup.isClosed()).toBe(true)
+})
+
+
+test('queue opening and closing never scrolls the host layout or hides the workspace', async ({ page }) => {
+  await page.goto('/tests/browser/midi-detail-page.html?controls=1')
+  await expect(page.locator('.detail-piano-roll')).toBeVisible()
+  await page.evaluate(() => window.midiDetailFixture.play('second.mid'))
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  await expect(popup.locator('.detail-piano-roll')).toBeVisible()
+  for (const target of [page, popup]) {
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const motion = target.evaluate(async () => {
+        const frames: { x: number; y: number }[] = []
+        const started = performance.now()
+        while (performance.now() - started < 1300) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          frames.push({ x: window.scrollX, y: window.scrollY })
+        }
+        return frames
+      })
+      await target.getByRole('button', { name: '打开播放队列', exact: true }).click()
+      const drawer = target.locator('.play-queue-drawer')
+      await expect(drawer.locator('.queue-item')).toHaveCount(2)
+      const samples = await motion
+      expect([...new Set(samples.map(({ x, y }) => `${x},${y}`))], `${target === page ? 'main' : 'detached'} open ${repeat}`).toEqual(['0,0'])
+      await drawer.getByRole('button', { name: '关闭', exact: true }).click()
+      await expect(drawer.locator('.queue-list')).toBeHidden()
+      expect(await target.evaluate(() => ({ x: window.scrollX, y: window.scrollY }))).toEqual({ x: 0, y: 0 })
+    }
+  }
+  await expect(popup.locator('.detail-piano-roll canvas').first()).toBeVisible()
+  await popup.evaluate(() => window.dispatchEvent(new Event('test-native-close')))
 })

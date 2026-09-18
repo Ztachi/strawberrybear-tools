@@ -117,6 +117,7 @@ declare global {
     midiDetailFixture: {
       navigate: (filename: string) => Promise<void>
       play: (filename: string | null) => void
+      setQueue: (filenames: string[]) => void
       startClock: () => void
       snapshot: () => {
         playbackActions: string[]
@@ -147,6 +148,9 @@ window.midiDetailFixture = {
     player.isPreviewPlaying = !!filename
     player.previewCurrentTime = 4000
   },
+  setQueue: (filenames) => {
+    player.previewQueueItems = player.midiLibrary.filter((item) => filenames.includes(item.filename))
+  },
   startClock: () => {
     window.midiDetailFixture.play(midi.filename)
     player.previewCurrentTime = 2000
@@ -170,6 +174,10 @@ window.midiDetailFixture = {
 
 // 仅标题栏交互验收替换播放动作端口，不加载音色或初始化模拟按键。
 if (query.has('controls')) {
+  player.playMidiInQueue = async (midi) => {
+    playbackActions.push(`queue:${midi.filename}`)
+    window.midiDetailFixture.play(midi.filename)
+  }
   player.pausePreviewPlayback = () => {
     playbackActions.push('pause')
     player.isPreviewPlaying = false

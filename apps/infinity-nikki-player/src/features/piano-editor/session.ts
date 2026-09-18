@@ -1,3 +1,4 @@
+import type { PreviewQueueState } from '@/features/player/previewQueue'
 import {
   isPreviewControlCommand,
   type PreviewControlState,
@@ -18,6 +19,7 @@ import { presentationNow } from './presentation-clock'
 interface SessionOptions {
   port: EditorWindowPort
   state: () => EditorPresentation
+  queue: () => PreviewQueueState
   playback: () => PreviewControlState
   transport: () => PianoRollTransport
   viewport: () => PianoWorkspaceState | undefined
@@ -40,6 +42,8 @@ export class PianoEditorSession {
   private timer?: ReturnType<typeof setTimeout>
   private ready = false
   private statePending = false
+  private queuePending = false
+  private queueRevision = 0
   private playbackPending = false
   private transportPending = false
   private sending = false
@@ -107,6 +111,13 @@ export class PianoEditorSession {
   /** 全局播放控件与详情文档分别同步，模式／播放状态变化不重建音轨和时间锚点。 */
   updatePlayback(): void {
     this.playbackPending = true
+    void this.flush()
+  }
+
+  /** 队列只在内容变化时同步；独立版本校验防止过期列表误播。 */
+  updateQueue(): void {
+    this.queueRevision += 1
+    this.queuePending = true
     void this.flush()
   }
 
@@ -180,6 +191,7 @@ export class PianoEditorSession {
       this.lastDocument = undefined
       this.restorePending = true
       this.statePending = true
+      this.queuePending = true
       this.playbackPending = true
       this.transportPending = true
       void this.flush()
@@ -191,6 +203,12 @@ export class PianoEditorSession {
       // 心跳只续约，不是音频采样。重发时保留原始时刻，否则缓存进度会周期性拉回显示时钟。
       this.transportPending = true
       void this.flush()
+      return
+    }
+    if (request.kind === 'queue-play') {
+      if (request.queueRevision === this.queueRevision &&
+          this.options.queue().items.some((item) => item.id === request.mediaId))
+        this.options.onCommand(request)
       return
     }
     if (request.kind === 'auto-switch') {
@@ -240,7 +258,7 @@ export class PianoEditorSession {
       while (
         this.session === session &&
         this.ready &&
-        (this.statePending || this.playbackPending || this.transportPending)
+        (this.statePending || this.playbackPending || this.queuePending || this.transportPending)
       ) {
         let update: EditorUpdate
         if (this.statePending) {
@@ -266,6 +284,12 @@ export class PianoEditorSession {
           if (!state.loading && this.session === session && this.readiness === readiness)
             this.lastDocument = state.document
           this.transportPending = true
+        } else if (this.queuePending) {
+          this.queuePending = false
+          await this.options.port.send({
+            kind: 'queue', session, revision: this.revision, sequence: ++this.sequence,
+            queue: this.options.queue(), queueRevision: this.queueRevision,
+          })
         } else if (this.playbackPending) {
           this.playbackPending = false
           await this.options.port.send({

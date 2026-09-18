@@ -66,7 +66,9 @@ function fixture() {
     mode: 'sequential',
     error: '',
   }
+  const queue = { title: 'Queue', error: '', items: [{ id: 'a.mid', title: 'A', durationMs: 1000, trackCount: 1, noteCount: 1 }] }
   const host = new PianoEditorSession({
+    queue: () => queue,
     playback: () => playback,
     port,
     state: () => state,
@@ -98,6 +100,7 @@ function fixture() {
   ) => receive({ ...command, session, revision, sequence: requestSequence })
   return {
     host,
+    queue,
     playback,
     transport,
     port,
@@ -118,6 +121,29 @@ const flush = async () => {
 afterEach(() => vi.useRealTimers())
 
 describe('detached piano editor session', () => {
+  it('synchronizes queue changes and rejects stale or removed queue selections independently of document loading', async () => {
+    const f = fixture()
+    await f.host.open()
+    f.request({ kind: 'ready' })
+    await flush()
+    expect(f.updates.some((update) => update.kind === 'queue' && update.queue.items[0]?.id === 'a.mid')).toBe(true)
+    f.state.loading = true
+    f.host.updateState(true)
+    f.request({ kind: 'queue-play', queueRevision: 0, mediaId: 'a.mid' })
+    expect(f.commands).toHaveLength(1)
+    f.queue.items = [{ id: 'b.mid', title: 'B', durationMs: 1000, trackCount: 1, noteCount: 1 }]
+    f.host.updateQueue()
+    f.request({ kind: 'queue-play', queueRevision: 0, mediaId: 'b.mid' })
+    f.request({ kind: 'queue-play', queueRevision: 1, mediaId: 'a.mid' })
+    f.request({ kind: 'queue-play', queueRevision: 1, mediaId: 'b.mid' }, 0, 'old-session')
+    expect(f.commands).toHaveLength(1)
+    f.request({ kind: 'queue-play', queueRevision: 1, mediaId: 'b.mid' })
+    expect(f.commands).toHaveLength(2)
+    await flush()
+    expect(f.updates.some((update) => update.kind === 'queue' && update.queueRevision === 1)).toBe(true)
+    await f.host.dock()
+  })
+
   it('accepts auto switch during a document transition but rejects stale sessions and malformed values', async () => {
     const f = fixture()
     await f.host.open()

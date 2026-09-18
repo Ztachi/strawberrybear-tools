@@ -6,11 +6,12 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Button, Tooltip } from 'antdv-next'
-import { Expand, Keyboard, ListMusic, Music2 } from 'lucide-vue-next'
+import { Expand, Keyboard, Music2 } from 'lucide-vue-next'
 import PlayerSongTitle from '@/components/PlayerSongTitle.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import { getMidiDisplayName } from '@/lib/midiDisplay'
 import { usePlayerStore } from '@/stores/player'
+import PreviewQueueButton from '@/components/PreviewPlayer/PreviewQueueButton.vue'
 import PlayQueueDrawer from './PlayQueueDrawer.vue'
 
 const { t } = useI18n()
@@ -83,17 +84,10 @@ function openVirtualKeyboard(): void {
           </template>
         </Button>
       </Tooltip>
-      <Tooltip :title="t('player.openQueue')">
-        <Button
-          type="text"
-          class="queue-btn"
-          @click="queueDrawerOpen = true"
-        >
-          <template #icon>
-            <ListMusic class="queue-btn-icon" />
-          </template>
-        </Button>
-      </Tooltip>
+      <PreviewQueueButton
+        :open="queueDrawerOpen"
+        @click="queueDrawerOpen = true"
+      />
     </div>
 
     <PlayQueueDrawer v-model:open="queueDrawerOpen" />
