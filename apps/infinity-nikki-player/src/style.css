@@ -98,6 +98,132 @@
       'calt' 1;
     overflow: hidden;
   }
+
+  /*
+   * 桌面端全局禁用文本选择，避免误操作选中无关 UI 文字。
+   * 选择器用 :where() 包裹把优先级归零，让下方白名单（普通类选择器）
+   * 能稳定覆盖；同时不影响 antdv cssinjs 注入的类选择器样式。
+   *
+   * cursor 策略：不主动重置全局 cursor，因为：
+   *   1. user-select: none 已隐含让浏览器不在文字上显示 text 光标（自动行为）
+   *   2. 局部 cursor: pointer/default 等交互样式仍能正常生效（继承浏览器默认）
+   *   3. 全局 cursor: default 会破坏按钮的 pointer 光标，反而画蛇添足
+   */
+  :where(*, *::before, *::after) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* ─────────────── 白名单：以下场景需允许文本选中 ─────────────── */
+
+  /* 1. 表单输入与富文本编辑：保证可输入/可编辑体验 */
+  input,
+  textarea,
+  [contenteditable='true'],
+  [contenteditable='plaintext-only'] {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+  }
+
+  /*
+   * 2. antdv 浮层本身就是给用户复制/查看的信息载体
+   *    Tooltip/Popover：标题与正文；Notification：标题与详情
+   *    Modal/Drawer：弹层正文。
+   *
+   * 用 `.foo.foo` 双类选择器把优先级提到 0,0,2,0，强制高于 antdv cssinjs 注入的
+   * 单类选择器 (0,0,1,0)，确保无论 cssinjs 何时注入都不会被覆盖。
+   * 同时给光标 `cursor: text`，与可选中行为对齐，避免父级 move/default 等
+   * 鼠标样式让用户误以为不可选。
+   */
+  .ant-tooltip.ant-tooltip,
+  .ant-tooltip-container.ant-tooltip-container,
+  .ant-tooltip-content.ant-tooltip-content,
+  .ant-tooltip-inner.ant-tooltip-inner,
+  .ant-popover.ant-popover,
+  .ant-popover-container.ant-popover-container,
+  .ant-popover-content.ant-popover-content,
+  .ant-popover-title.ant-popover-title,
+  .ant-popover-inner.ant-popover-inner,
+  .ant-modal-body.ant-modal-body,
+  .ant-modal-confirm-body.ant-modal-confirm-body,
+  .ant-modal-confirm-content.ant-modal-confirm-content,
+  .ant-drawer-body.ant-drawer-body,
+  .ant-notification-notice.ant-notification-notice,
+  .ant-notification-notice-message.ant-notification-notice-message,
+  .ant-notification-notice-description.ant-notification-notice-description {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    cursor: text !important;
+  }
+
+  /*
+   * 3. 业务侧"纯展示型"信息元素：标题、歌单/歌曲/模板名、简介/描述、联系方式、日志、元数据等
+   *    这些都是用户希望复制分享给别人的信息（歌名、文件路径、版本号、错误信息等）。
+   *
+   * 同 antdv 浮层处理：用 `.foo.foo` 双类选择器 + !important 强制高优先级，
+   * 避免被组件 scoped 样式或 antdv 内部样式覆盖。光标统一为 text，
+   * 保证 user-select: text 的元素鼠标都呈现 I 字光标。
+   *
+   * 例外：`.description-detail-link` 是可点击按钮，光标保持 pointer。
+   */
+  .marquee-text.marquee-text,
+  .song-title.song-title,
+  .song-meta.song-meta,
+  .song-duration.song-duration,
+  .song-description.song-description,
+  .song-title-group.song-title-group,
+  .song-author.song-author,
+  .playlist-name.playlist-name,
+  .detail-title.detail-title,
+  .detail-description.detail-description,
+  .detail-author.detail-author,
+  .description-popover-content.description-popover-content,
+  .current-title.current-title,
+  .current-song.current-song,
+  .queue-title.queue-title,
+  .queue-subtitle.queue-subtitle,
+  .queue-song-title.queue-song-title,
+  .queue-song-meta.queue-song-meta,
+  .template-name-text.template-name-text,
+  .template-editor-page-title.template-editor-page-title,
+  .template-editor-page-subtitle.template-editor-page-subtitle,
+  .template-help-dialog.template-help-dialog,
+  .template-help-section.template-help-section,
+  .piano-roll-track-name.piano-roll-track-name,
+  .metadata-title.metadata-title,
+  .metadata-item.metadata-item,
+  .metadata-row.metadata-row,
+  .about-app-name.about-app-name,
+  .about-description.about-description,
+  .about-contact-title.about-contact-title,
+  .about-contact-platform.about-contact-platform,
+  .about-contact-account.about-contact-account,
+  .header-title.header-title,
+  .log-count.log-count,
+  .log-entry.log-entry,
+  .time.time,
+  .pitch.pitch,
+  .key.key,
+  .action-badge.action-badge,
+  .keylog-title.keylog-title,
+  .keylog-empty.keylog-empty,
+  .chapter-title.chapter-title,
+  .chapter-range.chapter-range,
+  .entry-time.entry-time,
+  .entry-key.entry-key,
+  .entry-code.entry-code,
+  .entry-pitch.entry-pitch,
+  .break-all.break-all {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    cursor: text !important;
+  }
+
+  /* 4. 例外：`.description-detail-link` 是歌单/MIDI 简介的"查看详情"按钮，光标保持 pointer */
+  .description-detail-link.description-detail-link {
+    cursor: pointer !important;
+  }
 }
 
 @layer components {

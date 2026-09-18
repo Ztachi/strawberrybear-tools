@@ -554,8 +554,8 @@ export default {
     contacts: [
       {
         type: 'qq',
-        label: 'QQ',
-        account: '414135950',
+        label: 'QQ群',
+        account: '967529814',
       },
       {
         type: 'discord',

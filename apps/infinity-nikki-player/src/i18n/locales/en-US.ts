@@ -577,8 +577,8 @@ export default {
     contacts: [
       {
         type: 'qq',
-        label: 'QQ',
-        account: '414135950',
+        label: 'QQ Group',
+        account: '967529814',
       },
       {
         type: 'discord',
