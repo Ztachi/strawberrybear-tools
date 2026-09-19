@@ -1,7 +1,9 @@
 import type { PianoRollDocument } from './core'
 import type {
+  PianoRollEditingOptions,
   PianoRollLabels,
   PianoRollPlugin,
+  PianoRollTrackActionsContext,
   PianoRollTrackLabelContext,
   PianoRollTrackToggleContext,
   PianoRollTransport,
@@ -42,4 +44,14 @@ export interface PianoRollProps {
     container: HTMLElement,
     context: PianoRollTrackLabelContext
   ) => void | (() => void)
+  /** 宿主在总览轨道行右侧渲染操作菜单（重命名/删除等）。 */
+  renderTrackActions?: (
+    container: HTMLElement,
+    context: PianoRollTrackActionsContext
+  ) => void | (() => void)
+  /**
+   * 编辑层配置；省略即只读。`onIntent` 可省略，此时意图通过 `edit-intent` 事件发出。
+   * 传入新对象即触发 `setEditing`，宿主应在选择/工具变化时替换整个对象。
+   */
+  editing?: Omit<PianoRollEditingOptions, 'onIntent'> & Partial<Pick<PianoRollEditingOptions, 'onIntent'>>
 }

@@ -78,8 +78,84 @@ export interface PianoRollTrackLabelContext {
   track: PianoRollTrack
 }
 
+/** 宿主可在总览轨道行右侧挂载操作菜单（重命名、删除等）；公共包不绑定具体组件库。 */
+export interface PianoRollTrackActionsContext {
+  /** 当前音轨。 */
+  track: PianoRollTrack
+}
+
+/** 循环区间（tick）。 */
+export interface PianoRollLoopRange {
+  startTick: number
+  endTick: number
+}
+
+/**
+ * 编辑手势解析出的意图。视图不修改文档，宿主应用意图后再调用 `setDocument`。
+ * 前七种与 `@strawberrybear/midi-editor` 的 `EditorAction` 结构一致，可直接透传。
+ */
+export type PianoRollEditIntent =
+  | { type: 'select'; noteIds: string[]; mode: 'replace' | 'toggle' | 'add' }
+  | {
+      type: 'add-note'
+      trackId: string
+      pitch: number
+      startTick: number
+      durationTicks: number
+      velocity?: number
+    }
+  | { type: 'move'; noteIds: string[]; deltaTick: number; deltaPitch: number }
+  | { type: 'resize'; noteIds: string[]; edge: 'start' | 'end'; deltaTick: number }
+  | {
+      type: 'set-velocity'
+      changes: { noteId: string; velocity: number }[]
+      coalesceKey?: string
+    }
+  | { type: 'delete'; noteIds: string[] }
+  | { type: 'loop-change'; loop: PianoRollLoopRange | null }
+  | { type: 'audition'; pitch: number; velocity: number }
+  | {
+      type: 'context-menu'
+      noteId: string | null
+      tick: number
+      pitch: number
+      clientX: number
+      clientY: number
+    }
+
+/** 编辑层输入；全部为宿主状态的只读投影，视图内部不持有选择或吸附表。 */
+export interface PianoRollEditingOptions {
+  /** 关闭后视图退回只读，仍会绘制选中与可演奏高亮。 */
+  enabled: boolean
+  /** 指针工具：select 选择/移动/框选，draw 点击即落音符。 */
+  tool: 'select' | 'draw'
+  /** 当前选中音符 ID。 */
+  selectedNoteIds: ReadonlySet<string>
+  /** 由宿主注入的吸附函数；视图不了解网格分辨率。返回值应为非负 tick。 */
+  snapTicks: (tick: number, mode: 'nearest' | 'floor') => number
+  /** 新增音符的默认时长（tick）。 */
+  defaultDurationTicks: number
+  /** 新增音符的默认力度，默认 100。 */
+  defaultVelocity?: number
+  /** 游戏可演奏音高集合；非空时琴键/网格/音符会标记不可演奏项。null 关闭。 */
+  highlightPitches?: ReadonlySet<number> | null
+  /** 循环区间；null 不绘制。 */
+  loop?: PianoRollLoopRange | null
+  /** 力度条高度（px），0 或省略隐藏。 */
+  velocityLaneHeight?: number
+  /** 意图回调。 */
+  onIntent: (intent: PianoRollEditIntent) => void
+}
+
 /** 浏览器控制器选项。浮层布局由宿主负责。 */
 export interface PianoRollViewOptions {
+  /** 编辑层配置；省略时视图只读。 */
+  editing?: PianoRollEditingOptions
+  /** 总览轨道行右侧操作位渲染器；返回清理函数。 */
+  renderTrackActions?: (
+    container: HTMLElement,
+    context: PianoRollTrackActionsContext
+  ) => void | (() => void)
   /** 渲染宿主，需由 CSS 提供非零高度。 */
   container: HTMLElement
   /** 不可变 MIDI 文档；修改后调用 setDocument。 */
@@ -166,6 +242,8 @@ export interface PianoRollView {
       Pick<PianoRollViewport, 'scrollLeft' | 'scrollTop' | 'timeZoom' | 'pitchZoom' | 'follow'>
     >
   ): void
+  /** 替换编辑层配置；传 undefined 退回只读。不重建 DOM，不重置视口。 */
+  setEditing(editing?: PianoRollEditingOptions): void
   /** 为插件订阅视口变化，返回取消订阅函数。 */
   subscribe(listener: (viewport: Readonly<PianoRollViewport>) => void): () => void
   /** 移除监听器、RAF、ResizeObserver、插件与本实例 DOM；可重复调用。 */

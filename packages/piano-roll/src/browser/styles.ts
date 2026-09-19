@@ -13,7 +13,7 @@ export function installStyles(document: Document): void {
     document.createElement('style')
   style.dataset.pianoRoll = ''
   style.textContent = `
-.pr-view{display:grid;grid-template-columns:var(--pr-gutter,160px) minmax(0,1fr);grid-template-rows:32px minmax(0,1fr);height:100%;min-height:0;overflow:visible;color:var(--pr-text,#4a3f3f);background:var(--pr-surface,#fff9fa);position:relative;font:12px var(--pr-font-family,system-ui,sans-serif);color-scheme:light;contain:layout}
+.pr-view{display:grid;grid-template-columns:var(--pr-gutter,160px) minmax(0,1fr);grid-template-rows:32px minmax(0,1fr) var(--pr-lane,0px);height:100%;min-height:0;overflow:visible;color:var(--pr-text,#4a3f3f);background:var(--pr-surface,#fff9fa);position:relative;font:12px var(--pr-font-family,system-ui,sans-serif);color-scheme:light;contain:layout}
 .pr-corner{border-right:1px solid var(--pr-border,#f1d9de);border-bottom:1px solid var(--pr-border,#f1d9de);border-right-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);border-bottom-color:color-mix(in srgb,var(--pr-border,#f1d9de),transparent 34%);display:flex;align-items:center;padding:0 10px;overflow:hidden;white-space:nowrap}
 .pr-ruler{position:relative;min-width:0;overflow:visible;z-index:4;background:var(--pr-surface-raised,#fff1f4);touch-action:none;cursor:crosshair}
 .pr-ruler-grid{position:absolute;inset:0;overflow:hidden;pointer-events:none}
@@ -43,6 +43,13 @@ export function installStyles(document: Document): void {
 .pr-track-toggle[aria-checked=true]::after{transform:translateX(14px)}
 .pr-track-toggle:hover{border-color:var(--pr-primary,#e36f86)}
 .pr-track-toggle:focus-visible{outline:2px solid var(--pr-focus,#c9516b);outline-offset:2px}
+.pr-track-actions-host{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.pr-track-actions-host:empty{display:none}
+.pr-overlay{z-index:1}
+.pr-ruler-overlay{z-index:1}
+.pr-lane-gutter{grid-column:1;grid-row:3;border-top:1px solid var(--pr-border,#f1d9de);border-right:1px solid var(--pr-border,#f1d9de);background:var(--pr-surface-subtle,#fffafb)}
+.pr-lane{grid-column:2;grid-row:3;position:relative;min-width:0;overflow:hidden;border-top:1px solid var(--pr-border,#f1d9de);background:var(--pr-surface-raised,#fff1f4);touch-action:none;cursor:ns-resize}
+.pr-lane .pr-layer{pointer-events:none}
 .pr-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--pr-text-muted,#a89a9a);pointer-events:none}
 .pr-view[data-variant=editor] .pr-corner{font-weight:600}
 .pr-view[data-variant=editor] .pr-gutter{background:var(--pr-surface,#fff9fa)}

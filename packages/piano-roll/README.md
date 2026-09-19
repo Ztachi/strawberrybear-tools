@@ -82,6 +82,26 @@ editor.destroy()
 
 `getViewport()` 返回滚动、时间/音高缩放、`minTimeZoom` / `maxTimeZoom` 和 Follow 的快照。`subscribe()` 返回取消订阅函数，`fitToSong()` 显示全曲，`setFollow(true)` 立即回到播放位置。插件通过 `{ id, install(view) => cleanup }` 安装并使用公开 API，卸载时统一清理；没有暴露可变 Canvas 或音符内部状态，未来编辑命令可复用相同稳定 ID。
 
+## 编辑手势层
+
+视图始终"不改文档"。传入 `editing` 后，详情视图把指针操作解析为 `PianoRollEditIntent`（select / add-note / move / resize / set-velocity / delete / loop-change / audition / context-menu）交给宿主，宿主应用到文档后再 `setDocument`；Vue 组件同时通过 `edit-intent` 事件发出。
+
+```ts
+view.setEditing({
+  enabled: true,
+  tool: 'select',                          // 或 'draw'
+  selectedNoteIds: selection,              // 宿主状态的只读投影
+  snapTicks: (tick, mode) => session.snapTick(tick, mode),
+  defaultDurationTicks: 480,
+  highlightPitches: playablePitches,       // 不可演奏音高会被遮罩/灰化
+  loop: { startTick: 0, endTick: 1920 },   // 标尺 Alt+拖拽产生，双击清除
+  velocityLaneHeight: 64,                  // 0 隐藏力度条
+  onIntent: (intent) => session.dispatch(intent),
+})
+```
+
+交互约定：点选/Shift 加选，空白拖拽框选，双击空白落音符；拖音符体移动（以按住的音符为吸附基准，Alt 关闭吸附）、拖左右缘拉伸；draw 工具点击即落并横拖定长；右键发 `context-menu`；拖动期间只绘制 overlay 幽灵，松手才提交一次意图，Esc 取消。总览视图可通过 `renderTrackActions(container, { track })` 在轨道行右侧挂载宿主菜单，与 `renderTrackToggle` 同模式。相关主题 token：`noteSelected / noteGhost / noteUnplayable / selectionBox / loopRegion / velocityBar / pitchUnplayable`。
+
 ## 总览空轨筛选
 
 `hideEmptyTracks` 默认为 `false`，保持所有原始轨道可见。Vue 可通过 `<PianoRoll :hide-empty-tracks="true" ... />` 设置；原生浏览器通过 `createTracksOverview({ hideEmptyTracks: true, ... })` 初始化，或调用 `setHideEmptyTracks(enabled)` 动态切换。总览和详情均可接受此配置，但只有总览的显示行受到影响。

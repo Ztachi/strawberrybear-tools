@@ -58,6 +58,20 @@ export interface PianoRollThemeColors {
   scrollbarThumbHover: string
   /** 键盘焦点轮廓。 */
   focus: string
+  /** 选中音符填充。 */
+  noteSelected: string
+  /** 拖动/绘制中的幽灵音符。 */
+  noteGhost: string
+  /** 不在可演奏音高集合内的音符。 */
+  noteUnplayable: string
+  /** 框选矩形填充（应带透明度）。 */
+  selectionBox: string
+  /** 循环区间高亮（应带透明度）。 */
+  loopRegion: string
+  /** 力度条颜色。 */
+  velocityBar: string
+  /** 不可演奏音高行/琴键遮罩（应带透明度）。 */
+  pitchUnplayable: string
 }
 
 /** 可选的非颜色视觉令牌。 */
@@ -110,6 +124,13 @@ export const defaultPianoRollTheme: PianoRollTheme = Object.freeze({
     scrollbarThumb: '#e6a3af',
     scrollbarThumbHover: '#d97f91',
     focus: '#c9516b',
+    noteSelected: '#7a2f45',
+    noteGhost: 'rgba(227, 111, 134, 0.45)',
+    noteUnplayable: '#b7a7aa',
+    selectionBox: 'rgba(227, 111, 134, 0.16)',
+    loopRegion: 'rgba(227, 111, 134, 0.14)',
+    velocityBar: '#e36f86',
+    pitchUnplayable: 'rgba(74, 63, 63, 0.07)',
   }),
   metrics: Object.freeze({
     fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',

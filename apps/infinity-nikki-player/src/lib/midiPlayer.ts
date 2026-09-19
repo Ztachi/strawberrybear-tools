@@ -830,6 +830,15 @@ export async function ensureInstrument() {
 }
 
 /**
+ * @description: 确保音色就绪且音频上下文处于运行态（用户手势后的试听入口）
+ * @return {Promise<void>}
+ */
+export async function ensureAudioRunning(): Promise<void> {
+  await initInstrument()
+  if (audioContext?.state === 'suspended') await audioContext.resume()
+}
+
+/**
  * @description: 将 MIDI 音符号转换为音符名称
  */
 function pitchToNoteName(pitch: number): string {
@@ -934,6 +943,51 @@ export function stopAllNotes(): void {
  */
 export function getAudioContext(): AudioContext | null {
   return audioContext
+}
+
+/** 排程音符句柄；`stop(when)` 可在音频时钟指定时刻释放。 */
+export interface ScheduledNoteHandle {
+  stop: (whenSeconds?: number) => void
+}
+
+/**
+ * @description: 读取音频时钟（秒）；上下文未创建时退回 performance 时钟，保证同源单调。
+ * @return {number} 当前时钟秒
+ */
+export function getAudioClock(): number {
+  return audioContext ? audioContext.currentTime : performance.now() / 1000
+}
+
+/**
+ * @description: 在音频时钟指定时刻排程一个音符（MIDI 编辑器试听用）。
+ * @description 与全局试听共用音色与输出链路，但不进入全局播放器的节点表，互不干扰；
+ * 需先 `ensureInstrument()`，音色未就绪时返回 null。
+ * @param {number} pitch MIDI 音高 (0-127)
+ * @param {number} velocity 力度 (1-127)
+ * @param {number} whenSeconds 触发时刻（音频时钟秒）
+ * @param {number} [durationSeconds] 可选时长；省略时由调用方通过 `stop(when)` 释放
+ * @return {ScheduledNoteHandle | null} 句柄
+ */
+export function scheduleNote(
+  pitch: number,
+  velocity: number,
+  whenSeconds: number,
+  durationSeconds?: number
+): ScheduledNoteHandle | null {
+  if (!instrument || !audioContext) return null
+  const node = instrument.play(pitchToNoteName(pitch), Math.max(whenSeconds, audioContext.currentTime), {
+    gain: getNoteGain(velocity),
+    ...(durationSeconds !== undefined ? { duration: Math.max(0.01, durationSeconds) } : {}),
+  }) as unknown as { stop: (when?: number) => void }
+  return {
+    stop: (when) => {
+      try {
+        node.stop(when)
+      } catch {
+        /* 节点可能已自然结束 */
+      }
+    },
+  }
 }
 
 /**

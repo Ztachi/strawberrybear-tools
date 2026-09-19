@@ -1,6 +1,6 @@
 import type { ComponentOptionsMixin, DefineComponent } from 'vue'
 import type { PianoRollProps } from './vue-props'
-import type { PianoRollTrackOpenContext, PianoRollViewport } from './browser/types'
+import type { PianoRollEditIntent, PianoRollTrackOpenContext, PianoRollViewport } from './browser/types'
 export type { PianoRollProps } from './vue-props'
 
 /** Vue 事件使用标准轨道 ID 和原曲秒，预览事件不代表音频定位提交。 */
@@ -12,6 +12,7 @@ export type PianoRollEmits = {
   seek: (seconds: number) => void
   'follow-change': (enabled: boolean) => void
   'viewport-change': (viewport: Readonly<PianoRollViewport>) => void
+  'edit-intent': (intent: PianoRollEditIntent) => void
 }
 
 declare const PianoRoll: DefineComponent<

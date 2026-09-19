@@ -281,6 +281,63 @@ pub struct KeyTemplate {
     pub mappings: Vec<KeyMapping>,
 }
 
+/// MIDI 编辑器项目摘要（列表页只读）
+///
+/// # Fields
+///
+/// * `track_count` / `note_count` / `duration_ms` - 由前端保存时计算
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MidiProjectMeta {
+    #[serde(default)]
+    pub track_count: u32,
+    #[serde(default)]
+    pub note_count: u32,
+    #[serde(default)]
+    pub duration_ms: u64,
+}
+
+/// MIDI 编辑器项目文件
+///
+/// `document` 为钢琴卷帘文档，后端不解析其内容，只做透传持久化。
+/// 字段名与前端 `MidiProject` 保持 camelCase 一致。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MidiProject {
+    #[serde(default = "default_midi_project_schema_version")]
+    pub schema_version: u32,
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub created_at: u64,
+    #[serde(default)]
+    pub updated_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<serde_json::Value>,
+    #[serde(default)]
+    pub meta: MidiProjectMeta,
+    #[serde(default)]
+    pub r#loop: Option<serde_json::Value>,
+    pub document: serde_json::Value,
+}
+
+fn default_midi_project_schema_version() -> u32 {
+    1
+}
+
+/// 列表页使用的项目摘要，不含文档正文
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MidiProjectSummary {
+    pub id: String,
+    pub name: String,
+    pub created_at: u64,
+    pub updated_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<serde_json::Value>,
+    pub meta: MidiProjectMeta,
+}
+
 /// 键位映射
 ///
 /// 表示一个音高对应一个键盘按键

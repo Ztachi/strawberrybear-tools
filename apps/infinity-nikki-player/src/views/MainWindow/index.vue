@@ -34,12 +34,13 @@ const settingsStore = useSettingsStore()
 const songListStore = useSongListStore()
 
 /** 主窗口支持的页签路由值。 */
-type MainWindowTab = 'files' | 'templates' | 'online'
+type MainWindowTab = 'files' | 'templates' | 'midi-editor' | 'online'
 
 /** 当前激活的标签页由路由决定，避免刷新后回到默认文件页。 */
 const activeTab = computed<MainWindowTab>(() => {
   // 未知路径会被 router 重定向；重定向完成前按文件页渲染，保持首屏稳定。
   if (route.path.startsWith('/templates')) return 'templates'
+  if (route.path.startsWith('/midi-editor')) return 'midi-editor'
   if (route.path.startsWith('/online-library')) return 'online'
   return 'files'
 })
@@ -351,7 +352,7 @@ async function handleMainNavigate(
 ): Promise<boolean> {
   const normalizedNextTab = String(nextTab) as MainWindowTab
   // 左侧菜单只会发出已声明的页签值；这里防御无效值，避免错误 URL 污染应用状态。
-  if (!['files', 'templates', 'online'].includes(normalizedNextTab)) return false
+  if (!['files', 'templates', 'midi-editor', 'online'].includes(normalizedNextTab)) return false
   const routeTarget =
     targetRoute ??
     ({
@@ -360,7 +361,9 @@ async function handleMainNavigate(
           ? 'files-all'
           : normalizedNextTab === 'templates'
             ? 'templates'
-            : 'online-library',
+            : normalizedNextTab === 'midi-editor'
+              ? 'midi-editor'
+              : 'online-library',
       query: route.query,
     } as RouteLocationRaw)
 

@@ -21,10 +21,11 @@ interface PianoEditorResize {
 /**
  * @description: 管理单轨浮层的顶部高度手柄。只持有用户尺寸选择，实际窗口限制交给 CSS。
  * @param {() => void} close Escape 的关闭动作，不处理主卷轴的事件或滚动
+ * @param {number} initialPercent 初始高度百分比（编辑模式给详情面板更多空间）
  * @return {PianoEditorResize} 模板引用、尺寸状态与指针/键盘动作
  */
-export function usePianoEditorResize(close: () => void): PianoEditorResize {
-  const heightPercent = ref(55)
+export function usePianoEditorResize(close: () => void, initialPercent = 55): PianoEditorResize {
+  const heightPercent = ref(initialPercent)
   const handleRef = ref<HTMLElement | null>(null)
   const containerRef = ref<HTMLElement | null>(null)
   let session: ResizeSession | null = null

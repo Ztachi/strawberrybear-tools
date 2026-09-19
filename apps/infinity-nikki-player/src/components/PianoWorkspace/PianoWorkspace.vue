@@ -4,9 +4,12 @@ import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Tooltip } from 'antdv-next'
 import { ExportOutlined, FilterOutlined, ImportOutlined } from '@antdv-next/icons'
+import { Pencil } from 'lucide-vue-next'
 import PianoRoll from '@strawberrybear/piano-roll/vue'
+import type { PianoRollProps } from '@strawberrybear/piano-roll/vue'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type {
+  PianoRollEditIntent,
   PianoRollLabels,
   PianoRollTransport,
   PianoRollView,
@@ -32,13 +35,23 @@ const props = defineProps<{
   restore?: PianoWorkspaceState
   detached?: boolean
   opening?: boolean
+  /** 编辑层配置；传入后总览与详情都进入编辑模式，意图经 `edit-intent` 发出。 */
+  editing?: PianoRollProps['editing']
+  /** 总览轨道行右侧操作位渲染器（编辑模式下的轨道菜单）。 */
+  renderTrackActions?: PianoRollProps['renderTrackActions']
+  /** 隐藏“独立窗口”按钮；编辑器不支持跨窗口编辑。 */
+  hideDetach?: boolean
+  /** 显示“编辑此 MIDI”入口；仅主窗口详情页可用。 */
+  showEdit?: boolean
 }>()
 const emit = defineEmits<{
   seek: [seconds: number]
   'seek-preview': [seconds: number | null]
   'toggle-track': [trackId: string]
   'state-change': [state: PianoWorkspaceState]
+  'edit-intent': [intent: PianoRollEditIntent]
   migrate: []
+  edit: []
 }>()
 const { t } = useI18n()
 const {
@@ -49,7 +62,7 @@ const {
   move: moveEditorResize,
   end: endEditorResize,
   onKeydown: handleEditorResizeKey,
-} = usePianoEditorResize(() => closePianoEditor())
+} = usePianoEditorResize(() => closePianoEditor(), props.editing ? 70 : 55)
 const {
   selectedTrackId,
   isOpen: isPianoEditorOpen,
@@ -63,7 +76,8 @@ const {
     previewPianoSeek(null)
   }
 )
-const hideEmptyPianoTracks = ref(props.restore?.hideEmptyTracks ?? true)
+// 编辑模式默认显示空轨，否则新建的空音轨会立刻从总览消失。
+const hideEmptyPianoTracks = ref(props.restore?.hideEmptyTracks ?? !props.editing)
 const overviewPianoRollLabels = computed(() => ({
   ...props.labels,
   empty: hideEmptyPianoTracks.value ? t('midi.pianoRoll.noTracksWithNotes') : props.labels.empty,
@@ -150,12 +164,24 @@ function setTransport(transport: PianoRollTransport): void {
   overviewPanel.value?.getView()?.setTransport(transport)
   editorPanel.value?.getView()?.setTransport(transport)
 }
+/**
+ * @description: 选中并打开某条音轨的详情浮层（编辑器新建项目/新增轨道后聚焦）。
+ * @param {string} trackId 轨道 ID
+ * @return {void}
+ */
+function openTrack(trackId: string): void {
+  selectPianoTrack(trackId)
+  if (props.document.tracks.some((track) => track.id === trackId)) isPianoEditorOpen.value = true
+}
+function forwardEditIntent(intent: PianoRollEditIntent): void {
+  emit('edit-intent', intent)
+}
 onMounted(restoreWorkspace)
 watch(() => props.restore, restoreWorkspace, { flush: 'post' })
 watch([selectedTrackId, isPianoEditorOpen, hideEmptyPianoTracks, editorHeightPercent], changed, {
   flush: 'post',
 })
-defineExpose({ getState, setTransport })
+defineExpose({ getState, setTransport, openTrack })
 </script>
 
 <template>
@@ -186,12 +212,15 @@ defineExpose({ getState, setTransport })
         :hide-empty-tracks="hideEmptyPianoTracks"
         :render-track-label="renderPianoTrackLabel"
         :render-track-toggle="renderPianoTrackToggle"
+        :render-track-actions="renderTrackActions"
+        :editing="editing"
         @select-track="selectPianoTrack"
         @open-editor="openPianoEditor"
         @toggle-track="togglePianoTrack"
         @seek="seekPianoRoll"
         @seek-preview="previewPianoSeek"
         @viewport-change="persistOverviewViewport"
+        @edit-intent="forwardEditIntent"
       >
         <template #title="{ label }">
           <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
@@ -217,6 +246,7 @@ defineExpose({ getState, setTransport })
               </template>
             </Button>
           </Tooltip>
+          <slot name="corner-actions" />
         </template>
         <template #toolbar="{ view, viewport }">
           <div class="piano-roll-app-toolbar">
@@ -225,25 +255,48 @@ defineExpose({ getState, setTransport })
               :viewport="viewport"
               :labels="labels"
             />
-            <Tooltip :title="t(detached ? 'midi.pianoRoll.dock' : 'midi.pianoRoll.detach')">
-              <Button
-                class="piano-roll-trailing-action"
-                color="primary"
-                variant="link"
-                :loading="opening"
-                :aria-label="t(detached ? 'midi.pianoRoll.dock' : 'midi.pianoRoll.detach')"
-                @click="migrate"
+            <div class="piano-roll-trailing-actions">
+              <slot name="toolbar-actions" />
+              <Tooltip
+                v-if="showEdit"
+                :title="t('midiEditor.editThisMidi')"
               >
-                <template #icon>
-                  <component
-                    :is="detached ? ImportOutlined : ExportOutlined"
-                    :style="{ fontSize: '20px' }"
-                    class="piano-window-action-icon"
-                  />
-                </template>
-              </Button>
-            </Tooltip>
-            <PianoRollHelpDialog />
+                <Button
+                  color="primary"
+                  variant="link"
+                  :aria-label="t('midiEditor.editThisMidi')"
+                  @click="emit('edit')"
+                >
+                  <template #icon>
+                    <Pencil
+                      class="size-[18px]"
+                      :stroke-width="2.2"
+                    />
+                  </template>
+                </Button>
+              </Tooltip>
+              <Tooltip
+                v-if="!hideDetach"
+                :title="t(detached ? 'midi.pianoRoll.dock' : 'midi.pianoRoll.detach')"
+              >
+                <Button
+                  color="primary"
+                  variant="link"
+                  :loading="opening"
+                  :aria-label="t(detached ? 'midi.pianoRoll.dock' : 'midi.pianoRoll.detach')"
+                  @click="migrate"
+                >
+                  <template #icon>
+                    <component
+                      :is="detached ? ImportOutlined : ExportOutlined"
+                      :style="{ fontSize: '20px' }"
+                      class="piano-window-action-icon"
+                    />
+                  </template>
+                </Button>
+              </Tooltip>
+              <PianoRollHelpDialog />
+            </div>
           </div>
         </template>
       </PianoRoll>
@@ -283,9 +336,11 @@ defineExpose({ getState, setTransport })
         :time-zoom="pianoEditorTimeZoom"
         :pitch-zoom="pianoEditorPitchZoom"
         :restore="editorRestoreViewport"
+        :editing="editing"
         @seek="seekPianoRoll"
         @seek-preview="previewPianoSeek"
         @viewport-change="persistEditorViewport"
+        @edit-intent="forwardEditIntent"
         @close="closePianoEditor"
       />
     </section>
@@ -327,8 +382,8 @@ defineExpose({ getState, setTransport })
   @apply flex min-w-0 flex-1 items-center gap-2;
 }
 
-.piano-roll-trailing-action {
-  @apply ml-auto shrink-0;
+.piano-roll-trailing-actions {
+  @apply ml-auto flex shrink-0 items-center;
 }
 
 .detail-piano-roll :deep(.pr-gutter) {

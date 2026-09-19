@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** @description: Vue 薄适配层；文档、时间、事件与持久浏览器控制器的生命周期桥接。 */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useSlots, watch } from 'vue'
-import { TIME_ZOOM_CONFIG, createPianoRollEditor, createTracksOverview, defaultLabels, sliderToTimeZoom, timeZoomToSlider, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
+import { TIME_ZOOM_CONFIG, createPianoRollEditor, createTracksOverview, defaultLabels, sliderToTimeZoom, timeZoomToSlider, type PianoRollEditIntent, type PianoRollEditingOptions, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
 import { pianoRollThemeVariables, resolvePianoRollTheme } from './browser/theme'
 import type { PianoRollProps } from './vue-props'
 
@@ -18,8 +18,21 @@ const emit = defineEmits<{
   seek: [seconds: number]
   'follow-change': [enabled: boolean]
   'viewport-change': [viewport: Readonly<PianoRollViewport>]
+  'edit-intent': [intent: PianoRollEditIntent]
 }>()
 const slots = useSlots()
+/** 补齐 onIntent 后交给控制器；宿主未提供回调时经事件发出。 */
+function resolveEditing(): PianoRollEditingOptions | undefined {
+  const editing = props.editing
+  if (!editing) return undefined
+  return {
+    ...editing,
+    onIntent: (intent) => {
+      editing.onIntent?.(intent)
+      emit('edit-intent', intent)
+    },
+  }
+}
 const cornerHost = shallowRef<HTMLElement | null>(null)
 const host = ref<HTMLDivElement | null>(null)
 const labels = computed(() => ({ ...defaultLabels, ...props.labels }))
@@ -47,6 +60,8 @@ function mountView(): void {
     onTrackToggle: (id) => emit('toggle-track', id),
     renderTrackToggle: props.renderTrackToggle,
     renderTrackLabel: props.renderTrackLabel,
+    renderTrackActions: props.renderTrackActions,
+    editing: resolveEditing(),
     renderCorner: slots.corner ? (container) => {
       cornerHost.value = container
       return () => { cornerHost.value = null }
@@ -76,6 +91,7 @@ watch(() => props.theme, (next) => view?.setTheme(next), { deep: true })
 watch(() => props.timeZoom, (zoom) => { if (zoom !== undefined) view?.setTimeZoom(zoom) })
 watch(() => props.pitchZoom, (zoom) => view?.setPitchZoom(zoom))
 watch(() => props.hideEmptyTracks, (enabled) => view?.setHideEmptyTracks(enabled))
+watch(() => props.editing, () => view?.setEditing(resolveEditing()))
 defineExpose({ getView: () => view })
 </script>
 

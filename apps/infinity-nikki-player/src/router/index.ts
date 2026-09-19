@@ -12,6 +12,8 @@ import OnlineSongDetailPage from '@/views/MainWindow/OnlineLibraryTab/pages/Onli
 import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
 import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
 import KeyboardPage from '@/views/MainWindow/KeyboardPage/index.vue'
+import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
+import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
 
 /** Infinity Nikki Player 主窗口路由实例。 */
 export const router = createRouter({
@@ -60,6 +62,22 @@ export const router = createRouter({
       path: '/templates/:id/edit',
       name: 'templates-edit',
       component: TemplateEditorPage,
+    },
+    {
+      path: '/midi-editor',
+      name: 'midi-editor',
+      component: MidiEditorTab,
+    },
+    {
+      // query.from=<曲库文件名> 时以该 MIDI 为初始内容
+      path: '/midi-editor/new',
+      name: 'midi-editor-create',
+      component: MidiEditorPage,
+    },
+    {
+      path: '/midi-editor/:id/edit',
+      name: 'midi-editor-edit',
+      component: MidiEditorPage,
     },
     {
       path: '/keyboard',

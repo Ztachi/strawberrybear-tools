@@ -85,7 +85,7 @@ fn builtin_template_order(template_id: &str) -> Option<usize> {
 /// # Returns
 ///
 /// true 表示只包含 ASCII 字母、数字、横线或下划线，可安全拼接为模板文件名
-fn is_safe_template_id(template_id: &str) -> bool {
+pub(crate) fn is_safe_template_id(template_id: &str) -> bool {
     // 空 ID 会生成 ".json" 这类不可辨识文件名，必须拒绝。
     !template_id.is_empty()
         && template_id
@@ -103,7 +103,7 @@ fn is_safe_template_id(template_id: &str) -> bool {
 /// # Returns
 ///
 /// true 表示模板名称可直接作为跨平台文件名主体使用
-fn is_valid_template_file_name(template_name: &str) -> bool {
+pub(crate) fn is_valid_template_file_name(template_name: &str) -> bool {
     let name = template_name;
     if name.is_empty() || name.chars().count() > TEMPLATE_NAME_MAX_CHARS {
         return false;
@@ -162,7 +162,7 @@ fn validate_template_name(template_name: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn template_name_validation_message() -> String {
+pub(crate) fn template_name_validation_message() -> String {
     "模板名称必须符合 Windows 和 macOS 文件名规范，不能包含 <>:\"/\\|?* 或控制字符，不能以空格或点结尾，也不能使用 CON、PRN、AUX、NUL、COM1-COM9、LPT1-LPT9 等保留名称".to_string()
 }
 
@@ -536,7 +536,7 @@ fn make_unique_custom_id(app: &tauri::AppHandle, preferred_id: &str) -> Result<S
 /// # Returns
 ///
 /// true 表示路径扩展名匹配
-fn has_extension(path: &Path, expected_extension: &str) -> bool {
+pub(crate) fn has_extension(path: &Path, expected_extension: &str) -> bool {
     // 扩展名比较统一转小写，避免 .JSON 或 .Zip 在导入时被误拒。
     path.extension()
         .and_then(|extension| extension.to_str())
@@ -553,7 +553,7 @@ fn has_extension(path: &Path, expected_extension: &str) -> bool {
 /// # Returns
 ///
 /// true 表示 entry 是根目录下的 JSON 文件，且不包含路径穿越语义
-fn is_safe_zip_template_entry(entry_name: &str) -> bool {
+pub(crate) fn is_safe_zip_template_entry(entry_name: &str) -> bool {
     // 目录 entry 不包含模板内容，直接排除。
     if entry_name.ends_with('/') {
         return false;

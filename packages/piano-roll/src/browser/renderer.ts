@@ -138,6 +138,11 @@ export interface RenderFrame {
   pitchZoom: number
   /** Canvas 与 DOM 共用的已解析主题；缺省时使用默认主题。 */
   theme?: PianoRollTheme
+  /** 编辑层投影：选中音符与可演奏音高；只影响配色，不改变布局。 */
+  editing?: {
+    selectedNoteIds: ReadonlySet<string>
+    highlightPitches: ReadonlySet<number> | null
+  }
 }
 
 /** 仅在视口或 DPR 改变时分配 backing store，绝不按整首歌尺寸分配。 */
@@ -195,6 +200,7 @@ export function drawGrid(
   if (frame.variant === 'editor') {
     const firstRow = Math.max(0, Math.floor(scrollTop / pitchZoom))
     const lastRow = Math.min(127, Math.ceil((scrollTop + height) / pitchZoom))
+    const playable = frame.editing?.highlightPitches ?? null
     for (let row = firstRow; row <= lastRow; row += 1) {
       const pitch = 127 - row
       const y = row * pitchZoom - scrollTop
@@ -202,6 +208,11 @@ export function drawGrid(
         ? theme.colors.surface
         : theme.colors.surfaceSubtle
       context.fillRect(0, y, width, pitchZoom)
+      // 不可演奏行叠一层淡遮罩，网格线仍保留在其上以维持节拍参照。
+      if (playable && !playable.has(pitch)) {
+        context.fillStyle = theme.colors.pitchUnplayable
+        context.fillRect(0, y, width, pitchZoom)
+      }
       context.fillStyle = pitch % 12 === 0 ? theme.colors.gridMajor : theme.colors.gridMinor
       context.fillRect(0, y + pitchZoom - 1, width, 1)
     }
@@ -316,6 +327,8 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
     frame.variant === 'overview'
       ? frame.rows
       : frame.rows.filter((row) => row.track.id === frame.selectedTrackId)
+  const selected = frame.editing?.selectedNoteIds
+  const playable = frame.editing?.highlightPitches ?? null
   for (const row of rows) {
     const range = frame.index.getPitchRange(row.track.id)
     const low = (range?.min ?? 48) - 3
@@ -334,13 +347,19 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
       const w = Math.min(width + 2, Math.max(start + 2, end)) - x
       if (w <= 0) continue
       context.globalAlpha = row.track.enabled ? 1 : 0.28
-      context.fillStyle =
-        frame.variant === 'overview'
-          ? theme.colors.overviewNote
-          : row.track.color || theme.colors.editorNote
+      const isSelected = selected?.has(note.id) ?? false
+      const unplayable = playable !== null && !playable.has(note.pitch)
+      // 选中优先于其它状态；不可演奏音符在两种视图中都用灰色提示。
+      context.fillStyle = isSelected
+        ? theme.colors.noteSelected
+        : unplayable
+          ? theme.colors.noteUnplayable
+          : frame.variant === 'overview'
+            ? theme.colors.overviewNote
+            : row.track.color || theme.colors.editorNote
       context.fillRect(x, y, w, noteHeight)
       if (frame.variant === 'editor') {
-        context.strokeStyle = theme.colors.noteOutline
+        context.strokeStyle = isSelected ? theme.colors.text : theme.colors.noteOutline
         context.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), noteHeight - 1)
         context.fillStyle = theme.colors.noteVelocity
         context.fillRect(
@@ -362,7 +381,8 @@ export function drawKeyboard(
   height: number,
   pitchZoom: number,
   scrollTop: number,
-  theme: PianoRollTheme = defaultPianoRollTheme
+  theme: PianoRollTheme = defaultPianoRollTheme,
+  playable: ReadonlySet<number> | null = null
 ): void {
   const context = canvasContext(canvas, 64, height)
   if (!context) return
@@ -376,6 +396,13 @@ export function drawKeyboard(
     if (!black) {
       context.fillStyle = theme.colors.keyBorder
       context.fillRect(0, y + key.height - 1, 64, 1)
+    }
+    if (playable && !playable.has(pitch)) {
+      // 不可演奏键位压暗，白键用遮罩色、黑键降低不透明度。
+      context.fillStyle = black ? theme.colors.keyWhite : theme.colors.pitchUnplayable
+      context.globalAlpha = black ? 0.55 : 1
+      context.fillRect(0, y, black ? 42 : 64, key.height)
+      context.globalAlpha = 1
     }
     if (pitch % 12 === 0) {
       context.fillStyle = theme.colors.text

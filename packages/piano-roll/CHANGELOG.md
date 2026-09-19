@@ -1,5 +1,11 @@
 # @strawberrybear/piano-roll
 
+## 0.2.0
+
+### Minor Changes
+
+- 新增编辑手势层：`editing` 选项 / `setEditing` / `PianoRollEditIntent`，支持点选、框选、拖移、拉伸、绘制、力度条、循环区与可演奏音高高亮；总览新增 `renderTrackActions` 钩子；主题新增 `noteSelected / noteGhost / noteUnplayable / selectionBox / loopRegion / velocityBar / pitchUnplayable`。
+
 ## 0.1.1
 
 ### Patch Changes

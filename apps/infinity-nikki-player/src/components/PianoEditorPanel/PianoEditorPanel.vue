@@ -5,11 +5,13 @@ import { X } from 'lucide-vue-next'
 import PianoRoll from '@strawberrybear/piano-roll/vue'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type {
+  PianoRollEditIntent,
   PianoRollLabels,
   PianoRollTransport,
   PianoRollView,
   PianoRollViewport,
 } from '@strawberrybear/piano-roll/browser'
+import type { PianoRollProps } from '@strawberrybear/piano-roll/vue'
 import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
 import PianoRollControls from '@/components/PianoRollControls.vue'
 import PianoTrackLabel from '@/components/PianoTrackLabel.vue'
@@ -22,11 +24,14 @@ const props = defineProps<{
   timeZoom?: number
   pitchZoom?: number
   restore?: PianoRollViewport
+  /** 编辑层配置；省略即只读浏览。 */
+  editing?: PianoRollProps['editing']
 }>()
 const emit = defineEmits<{
   seek: [seconds: number]
   'seek-preview': [seconds: number | null]
   'viewport-change': [viewport: Readonly<PianoRollViewport>]
+  'edit-intent': [intent: PianoRollEditIntent]
   close: []
 }>()
 const roll = ref<{ getView: () => PianoRollView | null } | null>(null)
@@ -51,9 +56,11 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
     :time-zoom="timeZoom"
     :pitch-zoom="pitchZoom"
     :show-toolbar-controls="false"
+    :editing="editing"
     @seek="emit('seek', $event)"
     @seek-preview="emit('seek-preview', $event)"
     @viewport-change="emit('viewport-change', $event)"
+    @edit-intent="emit('edit-intent', $event)"
   >
     <template #title="{ label }">
       <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>

@@ -9,6 +9,7 @@ import { Button, Popover, Tooltip } from 'antdv-next'
 import { Clock3, Music2, Pause, Piano, Play, ExternalLink } from 'lucide-vue-next'
 import AutoSwitchDetailButton from '@/components/AutoSwitchDetailButton.vue'
 import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
+import { usePianoRollLabels } from '@/components/PianoWorkspace/usePianoRollLabels'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import { usePlayerStore } from '@/stores/player'
 import { getMidiDisplayArtist, getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
@@ -55,21 +56,7 @@ const {
   seek: seekPianoRoll,
   getQueue: getDetailQueue,
 } = usePianoDetailSeek(detailMidi, filename)
-const pianoRollLabels = computed(() => ({
-  overview: t('midi.pianoRoll.overview'),
-  editor: t('midi.pianoRoll.editor'),
-  follow: t('midi.pianoRoll.follow'),
-  following: t('midi.pianoRoll.following'),
-  timeZoom: t('midi.pianoRoll.timeZoom'),
-  pitchZoom: t('midi.pianoRoll.pitchZoom'),
-  enableTrack: t('midi.clickToEnable'),
-  disableTrack: t('midi.clickToDisable'),
-  notes: t('midi.pianoRoll.notes'),
-  empty: t('midi.pianoRoll.empty'),
-  playhead: t('midi.pianoRoll.playhead'),
-  fit: t('midi.pianoRoll.fit'),
-  close: t('midi.pianoRoll.close'),
-}))
+const pianoRollLabels = usePianoRollLabels()
 const sourcePianoDocument = computed(() =>
   adaptMidiToPianoRoll(detailMidi.value, (index) => t('midi.trackIndex', { n: index }))
 )
@@ -156,6 +143,14 @@ const detailStats = computed(() => [
 
 function togglePianoTrack(trackId: string): void {
   playerStore.toggleDetailTrackById(trackId)
+}
+
+/**
+ * @description: 以当前 MIDI 为初始内容进入编辑器新建页
+ * @return {Promise<void>}
+ */
+async function openMidiEditor(): Promise<void> {
+  await router.push({ name: 'midi-editor-create', query: { from: filename.value } })
 }
 
 function navigateBack(): void {
@@ -318,11 +313,13 @@ onBeforeUnmount(() => {
           :labels="pianoRollLabels"
           :restore="workspaceRestore"
           :opening="editorWindowStatus === 'opening'"
+          show-edit
           @state-change="rememberWorkspace"
           @toggle-track="togglePianoTrack"
           @seek="seekPianoRoll"
           @seek-preview="previewPianoSeek"
           @migrate="detachPianoWorkspace"
+          @edit="openMidiEditor"
         />
         <div
           v-else

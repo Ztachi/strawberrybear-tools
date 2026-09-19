@@ -10,6 +10,7 @@ import {
   type TrackRow,
 } from './renderer'
 import { installStyles } from './styles'
+import { installEditing } from './editing'
 import { installFollowNavigation } from './follow-navigation'
 import { applyPianoRollTheme, resolvePianoRollTheme } from './theme'
 import { installGestureZoom } from './gesture-zoom'
@@ -125,6 +126,7 @@ export function createView(
   const subscribers = new Set<(viewport: Readonly<PianoRollViewport>) => void>()
   const trackToggleCleanups = new WeakMap<HTMLElement, () => void>()
   const trackLabelCleanups = new WeakMap<HTMLElement, () => void>()
+  const trackActionsCleanups = new WeakMap<HTMLElement, () => void>()
   const cleanups: (() => void)[] = []
   const cornerCleanup = options.renderCorner?.(corner)
   if (cornerCleanup) cleanups.push(cornerCleanup)
@@ -254,10 +256,23 @@ export function createView(
     spacer.style.width = `${fitting ? width : Math.max(width, timeline.durationSeconds * timeZoom)}px`
     spacer.style.height = `${variant === 'editor' ? 128 * pitchZoom : Math.max(height, last ? last.top + last.height : height)}px`
   }
+  function fallbackPitchRange(): { min: number; max: number } {
+    const playable = editing.frameState()?.highlightPitches
+    if (playable?.size) {
+      let min = 127
+      let max = 0
+      for (const pitch of playable) {
+        if (pitch < min) min = pitch
+        if (pitch > max) max = pitch
+      }
+      return { min, max }
+    }
+    return { min: 48, max: 84 }
+  }
   function focusPitch(force: boolean): void {
     if (variant !== 'editor' || !selected || height <= 0) return
-    const range = noteIndex.getPitchRange(selected)
-    if (!range) return
+    // 空轨没有音符时退回可演奏音高范围，再退回中央 C 附近，避免停在顶部的 C9。
+    const range = noteIndex.getPitchRange(selected) ?? fallbackPitchRange()
     pitchFocused = true
     const top = (127 - range.max) * pitchZoom
     const bottom = (128 - range.min) * pitchZoom
@@ -271,17 +286,21 @@ export function createView(
     const y = localY + scroll.scrollTop
     return visibleRows(rows, y, 0)[0]
   }
+  function releaseTrackItem(item: Element): void {
+    trackToggleCleanups.get(item.children[1] as HTMLElement)?.()
+    trackLabelCleanups.get(item.children[0]?.children[0] as HTMLElement)?.()
+    trackActionsCleanups.get(item.children[2] as HTMLElement)?.()
+  }
   function renderGutter(visible: TrackRow[], top: number): void {
     if (variant === 'editor') {
-      drawKeyboard(keyboard, height, pitchZoom, top, theme)
+      drawKeyboard(keyboard, height, pitchZoom, top, theme, editing.frameState()?.highlightPitches ?? null)
       return
     }
     // 只为可见轨道建立可键盘操作的控件，保持现有节点以保留焦点。
     const ids = new Set(visible.map((row) => row.track.id))
     for (const child of Array.from(gutter.children)) {
       if (!ids.has((child as HTMLElement).dataset.trackId ?? '')) {
-        trackToggleCleanups.get(child.children[1] as HTMLElement)?.()
-        trackLabelCleanups.get(child.children[0]?.children[0] as HTMLElement)?.()
+        releaseTrackItem(child)
         child.remove()
       }
     }
@@ -312,6 +331,13 @@ export function createView(
           toggleHost.append(toggle)
         }
         item.append(select, toggleHost)
+        if (options.renderTrackActions) {
+          const actionsHost = make('span', 'pr-track-actions-host')
+          // 操作菜单是独立交互目标，阻止冒泡避免误触选轨/打开详情。
+          actionsHost.addEventListener('click', (event) => event.stopPropagation())
+          actionsHost.addEventListener('dblclick', (event) => event.stopPropagation())
+          item.append(actionsHost)
+        }
         gutter.append(item)
       }
       item.dataset.selected = String(row.track.id === selected)
@@ -360,6 +386,17 @@ export function createView(
           `${row.track.enabled ? labels.disableTrack : labels.enableTrack}: ${row.track.name}`
         )
       }
+      if (options.renderTrackActions) {
+        const actionsHost = item.children[2] as HTMLElement
+        const stateKey = `${row.track.id}:${row.track.name}:${row.track.color ?? ''}:${row.track.isPercussion}:${document.tracks.length}`
+        if (actionsHost.dataset.stateKey !== stateKey) {
+          trackActionsCleanups.get(actionsHost)?.()
+          const cleanup = options.renderTrackActions(actionsHost, { track: row.track })
+          actionsHost.dataset.stateKey = stateKey
+          if (cleanup) trackActionsCleanups.set(actionsHost, cleanup)
+          else trackActionsCleanups.delete(actionsHost)
+        }
+      }
     }
   }
   function render(): void {
@@ -394,9 +431,14 @@ export function createView(
       timeZoom,
       pitchZoom,
       theme,
+      editing: editing.frameState(),
     }
     const previous = painted?.frame
-    const commonChanged = !previous || previous.theme !== theme || painted?.dpr !== dpr
+    const commonChanged =
+      !previous ||
+      previous.theme !== theme ||
+      painted?.dpr !== dpr ||
+      previous.editing !== frame.editing
     const verticalChanged =
       commonChanged ||
       previous?.height !== height ||
@@ -426,6 +468,7 @@ export function createView(
     }
     empty.hidden = rows.length > 0
     paintPlayhead(seconds, projection.playheadX)
+    editing.render(frame)
     painted = { frame, seconds, rows, labels, dpr }
   }
   function scheduleRender(): void {
@@ -644,6 +687,7 @@ export function createView(
       if (destroyed) return
       navigation?.cancel()
       finishDrag(false)
+      editing.reset()
       selectionBeforeGesture = undefined
       layoutDirty = true
       const notesChanged = document.notes !== next.notes
@@ -725,6 +769,10 @@ export function createView(
       scheduleRender()
     },
     setFollow,
+    setEditing(next) {
+      if (destroyed) return
+      editing.update(next)
+    },
     fitToSong() {
       if (destroyed) return
       resize()
@@ -769,17 +817,44 @@ export function createView(
     destroy() {
       if (destroyed) return
       finishDrag(false)
+      editing.destroy()
       destroyed = true
       window!.cancelAnimationFrame(renderFrame)
       for (const cleanup of cleanups.reverse()) cleanup()
-      for (const child of Array.from(gutter.children)) {
-        trackToggleCleanups.get(child.children[1] as HTMLElement)?.()
-        trackLabelCleanups.get(child.children[0]?.children[0] as HTMLElement)?.()
-      }
+      for (const child of Array.from(gutter.children)) releaseTrackItem(child)
       subscribers.clear()
       root.remove()
     },
   }
+  // 编辑层需要在 view 对象与 DOM 就位后安装；overview 只用于绘制循环区/高亮，不解析音符手势。
+  const editing = installEditing(
+    {
+      variant,
+      root,
+      pane,
+      scroll,
+      ruler,
+      rulerGrid,
+      timeline: () => timeline,
+      index: () => noteIndex,
+      selectedTrackId: () => selected,
+      geometry: () => ({
+        scrollLeft: painted?.frame.scrollLeft ?? scroll.scrollLeft,
+        scrollTop: scroll.scrollTop,
+        timeZoom,
+        pitchZoom,
+        width,
+        height,
+      }),
+      theme: () => theme,
+      scheduleRender,
+      relayout: () => {
+        layoutDirty = true
+        resize(true)
+      },
+    },
+    options.editing
+  )
   const gestureZoom = installGestureZoom(root, {
     getZoom: () => view.getViewport().timeZoom,
     viewportElement: scroll,
