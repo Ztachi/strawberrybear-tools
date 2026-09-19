@@ -10,6 +10,7 @@ import type {
   PianoRollView,
   PianoRollViewport,
 } from '@strawberrybear/piano-roll/browser'
+import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
 import PianoRollControls from '@/components/PianoRollControls.vue'
 import PianoTrackLabel from '@/components/PianoTrackLabel.vue'
 
@@ -56,6 +57,13 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
   >
     <template #title="{ label }">
       <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
+    </template>
+    <template #corner="{ view, viewport }">
+      <PianoRollFollowButton
+        :view="view"
+        :viewport="viewport"
+        :labels="labels"
+      />
     </template>
     <template #toolbar="{ view, viewport }">
       <div class="piano-roll-app-toolbar">

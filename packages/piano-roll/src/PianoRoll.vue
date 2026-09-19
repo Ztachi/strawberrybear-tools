@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** @description: Vue 薄适配层；文档、时间、事件与持久浏览器控制器的生命周期桥接。 */
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useSlots, watch } from 'vue'
 import { TIME_ZOOM_CONFIG, createPianoRollEditor, createTracksOverview, defaultLabels, sliderToTimeZoom, timeZoomToSlider, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
 import { pianoRollThemeVariables, resolvePianoRollTheme } from './browser/theme'
 import type { PianoRollProps } from './vue-props'
@@ -19,6 +19,8 @@ const emit = defineEmits<{
   'follow-change': [enabled: boolean]
   'viewport-change': [viewport: Readonly<PianoRollViewport>]
 }>()
+const slots = useSlots()
+const cornerHost = shallowRef<HTMLElement | null>(null)
 const host = ref<HTMLDivElement | null>(null)
 const labels = computed(() => ({ ...defaultLabels, ...props.labels }))
 const themeVariables = computed(() => pianoRollThemeVariables(resolvePianoRollTheme(props.theme)))
@@ -45,6 +47,10 @@ function mountView(): void {
     onTrackToggle: (id) => emit('toggle-track', id),
     renderTrackToggle: props.renderTrackToggle,
     renderTrackLabel: props.renderTrackLabel,
+    renderCorner: slots.corner ? (container) => {
+      cornerHost.value = container
+      return () => { cornerHost.value = null }
+    } : undefined,
     onSeek: (seconds) => emit('seek', seconds),
     onSeekPreview: (seconds) => emit('seek-preview', seconds),
     onFollowChange: (enabled) => emit('follow-change', enabled),
@@ -138,6 +144,11 @@ defineExpose({ getView: () => view })
         </label>
       </template>
     </header>
+    <Teleport v-if="cornerHost" :to="cornerHost">
+      <div class="piano-roll-corner-controls">
+        <slot name="corner" :view="view" :viewport="viewport" />
+      </div>
+    </Teleport>
     <div
       ref="host"
       class="piano-roll-host"
@@ -185,6 +196,7 @@ defineExpose({ getView: () => view })
 .piano-roll-zoom input::-moz-range-track { height: 4px; border-radius: 999px; background: var(--pr-border); }
 .piano-roll-zoom input::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--pr-primary); }
 .piano-roll-zoom input:disabled { opacity: .5; cursor: default; }
+.piano-roll-corner-controls { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; }
 .piano-roll-host { flex: 1; min-width: 0; min-height: 0; position: relative; }
 @container piano-roll (max-width: 540px) {
   .piano-roll-toolbar { gap: 6px; padding: 6px; }

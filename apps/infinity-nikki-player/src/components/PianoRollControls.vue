@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { Button, Slider, Tooltip } from 'antdv-next'
+import { Slider } from 'antdv-next'
 import { sliderToTimeZoom, timeZoomToSlider } from '@strawberrybear/piano-roll/browser'
-import { Crosshair } from 'lucide-vue-next'
 import type {
   PianoRollLabels,
   PianoRollView,
@@ -38,23 +37,6 @@ function onTimeKey(
 </script>
 
 <template>
-  <Tooltip :title="viewport.follow ? labels.following : labels.follow">
-    <Button
-      size="small"
-      shape="circle"
-      :type="viewport.follow ? 'primary' : 'default'"
-      :aria-pressed="viewport.follow"
-      :aria-label="viewport.follow ? labels.following : labels.follow"
-      @click="view?.setFollow(!viewport.follow)"
-    >
-      <template #icon>
-        <Crosshair
-          class="size-4"
-          :stroke-width="2.2"
-        />
-      </template>
-    </Button>
-  </Tooltip>
   <span class="piano-roll-app-slider">
     <span>{{ labels.timeZoom }}</span>
     <!-- 仅转换显示刻度，不持有第二份值；滑块端点与手势边界均来自控制器。 -->

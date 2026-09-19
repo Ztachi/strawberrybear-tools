@@ -26,7 +26,7 @@ async function rowIds(page: Page): Promise<string[]> {
 async function expectLeftActions(header: Locator): Promise<void> {
   const positions = await header.evaluate((element) => {
     const title = element.querySelector('.piano-roll-slot-title')!.getBoundingClientRect()
-    const action = element.querySelector('.piano-roll-app-toolbar button')!.getBoundingClientRect()
+    const action = element.querySelector('.piano-roll-app-slider')!.getBoundingClientRect()
     return {
       gap: action.left - title.right,
       offset: action.left - element.getBoundingClientRect().left,
@@ -48,12 +48,19 @@ for (const [locale, width] of [
     await openDetail(page, `?locale=${locale}`)
     const overview = page.locator('.detail-piano-roll')
     await expectLeftActions(overview.locator('.piano-roll-toolbar'))
+    await expect(overview.locator('.pr-corner button')).toHaveCount(2)
     const row = overview.locator('.pr-track[data-track-id="1"]')
     const initialHeight = await row.evaluate((element) => element.getBoundingClientRect().height)
     await row.locator('.pr-track-select').dblclick()
     const editor = page.locator('.detail-piano-editor')
     await expect(editor).toBeVisible()
     await expectLeftActions(editor.locator('.piano-roll-toolbar'))
+    const follow = editor.locator('.pr-corner button')
+    await expect(follow).toHaveCount(1)
+    await expect(follow).toHaveAttribute('aria-pressed', 'true')
+    await follow.click()
+    await expect(follow).toHaveAttribute('aria-pressed', 'false')
+    await expect(overview.locator('.pr-corner button').first()).toHaveAttribute('aria-pressed', 'true')
     await expect
       .poll(() => row.evaluate((element) => element.getBoundingClientRect().height))
       .toBeLessThan(initialHeight)
@@ -226,10 +233,28 @@ for (const copy of [
     const help = page.getByRole('button', { name: copy.title, exact: true })
     const filter = page.getByRole('button', { name: copy.filter, exact: true })
     const helpBox = await help.boundingBox()
+    await expect(filter.locator('..')).toBeVisible()
+    await expect(help).toHaveClass(/ant-btn-variant-link/)
+    const cornerButtons = page.locator('.detail-piano-roll .pr-corner button')
+    const followBox = await cornerButtons.first().boundingBox()
     const filterBox = await filter.boundingBox()
-    expect(helpBox!.x - filterBox!.x - filterBox!.width).toBeGreaterThanOrEqual(6)
-    expect(helpBox!.x - filterBox!.x - filterBox!.width).toBeLessThanOrEqual(10)
+    expect(filterBox!.x - followBox!.x - followBox!.width).toBeGreaterThanOrEqual(12)
+    expect(followBox!.height).toBe(20)
+    expect(filterBox!.height).toBe(20)
     expect(780 - helpBox!.x - helpBox!.width).toBeLessThanOrEqual(28)
+    // 图标按钮悬浮只改变颜色，不改变几何位置；link 不显示方块背景。
+    for (const button of [help, ...await cornerButtons.all(), page.locator('.piano-roll-trailing-action').first()]) {
+      await page.mouse.move(0, 0)
+      const before = await button.boundingBox()
+      const iconBefore = await button.locator('svg').boundingBox()
+      await button.hover()
+      await page.waitForTimeout(300)
+      expect(await button.boundingBox()).toEqual(before)
+      expect(await button.locator('svg').boundingBox()).toEqual(iconBefore)
+      expect(Math.abs(iconBefore!.x + iconBefore!.width / 2 - before!.x - before!.width / 2)).toBeLessThan(1)
+      expect(Math.abs(iconBefore!.y + iconBefore!.height / 2 - before!.y - before!.height / 2)).toBeLessThan(1)
+    }
+    expect(await help.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
     await help.hover()
     await expect(page.getByRole('tooltip', { name: copy.title })).toBeVisible()
     await help.click()

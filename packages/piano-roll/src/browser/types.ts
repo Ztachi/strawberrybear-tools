@@ -122,6 +122,8 @@ export interface PianoRollViewOptions {
     container: HTMLElement,
     context: PianoRollTrackLabelContext
   ) => void | (() => void)
+  /** 标尺左侧控件区域渲染器；返回销毁清理函数，未提供时显示默认文字。 */
+  renderCorner?: (container: HTMLElement) => void | (() => void)
   /** Follow 状态变化，只作用于此视图。 */
   onFollowChange?: (enabled: boolean) => void
   /** 滚动或缩放变化的只读快照。 */

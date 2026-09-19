@@ -39,7 +39,7 @@ function seek(seconds: number) {
 
 Vue props：`document`、`transport` 必填，`variant`、`selectedTrackId`、`timeZoom`、`pitchZoom`、`hideEmptyTracks`、`labels`、`theme`、`plugins` 可选。`toolbar` slot 用于关闭按钮等宿主控件。容器必须通过 CSS 指定高度；组件使用完整容器高度，不用歌曲时长决定布局高度。
 
-公共 Vue 层不绑定 Ant Design、Element 或其它 UI 框架。需要与宿主设计系统一致时，将 `showToolbarControls` 设为 `false`，通过 `title` 和 `toolbar` slot 注入宿主的标题、按钮和滑块；总览轨道开关通过 `renderTrackToggle(container, context)` 注入，可能被省略的轨道名称通过 `renderTrackLabel(container, context)` 注入。渲染器把组件挂载到给定容器，并返回清理函数；虚拟行离开可见区域及视图销毁时都会清理。`context.onChange()` 只提交切换意图，实际启用状态仍由宿主更新 `document.tracks[].enabled`。轨道名称应先测量 `scrollWidth > clientWidth`，只有发生省略时才显示 Tooltip。
+公共 Vue 层不绑定 Ant Design、Element 或其它 UI 框架。需要与宿主设计系统一致时，将 `showToolbarControls` 设为 `false`，通过 `title`、`toolbar` 和 `corner` slot 注入宿主的标题、按钮和滑块；总览轨道开关通过 `renderTrackToggle(container, context)` 注入，可能被省略的轨道名称通过 `renderTrackLabel(container, context)` 注入。渲染器把组件挂载到给定容器，并返回清理函数；虚拟行离开可见区域及视图销毁时都会清理。`context.onChange()` 只提交切换意图，实际启用状态仍由宿主更新 `document.tracks[].enabled`。轨道名称应先测量 `scrollWidth > clientWidth`，只有发生省略时才显示 Tooltip。
 
 依赖主题或语言 Provider 的 Vue 控件应通过页面组件树中的 `Teleport` 放入挂载点，保留祖先的依赖注入。不要直接用独立的 `render(h(Component), container)` 代替，否则控件虽然来自 UI 库，却可能丢失宿主主题。挂载点回调可以登记 `{ container, context }`，由页面渲染对应 Teleport；更新状态时复用挂载点的稳定 key，清理时删除登记项。这样公共层保持框架无关，宿主 UI 控件继续继承页面的主题和语言。
 
@@ -197,3 +197,5 @@ WebKit 手势按相邻采样倍率更新当前实际缩放；在边界外继续�
 | `wheelLogScalePerPixel` | `0.01` | wheel 原始像素转换成对数倍率的系数，再乘 `gestureExponent`。只需进一步调节滚轮设备时修改。 |
 
 增大这些正数会提高最大展开比例或手势灵敏度。最小缩放仍严格适合一屏；滑块始终反映控制器的真实 px/s，手势到达边界后反向立即响应。音符、标尺和播放头共同展开，真实音符时长与间隔比例保持不变。无休止、首尾相接的音符不会凭空出现时间空隙。已保存的 px/s 保持原值，下一次缩放才按新参数响应；音高缩放不受影响。
+
+`corner` 插槽位于标尺左侧，提供 `{ view, viewport }`，适合放置跟随、轨道筛选等控件；提供插槽时替代默认角落文字。它保留宿主 Vue 的主题和国际化上下文。纯浏览器调用可使用 `renderCorner(container)`，返回可选清理函数。

@@ -3,7 +3,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Modal, Tooltip } from 'antdv-next'
-import { CircleHelp } from 'lucide-vue-next'
+import { QuestionCircleFilled } from '@antdv-next/icons'
 
 const { t } = useI18n()
 const open = ref(false)
@@ -17,16 +17,13 @@ const groups = [
 <template>
   <Tooltip :title="t('midi.pianoRoll.help.title')">
     <Button
-      class="nikki-outline-btn"
-      size="small"
+      color="primary"
+      variant="link"
       :aria-label="t('midi.pianoRoll.help.title')"
       @click="open = true"
     >
       <template #icon>
-        <CircleHelp
-          class="size-4"
-          :stroke-width="2"
-        />
+        <QuestionCircleFilled :style="{ fontSize: '20px' }" />
       </template>
     </Button>
   </Tooltip>

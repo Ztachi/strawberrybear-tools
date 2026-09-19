@@ -55,7 +55,7 @@ export function createView(
   root.style.setProperty('--pr-gutter', variant === 'overview' ? '160px' : '64px')
   const corner = make('div', 'pr-corner')
   // 总览左上角只作为轨道栏的留白，标题已经由 Vue 工具栏提供，避免重复占据视野。
-  corner.textContent = variant === 'overview' ? '' : labels.editor
+  if (!options.renderCorner) corner.textContent = variant === 'overview' ? '' : labels.editor
   const ruler = make('div', 'pr-ruler')
   ruler.setAttribute('aria-label', labels.playhead)
   const rulerGrid = make('div', 'pr-ruler-grid')
@@ -126,6 +126,8 @@ export function createView(
   const trackToggleCleanups = new WeakMap<HTMLElement, () => void>()
   const trackLabelCleanups = new WeakMap<HTMLElement, () => void>()
   const cleanups: (() => void)[] = []
+  const cornerCleanup = options.renderCorner?.(corner)
+  if (cornerCleanup) cleanups.push(cornerCleanup)
   let drag: {
     pointerId: number
     clientX: number
@@ -670,7 +672,7 @@ export function createView(
     },
     setLabels(next) {
       labels = { ...defaultLabels, ...next }
-      corner.textContent = variant === 'overview' ? '' : labels.editor
+      if (!options.renderCorner) corner.textContent = variant === 'overview' ? '' : labels.editor
       empty.textContent = labels.empty
       ruler.setAttribute('aria-label', labels.playhead)
       handle.setAttribute('aria-label', labels.playhead)

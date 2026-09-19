@@ -3,7 +3,7 @@
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Tooltip } from 'antdv-next'
-import { ExternalLink, ListFilter, PanelBottom } from 'lucide-vue-next'
+import { ExportOutlined, FilterOutlined, ImportOutlined } from '@antdv-next/icons'
 import PianoRoll from '@strawberrybear/piano-roll/vue'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type {
@@ -14,6 +14,7 @@ import type {
 } from '@strawberrybear/piano-roll/browser'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import PianoEditorPanel from '@/components/PianoEditorPanel/PianoEditorPanel.vue'
+import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
 import PianoRollControls from '@/components/PianoRollControls.vue'
 import PianoTrackLabel from '@/components/PianoTrackLabel.vue'
 import PianoTrackHosts from './components/PianoTrackHosts/PianoTrackHosts.vue'
@@ -195,6 +196,28 @@ defineExpose({ getState, setTransport })
         <template #title="{ label }">
           <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
         </template>
+        <template #corner="{ view, viewport }">
+          <PianoRollFollowButton
+            :view="view"
+            :viewport="viewport"
+            :labels="labels"
+          />
+          <Tooltip :title="t('midi.pianoRoll.hideEmptyTracks')">
+            <Button
+              class="piano-filter-button"
+              size="small"
+              color="primary"
+              :variant="hideEmptyPianoTracks ? 'solid' : 'link'"
+              :aria-pressed="hideEmptyPianoTracks"
+              :aria-label="t('midi.pianoRoll.hideEmptyTracks')"
+              @click="hideEmptyPianoTracks = !hideEmptyPianoTracks"
+            >
+              <template #icon>
+                <FilterOutlined />
+              </template>
+            </Button>
+          </Tooltip>
+        </template>
         <template #toolbar="{ view, viewport }">
           <div class="piano-roll-app-toolbar">
             <PianoRollControls
@@ -205,33 +228,17 @@ defineExpose({ getState, setTransport })
             <Tooltip :title="t(detached ? 'midi.pianoRoll.dock' : 'midi.pianoRoll.detach')">
               <Button
                 class="piano-roll-trailing-action"
-                size="small"
-                type="primary"
+                color="primary"
+                variant="link"
                 :loading="opening"
                 :aria-label="t(detached ? 'midi.pianoRoll.dock' : 'midi.pianoRoll.detach')"
                 @click="migrate"
               >
                 <template #icon>
                   <component
-                    :is="detached ? PanelBottom : ExternalLink"
-                    class="size-4"
-                    :stroke-width="2"
-                  />
-                </template>
-              </Button>
-            </Tooltip>
-            <Tooltip :title="t('midi.pianoRoll.hideEmptyTracks')">
-              <Button
-                size="small"
-                :type="hideEmptyPianoTracks ? 'primary' : 'default'"
-                :aria-pressed="hideEmptyPianoTracks"
-                :aria-label="t('midi.pianoRoll.hideEmptyTracks')"
-                @click="hideEmptyPianoTracks = !hideEmptyPianoTracks"
-              >
-                <template #icon>
-                  <ListFilter
-                    class="size-4"
-                    :stroke-width="2"
+                    :is="detached ? ImportOutlined : ExportOutlined"
+                    :style="{ fontSize: '20px' }"
+                    class="piano-window-action-icon"
                   />
                 </template>
               </Button>
@@ -285,6 +292,9 @@ defineExpose({ getState, setTransport })
   </div>
 </template>
 <style scoped>
+/* 保持打开/还原的箭头语义，沿原始路径轻微加粗，不改变图标尺寸和位置。 */
+.piano-window-action-icon :deep(svg) { stroke: currentColor; stroke-width: 24; stroke-linejoin: round; }
+.piano-filter-button.ant-btn { width: 20px; min-width: 20px; height: 20px; padding: 0; font-size: 14px; }
 .detail-body {
   @apply relative flex min-h-0 flex-1 flex-col bg-white;
   /* 给总览工具栏、标尺和至少一行轨道留出空间；更小的宿主中浮层自动收缩。 */
