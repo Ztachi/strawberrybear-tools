@@ -6,8 +6,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Button, Input, Tag, Tooltip } from 'antdv-next'
-import { FileMusic, ListPlus, Plus, Save, X } from 'lucide-vue-next'
-import { invoke } from '@tauri-apps/api/core'
+import { FileMusic, ListPlus, Maximize2, Minimize2, Plus, Save, X } from 'lucide-vue-next'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { createProject } from '@strawberrybear/midi-editor'
 import type { EditorAction, MidiProject } from '@strawberrybear/midi-editor'
 import type { PianoRollEditIntent } from '@strawberrybear/piano-roll/browser'
@@ -30,6 +30,7 @@ import {
 } from '@/features/midi-editor/projectIo'
 import { feedback as toast } from '@/lib/feedback'
 import { useMidiProjectStore } from '@/stores/midiProjects'
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import type { MidiInfo } from '@/types'
@@ -47,6 +48,9 @@ const router = useRouter()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 const projectStore = useMidiProjectStore()
+const mainWindowUi = useMainWindowUiStore()
+// macOS 沉浸式窗口的原生交通灯仍占据左上角，全屏布局把留白收敛到工具栏内。
+const needsTrafficLightSpace = isTauri() && /Mac/i.test(navigator.userAgent)
 const labels = usePianoRollLabels()
 
 /** 草稿自动保存间隔。 */
@@ -74,7 +78,7 @@ const contextTarget = ref<NoteContextMenuTarget | null>(null)
 const workspace = ref<InstanceType<typeof PianoWorkspace> | null>(null)
 const trackActions: PianoTrackActionsRegistry = createPianoHostRegistry()
 let uninstallShortcuts: (() => void) | null = null
-let draftTimer: ReturnType<typeof window.setInterval> | null = null
+let draftTimer: number | null = null
 
 const playback = useMidiEditorPlayback(activeDocument, loop, (frame) => workspace.value?.setTransport(frame))
 
@@ -448,6 +452,17 @@ function handleBeforeUnload(event: BeforeUnloadEvent): void {
   event.returnValue = ''
 }
 
+function handleExitExpanded(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || event.defaultPrevented || !mainWindowUi.midiEditorExpanded) return
+  // 弹层先处理 Escape；关闭菜单或确认框时不同时改变编辑布局。
+  if (choice.value.open || contextTarget.value) return
+  if (
+    event.target instanceof Element &&
+    event.target.closest('.ant-select, .ant-popover, .ant-dropdown, .ant-modal')
+  ) return
+  mainWindowUi.midiEditorExpanded = false
+}
+
 onBeforeRouteLeave(async (to) => {
   // 新建保存后 replace 到编辑路由属于同一页面，不触发守卫。
   if (to.name === 'midi-editor-edit' && state.value?.project.id === to.params.id) return true
@@ -468,10 +483,13 @@ watch(
 onMounted(() => {
   void loadFromRoute()
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('keydown', handleExitExpanded)
   draftTimer = window.setInterval(writeDraft, DRAFT_AUTOSAVE_INTERVAL_MS)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('keydown', handleExitExpanded)
+  mainWindowUi.midiEditorExpanded = false
   if (draftTimer !== null) window.clearInterval(draftTimer)
   choice.value.resolve?.('cancel')
   disposeEditor()
@@ -479,9 +497,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="midi-editor-page">
-    <header class="midi-editor-header">
-      <div class="min-w-0 flex-1">
+  <section
+    class="midi-editor-page"
+    :class="{ 'midi-editor-page--expanded': mainWindowUi.midiEditorExpanded }"
+  >
+    <header
+      class="midi-editor-header"
+      :class="{ '!pl-[90px]': mainWindowUi.midiEditorExpanded && needsTrafficLightSpace }"
+    >
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
         <h1 class="midi-editor-title">
           {{ pageTitle }}
         </h1>
@@ -492,6 +516,7 @@ onBeforeUnmount(() => {
           :value="state.project.name"
           :maxlength="30"
           :placeholder="t('midiEditor.name')"
+          :aria-label="t('midiEditor.name')"
           @change="renameProject"
         />
       </div>
@@ -502,6 +527,24 @@ onBeforeUnmount(() => {
       >
         {{ t('midiEditor.unsaved') }}
       </Tag>
+
+      <Tooltip :title="t(mainWindowUi.midiEditorExpanded ? 'midiEditor.exitFullscreen' : 'midiEditor.fullscreen')">
+        <Button
+          size="small"
+          color="primary"
+          variant="outlined"
+          :aria-label="t(mainWindowUi.midiEditorExpanded ? 'midiEditor.exitFullscreen' : 'midiEditor.fullscreen')"
+          :aria-pressed="mainWindowUi.midiEditorExpanded"
+          @click="mainWindowUi.midiEditorExpanded = !mainWindowUi.midiEditorExpanded"
+        >
+          <template #icon>
+            <component
+              :is="mainWindowUi.midiEditorExpanded ? Minimize2 : Maximize2"
+              class="header-action-icon"
+            />
+          </template>
+        </Button>
+      </Tooltip>
 
       <Tooltip :title="t('midiEditor.exportMidi')">
         <Button
@@ -672,17 +715,20 @@ onBeforeUnmount(() => {
 }
 
 .midi-editor-header {
-  @apply flex shrink-0 flex-wrap items-center gap-2 border-b border-primary/10 p-3;
+  @apply flex shrink-0 flex-wrap items-center gap-2 border-b border-primary/10 px-3 py-2;
+}
+
+.midi-editor-page--expanded {
+  @apply rounded-none border-0;
 }
 
 .midi-editor-title {
-  @apply truncate text-lg font-semibold;
+  @apply shrink-0 text-sm font-semibold;
   color: var(--color-foreground);
 }
 
 .midi-editor-name {
-  @apply mt-1;
-  width: 260px;
+  width: 200px;
   max-width: 100%;
 }
 

@@ -32,6 +32,10 @@ const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 const songListStore = useSongListStore()
+const isMidiEditing = computed(() =>
+  route.name === 'midi-editor-create' || route.name === 'midi-editor-edit'
+)
+const isEditorExpanded = computed(() => isMidiEditing.value && mainWindowUiStore.midiEditorExpanded)
 
 /** 主窗口支持的页签路由值。 */
 type MainWindowTab = 'files' | 'templates' | 'midi-editor' | 'online'
@@ -606,6 +610,7 @@ provide(midiImportActionsKey, {
     <!-- 正常模式内容：用 v-show 保留 DOM 和滚动状态，避免退出悬浮后页面重新创建 -->
     <div v-show="!settingsStore.isOverlayMode" class="normal-mode-shell">
       <AppHeader
+        v-show="!isEditorExpanded"
         :title="t('app.title')"
         :has-accessibility="playerStore.hasAccessibility"
         @open-accessibility-settings="openAccessibilitySettings"
@@ -617,25 +622,36 @@ provide(midiImportActionsKey, {
       <!-- 主内容区 -->
       <main id="main-window-body" class="content">
         <div id="main-window-portal-root" class="content-portal-root" />
-        <div class="main-content-shell">
-          <SongListSidebar :request-navigate="handleMainNavigate" />
+        <div
+          class="main-content-shell"
+          :class="{ 'main-content-shell--expanded': isEditorExpanded }"
+        >
+          <SongListSidebar
+            v-show="!isEditorExpanded"
+            :request-navigate="handleMainNavigate"
+          />
 
           <section class="route-content">
             <section class="route-page-stage">
               <RouterView v-slot="{ Component, route: pageRoute }">
                 <Transition name="main-page">
-                  <section :key="mainPageIdentity(pageRoute)" class="route-page-host">
+                  <section
+                    :key="mainPageIdentity(pageRoute)"
+                    class="route-page-host"
+                    :class="{ 'route-page-host--editor': isMidiEditing }"
+                  >
                     <component :is="Component" />
                   </section>
                 </Transition>
               </RouterView>
             </section>
 
-            <GlobalMusicPlayer />
+            <GlobalMusicPlayer v-show="!isMidiEditing" />
           </section>
         </div>
 
         <FloatingActionGroup
+          v-show="!isEditorExpanded"
           :show-back-to-top="mainWindowUiStore.canBackToTop"
           :show-locate-current="mainWindowUiStore.canLocateCurrent"
           :back-to-top-title="t('actions.backToTop')"
@@ -734,11 +750,13 @@ provide(midiImportActionsKey, {
   @apply absolute inset-0 z-40 pointer-events-none;
 }
 
+/* 空白区域保持穿透，实际弹层必须恢复命中；Select 也挂载在此容器内。 */
 .content-portal-root :global(.ant-drawer-root),
 .content-portal-root :global(.ant-drawer-mask),
 .content-portal-root :global(.ant-drawer-wrap),
 .content-portal-root :global(.ant-drawer-content-wrapper),
 .content-portal-root :global(.ant-dropdown),
+.content-portal-root :global(.ant-select-dropdown),
 .content-portal-root :global(.ant-popover),
 .content-portal-root :global(.ant-tooltip),
 .content-portal-root :global(.ant-modal-root) {
@@ -747,6 +765,10 @@ provide(midiImportActionsKey, {
 
 .main-content-shell {
   @apply flex h-full min-h-0 gap-2 px-2 pb-2;
+}
+
+.main-content-shell--expanded {
+  @apply gap-0 p-0;
 }
 
 .route-content {
@@ -761,6 +783,11 @@ provide(midiImportActionsKey, {
   @apply absolute inset-0 overflow-hidden rounded-2xl p-4;
   background: var(--bg-white-50);
   border: 1px solid var(--border-primary-15);
+}
+
+/* 编辑页已有自己的工具栏和边框，避免再嵌套一层卡片与留白。 */
+.route-page-host--editor {
+  @apply rounded-none border-0 bg-transparent p-0;
 }
 
 .main-page-enter-active,

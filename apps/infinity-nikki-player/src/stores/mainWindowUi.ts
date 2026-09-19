@@ -21,6 +21,8 @@ export type FloatingActionRegistration = (() => void) & {
 export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
   /** 仅当前应用会话的详情跟随偏好，首次关闭；不参与 Player 状态机。 */
   const autoSwitchDetail = ref(false)
+  /** 编辑页全屏布局仅在当前页面存活，离开时由编辑页清理。 */
+  const midiEditorExpanded = ref(false)
   const canBackToTop = ref(false)
   const canLocateCurrent = ref(false)
 
@@ -127,6 +129,7 @@ export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
 
   return {
     autoSwitchDetail,
+    midiEditorExpanded,
     canBackToTop,
     canLocateCurrent,
     registerBackToTop,

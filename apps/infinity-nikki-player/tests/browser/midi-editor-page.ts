@@ -1,0 +1,78 @@
+import { createApp, h } from 'vue'
+import { createPinia } from 'pinia'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { mockIPC } from '@tauri-apps/api/mocks'
+import { App as AntApp, ConfigProvider } from 'antdv-next'
+import { i18n } from '@/i18n'
+import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
+import MainWindow from '@/views/MainWindow/index.vue'
+import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
+import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
+import type { MidiInfo } from '@/types'
+import '@/style.css'
+
+const midi: MidiInfo = {
+  filename: 'layout-fixture.mid',
+  file_path: '/fixture/layout-fixture.mid',
+  title: '布局验收',
+  duration_ms: 2000,
+  duration_ticks: 1920,
+  ticks_per_beat: 480,
+  tempo: 500000,
+  tempo_map: [{ tick: 0, microseconds_per_quarter: 500000 }],
+  time_signature_map: [{ tick: 0, numerator: 4, denominator: 4 }],
+  track_count: 0,
+  melody_note_count: 0,
+  tracks: [],
+  events: [],
+}
+
+// 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
+mockIPC((command) => {
+  if (
+    [
+      'get_midi_projects',
+      'get_song_lists',
+      'get_templates',
+      'extract_melody',
+      'extract_all_notes',
+    ].includes(command)
+  )
+    return []
+  if (command === 'get_midi_library') return [midi]
+  if (command === 'load_midi_config') return { ...midi, disabled_tracks: [] }
+  if (command === 'load_midi_project_draft') return null
+  if (command === 'check_accessibility') return true
+  if (command === 'has_saved_overlay_window_state') return false
+  if (['save_midi_project_draft', 'delete_midi_project_draft', 'save_settings'].includes(command))
+    return
+  if (command === 'load_settings')
+    return {
+      locale: 'zh-CN',
+      current_template_id: null,
+      play_mode: 'auto',
+      enable_keyboard_sim: false,
+      auto_fps_enabled: false,
+      manual_fps: 60,
+    }
+  throw new Error(`Unexpected native command in MIDI editor fixture: ${command}`)
+})
+i18n.global.locale.value = 'zh-CN'
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { name: 'midi-editor-create', path: '/midi-editor/new', component: MidiEditorPage },
+    { name: 'midi-editor', path: '/midi-editor', component: MidiEditorTab },
+  ],
+})
+await router.push('/midi-editor/new')
+createApp({
+  render: () =>
+    h(ConfigProvider, infinityNikkiConfigProviderProps, {
+      default: () => h(AntApp, null, { default: () => h(MainWindow) }),
+    }),
+})
+  .use(createPinia())
+  .use(i18n)
+  .use(router)
+  .mount('#app')

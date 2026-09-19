@@ -491,6 +491,8 @@ export default {
     },
   },
   midiEditor: {
+    fullscreen: 'Expand editor',
+    exitFullscreen: 'Exit expanded editor',
     title: 'MIDI Editor',
     description: 'Create, edit, import and export MIDI projects; export .mid or add to the library when done',
     projectList: 'Projects',

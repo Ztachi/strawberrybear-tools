@@ -472,6 +472,8 @@ export default {
     },
   },
   midiEditor: {
+    fullscreen: '全屏编辑',
+    exitFullscreen: '退出全屏编辑',
     title: 'MIDI 编辑',
     description: '创建、编辑、导入和导出 MIDI 项目，编辑完成后可导出 .mid 或直接加入曲库',
     projectList: '项目列表',
