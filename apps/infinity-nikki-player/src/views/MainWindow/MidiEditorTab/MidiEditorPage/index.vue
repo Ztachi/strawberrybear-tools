@@ -71,7 +71,7 @@ const persisted = ref(false)
 /** 已加载草稿但尚未保存时，会话 dirty 为 false，需要单独标记。 */
 const draftLoaded = ref(false)
 const hasChanges = computed(() => !!state.value && (state.value.dirty || draftLoaded.value))
-const showVelocity = ref(true)
+const showVelocity = ref(false)
 const showPlayable = ref(false)
 const selectedTrackId = ref<string | null>(null)
 const contextTarget = ref<NoteContextMenuTarget | null>(null)

@@ -4,7 +4,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, InputNumber, Slider } from 'antdv-next'
+import { Button, InputNumber, Slider, Tooltip } from 'antdv-next'
 import { createTimeline } from '@strawberrybear/piano-roll/core'
 import {
   MAX_PITCH,
@@ -177,38 +177,46 @@ function handleVelocity(value: number | number[]): void {
       <div class="inspector-row">
         <span class="inspector-label">{{ t('midiEditor.inspector.quantize') }}</span>
         <div class="inspector-actions">
-          <Button
-            size="small"
-            color="primary"
-            variant="outlined"
-            @click="emit('dispatch', { type: 'quantize', start: true })"
-          >
-            {{ t('midiEditor.inspector.quantizeStart') }}
-          </Button>
-          <Button
-            size="small"
-            color="primary"
-            variant="outlined"
-            @click="emit('dispatch', { type: 'quantize', start: false, length: true })"
-          >
-            {{ t('midiEditor.inspector.quantizeLength') }}
-          </Button>
+          <Tooltip :title="t('midiEditor.inspector.quantizeStartTip')">
+            <Button
+              size="small"
+              color="primary"
+              variant="outlined"
+              @click="emit('dispatch', { type: 'quantize', start: true })"
+            >
+              {{ t('midiEditor.inspector.quantizeStart') }}
+            </Button>
+          </Tooltip>
+          <Tooltip :title="t('midiEditor.inspector.quantizeLengthTip')">
+            <Button
+              size="small"
+              color="primary"
+              variant="outlined"
+              @click="emit('dispatch', { type: 'quantize', start: false, length: true })"
+            >
+              {{ t('midiEditor.inspector.quantizeLength') }}
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
       <div class="inspector-row">
         <span class="inspector-label">{{ t('midiEditor.inspector.transpose') }}</span>
         <div class="inspector-actions">
-          <Button
+          <Tooltip
             v-for="step in TRANSPOSE_STEPS"
             :key="step.semitones"
-            size="small"
-            color="primary"
-            variant="outlined"
-            @click="emit('dispatch', { type: 'transpose', semitones: step.semitones })"
+            :title="t('midiEditor.inspector.transposeTip', { semitones: step.semitones > 0 ? `+${step.semitones}` : step.semitones })"
           >
-            {{ t(`midiEditor.inspector.${step.key}`) }}
-          </Button>
+            <Button
+              size="small"
+              color="primary"
+              variant="outlined"
+              @click="emit('dispatch', { type: 'transpose', semitones: step.semitones })"
+            >
+              {{ t(`midiEditor.inspector.${step.key}`) }}
+            </Button>
+          </Tooltip>
         </div>
       </div>
 

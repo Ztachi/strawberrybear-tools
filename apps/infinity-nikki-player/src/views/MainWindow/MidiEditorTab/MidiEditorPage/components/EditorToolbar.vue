@@ -4,7 +4,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, InputNumber, Popover, Segmented, Select, Tooltip } from 'antdv-next'
+import { Button, InputNumber, Popover, Select, Tooltip } from 'antdv-next'
 import {
   CircleHelp,
   Gamepad2,
@@ -59,10 +59,10 @@ const snapOptions = computed(() =>
           : value,
   }))
 )
-const toolOptions = computed(() => [
-  { value: 'select', label: t('midiEditor.toolbar.select') },
-  { value: 'draw', label: t('midiEditor.toolbar.draw') },
-])
+const toolOptions = [
+  { value: 'select', icon: MousePointer2, help: 'selectTool' },
+  { value: 'draw', icon: Pencil, help: 'drawTool' },
+] as const
 const helpLines = computed(() =>
   (['selectTool', 'drawTool', 'loop', 'velocity', 'shortcuts', 'playback'] as const).map((key) =>
     t(`midiEditor.help.${key}`)
@@ -84,73 +84,96 @@ function handleDenominator(value: unknown): void {
 function handleSnap(value: unknown): void {
   emit('dispatch', { type: 'set-snap', resolution: value as SnapResolution })
 }
-function handleTool(value: unknown): void {
-  emit('dispatch', { type: 'set-tool', tool: value === 'draw' ? 'draw' : 'select' })
-}
 </script>
 
 <template>
   <div class="editor-toolbar">
-    <label class="toolbar-field">
-      <span class="toolbar-label">{{ t('midiEditor.toolbar.bpm') }}</span>
-      <InputNumber
-        class="toolbar-bpm"
-        size="small"
-        :min="MIN_BPM"
-        :max="MAX_BPM"
-        :precision="2"
-        :step="1"
-        :value="bpm"
-        @change="handleBpm"
-      />
-    </label>
-
-    <div class="toolbar-field">
-      <span class="toolbar-label">{{ t('midiEditor.toolbar.timeSignature') }}</span>
-      <Select
-        class="toolbar-meter"
-        size="small"
-        :value="meter.numerator"
-        :options="numeratorOptions"
-        :get-popup-container="getMainWindowPopupContainer"
-        @change="handleNumerator"
-      />
-      <span class="toolbar-label">/</span>
-      <Select
-        class="toolbar-meter"
-        size="small"
-        :value="meter.denominator"
-        :options="denominatorOptions"
-        :get-popup-container="getMainWindowPopupContainer"
-        @change="handleDenominator"
-      />
-    </div>
-
-    <div class="toolbar-field">
-      <span class="toolbar-label">{{ t('midiEditor.toolbar.snap') }}</span>
-      <Select
-        class="toolbar-snap"
-        size="small"
-        :value="state.snap"
-        :options="snapOptions"
-        :get-popup-container="getMainWindowPopupContainer"
-        @change="handleSnap"
-      />
-    </div>
-
-    <Segmented
-      size="small"
-      :value="state.tool"
-      :options="toolOptions"
-      @change="handleTool"
-    >
-      <template #iconRender="{ value }">
-        <component
-          :is="value === 'draw' ? Pencil : MousePointer2"
-          class="toolbar-icon"
+    <Tooltip :title="t('midiEditor.toolbar.bpmTip')">
+      <label class="toolbar-field">
+        <span class="toolbar-label">{{ t('midiEditor.toolbar.bpm') }}</span>
+        <InputNumber
+          class="toolbar-bpm"
+          size="small"
+          :min="MIN_BPM"
+          :max="MAX_BPM"
+          :precision="2"
+          :step="1"
+          :value="bpm"
+          @change="handleBpm"
         />
-      </template>
-    </Segmented>
+      </label>
+    </Tooltip>
+
+    <Tooltip :title="t('midiEditor.toolbar.timeSignatureTip')">
+      <div class="toolbar-field">
+        <span class="toolbar-label">{{ t('midiEditor.toolbar.timeSignature') }}</span>
+        <Select
+          class="toolbar-meter"
+          size="small"
+          :value="meter.numerator"
+          :options="numeratorOptions"
+          :get-popup-container="getMainWindowPopupContainer"
+          @change="handleNumerator"
+        />
+        <span class="toolbar-label">/</span>
+        <Select
+          class="toolbar-meter"
+          size="small"
+          :value="meter.denominator"
+          :options="denominatorOptions"
+          :get-popup-container="getMainWindowPopupContainer"
+          @change="handleDenominator"
+        />
+      </div>
+    </Tooltip>
+
+    <Tooltip :title="t('midiEditor.toolbar.snapTip')">
+      <div class="toolbar-field">
+        <span class="toolbar-label">{{ t('midiEditor.toolbar.snap') }}</span>
+        <Select
+          class="toolbar-snap"
+          size="small"
+          :value="state.snap"
+          :options="snapOptions"
+          :get-popup-container="getMainWindowPopupContainer"
+          @change="handleSnap"
+        />
+      </div>
+    </Tooltip>
+
+    <div
+      class="inline-flex items-center gap-0.5"
+      role="group"
+      :aria-label="t('midiEditor.toolbar.tool')"
+    >
+      <Tooltip
+        v-for="tool in toolOptions"
+        :key="tool.value"
+        :trigger="['hover', 'focus']"
+      >
+        <template #title>
+          <div class="font-semibold">
+            {{ t(`midiEditor.toolbar.${tool.value}`) }}
+          </div>
+          <div>{{ t(`midiEditor.help.${tool.help}`) }}</div>
+        </template>
+        <Button
+          size="small"
+          color="primary"
+          :variant="state.tool === tool.value ? 'filled' : 'text'"
+          :aria-label="t(`midiEditor.toolbar.${tool.value}`)"
+          :aria-pressed="state.tool === tool.value"
+          @click="emit('dispatch', { type: 'set-tool', tool: tool.value })"
+        >
+          <template #icon>
+            <component
+              :is="tool.icon"
+              class="toolbar-icon"
+            />
+          </template>
+        </Button>
+      </Tooltip>
+    </div>
 
     <span class="toolbar-divider" />
 
@@ -223,24 +246,33 @@ function handleTool(value: unknown): void {
         </template>
       </Button>
     </Tooltip>
-    <Tooltip :title="t(state.project.loop ? 'midiEditor.toolbar.clearLoop' : 'midiEditor.toolbar.loop')">
-      <Button
-        size="small"
-        color="primary"
-        :variant="state.project.loop ? 'solid' : 'link'"
-        :disabled="!state.project.loop"
-        :aria-label="t('midiEditor.toolbar.loop')"
-        @click="emit('dispatch', { type: 'loop-change', loop: null })"
+    <Tooltip
+      :title="t(state.project.loop ? 'midiEditor.toolbar.clearLoopTip' : 'midiEditor.toolbar.loopTip')"
+      :trigger="['hover', 'focus']"
+    >
+      <!-- 禁用按钮无法接收指针事件，外层保留提示的悬停与键盘焦点入口。 -->
+      <span
+        class="inline-flex"
+        :tabindex="state.project.loop ? undefined : 0"
       >
-        <template #icon>
-          <Repeat class="toolbar-icon" />
-        </template>
-      </Button>
+        <Button
+          size="small"
+          color="primary"
+          :variant="state.project.loop ? 'solid' : 'link'"
+          :disabled="!state.project.loop"
+          :aria-label="t('midiEditor.toolbar.loop')"
+          @click="emit('dispatch', { type: 'loop-change', loop: null })"
+        >
+          <template #icon>
+            <Repeat class="toolbar-icon" />
+          </template>
+        </Button>
+      </span>
     </Tooltip>
 
     <span class="toolbar-divider" />
 
-    <Tooltip :title="t('midiEditor.toolbar.velocityLane')">
+    <Tooltip :title="t('midiEditor.toolbar.velocityLaneTip')">
       <Button
         size="small"
         color="primary"
