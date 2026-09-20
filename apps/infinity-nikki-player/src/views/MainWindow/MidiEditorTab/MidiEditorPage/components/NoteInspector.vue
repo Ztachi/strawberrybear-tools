@@ -2,9 +2,11 @@
 /**
  * @description: 选中音符属性面板：音高/起点/长度/力度，批量量化与移调
  */
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, InputNumber, Slider, Tooltip } from 'antdv-next'
+import { Button, Slider, Tooltip } from 'antdv-next'
+import EditorNumberInput from './EditorNumberInput.vue'
+import { useEditorValueDraft } from '../useEditorValueDraft'
 import { createTimeline } from '@strawberrybear/piano-roll/core'
 import {
   MAX_PITCH,
@@ -97,10 +99,34 @@ function handleLength(value: number | string | null): void {
     emit('dispatch', { type: 'resize', noteIds: [single.value.id], edge: 'end', deltaTick: delta })
   }
 }
-function handleVelocity(value: number | number[]): void {
-  const next = Array.isArray(value) ? value[0] : value
-  if (typeof next === 'number') emit('dispatch', { type: 'set-selected-velocity', velocity: next })
+const velocityDraft = useEditorValueDraft(() => velocity.value, next => {
+  emit('dispatch', { type: 'set-selected-velocity', velocity: next })
+})
+let velocityCancelled = false
+function beginVelocity(): void { velocityCancelled = false }
+function discardVelocity(): void {
+  velocityCancelled = true
+  velocityDraft.cancel()
 }
+function previewVelocity(value: number | number[]): void {
+  // 框架在 Escape/失焦后可能仍收到旧手势的 move/end，直到下一次按下前全部忽略。
+  if (velocityCancelled) return
+  const next = Array.isArray(value) ? value[0] : value
+  if (typeof next === 'number') velocityDraft.update(next)
+}
+function cancelVelocity(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') {
+    if (!event.repeat) beginVelocity()
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  discardVelocity()
+}
+// 相同力度的不同选区也要重置；撤销或其它编辑不能被旧手势的完成事件覆盖。
+watch(() => [props.state.selection, props.state.document], discardVelocity, { flush: 'sync' })
+onMounted(() => window.addEventListener('blur', discardVelocity))
+onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
 </script>
 
 <template>
@@ -120,14 +146,15 @@ function handleVelocity(value: number | number[]): void {
       <div class="inspector-row">
         <span class="inspector-label">{{ t('midiEditor.inspector.pitch') }}</span>
         <template v-if="single">
-          <InputNumber
+          <EditorNumberInput
+            :key="single.id"
             size="small"
             class="inspector-input"
             :min="MIN_PITCH"
             :max="MAX_PITCH"
             :precision="0"
             :value="single.pitch"
-            @change="handlePitch"
+            @commit="handlePitch"
           />
           <span class="inspector-hint">{{ noteName(single.pitch) }}</span>
         </template>
@@ -152,13 +179,14 @@ function handleVelocity(value: number | number[]): void {
         class="inspector-row"
       >
         <span class="inspector-label">{{ t('midiEditor.inspector.length') }}</span>
-        <InputNumber
+        <EditorNumberInput
+          :key="single.id"
           size="small"
           class="inspector-input"
           :min="0.001"
           :step="0.25"
           :value="lengthBeats"
-          @change="handleLength"
+          @commit="handleLength"
         />
       </div>
 
@@ -168,10 +196,15 @@ function handleVelocity(value: number | number[]): void {
           class="inspector-slider"
           :min="MIN_VELOCITY"
           :max="MAX_VELOCITY"
-          :value="velocity"
-          @change="handleVelocity"
+          :value="velocityDraft.value.value"
+          @change="previewVelocity"
+          @change-complete="velocityDraft.commit"
+          @pointerdown.capture="beginVelocity"
+          @keydown.capture="cancelVelocity"
+          @pointercancel="discardVelocity"
+          @touchcancel="discardVelocity"
         />
-        <span class="inspector-hint w-7 text-right">{{ velocity }}</span>
+        <span class="inspector-hint w-7 text-right">{{ velocityDraft.value.value }}</span>
       </div>
 
       <div class="inspector-row">

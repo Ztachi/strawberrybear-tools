@@ -31,8 +31,10 @@ export interface EditorShortcutHandlers {
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable) return true
-  const tag = target.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+  // Slider 的焦点在 div，不能只识别 input；控件自己的空格/方向键不能再触发编辑器。
+  return !!target.closest(
+    'input, textarea, select, button, [contenteditable="true"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menu"], [role="dialog"], [role="listbox"]'
+  )
 }
 
 /**
@@ -43,6 +45,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function useMidiEditorSession(project: MidiProject, options: EditorSessionOptions) {
   const session: EditorSession = createEditorSession(project, options)
   const state = shallowRef<EditorSessionState>(session.getState())
+  let nudgeGesture: { key: string; shift: boolean; coalesceKey: string } | null = null
+  let nudgeSequence = 0
   const unsubscribe = session.subscribe((next) => {
     state.value = next
   })
@@ -53,7 +57,16 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
    * @return {void}
    */
   function dispatch(action: EditorAction): void {
+    nudgeGesture = null
     session.dispatch(action)
+  }
+
+  function nudge(event: KeyboardEvent, deltaTick: number, deltaPitch: number): void {
+    if (!event.repeat || nudgeGesture?.key !== event.key || nudgeGesture.shift !== event.shiftKey) {
+      nudgeGesture = { key: event.key, shift: event.shiftKey, coalesceKey: `nudge-${++nudgeSequence}` }
+    }
+    // 每次独立按下使用新 key；自动重复实时更新画面，但只保留一个撤销节点。
+    session.dispatch({ type: 'nudge', deltaTick, deltaPitch, coalesceKey: nudgeGesture.coalesceKey })
   }
 
   /**
@@ -63,9 +76,15 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
    * @return {boolean} 是否已处理（需阻止默认行为）
    */
   function handleKeydown(event: KeyboardEvent, handlers: EditorShortcutHandlers): boolean {
-    if (event.defaultPrevented || isTypingTarget(event.target)) return false
+    if (event.defaultPrevented || isTypingTarget(event.target)) {
+      nudgeGesture = null
+      return false
+    }
     const mod = event.metaKey || event.ctrlKey
+    if (mod || !event.key.startsWith('Arrow')) nudgeGesture = null
     const key = event.key.toLowerCase()
+    // 长按方向键允许连续微调；保存、粘贴、复制一份和播放切换按一次只执行一次。
+    if (event.repeat && (key === ' ' || (mod && ['s', 'c', 'x', 'v', 'd'].includes(key)))) return true
     const current = state.value
     // 方向键时间微调步长：吸附关闭时退回一拍。
     const step = session.snapStep() || current.document.ticksPerBeat
@@ -117,7 +136,7 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
       case 'ArrowDown': {
         if (current.selection.size === 0) return false
         const sign = event.key === 'ArrowUp' ? 1 : -1
-        dispatch({ type: 'nudge', deltaTick: 0, deltaPitch: sign * (event.shiftKey ? 12 : 1) })
+        nudge(event, 0, sign * (event.shiftKey ? 12 : 1))
         return true
       }
       case 'ArrowLeft':
@@ -125,7 +144,7 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
         if (current.selection.size === 0) return false
         const sign = event.key === 'ArrowRight' ? 1 : -1
         const barTicks = barLength(current)
-        dispatch({ type: 'nudge', deltaTick: sign * (event.shiftKey ? barTicks : step), deltaPitch: 0 })
+        nudge(event, sign * (event.shiftKey ? barTicks : step), 0)
         return true
       }
       default:
@@ -163,8 +182,21 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
     const listener = (event: KeyboardEvent): void => {
       if (handleKeydown(event, handlers)) event.preventDefault()
     }
+    const endGesture = (): void => { nudgeGesture = null }
+    const keyup = (event: KeyboardEvent): void => {
+      if (event.key === nudgeGesture?.key) endGesture()
+    }
     window.addEventListener('keydown', listener)
-    return () => window.removeEventListener('keydown', listener)
+    window.addEventListener('keyup', keyup)
+    window.addEventListener('blur', endGesture)
+    window.addEventListener('pointerdown', endGesture)
+    return () => {
+      endGesture()
+      window.removeEventListener('keydown', listener)
+      window.removeEventListener('keyup', keyup)
+      window.removeEventListener('blur', endGesture)
+      window.removeEventListener('pointerdown', endGesture)
+    }
   }
 
   return { session, state, dispatch, installShortcuts, dispose: unsubscribe }

@@ -283,7 +283,7 @@ export function createEditorSession(
         return
       }
       case 'nudge':
-        commit(moveNotes(document(), selection, action.deltaTick, action.deltaPitch), 'nudge')
+        commit(moveNotes(document(), selection, action.deltaTick, action.deltaPitch), 'nudge', action.coalesceKey)
         return
       case 'quantize':
         commit(
@@ -376,6 +376,8 @@ export function createEditorSession(
       }
     },
     markSaved(patch) {
+      // 保存点必须能被撤销准确恢复，不能继续与保存前的连续操作合并。
+      history.breakCoalescing()
       base = { ...base, ...patch, name, loop, meta: computeProjectMeta(document()) }
       savedDocument = document()
       savedName = name

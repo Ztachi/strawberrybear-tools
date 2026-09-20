@@ -130,7 +130,7 @@ export type EditorAction =
   | { type: 'cut' }
   | { type: 'paste'; atTick?: number; trackId?: string }
   | { type: 'duplicate' }
-  | { type: 'nudge'; deltaTick: number; deltaPitch: number }
+  | { type: 'nudge'; deltaTick: number; deltaPitch: number; coalesceKey?: string }
   | { type: 'quantize'; resolution?: SnapResolution; start?: boolean; length?: boolean }
   | { type: 'transpose'; semitones: number }
   | { type: 'set-selected-velocity'; velocity: number }

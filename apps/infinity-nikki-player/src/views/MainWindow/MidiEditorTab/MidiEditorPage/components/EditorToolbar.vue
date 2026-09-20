@@ -4,7 +4,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, InputNumber, Popover, Select, Tooltip } from 'antdv-next'
+import { Button, Popover, Select, Tooltip } from 'antdv-next'
 import {
   CircleHelp,
   Gamepad2,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 import { MAX_BPM, MIN_BPM, SNAP_RESOLUTIONS, tempoToBpm } from '@strawberrybear/midi-editor'
 import type { EditorAction, EditorSessionState, SnapResolution } from '@strawberrybear/midi-editor'
+import EditorNumberInput from './EditorNumberInput.vue'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 
 const props = defineProps<{
@@ -91,7 +92,7 @@ function handleSnap(value: unknown): void {
     <Tooltip :title="t('midiEditor.toolbar.bpmTip')">
       <label class="toolbar-field">
         <span class="toolbar-label">{{ t('midiEditor.toolbar.bpm') }}</span>
-        <InputNumber
+        <EditorNumberInput
           class="toolbar-bpm"
           size="small"
           :min="MIN_BPM"
@@ -99,7 +100,7 @@ function handleSnap(value: unknown): void {
           :precision="2"
           :step="1"
           :value="bpm"
-          @change="handleBpm"
+          @commit="handleBpm"
         />
       </label>
     </Tooltip>
