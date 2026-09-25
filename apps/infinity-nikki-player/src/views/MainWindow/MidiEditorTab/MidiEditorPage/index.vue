@@ -6,8 +6,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Button, ConfigProvider, Input, Tooltip } from 'antdv-next'
-import { FileMusic, ListPlus, Maximize2, Minimize2, Plus, Save, LogOut, X } from 'lucide-vue-next'
-import { NIKKI_PRIMARY_ACTIVE_COLOR } from '@/theme/infinityNikkiTheme'
+import { Download, Maximize2, Minimize2, Plus, Save, LogOut, X } from 'lucide-vue-next'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { createProject } from '@strawberrybear/midi-editor'
 import type { EditorAction, MidiProject } from '@strawberrybear/midi-editor'
@@ -23,7 +22,6 @@ import {
 } from '@/components/PianoWorkspace/usePianoTrackHosts'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import {
-  addProjectToLibrary,
   createProjectFromMidi,
   duplicateProject,
   exportProjectAsMidi,
@@ -78,7 +76,7 @@ const detailed = ref(false)
 const editorTheme = {
   token: { borderRadius: 6, controlHeightSM: 28, fontSize: 13 },
   components: {
-    Button: { borderRadius: 6, primaryShadow: 'none', colorPrimary: NIKKI_PRIMARY_ACTIVE_COLOR },
+    Button: { borderRadius: 6, primaryShadow: 'none' },
     Select: { borderRadius: 6, borderRadiusLG: 8 },
     Popover: { borderRadiusLG: 10 },
   },
@@ -96,9 +94,6 @@ const playback = useMidiEditorPlayback(activeDocument, loop, (frame) => workspac
 const isEditRoute = computed(() => route.name === 'midi-editor-edit')
 const draftKey = computed(() =>
   isEditRoute.value ? `edit-${String(route.params.id ?? '')}` : 'create'
-)
-const pageTitle = computed(() =>
-  isEditRoute.value ? t('midiEditor.editProject') : t('midiEditor.newProject')
 )
 /** 当前映射模板可演奏的音高集合；关闭高亮时为 null。 */
 const playablePitches = computed(() => {
@@ -411,14 +406,6 @@ async function exportMidi(): Promise<void> {
     toast.error(t('midiEditor.exportFailed'), { description: String(error), richColors: true })
   }
 }
-async function addToLibrary(): Promise<void> {
-  const handle = editor.value
-  if (!handle) return
-  if (await addProjectToLibrary(handle.session.toProject())) {
-    toast.success(t('midiEditor.addedToLibrary'), { richColors: true })
-  }
-}
-
 // ---------- 离开 ----------
 async function leaveWithoutNewHistory(): Promise<void> {
   if (window.history.state?.back != null) {
@@ -518,12 +505,11 @@ onBeforeUnmount(() => {
         :class="{ '!pl-[90px]': mainWindowUi.midiEditorExpanded && needsTrafficLightSpace }"
       >
         <div class="editor-project-identity">
-          <span class="editor-project-label">{{ pageTitle }}</span>
           <Input
             v-if="state"
             class="midi-editor-name"
             size="small"
-            variant="borderless"
+            variant="outlined"
             :value="state.project.name"
             :maxlength="30"
             :placeholder="t('midiEditor.name')"
@@ -538,28 +524,14 @@ onBeforeUnmount(() => {
           <Tooltip :title="t('midiEditor.exportMidi')" :trigger="['hover', 'focus']">
             <Button
               size="small"
-              color="default"
+              color="primary"
               variant="text"
               :disabled="!state"
               :aria-label="t('midiEditor.exportMidi')"
               @click="exportMidi"
             >
               <template #icon>
-                <FileMusic class="header-action-icon" />
-              </template>
-            </Button>
-          </Tooltip>
-          <Tooltip :title="t('midiEditor.addToLibrary')" :trigger="['hover', 'focus']">
-            <Button
-              size="small"
-              color="default"
-              variant="text"
-              :disabled="!state"
-              :aria-label="t('midiEditor.addToLibrary')"
-              @click="addToLibrary"
-            >
-              <template #icon>
-                <ListPlus class="header-action-icon" />
+                <Download class="header-action-icon" />
               </template>
             </Button>
           </Tooltip>
@@ -570,10 +542,10 @@ onBeforeUnmount(() => {
           >
             <Button
               size="small"
-              color="default"
-              variant="text"
+              color="primary"
               :aria-label="t(mainWindowUi.midiEditorExpanded ? 'midiEditor.exitFullscreen' : 'midiEditor.fullscreen')"
               :aria-pressed="mainWindowUi.midiEditorExpanded"
+              :variant="mainWindowUi.midiEditorExpanded ? 'solid' : 'text'"
               @click="mainWindowUi.midiEditorExpanded = !mainWindowUi.midiEditorExpanded"
             >
               <template #icon>
@@ -587,7 +559,7 @@ onBeforeUnmount(() => {
           <Tooltip :title="t('actions.cancel')" :trigger="['hover', 'focus']">
             <Button
               size="small"
-              color="default"
+              color="primary"
               variant="text"
               :aria-label="t('actions.cancel')"
               @click="navigateBack"
@@ -606,7 +578,7 @@ onBeforeUnmount(() => {
           <Tooltip :title="t('midiEditor.saveAndExit')" :trigger="['hover', 'focus']">
             <Button
               size="small"
-              color="default"
+              color="primary"
               variant="text"
               :loading="saving"
               :disabled="!state"
@@ -728,10 +700,8 @@ onBeforeUnmount(() => {
 
 /* 输入与按钮来自多根组件，尺寸样式通过容器的 deep 选择器稳定作用于最终 DOM。 */
 .editor-project-identity { @apply flex min-w-0 flex-1 items-center gap-2; }
-.editor-project-label { @apply shrink-0 text-xs; color: var(--color-muted); }
 .editor-project-identity :deep(.midi-editor-name) { width: 100%; min-width: 0; max-width: 360px; font-weight: 600; }
 .editor-project-actions { @apply flex shrink-0 items-center gap-1; }
-.editor-project-actions :deep(.ant-btn-text) { color: var(--color-muted-dark); }
 .editor-unsaved { @apply size-1.5 shrink-0 rounded-full bg-primary; }
 .header-separator { @apply mx-1 h-4 w-px bg-primary/15; }
 

@@ -206,7 +206,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
       <Tooltip :title="t('midiEditor.toolbar.detailTip')" :trigger="['hover', 'focus']">
         <Button
           size="small"
-          color="default"
+          color="primary"
           variant="text"
           :aria-expanded="Boolean(detailed)"
           aria-controls="midi-note-details"
@@ -230,7 +230,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
               <Button
                 size="small"
                 color="primary"
-                variant="filled"
+                variant="outlined"
                 @click="emit('dispatch', { type: 'quantize', start: true })"
               >
                 {{ t('midiEditor.inspector.quantizeStart') }}
@@ -240,7 +240,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
               <Button
                 size="small"
                 color="primary"
-                variant="filled"
+                variant="outlined"
                 @click="emit('dispatch', { type: 'quantize', start: false, length: true })"
               >
                 {{ t('midiEditor.inspector.quantizeLength') }}
@@ -260,7 +260,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
               <Button
                 size="small"
                 color="primary"
-                variant="filled"
+                variant="outlined"
                 @click="emit('dispatch', { type: 'transpose', semitones: step.semitones })"
               >
                 {{ t(`midiEditor.inspector.${step.key}`) }}

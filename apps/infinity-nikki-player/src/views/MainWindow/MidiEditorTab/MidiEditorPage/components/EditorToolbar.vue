@@ -112,7 +112,7 @@ function handleSnap(value: unknown): void {
           <Button
             size="small"
             color="primary"
-            :variant="state.tool === tool.value ? 'filled' : 'text'"
+            :variant="state.tool === tool.value ? 'solid' : 'text'"
             :aria-label="t(`midiEditor.toolbar.${tool.value}`)"
             :aria-pressed="state.tool === tool.value"
             @click="emit('dispatch', { type: 'set-tool', tool: tool.value })"
@@ -128,7 +128,7 @@ function handleSnap(value: unknown): void {
       <Tooltip :title="t('midiEditor.toolbar.undo')">
         <Button
           size="small"
-          color="default"
+          color="primary"
           variant="text"
           :disabled="!state.canUndo"
           :aria-label="t('midiEditor.toolbar.undo')"
@@ -142,7 +142,7 @@ function handleSnap(value: unknown): void {
       <Tooltip :title="t('midiEditor.toolbar.redo')">
         <Button
           size="small"
-          color="default"
+          color="primary"
           variant="text"
           :disabled="!state.canRedo"
           :aria-label="t('midiEditor.toolbar.redo')"
@@ -176,7 +176,7 @@ function handleSnap(value: unknown): void {
       <Tooltip :title="t('midiEditor.toolbar.stop')">
         <Button
           size="small"
-          color="default"
+          color="primary"
           variant="text"
           :aria-label="t('midiEditor.toolbar.stop')"
           @click="emit('stop')"
@@ -195,7 +195,7 @@ function handleSnap(value: unknown): void {
           <Button
             size="small"
             color="primary"
-            :variant="state.project.loop ? 'filled' : 'text'"
+            :variant="state.project.loop ? 'solid' : 'text'"
             :disabled="!state.project.loop"
             :aria-label="t('midiEditor.toolbar.loop')"
             @click="emit('dispatch', { type: 'loop-change', loop: null })"
@@ -291,7 +291,7 @@ function handleSnap(value: unknown): void {
                 <Button
                   size="small"
                   color="primary"
-                  :variant="showVelocity ? 'filled' : 'text'"
+                  :variant="showVelocity ? 'solid' : 'text'"
                   :aria-pressed="showVelocity"
                   :aria-label="t('midiEditor.toolbar.velocityLane')"
                   @click="emit('update:showVelocity', !showVelocity)"
@@ -306,7 +306,7 @@ function handleSnap(value: unknown): void {
                 <Button
                   size="small"
                   color="primary"
-                  :variant="showPlayable ? 'filled' : 'text'"
+                  :variant="showPlayable ? 'solid' : 'text'"
                   :aria-pressed="showPlayable"
                   :aria-label="t('midiEditor.toolbar.playableHighlight')"
                   @click="emit('update:showPlayable', !showPlayable)"
@@ -322,7 +322,7 @@ function handleSnap(value: unknown): void {
         </template>
         <Button
           size="small"
-          color="default"
+          color="primary"
           variant="text"
           class="song-settings-trigger"
           :aria-expanded="settingsOpen"
@@ -354,7 +354,7 @@ function handleSnap(value: unknown): void {
         </template>
         <Button
           size="small"
-          color="default"
+          color="primary"
           variant="text"
           :aria-label="t('midiEditor.toolbar.help')"
         >
@@ -381,7 +381,6 @@ function handleSnap(value: unknown): void {
 .toolbar-icon { width: 16px; height: 16px; stroke-width: 2; }
 .toolbar-chevron { width: 12px; height: 12px; }
 .toolbar-group :deep(.ant-btn) { box-shadow: none; }
-.toolbar-group :deep(.ant-btn-text:not(:disabled):not(.ant-btn-color-primary)) { color: var(--color-muted-dark); }
 .toolbar-edit-group > :first-child { @apply mr-2 rounded-md bg-primary/10 p-0.5; }
 .toolbar-separator { @apply mx-1 h-4 w-px bg-primary/15; }
 .toolbar-settings-group :deep(.song-settings-trigger) { width: 174px; }

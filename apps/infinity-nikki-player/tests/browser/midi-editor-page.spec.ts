@@ -127,6 +127,7 @@ for (const width of [900, 1100, 1440]) {
     expect(
       await page.locator('.toolbar-snap').evaluate((el) => el.getBoundingClientRect().width)
     ).toBe(104)
+    await expect(page.getByRole('button', { name: '添加到播放器', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: '导出 .mid', exact: true }).hover()
     await expect(page.getByRole('tooltip').filter({ hasText: '导出 .mid' })).toBeVisible()
   })
@@ -150,5 +151,11 @@ test('窄窗口中单音符属性完整显示，切换详细模式不产生历�
   ).toBe(true)
   await expect(page.getByRole('button', { name: /撤销/ })).toBeDisabled()
   await page.getByRole('button', { name: /量化起点/, exact: true }).hover()
+  await expect(page.getByRole('button', { name: /量化起点/, exact: true })).toHaveClass(
+    /ant-btn-variant-outlined/
+  )
+  await expect(page.getByRole('button', { name: /-八度/, exact: true })).toHaveClass(
+    /ant-btn-variant-outlined/
+  )
   await expect(page.getByRole('tooltip').filter({ hasText: '对齐到当前吸附网格' })).toBeVisible()
 })
