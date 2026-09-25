@@ -5,12 +5,12 @@
  */
 import { computed, h, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Dropdown, Modal } from 'antdv-next'
+import { Button, Modal } from 'antdv-next'
 import { ListMinus, Plus, Trash2 } from 'lucide-vue-next'
 import { usePlayerStore } from '@/stores/player'
 import { useSongListStore } from '@/stores/songLists'
-import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { MidiInfo } from '@/types'
+import ListActionMenu from '@/views/MainWindow/components/ListActionMenu.vue'
 
 const props = defineProps<{
   midi: MidiInfo
@@ -164,20 +164,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!--
-    当 controlledOpen 不为 undefined 时启用受控模式，将 antdv-next Dropdown 的 open 与父组件同步；
-    trigger 仍由 antdv-next 监听，trigger 命中后会 emit update:open，由父组件写回 controlledOpen。
-  -->
-  <Dropdown
-    v-bind="controlledOpen !== undefined ? { open: controlledOpen } : {}"
-    :trigger="[trigger ?? 'click']"
-    placement="bottomRight"
-    :get-popup-container="getMainWindowPopupContainer"
-    :menu="{ items: menuItems, onClick: handleMenuClick }"
-    @update:open="(v) => emit('update:open', v)"
+  <!-- 点击与右键入口由列表层统一控制打开状态，操作内容仍由歌曲菜单负责。 -->
+  <ListActionMenu
+    :items="menuItems"
+    :open="controlledOpen"
+    :trigger="trigger ?? 'click'"
+    @select="(key) => handleMenuClick({ key })"
+    @update:open="(value) => emit('update:open', value)"
   >
     <slot />
-  </Dropdown>
+  </ListActionMenu>
 
   <Modal
     :open="confirmDialog.open"

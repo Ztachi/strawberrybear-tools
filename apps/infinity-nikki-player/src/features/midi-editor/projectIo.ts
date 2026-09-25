@@ -35,7 +35,10 @@ export function uniqueProjectName(
   for (let index = 2; ; index += 1) {
     const suffix = ` (${index})`
     const candidate =
-      Array.from(base).slice(0, PROJECT_NAME_MAX_LENGTH - suffix.length).join('').trimEnd() + suffix
+      Array.from(base)
+        .slice(0, PROJECT_NAME_MAX_LENGTH - suffix.length)
+        .join('')
+        .trimEnd() + suffix
     if (!existing.has(candidate)) return candidate
   }
 }
@@ -123,10 +126,18 @@ export async function exportProjectAsMidi(project: MidiProject): Promise<boolean
 /**
  * @description: 把项目编码后加入播放器曲库（不自动切换当前曲目）
  * @param {MidiProject} project 项目
- * @return {Promise<boolean>} 导入是否成功
+ * @return {Promise<MidiInfo | null>} 导入后的曲库条目；失败返回 null
  */
-export function addProjectToLibrary(project: MidiProject): Promise<boolean> {
-  return usePlayerStore().importMidiBuffer(`${project.name}.mid`, projectToMidiBytes(project), {
-    autoSelect: false,
-  })
+export async function addProjectToLibrary(project: MidiProject): Promise<MidiInfo | null> {
+  const playerStore = usePlayerStore()
+  // 禁止自动选曲，列表菜单的“添加到”操作只写入曲库和歌单，不应打断当前播放。
+  const imported = await playerStore.importMidiBuffer(
+    `${project.name}.mid`,
+    projectToMidiBytes(project),
+    {
+      autoSelect: false,
+    }
+  )
+  // importMidiBuffer 只返回成功状态，曲库条目通过 store 的导入结果契约读取。
+  return imported ? playerStore.lastImportedMidi : null
 }

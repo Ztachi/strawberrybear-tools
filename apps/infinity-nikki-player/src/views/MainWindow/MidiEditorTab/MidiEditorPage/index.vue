@@ -71,8 +71,7 @@ const persisted = ref(false)
 const draftLoaded = ref(false)
 const hasChanges = computed(() => !!state.value && (state.value.dirty || draftLoaded.value))
 const showVelocity = ref(false)
-// 编辑密度独立于项目历史；切换不会重建会话或丢失选区。
-const detailed = ref(false)
+const dimUnplayable = ref(false)
 const editorTheme = {
   token: { borderRadius: 6, controlHeightSM: 28, fontSize: 13 },
   components: {
@@ -81,7 +80,6 @@ const editorTheme = {
     Popover: { borderRadiusLG: 10 },
   },
 }
-const showPlayable = ref(false)
 const selectedTrackId = ref<string | null>(null)
 const contextTarget = ref<NoteContextMenuTarget | null>(null)
 const workspace = ref<InstanceType<typeof PianoWorkspace> | null>(null)
@@ -95,9 +93,9 @@ const isEditRoute = computed(() => route.name === 'midi-editor-edit')
 const draftKey = computed(() =>
   isEditRoute.value ? `edit-${String(route.params.id ?? '')}` : 'create'
 )
-/** 当前映射模板可演奏的音高集合；关闭高亮时为 null。 */
+/** 当前映射模板可演奏的音高集合；关闭不可演奏音符置灰时为 null。 */
 const playablePitches = computed(() => {
-  if (!showPlayable.value) return null
+  if (!dimUnplayable.value) return null
   const template = settingsStore.templates.find((item) => item.id === settingsStore.currentTemplateId)
   return template ? new Set(template.mappings.map((mapping) => mapping.pitch)) : null
 })
@@ -407,6 +405,10 @@ async function exportMidi(): Promise<void> {
   }
 }
 // ---------- 离开 ----------
+/**
+ * @description: 返回上一个页面，缺少浏览历史时回到 MIDI 项目列表
+ * @return {Promise<void>} 导航完成后结束
+ */
 async function leaveWithoutNewHistory(): Promise<void> {
   if (window.history.state?.back != null) {
     router.back()
@@ -437,9 +439,18 @@ async function confirmLeaveIfNeeded(): Promise<boolean> {
   }
   return false
 }
+/**
+ * @description: 触发编辑器返回导航
+ * @return {Promise<void>} 导航完成后结束
+ */
 async function navigateBack(): Promise<void> {
-  if (await confirmLeaveIfNeeded()) await leaveWithoutNewHistory()
+  // 路由守卫是离开确认的唯一入口，避免按钮先询问一次、导航时再询问一次。
+  await leaveWithoutNewHistory()
 }
+/**
+ * @description: 保存项目后退出编辑器
+ * @return {Promise<void>} 保存或导航完成后结束
+ */
 async function saveAndExit(): Promise<void> {
   if (await save()) await leaveWithoutNewHistory()
 }
@@ -603,7 +614,7 @@ onBeforeUnmount(() => {
       <template v-else-if="state && editor">
         <EditorToolbar
           v-model:show-velocity="showVelocity"
-          v-model:show-playable="showPlayable"
+          v-model:dim-unplayable="dimUnplayable"
           :state="state"
           :is-playing="playback.isPlaying.value"
           @dispatch="dispatch"
@@ -648,12 +659,7 @@ onBeforeUnmount(() => {
           </PianoWorkspace>
         </div>
 
-        <NoteInspector
-          v-model:detailed="detailed"
-          :state="state"
-          :playable-pitches="playablePitches"
-          @dispatch="dispatch"
-        />
+        <NoteInspector :state="state" :playable-pitches="playablePitches" @dispatch="dispatch" />
 
         <TrackActionsMenu
           :hosts="trackActions.hosts"

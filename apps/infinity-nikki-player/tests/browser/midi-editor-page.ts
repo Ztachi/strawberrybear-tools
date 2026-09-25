@@ -49,26 +49,63 @@ const project = createProject({
     ),
   },
 })
+const showProjectList = new URLSearchParams(location.search).has('list')
+const projectSummary = {
+  id: project.id,
+  name: project.name,
+  createdAt: project.createdAt,
+  updatedAt: project.updatedAt,
+  meta: project.meta,
+}
 
 // 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
 mockIPC((command) => {
   if (command === 'load_midi_project') return project
-  if (
-    [
-      'get_midi_projects',
-      'get_song_lists',
-      'get_templates',
-      'extract_melody',
-      'extract_all_notes',
-    ].includes(command)
-  )
-    return []
+  if (command === 'import_midi_buffer')
+    return {
+      ...midi,
+      filename: `${project.name}.mid`,
+      file_path: `/fixture/${project.name}.mid`,
+    }
+  if (command === 'add_songs_to_song_list')
+    return {
+      id: 'favorites',
+      name: '常用歌单',
+      description: '',
+      cover_filename: null,
+      song_filenames: [`${project.name}.mid`],
+      created_at: 1,
+      updated_at: 2,
+    }
+  if (command === 'get_midi_projects') return showProjectList ? [projectSummary] : []
+  if (command === 'get_song_lists')
+    return showProjectList
+      ? [
+          {
+            id: 'favorites',
+            name: '常用歌单',
+            description: '',
+            cover_filename: null,
+            song_filenames: [],
+            created_at: 1,
+            updated_at: 1,
+          },
+        ]
+      : []
+  if (['get_templates', 'extract_melody', 'extract_all_notes'].includes(command)) return []
   if (command === 'get_midi_library') return [midi]
   if (command === 'load_midi_config') return { ...midi, disabled_tracks: [] }
   if (command === 'load_midi_project_draft') return null
   if (command === 'check_accessibility') return true
   if (command === 'has_saved_overlay_window_state') return false
-  if (['save_midi_project_draft', 'delete_midi_project_draft', 'save_settings'].includes(command))
+  if (
+    [
+      'save_midi_project_draft',
+      'delete_midi_project_draft',
+      'save_midi_config',
+      'save_settings',
+    ].includes(command)
+  )
     return
   if (command === 'load_settings')
     return {
@@ -91,9 +128,11 @@ const router = createRouter({
   ],
 })
 await router.push(
-  new URLSearchParams(location.search).has('populated')
-    ? '/midi-editor/fixture'
-    : '/midi-editor/new'
+  showProjectList
+    ? '/midi-editor'
+    : new URLSearchParams(location.search).has('populated')
+      ? '/midi-editor/fixture'
+      : '/midi-editor/new'
 )
 createApp({
   render: () =>

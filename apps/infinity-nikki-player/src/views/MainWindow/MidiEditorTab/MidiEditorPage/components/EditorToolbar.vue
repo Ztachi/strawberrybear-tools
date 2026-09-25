@@ -4,19 +4,18 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Popover, Select, Tooltip } from 'antdv-next'
+import { Button, Popover, Select, Switch, Tooltip } from 'antdv-next'
 import {
+  CircleAlert,
   CircleHelp,
   Settings2,
   ChevronDown,
-  Gamepad2,
   MousePointer2,
   Pause,
   Pencil,
   Play,
   Redo2,
   Repeat,
-  SlidersVertical,
   Square,
   Undo2,
 } from 'lucide-vue-next'
@@ -29,7 +28,7 @@ const props = defineProps<{
   state: EditorSessionState
   isPlaying: boolean
   showVelocity: boolean
-  showPlayable: boolean
+  dimUnplayable: boolean
 }>()
 const emit = defineEmits<{
   dispatch: [action: EditorAction]
@@ -39,7 +38,7 @@ const emit = defineEmits<{
   'set-bpm': [bpm: number]
   'set-meter': [numerator: number, denominator: number]
   'update:showVelocity': [value: boolean]
-  'update:showPlayable': [value: boolean]
+  'update:dimUnplayable': [value: boolean]
 }>()
 const { t } = useI18n()
 const settingsOpen = ref(false)
@@ -47,14 +46,16 @@ const settingsOpen = ref(false)
 /** 拍号可选分子/分母；分母限定为 2 的幂以符合 SMF 规范。 */
 const METER_NUMERATORS = Array.from({ length: 16 }, (_, index) => index + 1)
 const METER_DENOMINATORS = [1, 2, 4, 8, 16]
-const numeratorOptions = METER_NUMERATORS.map((value) => ({ value, label: String(value) }))
-const denominatorOptions = METER_DENOMINATORS.map((value) => ({ value, label: String(value) }))
+// antdv-next 会把纯文本 label 自动写入原生 title；显式置空，统一由 Tooltip 提供说明。
+const numeratorOptions = METER_NUMERATORS.map((value) => ({ value, label: String(value), title: '' }))
+const denominatorOptions = METER_DENOMINATORS.map((value) => ({ value, label: String(value), title: '' }))
 
 const bpm = computed(() => tempoToBpm(props.state.document.tempoMap[0]?.microsecondsPerQuarter ?? 0))
 const meter = computed(() => props.state.document.timeSignatureMap[0] ?? { numerator: 4, denominator: 4 })
 const snapOptions = computed(() =>
   SNAP_RESOLUTIONS.map((value) => ({
     value,
+    title: '',
     label:
       value === 'bar'
         ? t('midiEditor.toolbar.snapBar')
@@ -87,6 +88,22 @@ function handleDenominator(value: unknown): void {
 }
 function handleSnap(value: unknown): void {
   emit('dispatch', { type: 'set-snap', resolution: value as SnapResolution })
+}
+/**
+ * @description: 更新力度条显示状态
+ * @param {boolean} value - 是否显示力度条
+ * @return {void}
+ */
+function handleVelocityLane(value: boolean): void {
+  emit('update:showVelocity', value)
+}
+/**
+ * @description: 更新不可演奏音符的置灰状态
+ * @param {boolean} value - 是否置灰不可演奏音符
+ * @return {void}
+ */
+function handleDimUnplayable(value: boolean): void {
+  emit('update:dimUnplayable', value)
 }
 </script>
 
@@ -209,9 +226,17 @@ function handleSnap(value: unknown): void {
     </div>
     <div class="toolbar-group toolbar-settings-group">
       <div class="toolbar-field">
-        <Tooltip :title="t('midiEditor.toolbar.snapTip')">
-          <span class="toolbar-label">{{ t('midiEditor.toolbar.snap') }}</span>
-        </Tooltip>
+        <span class="toolbar-label toolbar-label-with-help">
+          {{ t('midiEditor.toolbar.snap') }}
+          <Tooltip :title="t('midiEditor.toolbar.snapTip')" :trigger="['hover', 'focus']">
+            <CircleAlert
+              class="property-help-icon"
+              tabindex="0"
+              role="img"
+              :aria-label="t('midiEditor.toolbar.snapTip')"
+            />
+          </Tooltip>
+        </span>
         <Select
           class="toolbar-snap"
           :aria-label="t('midiEditor.toolbar.snap')"
@@ -233,14 +258,23 @@ function handleSnap(value: unknown): void {
       >
         <template #content>
           <div id="midi-song-settings" class="editor-settings">
-            <h3 class="settings-title">
+            <h3 class="settings-title settings-title-with-help">
               {{ t('midiEditor.toolbar.songSettings') }}
+              <Tooltip
+                :title="t('midiEditor.toolbar.songSettingsTip')"
+                :trigger="['hover', 'focus']"
+              >
+                <CircleAlert
+                  class="property-help-icon"
+                  tabindex="0"
+                  role="img"
+                  :aria-label="t('midiEditor.toolbar.songSettingsTip')"
+                />
+              </Tooltip>
             </h3>
 
             <label class="toolbar-field">
-              <Tooltip :title="t('midiEditor.toolbar.bpmTip')">
-                <span class="toolbar-label">{{ t('midiEditor.toolbar.bpm') }}</span>
-              </Tooltip>
+              <span class="toolbar-label">{{ t('midiEditor.toolbar.bpm') }}</span>
               <EditorNumberInput
                 class="toolbar-bpm"
                 :style="{ width: '100px' }"
@@ -255,9 +289,7 @@ function handleSnap(value: unknown): void {
             </label>
 
             <div class="toolbar-field">
-              <Tooltip :title="t('midiEditor.toolbar.timeSignatureTip')">
-                <span class="toolbar-label">{{ t('midiEditor.toolbar.timeSignature') }}</span>
-              </Tooltip>
+              <span class="toolbar-label">{{ t('midiEditor.toolbar.timeSignature') }}</span>
               <Select
                 class="toolbar-meter"
                 :style="{ width: '80px', flex: '0 0 80px' }"
@@ -283,40 +315,39 @@ function handleSnap(value: unknown): void {
               />
             </div>
 
-            <h3 class="settings-title settings-divider">
+            <h3 class="settings-title settings-title-with-help settings-divider">
               {{ t('midiEditor.toolbar.displaySettings') }}
+              <Tooltip
+                :title="t('midiEditor.toolbar.displaySettingsTip')"
+                :trigger="['hover', 'focus']"
+              >
+                <CircleAlert
+                  class="property-help-icon"
+                  tabindex="0"
+                  role="img"
+                  :aria-label="t('midiEditor.toolbar.displaySettingsTip')"
+                />
+              </Tooltip>
             </h3>
             <div class="settings-display">
-              <Tooltip :title="t('midiEditor.toolbar.velocityLaneTip')">
-                <Button
+              <label class="settings-switch-row">
+                <span>{{ t('midiEditor.toolbar.velocityLane') }}</span>
+                <Switch
                   size="small"
-                  color="primary"
-                  :variant="showVelocity ? 'solid' : 'text'"
-                  :aria-pressed="showVelocity"
+                  :checked="showVelocity"
                   :aria-label="t('midiEditor.toolbar.velocityLane')"
-                  @click="emit('update:showVelocity', !showVelocity)"
-                >
-                  <template #icon>
-                    <SlidersVertical class="toolbar-icon" />
-                  </template>
-                  {{ t('midiEditor.toolbar.velocityLane') }}
-                </Button>
-              </Tooltip>
-              <Tooltip :title="t('midiEditor.toolbar.playableHighlightTip')">
-                <Button
+                  @change="handleVelocityLane"
+                />
+              </label>
+              <label class="settings-switch-row">
+                <span>{{ t('midiEditor.toolbar.unplayableDim') }}</span>
+                <Switch
                   size="small"
-                  color="primary"
-                  :variant="showPlayable ? 'solid' : 'text'"
-                  :aria-pressed="showPlayable"
-                  :aria-label="t('midiEditor.toolbar.playableHighlight')"
-                  @click="emit('update:showPlayable', !showPlayable)"
-                >
-                  <template #icon>
-                    <Gamepad2 class="toolbar-icon" />
-                  </template>
-                  {{ t('midiEditor.toolbar.playableHighlight') }}
-                </Button>
-              </Tooltip>
+                  :checked="dimUnplayable"
+                  :aria-label="t('midiEditor.toolbar.unplayableDim')"
+                  @change="handleDimUnplayable"
+                />
+              </label>
             </div>
           </div>
         </template>
@@ -327,16 +358,14 @@ function handleSnap(value: unknown): void {
           class="song-settings-trigger"
           :aria-expanded="settingsOpen"
           aria-controls="midi-song-settings"
-          :title="t('midiEditor.toolbar.songSettings')"
           :aria-label="t('midiEditor.toolbar.songSettings')"
         >
           <template #icon>
             <Settings2 class="toolbar-icon" />
           </template>
-          <span class="song-settings-summary"
-            >{{ Math.round(bpm * 100) / 100 }} BPM ·
-            {{ meter.numerator }}/{{ meter.denominator }}</span
-          >
+          <span class="song-settings-summary">
+            {{ Math.round(bpm * 100) / 100 }} BPM · {{ meter.numerator }}/{{ meter.denominator }}
+          </span>
           <ChevronDown class="toolbar-chevron" />
         </Button>
       </Popover>
@@ -378,6 +407,8 @@ function handleSnap(value: unknown): void {
 .toolbar-settings-group { @apply gap-2; }
 .toolbar-field { @apply flex items-center justify-between gap-2 whitespace-nowrap; }
 .toolbar-label { @apply text-xs; color: var(--color-muted-dark); }
+.toolbar-label-with-help, .settings-title-with-help { @apply flex items-center gap-1; }
+.property-help-icon { @apply cursor-help; width: 13px; height: 13px; color: var(--color-muted); }
 .toolbar-icon { width: 16px; height: 16px; stroke-width: 2; }
 .toolbar-chevron { width: 12px; height: 12px; }
 .toolbar-group :deep(.ant-btn) { box-shadow: none; }
@@ -388,8 +419,8 @@ function handleSnap(value: unknown): void {
 .editor-settings { @apply flex flex-col gap-3; width: 244px; }
 .settings-title { @apply m-0 text-xs font-semibold; color: var(--color-foreground); }
 .settings-divider { @apply border-t border-primary/10 pt-3; }
-.settings-display { @apply flex flex-col items-stretch gap-1; }
-.settings-display :deep(.ant-btn) { @apply justify-start; }
+.settings-display { @apply flex flex-col gap-2; }
+.settings-switch-row { @apply flex cursor-pointer items-center justify-between gap-6 text-xs; color: var(--color-muted-dark); }
 .editor-help-list { @apply flex max-w-sm flex-col gap-1.5 text-xs leading-5; color: var(--color-muted-dark); }
 @container (max-width: 650px) {
   .song-settings-summary { display: none; }

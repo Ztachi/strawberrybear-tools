@@ -3,7 +3,7 @@
  * @description: TemplateEditor - 模板管理页主体
  * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容。
  */
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import type { HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -20,10 +20,12 @@ import {
   Search,
   Trash2,
 } from 'lucide-vue-next'
-import { Button, Checkbox, Input, Modal, Pagination, Popover, Table, Tooltip } from 'antdv-next'
-import type { PaginationProps, TableColumnsType } from 'antdv-next'
+import { Button, Checkbox, Input, Modal, Pagination, Table, Tooltip } from 'antdv-next'
+import type { MenuProps, PaginationProps, TableColumnsType } from 'antdv-next'
 import { useSettingsStore } from '@/stores/settings'
 import type { KeyTemplate } from '@/types'
+import { useListActionMenu } from '@/composables/useListActionMenu'
+import ListActionMenu from '@/views/MainWindow/components/ListActionMenu.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -47,8 +49,12 @@ const pageSize = ref(readPersistedPageSize())
 const selectedTemplateIds = ref<Set<string>>(new Set())
 /** 头部+表格头部高度 */
 const totalHeaderHeight = ref(260)
-/** 当前打开的表格行操作菜单模板 ID；受控关闭可避免进入抽屉后浮层残留。 */
-const openActionMenuTemplateId = ref<string | null>(null)
+/** 右键与“更多操作”共用公共菜单状态。 */
+const { isMenuOpen, setMenuOpen, closeMenu } = useListActionMenu()
+/** 右键菜单关联的模板 ID，用于列表刷新后重新解析当前模板。 */
+const contextMenuTemplateId = ref<string | null>(null)
+/** 右键菜单的视口坐标，供公共菜单组件定位。 */
+const contextMenuPoint = ref({ x: 0, y: 0 })
 /** 模板删除确认框状态，使用页面内 Modal 保持主题一致。 */
 const actionConfirm = ref<{
   open: boolean
@@ -106,6 +112,10 @@ const pagedTemplates = computed(() => {
 /** 当前勾选的模板对象。 */
 const selectedTemplates = computed(() =>
   settingsStore.templates.filter((template) => selectedTemplateIds.value.has(template.id))
+)
+/** 当前右键菜单对应的模板；模板被删除后会自动变为空并卸载菜单。 */
+const contextMenuTemplate = computed(() =>
+  settingsStore.templates.find((template) => template.id === contextMenuTemplateId.value)
 )
 
 /** antdv 表格列定义；渲染内容放在插槽中，避免把业务操作函数塞进 columns。 */
@@ -180,6 +190,14 @@ function toggleTemplateSelection(templateId: string): void {
 function getTemplateRowProps(template: KeyTemplate): HTMLAttributes {
   return {
     onClick: () => toggleTemplateSelection(template.id),
+    onContextmenu: (event: MouseEvent) => {
+      event.preventDefault()
+      // 保存 ID 而不是模板快照，保证导入、删除刷新列表后菜单不会继续引用旧对象。
+      contextMenuTemplateId.value = template.id
+      // 使用视口坐标配合 fixed 锚点，使菜单不受表格滚动容器裁切。
+      contextMenuPoint.value = { x: event.clientX, y: event.clientY }
+      setMenuOpen('context', template.id, true)
+    },
   }
 }
 
@@ -349,18 +367,71 @@ async function exportTemplate(template: KeyTemplate): Promise<void> {
  * @return {void}
  */
 function closeTemplateActionMenu(): void {
-  openActionMenuTemplateId.value = null
+  closeMenu()
+}
+
+const menuIconClass = 'align-middle size-4 shrink-0 -translate-y-px'
+
+/**
+ * @description: 生成模板行操作菜单项
+ * @return {NonNullable<MenuProps['items']>} 模板操作菜单项
+ */
+function getTemplateMenuItems(): NonNullable<MenuProps['items']> {
+  return [
+    {
+      key: 'edit',
+      label: t('actions.edit'),
+      icon: h(Pencil, { class: menuIconClass, strokeWidth: 2.2 }),
+    },
+    {
+      key: 'create-from',
+      label: t('template.createFromTemplateShort'),
+      icon: h(Copy, { class: menuIconClass, strokeWidth: 2.2 }),
+    },
+    {
+      key: 'export',
+      label: t('template.exportTemplate'),
+      icon: h(Download, { class: menuIconClass, strokeWidth: 2.2 }),
+    },
+    {
+      key: 'delete',
+      label: t('actions.delete'),
+      icon: h(Trash2, { class: menuIconClass, strokeWidth: 2.2 }),
+      danger: true,
+    },
+  ]
 }
 
 /**
- * @description: 更新指定模板行操作菜单打开状态
- * @param {string} templateId - 模板 ID
+ * @description: 执行模板菜单选择的操作
+ * @param {KeyTemplate} template - 目标模板
+ * @param {string} key - 菜单项键
+ * @return {void}
+ */
+function handleTemplateMenuSelect(template: KeyTemplate, key: string): void {
+  closeTemplateActionMenu()
+  if (key === 'edit') void editTemplate(template)
+  else if (key === 'create-from') void createFromTemplate(template)
+  else if (key === 'export') void exportTemplate(template)
+  else if (key === 'delete') void deleteTemplate(template)
+}
+
+/**
+ * @description: 将右键菜单选择转发给当前模板
+ * @param {string} key - 菜单项键
+ * @return {void}
+ */
+function handleContextTemplateMenuSelect(key: string): void {
+  if (contextMenuTemplate.value) handleTemplateMenuSelect(contextMenuTemplate.value, key)
+}
+
+/**
+ * @description: 更新当前模板右键菜单的打开状态
  * @param {boolean} open - 是否打开
  * @return {void}
  */
-function setTemplateActionMenuOpen(templateId: string, open: boolean): void {
-  // 同一时间只保留一个行菜单，选择任意操作后由动作函数主动关闭。
-  openActionMenuTemplateId.value = open ? templateId : null
+function setContextTemplateMenuOpen(open: boolean): void {
+  if (contextMenuTemplate.value) setMenuOpen('context', contextMenuTemplate.value.id, open)
 }
 
 /**
@@ -611,60 +682,24 @@ defineExpose({
 
             <template v-else-if="column.key === 'actions'">
               <div @click.stop>
-                <Popover
-                  trigger="click"
-                  placement="bottomRight"
-                  :open="openActionMenuTemplateId === template.id"
-                  @update:open="setTemplateActionMenuOpen(template.id, $event)"
+                <ListActionMenu
+                  :items="getTemplateMenuItems()"
+                  :open="isMenuOpen('click', template.id)"
+                  @select="(key) => handleTemplateMenuSelect(template, key)"
+                  @update:open="(value) => setMenuOpen('click', template.id, value)"
                 >
-                  <template #content>
-                    <div class="flex flex-col">
-                      <Button type="text" class="justify-start" @click="editTemplate(template)">
-                        <template #icon>
-                          <Pencil class="size-4" />
-                        </template>
-                        {{ t('actions.edit') }}
-                      </Button>
-                      <Button
-                        type="text"
-                        class="justify-start"
-                        @click="createFromTemplate(template)"
-                      >
-                        <template #icon>
-                          <Copy class="size-4" />
-                        </template>
-                        {{ t('template.createFromTemplateShort') }}
-                      </Button>
-                      <Button type="text" class="justify-start" @click="exportTemplate(template)">
-                        <template #icon>
-                          <Download class="size-4" />
-                        </template>
-                        {{ t('template.exportTemplate') }}
-                      </Button>
-                      <Button
-                        type="text"
-                        danger
-                        class="justify-start"
-                        @click="deleteTemplate(template)"
-                      >
-                        <template #icon>
-                          <Trash2 class="size-4" />
-                        </template>
-                        {{ t('actions.delete') }}
-                      </Button>
-                    </div>
-                  </template>
                   <Button
                     type="text"
                     color="primary"
                     variant="outlined"
                     class="template-action-btn"
+                    :aria-label="t('songList.actions.more')"
                   >
                     <template #icon>
                       <MoreVertical class="template-action-icon" />
                     </template>
                   </Button>
-                </Popover>
+                </ListActionMenu>
               </div>
             </template>
           </template>
@@ -684,6 +719,15 @@ defineExpose({
         />
       </div>
     </section>
+
+    <ListActionMenu
+      v-if="contextMenuTemplate"
+      :items="getTemplateMenuItems()"
+      :open="isMenuOpen('context', contextMenuTemplate.id)"
+      :anchor-point="contextMenuPoint"
+      @select="handleContextTemplateMenuSelect"
+      @update:open="setContextTemplateMenuOpen"
+    />
 
     <Modal
       :open="actionConfirm.open"

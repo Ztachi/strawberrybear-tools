@@ -16,6 +16,7 @@ import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
 import type { MidiInfo } from '@/types'
 import { getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
+import { useListActionMenu } from '@/composables/useListActionMenu'
 import { buildCollectionContext, formatDuration } from '../utils'
 import SongActionMenu from './SongActionMenu.vue'
 import SongPlaybackCover from './SongPlaybackCover.vue'
@@ -27,8 +28,6 @@ const props = defineProps<{
   collectionTitle: string
 }>()
 
-type MenuKind = 'context' | 'click'
-
 const { t } = useI18n()
 const router = useRouter()
 const mainWindowUiStore = useMainWindowUiStore()
@@ -39,12 +38,8 @@ const searchKeyword = ref('')
 const batchMode = ref(false)
 const selectedFilenames = ref<Set<string>>(new Set())
 const scrollElement = ref<HTMLElement | null>(null)
-/**
- * 全局唯一打开的歌曲操作菜单 key，格式 `${kind}:${filename}`。
- * 行右键菜单和右侧点击菜单共用同一个状态，保证同时只有一个菜单可见，
- * 避免嵌套 Dropdown 的 outside press 判定（同行的 MoreVertical 在 trigger 元素子树内）导致右键菜单残留。
- */
-const openMenuKey = ref<string | null>(null)
+/** 行右键与“更多操作”共用公共菜单状态，始终只保留一个入口打开。 */
+const { isMenuOpen, setMenuOpen, closeMenu } = useListActionMenu()
 const confirmDialog = ref<{
   open: boolean
   title: string
@@ -126,46 +121,6 @@ const batchAddMenuItems = computed(() =>
   }))
 )
 
-/**
- * @description: 拼接歌曲操作菜单的唯一 key。
- * @param {MenuKind} kind - 菜单种类（右键或右侧点击）
- * @param {string} filename - 关联的 MIDI 文件名
- * @return {string} 形如 `context:foo.mid` 或 `click:foo.mid` 的标识
- */
-function buildMenuKey(kind: MenuKind, filename: string): string {
-  return `${kind}:${filename}`
-}
-
-/**
- * @description: 受控菜单的 open 变化回调，统一写入 openMenuKey。
- * @description: 打开时直接覆盖，关闭时清空，确保两个菜单互斥且不会残留右键菜单。
- * @param {MenuKind} kind - 触发变化的菜单种类
- * @param {string} filename - 关联的 MIDI 文件名
- * @param {boolean} open - 当前菜单的 open 状态
- * @return {void} 无返回值
- */
-function handleSongMenuOpenChange(kind: MenuKind, filename: string, open: boolean): void {
-  openMenuKey.value = open ? buildMenuKey(kind, filename) : null
-}
-
-/**
- * @description: 判断指定歌曲的右键菜单是否处于打开状态。
- * @param {string} filename - 关联的 MIDI 文件名
- * @return {boolean} 是否打开
- */
-function isContextMenuOpen(filename: string): boolean {
-  return openMenuKey.value === buildMenuKey('context', filename)
-}
-
-/**
- * @description: 判断指定歌曲的右侧点击菜单是否处于打开状态。
- * @param {string} filename - 关联的 MIDI 文件名
- * @return {boolean} 是否打开
- */
-function isClickMenuOpen(filename: string): boolean {
-  return openMenuKey.value === buildMenuKey('click', filename)
-}
-
 function setSelectedFilenames(nextSet: Set<string>): void {
   selectedFilenames.value = nextSet
 }
@@ -182,7 +137,7 @@ function toggleBatchMode(): void {
 function exitBatchMode(): void {
   batchMode.value = false
   selectedFilenames.value = new Set()
-  openMenuKey.value = null
+  closeMenu()
 }
 
 function handleWindowKeydown(event: KeyboardEvent): void {
@@ -439,8 +394,8 @@ onUnmounted(() => {
             :source-type="type"
             :source-song-list-id="songListId"
             trigger="contextmenu"
-            :controlled-open="isContextMenuOpen(filteredSongs[virtualRow.index]!.filename)"
-            @update:open="(v) => handleSongMenuOpenChange('context', filteredSongs[virtualRow.index]!.filename, v)"
+            :controlled-open="isMenuOpen('context', filteredSongs[virtualRow.index]!.filename)"
+            @update:open="(value) => setMenuOpen('context', filteredSongs[virtualRow.index]!.filename, value)"
           >
             <div
               class="song-row group/song-row"
@@ -490,8 +445,8 @@ onUnmounted(() => {
                 :source-type="type"
                 :source-song-list-id="songListId"
                 trigger="click"
-                :controlled-open="isClickMenuOpen(filteredSongs[virtualRow.index]!.filename)"
-                @update:open="(v) => handleSongMenuOpenChange('click', filteredSongs[virtualRow.index]!.filename, v)"
+                :controlled-open="isMenuOpen('click', filteredSongs[virtualRow.index]!.filename)"
+                @update:open="(value) => setMenuOpen('click', filteredSongs[virtualRow.index]!.filename, value)"
               >
                 <button
                   class="song-menu-trigger"

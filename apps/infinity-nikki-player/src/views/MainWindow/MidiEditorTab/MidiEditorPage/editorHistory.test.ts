@@ -21,7 +21,7 @@ vi.mock('antdv-next', async () => {
       },
     })
   return Object.fromEntries(
-    ['Button', 'InputNumber', 'Slider', 'Tooltip', 'Popover', 'Select'].map((name) => [
+    ['Button', 'InputNumber', 'Slider', 'Tooltip', 'Popover', 'Select', 'Switch'].map((name) => [
       name,
       control(name),
     ])
@@ -92,7 +92,7 @@ function mount(target: 'inspector' | 'toolbar'): void {
                 state: handle.state.value,
                 isPlaying: false,
                 showVelocity: false,
-                showPlayable: false,
+                dimUnplayable: false,
                 onDispatch: handle.dispatch,
                 onSetBpm: (bpm: number) => handle.dispatch({ type: 'set-tempo', bpm }),
               })
