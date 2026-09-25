@@ -1,3 +1,4 @@
+import { createProject } from '@strawberrybear/midi-editor'
 import { createApp, h } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -27,8 +28,31 @@ const midi: MidiInfo = {
   events: [],
 }
 
+const project = createProject({
+  name: 'Counting Stars · Piano study',
+  document: {
+    ticksPerBeat: 480,
+    durationTicks: 7680,
+    tempoMap: [{ tick: 0, microsecondsPerQuarter: 500000 }],
+    timeSignatureMap: [{ tick: 0, numerator: 4, denominator: 4 }],
+    tracks: [{ id: 'piano', name: 'Piano', enabled: true, isPercussion: false }],
+    notes: Array.from(
+      { length: new URLSearchParams(location.search).has('single') ? 1 : 32 },
+      (_, i) => ({
+        id: `note-${i}`,
+        trackId: 'piano',
+        pitch: [60, 64, 67, 64, 62, 65, 69, 65][i % 8]!,
+        startTick: i * 240,
+        endTick: i * 240 + 180,
+        velocity: 100,
+      })
+    ),
+  },
+})
+
 // 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
 mockIPC((command) => {
+  if (command === 'load_midi_project') return project
   if (
     [
       'get_midi_projects',
@@ -61,11 +85,16 @@ i18n.global.locale.value = 'zh-CN'
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
+    { name: 'midi-editor-edit', path: '/midi-editor/:id', component: MidiEditorPage },
     { name: 'midi-editor-create', path: '/midi-editor/new', component: MidiEditorPage },
     { name: 'midi-editor', path: '/midi-editor', component: MidiEditorTab },
   ],
 })
-await router.push('/midi-editor/new')
+await router.push(
+  new URLSearchParams(location.search).has('populated')
+    ? '/midi-editor/fixture'
+    : '/midi-editor/new'
+)
 createApp({
   render: () =>
     h(ConfigProvider, infinityNikkiConfigProviderProps, {

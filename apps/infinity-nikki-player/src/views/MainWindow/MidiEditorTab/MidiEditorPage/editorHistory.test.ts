@@ -16,7 +16,8 @@ vi.mock('antdv-next', async () => {
       name,
       inheritAttrs: false,
       setup(_, { attrs, slots }) {
-        return () => h(name, attrs, slots.default?.())
+        return () =>
+          h(name, attrs, [slots.default?.(), ...(name === 'Popover' ? [slots.content?.()] : [])])
       },
     })
   return Object.fromEntries(
@@ -252,7 +253,11 @@ describe('continuous editor changes', () => {
     expect(handle.state.value.document.notes[0]!.pitch).toBe(60)
     expect(input.props.value).toBe(60)
     await fire(input, 'onChange', 80)
-    await fire(input, 'onKeydownCapture', { key: 'Escape', preventDefault() {}, stopPropagation() {} })
+    await fire(input, 'onKeydownCapture', {
+      key: 'Escape',
+      preventDefault() {},
+      stopPropagation() {},
+    })
     await fire(input, 'onBlur', {})
     expect(handle.state.value.canUndo).toBe(false)
     expect(input.props.value).toBe(60)

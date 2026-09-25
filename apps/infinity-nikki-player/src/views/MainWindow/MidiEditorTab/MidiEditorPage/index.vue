@@ -5,8 +5,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { Button, Input, Tag, Tooltip } from 'antdv-next'
-import { FileMusic, ListPlus, Maximize2, Minimize2, Plus, Save, X } from 'lucide-vue-next'
+import { Button, ConfigProvider, Input, Tooltip } from 'antdv-next'
+import { FileMusic, ListPlus, Maximize2, Minimize2, Plus, Save, LogOut, X } from 'lucide-vue-next'
+import { NIKKI_PRIMARY_ACTIVE_COLOR } from '@/theme/infinityNikkiTheme'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { createProject } from '@strawberrybear/midi-editor'
 import type { EditorAction, MidiProject } from '@strawberrybear/midi-editor'
@@ -72,6 +73,16 @@ const persisted = ref(false)
 const draftLoaded = ref(false)
 const hasChanges = computed(() => !!state.value && (state.value.dirty || draftLoaded.value))
 const showVelocity = ref(false)
+// 编辑密度独立于项目历史；切换不会重建会话或丢失选区。
+const detailed = ref(false)
+const editorTheme = {
+  token: { borderRadius: 6, controlHeightSM: 28, fontSize: 13 },
+  components: {
+    Button: { borderRadius: 6, primaryShadow: 'none', colorPrimary: NIKKI_PRIMARY_ACTIVE_COLOR },
+    Select: { borderRadius: 6, borderRadiusLG: 8 },
+    Popover: { borderRadiusLG: 10 },
+  },
+}
 const showPlayable = ref(false)
 const selectedTrackId = ref<string | null>(null)
 const contextTarget = ref<NoteContextMenuTarget | null>(null)
@@ -497,216 +508,209 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section
-    class="midi-editor-page"
-    :class="{ 'midi-editor-page--expanded': mainWindowUi.midiEditorExpanded }"
-  >
-    <header
-      class="midi-editor-header"
-      :class="{ '!pl-[90px]': mainWindowUi.midiEditorExpanded && needsTrafficLightSpace }"
+  <ConfigProvider :theme="editorTheme" :tooltip="{ styles: { root: { pointerEvents: 'none' } } }">
+    <section
+      class="midi-editor-page"
+      :class="{ 'midi-editor-page--expanded': mainWindowUi.midiEditorExpanded }"
     >
-      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 class="midi-editor-title">
-          {{ pageTitle }}
-        </h1>
-        <Input
-          v-if="state"
-          class="midi-editor-name"
-          size="small"
-          :value="state.project.name"
-          :maxlength="30"
-          :placeholder="t('midiEditor.name')"
-          :aria-label="t('midiEditor.name')"
-          @change="renameProject"
+      <header
+        class="midi-editor-header"
+        :class="{ '!pl-[90px]': mainWindowUi.midiEditorExpanded && needsTrafficLightSpace }"
+      >
+        <div class="editor-project-identity">
+          <span class="editor-project-label">{{ pageTitle }}</span>
+          <Input
+            v-if="state"
+            class="midi-editor-name"
+            size="small"
+            variant="borderless"
+            :value="state.project.name"
+            :maxlength="30"
+            :placeholder="t('midiEditor.name')"
+            :aria-label="t('midiEditor.name')"
+            @change="renameProject"
+          />
+          <Tooltip v-if="hasChanges" :title="t('midiEditor.unsaved')">
+            <span class="editor-unsaved" :aria-label="t('midiEditor.unsaved')" role="status" />
+          </Tooltip>
+        </div>
+        <div class="editor-project-actions">
+          <Tooltip :title="t('midiEditor.exportMidi')" :trigger="['hover', 'focus']">
+            <Button
+              size="small"
+              color="default"
+              variant="text"
+              :disabled="!state"
+              :aria-label="t('midiEditor.exportMidi')"
+              @click="exportMidi"
+            >
+              <template #icon>
+                <FileMusic class="header-action-icon" />
+              </template>
+            </Button>
+          </Tooltip>
+          <Tooltip :title="t('midiEditor.addToLibrary')" :trigger="['hover', 'focus']">
+            <Button
+              size="small"
+              color="default"
+              variant="text"
+              :disabled="!state"
+              :aria-label="t('midiEditor.addToLibrary')"
+              @click="addToLibrary"
+            >
+              <template #icon>
+                <ListPlus class="header-action-icon" />
+              </template>
+            </Button>
+          </Tooltip>
+          <span class="header-separator" />
+          <Tooltip
+            :title="t(mainWindowUi.midiEditorExpanded ? 'midiEditor.exitFullscreen' : 'midiEditor.fullscreen')"
+            :trigger="['hover', 'focus']"
+          >
+            <Button
+              size="small"
+              color="default"
+              variant="text"
+              :aria-label="t(mainWindowUi.midiEditorExpanded ? 'midiEditor.exitFullscreen' : 'midiEditor.fullscreen')"
+              :aria-pressed="mainWindowUi.midiEditorExpanded"
+              @click="mainWindowUi.midiEditorExpanded = !mainWindowUi.midiEditorExpanded"
+            >
+              <template #icon>
+                <component
+                  :is="mainWindowUi.midiEditorExpanded ? Minimize2 : Maximize2"
+                  class="header-action-icon"
+                />
+              </template>
+            </Button>
+          </Tooltip>
+          <Tooltip :title="t('actions.cancel')" :trigger="['hover', 'focus']">
+            <Button
+              size="small"
+              color="default"
+              variant="text"
+              :aria-label="t('actions.cancel')"
+              @click="navigateBack"
+            >
+              <template #icon>
+                <X class="header-action-icon" />
+              </template>
+            </Button>
+          </Tooltip>
+          <span class="header-separator" />
+          <Button type="primary" size="small" :loading="saving" :disabled="!state" @click="save">
+            <template #icon>
+              <Save class="header-action-icon" /> </template
+            >{{ t('actions.save') }}
+          </Button>
+          <Tooltip :title="t('midiEditor.saveAndExit')" :trigger="['hover', 'focus']">
+            <Button
+              size="small"
+              color="default"
+              variant="text"
+              :loading="saving"
+              :disabled="!state"
+              :aria-label="t('midiEditor.saveAndExit')"
+              @click="saveAndExit"
+            >
+              <template #icon>
+                <LogOut class="header-action-icon" />
+              </template>
+            </Button>
+          </Tooltip>
+        </div>
+      </header>
+
+      <section v-if="loadError" class="midi-editor-missing">
+        <span>{{ loadError }}</span>
+        <Button @click="leaveWithoutNewHistory">
+          {{ t('midiEditor.projectList') }}
+        </Button>
+      </section>
+
+      <template v-else-if="state && editor">
+        <EditorToolbar
+          v-model:show-velocity="showVelocity"
+          v-model:show-playable="showPlayable"
+          :state="state"
+          :is-playing="playback.isPlaying.value"
+          @dispatch="dispatch"
+          @play="playback.play()"
+          @pause="playback.pause()"
+          @stop="playback.stop()"
+          @set-bpm="setBpm"
+          @set-meter="setMeter"
         />
-      </div>
 
-      <Tag
-        v-if="hasChanges"
-        color="pink"
-      >
-        {{ t('midiEditor.unsaved') }}
-      </Tag>
+        <div class="midi-editor-body">
+          <PianoWorkspace
+            ref="workspace"
+            :filename="`midi-editor:${state.project.id}`"
+            :document="state.document"
+            :transport="playback.transport.value"
+            :labels="labels"
+            :editing="editing"
+            :render-track-actions="trackActions.render"
+            hide-detach
+            @state-change="rememberWorkspace"
+            @toggle-track="toggleTrackEnabled"
+            @seek="playback.seek"
+            @edit-intent="handleIntent"
+          >
+            <template #corner-actions>
+              <Tooltip :title="t('midiEditor.addTrack')">
+                <Button
+                  class="piano-corner-button"
+                  size="small"
+                  color="primary"
+                  variant="link"
+                  :aria-label="t('midiEditor.addTrack')"
+                  @click="addTrack"
+                >
+                  <template #icon>
+                    <Plus class="size-4" :stroke-width="2.4" />
+                  </template>
+                </Button>
+              </Tooltip>
+            </template>
+          </PianoWorkspace>
+        </div>
 
-      <Tooltip :title="t(mainWindowUi.midiEditorExpanded ? 'midiEditor.exitFullscreen' : 'midiEditor.fullscreen')">
-        <Button
-          size="small"
-          color="primary"
-          variant="outlined"
-          :aria-label="t(mainWindowUi.midiEditorExpanded ? 'midiEditor.exitFullscreen' : 'midiEditor.fullscreen')"
-          :aria-pressed="mainWindowUi.midiEditorExpanded"
-          @click="mainWindowUi.midiEditorExpanded = !mainWindowUi.midiEditorExpanded"
-        >
-          <template #icon>
-            <component
-              :is="mainWindowUi.midiEditorExpanded ? Minimize2 : Maximize2"
-              class="header-action-icon"
-            />
-          </template>
-        </Button>
-      </Tooltip>
+        <NoteInspector
+          v-model:detailed="detailed"
+          :state="state"
+          :playable-pitches="playablePitches"
+          @dispatch="dispatch"
+        />
 
-      <Tooltip :title="t('midiEditor.exportMidi')">
-        <Button
-          size="small"
-          color="primary"
-          variant="outlined"
-          :disabled="!state"
-          @click="exportMidi"
-        >
-          <template #icon>
-            <FileMusic class="header-action-icon" />
-          </template>
-          {{ t('midiEditor.exportMidi') }}
-        </Button>
-      </Tooltip>
-      <Button
-        size="small"
-        color="primary"
-        variant="outlined"
-        :disabled="!state"
-        @click="addToLibrary"
-      >
-        <template #icon>
-          <ListPlus class="header-action-icon" />
-        </template>
-        {{ t('midiEditor.addToLibrary') }}
-      </Button>
-      <Button
-        size="small"
-        color="primary"
-        variant="outlined"
-        @click="navigateBack"
-      >
-        <template #icon>
-          <X class="header-action-icon" />
-        </template>
-        {{ t('actions.cancel') }}
-      </Button>
-      <Button
-        size="small"
-        color="primary"
-        variant="outlined"
-        :loading="saving"
-        :disabled="!state"
-        @click="save"
-      >
-        <template #icon>
-          <Save class="header-action-icon" />
-        </template>
-        {{ t('actions.save') }}
-      </Button>
-      <Button
-        type="primary"
-        size="small"
-        :loading="saving"
-        :disabled="!state"
-        @click="saveAndExit"
-      >
-        <template #icon>
-          <Save class="header-action-icon" />
-        </template>
-        {{ t('midiEditor.saveAndExit') }}
-      </Button>
-    </header>
+        <TrackActionsMenu
+          :hosts="trackActions.hosts"
+          :tracks="state.document.tracks"
+          @dispatch="dispatch"
+          @remove-track="removeTrack"
+        />
+        <NoteContextMenu
+          :target="contextTarget"
+          :state="state"
+          :track-id="selectedTrackId"
+          @dispatch="dispatch"
+          @close="contextTarget = null"
+        />
+      </template>
 
-    <section
-      v-if="loadError"
-      class="midi-editor-missing"
-    >
-      <span>{{ loadError }}</span>
-      <Button @click="leaveWithoutNewHistory">
-        {{ t('midiEditor.projectList') }}
-      </Button>
+      <section v-else class="midi-editor-missing">
+        <span>{{ t('onlineLibrary.loading') }}</span>
+      </section>
+
+      <EditorChoiceModal
+        :open="choice.open"
+        :title="choice.title"
+        :description="choice.description"
+        :options="choice.options"
+        @choose="resolveChoice"
+      />
     </section>
-
-    <template v-else-if="state && editor">
-      <EditorToolbar
-        v-model:show-velocity="showVelocity"
-        v-model:show-playable="showPlayable"
-        :state="state"
-        :is-playing="playback.isPlaying.value"
-        @dispatch="dispatch"
-        @play="playback.play()"
-        @pause="playback.pause()"
-        @stop="playback.stop()"
-        @set-bpm="setBpm"
-        @set-meter="setMeter"
-      />
-
-      <div class="midi-editor-body">
-        <PianoWorkspace
-          ref="workspace"
-          :filename="`midi-editor:${state.project.id}`"
-          :document="state.document"
-          :transport="playback.transport.value"
-          :labels="labels"
-          :editing="editing"
-          :render-track-actions="trackActions.render"
-          hide-detach
-          @state-change="rememberWorkspace"
-          @toggle-track="toggleTrackEnabled"
-          @seek="playback.seek"
-          @edit-intent="handleIntent"
-        >
-          <template #corner-actions>
-            <Tooltip :title="t('midiEditor.addTrack')">
-              <Button
-                class="piano-corner-button"
-                size="small"
-                color="primary"
-                variant="link"
-                :aria-label="t('midiEditor.addTrack')"
-                @click="addTrack"
-              >
-                <template #icon>
-                  <Plus
-                    class="size-4"
-                    :stroke-width="2.4"
-                  />
-                </template>
-              </Button>
-            </Tooltip>
-          </template>
-        </PianoWorkspace>
-      </div>
-
-      <NoteInspector
-        :state="state"
-        :playable-pitches="playablePitches"
-        @dispatch="dispatch"
-      />
-
-      <TrackActionsMenu
-        :hosts="trackActions.hosts"
-        :tracks="state.document.tracks"
-        @dispatch="dispatch"
-        @remove-track="removeTrack"
-      />
-      <NoteContextMenu
-        :target="contextTarget"
-        :state="state"
-        :track-id="selectedTrackId"
-        @dispatch="dispatch"
-        @close="contextTarget = null"
-      />
-    </template>
-
-    <section
-      v-else
-      class="midi-editor-missing"
-    >
-      <span>{{ t('onlineLibrary.loading') }}</span>
-    </section>
-
-    <EditorChoiceModal
-      :open="choice.open"
-      :title="choice.title"
-      :description="choice.description"
-      :options="choice.options"
-      @choose="resolveChoice"
-    />
-  </section>
+  </ConfigProvider>
 </template>
 
 <style scoped>
@@ -715,22 +719,21 @@ onBeforeUnmount(() => {
 }
 
 .midi-editor-header {
-  @apply flex shrink-0 flex-wrap items-center gap-2 border-b border-primary/10 px-3 py-2;
+  @apply flex shrink-0 items-center justify-between gap-3 border-b border-primary/10 px-3 py-2;
 }
 
 .midi-editor-page--expanded {
   @apply rounded-none border-0;
 }
 
-.midi-editor-title {
-  @apply shrink-0 text-sm font-semibold;
-  color: var(--color-foreground);
-}
-
-.midi-editor-name {
-  width: 200px;
-  max-width: 100%;
-}
+/* 输入与按钮来自多根组件，尺寸样式通过容器的 deep 选择器稳定作用于最终 DOM。 */
+.editor-project-identity { @apply flex min-w-0 flex-1 items-center gap-2; }
+.editor-project-label { @apply shrink-0 text-xs; color: var(--color-muted); }
+.editor-project-identity :deep(.midi-editor-name) { width: 100%; min-width: 0; max-width: 360px; font-weight: 600; }
+.editor-project-actions { @apply flex shrink-0 items-center gap-1; }
+.editor-project-actions :deep(.ant-btn-text) { color: var(--color-muted-dark); }
+.editor-unsaved { @apply size-1.5 shrink-0 rounded-full bg-primary; }
+.header-separator { @apply mx-1 h-4 w-px bg-primary/15; }
 
 .header-action-icon {
   width: 16px;

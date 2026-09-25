@@ -494,7 +494,8 @@ export default {
     fullscreen: 'Expand editor',
     exitFullscreen: 'Exit expanded editor',
     title: 'MIDI Editor',
-    description: 'Create, edit, import and export MIDI projects; export .mid or add to the library when done',
+    description:
+      'Create, edit, import and export MIDI projects; export .mid or add to the library when done',
     projectList: 'Projects',
     newProject: 'New Project',
     untitled: 'Untitled Project',
@@ -563,12 +564,21 @@ export default {
     confirmDeleteTrack: 'Track "{name}" has {count} notes. Delete it? This cannot be undone.',
     lastTrack: 'At least one track must remain',
     toolbar: {
+      songSettings: 'Song settings',
+      displaySettings: 'Display',
+      compact: 'Compact',
+      detailed: 'Detailed',
+      detailTip:
+        'Switch note inspector layout. Detailed mode reveals quantize and transpose actions.',
       bpm: 'BPM',
-      bpmTip: 'Set beats per minute; higher values play faster. Songs with tempo changes require confirmation before replacing them with one tempo.',
+      bpmTip:
+        'Set beats per minute; higher values play faster. Songs with tempo changes require confirmation before replacing them with one tempo.',
       timeSignature: 'Meter',
-      timeSignatureTip: 'The left value is beats per bar; the right is the note value of one beat. For example, 3/4 means three quarter notes per bar.',
+      timeSignatureTip:
+        'The left value is beats per bar; the right is the note value of one beat. For example, 3/4 means three quarter notes per bar.',
       snap: 'Snap',
-      snapTip: 'Set the grid for adding, moving, resizing and quantizing notes. Hold Alt while dragging to temporarily bypass snapping.',
+      snapTip:
+        'Set the grid for adding, moving, resizing and quantizing notes. Hold Alt while dragging to temporarily bypass snapping.',
       snapOff: 'Off',
       snapBar: 'Bar',
       tool: 'Tool',
@@ -581,17 +591,22 @@ export default {
       stop: 'Stop',
       loop: 'Loop Region',
       clearLoop: 'Clear Loop',
-      loopTip: 'Alt-drag on the time ruler to set a preview loop; double-click the ruler to clear it. Once set, this button also clears the loop.',
-      clearLoopTip: 'Click to clear the current loop, or double-click the time ruler. Alt-drag on the ruler to set a new region.',
+      loopTip:
+        'Alt-drag on the time ruler to set a preview loop; double-click the ruler to clear it. Once set, this button also clears the loop.',
+      clearLoopTip:
+        'Click to clear the current loop, or double-click the time ruler. Alt-drag on the ruler to set a new region.',
       velocityLane: 'Velocity Lane',
-      velocityLaneTip: 'Show or hide the bottom velocity lane. Drag bars vertically to adjust velocity; selected notes change together.',
+      velocityLaneTip:
+        'Show or hide the bottom velocity lane. Drag bars vertically to adjust velocity; selected notes change together.',
       playableHighlight: 'Playable Highlight',
       playableHighlightTip: 'Dim pitches that the current key template cannot play in-game',
       help: 'Shortcuts',
       replaceTempoTitle: 'Replace with a single tempo',
-      replaceTempoDescription: 'This MIDI has multiple tempo changes. Changing BPM replaces them with one tempo for the whole song.',
+      replaceTempoDescription:
+        'This MIDI has multiple tempo changes. Changing BPM replaces them with one tempo for the whole song.',
       replaceMeterTitle: 'Replace with a single meter',
-      replaceMeterDescription: 'This MIDI has multiple meter changes. Changing the meter replaces them with one meter for the whole song.',
+      replaceMeterDescription:
+        'This MIDI has multiple meter changes. Changing the meter replaces them with one meter for the whole song.',
       replace: 'Replace',
     },
     inspector: {
@@ -604,11 +619,14 @@ export default {
       velocity: 'Velocity',
       quantize: 'Quantize',
       quantizeStart: 'Quantize Start',
-      quantizeStartTip: 'Select notes, then align their start times to the current snap grid without changing their lengths. Does nothing when snapping is off.',
+      quantizeStartTip:
+        'Select notes, then align their start times to the current snap grid without changing their lengths. Does nothing when snapping is off.',
       quantizeLength: 'Quantize Length',
-      quantizeLengthTip: 'Round selected note lengths to multiples of the current snap grid without moving their start times. Does nothing when snapping is off.',
+      quantizeLengthTip:
+        'Round selected note lengths to multiples of the current snap grid without moving their start times. Does nothing when snapping is off.',
       transpose: 'Transpose',
-      transposeTip: 'Move selected notes by {semitones} semitones without changing their start times or lengths. Twelve semitones equal one octave.',
+      transposeTip:
+        'Move selected notes by {semitones} semitones without changing their start times or lengths. Twelve semitones equal one octave.',
       octaveUp: '+Octave',
       octaveDown: '-Octave',
       semitoneUp: '+1',
@@ -631,12 +649,15 @@ export default {
     },
     help: {
       title: 'Editor Guide',
-      selectTool: 'Select tool: click to select, Shift to add; drag on empty space for box selection; double-click empty space to add a note; drag a note to move, drag its edges to resize; hold Alt to disable snapping.',
+      selectTool:
+        'Select tool: click to select, Shift to add; drag on empty space for box selection; double-click empty space to add a note; drag a note to move, drag its edges to resize; hold Alt to disable snapping.',
       drawTool: 'Draw tool: click to add a note, drag horizontally to set its length.',
       loop: 'Loop: Alt+drag on the ruler to set the loop region, double-click the ruler to clear it.',
       velocity: 'Velocity: drag bars in the bottom lane; multiple selected notes change together.',
-      shortcuts: 'Shortcuts: Delete removes, Ctrl+A selects all, Ctrl+C/X/V copy/cut/paste, Ctrl+D duplicates, Ctrl+Z / Ctrl+Shift+Z undo/redo, arrow keys nudge (Shift for octave/bar), Space plays/pauses, Esc clears selection, V/B switch tools.',
-      playback: 'Preview plays only this project and never triggers in-game keys; the global player pauses when preview starts.',
+      shortcuts:
+        'Shortcuts: Delete removes, Ctrl+A selects all, Ctrl+C/X/V copy/cut/paste, Ctrl+D duplicates, Ctrl+Z / Ctrl+Shift+Z undo/redo, arrow keys nudge (Shift for octave/bar), Space plays/pauses, Esc clears selection, V/B switch tools.',
+      playback:
+        'Preview plays only this project and never triggers in-game keys; the global player pauses when preview starts.',
     },
   },
   pagination: {

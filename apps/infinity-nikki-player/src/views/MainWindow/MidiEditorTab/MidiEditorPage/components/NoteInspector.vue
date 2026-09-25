@@ -5,6 +5,7 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Slider, Tooltip } from 'antdv-next'
+import { ChevronDown, ChevronUp } from 'lucide-vue-next'
 import EditorNumberInput from './EditorNumberInput.vue'
 import { useEditorValueDraft } from '../useEditorValueDraft'
 import { createTimeline } from '@strawberrybear/piano-roll/core'
@@ -18,12 +19,14 @@ import {
 import type { EditorAction, EditorSessionState } from '@strawberrybear/midi-editor'
 
 const props = defineProps<{
+  detailed?: boolean
   state: EditorSessionState
   /** 游戏可演奏音高；提供时统计选区内不可演奏音符数。 */
   playablePitches?: ReadonlySet<number> | null
 }>()
 const emit = defineEmits<{
   dispatch: [action: EditorAction]
+  'update:detailed': [value: boolean]
 }>()
 const { t } = useI18n()
 
@@ -130,185 +133,168 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
 </script>
 
 <template>
-  <aside class="note-inspector">
-    <header class="inspector-header">
-      <span class="inspector-title">{{ t('midiEditor.inspector.title') }}</span>
-      <span class="inspector-count">
-        {{
-          selectedNotes.length === 0
-            ? t('midiEditor.inspector.noSelection')
-            : t('midiEditor.inspector.selectedCount', { count: selectedNotes.length })
-        }}
-      </span>
-    </header>
-
-    <template v-if="selectedNotes.length > 0">
-      <div class="inspector-row">
-        <span class="inspector-label">{{ t('midiEditor.inspector.pitch') }}</span>
-        <template v-if="single">
-          <EditorNumberInput
-            :key="single.id"
-            size="small"
-            class="inspector-input"
-            :min="MIN_PITCH"
-            :max="MAX_PITCH"
-            :precision="0"
-            :value="single.pitch"
-            @commit="handlePitch"
-          />
-          <span class="inspector-hint">{{ noteName(single.pitch) }}</span>
-        </template>
-        <span
-          v-else
-          class="inspector-value"
-        >
-          {{ noteName(pitchRange.min) }} – {{ noteName(pitchRange.max) }}
+  <aside class="note-inspector" :class="{ 'note-inspector--detailed': detailed }">
+    <div class="inspector-main">
+      <header class="inspector-header">
+        <span class="inspector-title">{{ t('midiEditor.inspector.title') }}</span>
+        <span class="inspector-count">
+          {{
+            selectedNotes.length === 0
+              ? t('midiEditor.inspector.noSelection')
+              : t('midiEditor.inspector.selectedCount', { count: selectedNotes.length })
+          }}
         </span>
-      </div>
+      </header>
+      <div class="inspector-properties">
+        <template v-if="selectedNotes.length > 0">
+          <div class="inspector-row">
+            <span class="inspector-label">{{ t('midiEditor.inspector.pitch') }}</span>
+            <template v-if="single">
+              <EditorNumberInput
+                :key="single.id"
+                :aria-label="t('midiEditor.inspector.pitch')"
+                size="small"
+                class="inspector-input"
+                :style="{ width: '76px' }"
+                :min="MIN_PITCH"
+                :max="MAX_PITCH"
+                :precision="0"
+                :value="single.pitch"
+                @commit="handlePitch"
+              />
+              <span class="inspector-hint">{{ noteName(single.pitch) }}</span>
+            </template>
+            <span v-else class="inspector-value">
+              {{ noteName(pitchRange.min) }} – {{ noteName(pitchRange.max) }}
+            </span>
+          </div>
 
-      <div
-        v-if="single"
-        class="inspector-row"
-      >
-        <span class="inspector-label">{{ t('midiEditor.inspector.start') }}</span>
-        <span class="inspector-value">{{ formatPosition(single.startTick) }}</span>
-      </div>
+          <div v-if="single" class="inspector-row">
+            <span class="inspector-label">{{ t('midiEditor.inspector.length') }}</span>
+            <EditorNumberInput
+              :key="single.id"
+              :aria-label="t('midiEditor.inspector.length')"
+              size="small"
+              class="inspector-input"
+              :style="{ width: '76px' }"
+              :min="0.001"
+              :step="0.25"
+              :value="lengthBeats"
+              @commit="handleLength"
+            />
+          </div>
 
-      <div
-        v-if="single"
-        class="inspector-row"
-      >
-        <span class="inspector-label">{{ t('midiEditor.inspector.length') }}</span>
-        <EditorNumberInput
-          :key="single.id"
+          <div class="inspector-row">
+            <span class="inspector-label">{{ t('midiEditor.inspector.velocity') }}</span>
+            <Slider
+              class="inspector-slider"
+              :style="{ width: '96px', margin: '0 4px' }"
+              :min="MIN_VELOCITY"
+              :max="MAX_VELOCITY"
+              :value="velocityDraft.value.value"
+              @change="previewVelocity"
+              @change-complete="velocityDraft.commit"
+              @pointerdown.capture="beginVelocity"
+              @keydown.capture="cancelVelocity"
+              @pointercancel="discardVelocity"
+              @touchcancel="discardVelocity"
+            />
+            <span class="inspector-hint w-7 text-right">{{ velocityDraft.value.value }}</span>
+          </div>
+        </template>
+      </div>
+      <Tooltip :title="t('midiEditor.toolbar.detailTip')" :trigger="['hover', 'focus']">
+        <Button
           size="small"
-          class="inspector-input"
-          :min="0.001"
-          :step="0.25"
-          :value="lengthBeats"
-          @commit="handleLength"
-        />
-      </div>
-
-      <div class="inspector-row">
-        <span class="inspector-label">{{ t('midiEditor.inspector.velocity') }}</span>
-        <Slider
-          class="inspector-slider"
-          :min="MIN_VELOCITY"
-          :max="MAX_VELOCITY"
-          :value="velocityDraft.value.value"
-          @change="previewVelocity"
-          @change-complete="velocityDraft.commit"
-          @pointerdown.capture="beginVelocity"
-          @keydown.capture="cancelVelocity"
-          @pointercancel="discardVelocity"
-          @touchcancel="discardVelocity"
-        />
-        <span class="inspector-hint w-7 text-right">{{ velocityDraft.value.value }}</span>
-      </div>
-
-      <div class="inspector-row">
-        <span class="inspector-label">{{ t('midiEditor.inspector.quantize') }}</span>
-        <div class="inspector-actions">
-          <Tooltip :title="t('midiEditor.inspector.quantizeStartTip')">
-            <Button
-              size="small"
-              color="primary"
-              variant="outlined"
-              @click="emit('dispatch', { type: 'quantize', start: true })"
-            >
-              {{ t('midiEditor.inspector.quantizeStart') }}
-            </Button>
-          </Tooltip>
-          <Tooltip :title="t('midiEditor.inspector.quantizeLengthTip')">
-            <Button
-              size="small"
-              color="primary"
-              variant="outlined"
-              @click="emit('dispatch', { type: 'quantize', start: false, length: true })"
-            >
-              {{ t('midiEditor.inspector.quantizeLength') }}
-            </Button>
-          </Tooltip>
+          color="default"
+          variant="text"
+          :aria-expanded="Boolean(detailed)"
+          aria-controls="midi-note-details"
+          @click="emit('update:detailed', !detailed)"
+        >
+          {{ t(detailed ? 'midiEditor.toolbar.compact' : 'midiEditor.toolbar.detailed') }}
+          <component :is="detailed ? ChevronDown : ChevronUp" class="size-3" />
+        </Button>
+      </Tooltip>
+    </div>
+    <div v-if="detailed" id="midi-note-details" class="inspector-details">
+      <template v-if="selectedNotes.length > 0">
+        <div v-if="single" class="inspector-row">
+          <span class="inspector-label">{{ t('midiEditor.inspector.start') }}</span>
+          <span class="inspector-value">{{ formatPosition(single.startTick) }}</span>
         </div>
-      </div>
-
-      <div class="inspector-row">
-        <span class="inspector-label">{{ t('midiEditor.inspector.transpose') }}</span>
-        <div class="inspector-actions">
-          <Tooltip
-            v-for="step in TRANSPOSE_STEPS"
-            :key="step.semitones"
-            :title="t('midiEditor.inspector.transposeTip', { semitones: step.semitones > 0 ? `+${step.semitones}` : step.semitones })"
-          >
-            <Button
-              size="small"
-              color="primary"
-              variant="outlined"
-              @click="emit('dispatch', { type: 'transpose', semitones: step.semitones })"
-            >
-              {{ t(`midiEditor.inspector.${step.key}`) }}
-            </Button>
-          </Tooltip>
+        <div class="inspector-row">
+          <span class="inspector-label">{{ t('midiEditor.inspector.quantize') }}</span>
+          <div class="inspector-actions">
+            <Tooltip :title="t('midiEditor.inspector.quantizeStartTip')">
+              <Button
+                size="small"
+                color="primary"
+                variant="filled"
+                @click="emit('dispatch', { type: 'quantize', start: true })"
+              >
+                {{ t('midiEditor.inspector.quantizeStart') }}
+              </Button>
+            </Tooltip>
+            <Tooltip :title="t('midiEditor.inspector.quantizeLengthTip')">
+              <Button
+                size="small"
+                color="primary"
+                variant="filled"
+                @click="emit('dispatch', { type: 'quantize', start: false, length: true })"
+              >
+                {{ t('midiEditor.inspector.quantizeLength') }}
+              </Button>
+            </Tooltip>
+          </div>
         </div>
-      </div>
 
-      <p
-        v-if="unplayableCount > 0"
-        class="inspector-warning"
-      >
-        {{ t('midiEditor.inspector.unplayableCount', { count: unplayableCount }) }}
-      </p>
-    </template>
+        <div class="inspector-row">
+          <span class="inspector-label">{{ t('midiEditor.inspector.transpose') }}</span>
+          <div class="inspector-actions">
+            <Tooltip
+              v-for="step in TRANSPOSE_STEPS"
+              :key="step.semitones"
+              :title="t('midiEditor.inspector.transposeTip', { semitones: step.semitones > 0 ? `+${step.semitones}` : step.semitones })"
+            >
+              <Button
+                size="small"
+                color="primary"
+                variant="filled"
+                @click="emit('dispatch', { type: 'transpose', semitones: step.semitones })"
+              >
+                {{ t(`midiEditor.inspector.${step.key}`) }}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+
+        <p v-if="unplayableCount > 0" class="inspector-warning">
+          {{ t('midiEditor.inspector.unplayableCount', { count: unplayableCount }) }}
+        </p>
+      </template>
+      <span v-else class="inspector-hint">{{ t('midiEditor.inspector.noSelection') }}</span>
+    </div>
   </aside>
 </template>
 
 <style scoped>
-.note-inspector {
-  @apply flex flex-wrap content-start items-center gap-x-4 gap-y-2 overflow-y-auto border-t border-primary/10 px-3 py-2 text-xs;
-  /* 固定两行高度：选中/取消选中时不改变钢琴卷帘的几何位置，避免拖拽中的指针错位。 */
-  height: 4.5rem;
-}
-
-.inspector-header {
-  @apply flex items-center gap-2;
-}
-
-.inspector-title {
-  @apply font-semibold;
-  color: var(--color-foreground);
-}
-
-.inspector-count,
-.inspector-label,
-.inspector-hint {
-  color: var(--color-muted);
-}
-
-.inspector-row {
-  @apply flex items-center gap-2;
-}
-
-.inspector-value {
-  @apply font-medium tabular-nums;
-  color: var(--color-foreground);
-}
-
-.inspector-input {
-  width: 84px;
-}
-
-.inspector-slider {
-  width: 120px;
-  margin: 0 4px;
-}
-
-.inspector-actions {
-  @apply flex items-center gap-1;
-}
-
-.inspector-warning {
-  @apply m-0 font-medium;
-  color: var(--color-danger, #d9534f);
+.note-inspector { @apply shrink-0 border-t border-primary/10 bg-white/80 text-xs; container-type: inline-size; }
+.inspector-main { @apply flex items-center gap-4 px-3; height: 60px; }
+.inspector-header { @apply flex shrink-0 flex-col gap-1; width: 120px; }
+.inspector-title { @apply font-semibold; color: var(--color-foreground); }
+.inspector-count, .inspector-label, .inspector-hint { color: var(--color-muted-dark); }
+.inspector-properties { @apply flex min-w-0 flex-1 items-center gap-5; }
+.inspector-row { @apply flex shrink-0 items-center gap-2 whitespace-nowrap; }
+.inspector-value { @apply font-medium tabular-nums; color: var(--color-foreground); }
+.inspector-details { @apply flex items-center gap-5 border-t border-primary/10 px-3; min-height: 48px; }
+.inspector-actions { @apply flex items-center gap-1; }
+.inspector-warning { @apply m-0 text-xs; color: var(--color-danger, #d9534f); }
+@container (max-width: 760px) {
+  .inspector-header { width: 90px; }
+  .inspector-main, .inspector-properties { gap: 8px; }
+  .inspector-properties .inspector-row { gap: 4px; }
+  .inspector-properties :deep(.inspector-slider) { width: 64px !important; }
+  .inspector-details { @apply grid grid-cols-2 gap-x-3 gap-y-2 py-2; }
 }
 </style>

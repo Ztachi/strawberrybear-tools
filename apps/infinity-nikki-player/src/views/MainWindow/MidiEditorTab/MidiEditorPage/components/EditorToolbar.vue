@@ -2,11 +2,13 @@
 /**
  * @description: MIDI 编辑器工具栏：速度/拍号/吸附/工具/撤销重做/试听/显示开关
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Popover, Select, Tooltip } from 'antdv-next'
 import {
   CircleHelp,
+  Settings2,
+  ChevronDown,
   Gamepad2,
   MousePointer2,
   Pause,
@@ -40,6 +42,7 @@ const emit = defineEmits<{
   'update:showPlayable': [value: boolean]
 }>()
 const { t } = useI18n()
+const settingsOpen = ref(false)
 
 /** 拍号可选分子/分母；分母限定为 2 的幂以符合 SMF 规范。 */
 const METER_NUMERATORS = Array.from({ length: 16 }, (_, index) => index + 1)
@@ -89,50 +92,131 @@ function handleSnap(value: unknown): void {
 
 <template>
   <div class="editor-toolbar">
-    <Tooltip :title="t('midiEditor.toolbar.bpmTip')">
-      <label class="toolbar-field">
-        <span class="toolbar-label">{{ t('midiEditor.toolbar.bpm') }}</span>
-        <EditorNumberInput
-          class="toolbar-bpm"
-          size="small"
-          :min="MIN_BPM"
-          :max="MAX_BPM"
-          :precision="2"
-          :step="1"
-          :value="bpm"
-          @commit="handleBpm"
-        />
-      </label>
-    </Tooltip>
-
-    <Tooltip :title="t('midiEditor.toolbar.timeSignatureTip')">
-      <div class="toolbar-field">
-        <span class="toolbar-label">{{ t('midiEditor.toolbar.timeSignature') }}</span>
-        <Select
-          class="toolbar-meter"
-          size="small"
-          :value="meter.numerator"
-          :options="numeratorOptions"
-          :get-popup-container="getMainWindowPopupContainer"
-          @change="handleNumerator"
-        />
-        <span class="toolbar-label">/</span>
-        <Select
-          class="toolbar-meter"
-          size="small"
-          :value="meter.denominator"
-          :options="denominatorOptions"
-          :get-popup-container="getMainWindowPopupContainer"
-          @change="handleDenominator"
-        />
+    <div
+      class="toolbar-group toolbar-edit-group"
+      :aria-label="t('midiEditor.toolbar.tool')"
+      role="group"
+    >
+      <div
+        class="inline-flex items-center gap-0.5"
+        role="group"
+        :aria-label="t('midiEditor.toolbar.tool')"
+      >
+        <Tooltip v-for="tool in toolOptions" :key="tool.value" :trigger="['hover', 'focus']">
+          <template #title>
+            <div class="font-semibold">
+              {{ t(`midiEditor.toolbar.${tool.value}`) }}
+            </div>
+            <div>{{ t(`midiEditor.help.${tool.help}`) }}</div>
+          </template>
+          <Button
+            size="small"
+            color="primary"
+            :variant="state.tool === tool.value ? 'filled' : 'text'"
+            :aria-label="t(`midiEditor.toolbar.${tool.value}`)"
+            :aria-pressed="state.tool === tool.value"
+            @click="emit('dispatch', { type: 'set-tool', tool: tool.value })"
+          >
+            <template #icon>
+              <component :is="tool.icon" class="toolbar-icon" />
+            </template>
+          </Button>
+        </Tooltip>
       </div>
-    </Tooltip>
 
-    <Tooltip :title="t('midiEditor.toolbar.snapTip')">
+      <span class="toolbar-separator" />
+      <Tooltip :title="t('midiEditor.toolbar.undo')">
+        <Button
+          size="small"
+          color="default"
+          variant="text"
+          :disabled="!state.canUndo"
+          :aria-label="t('midiEditor.toolbar.undo')"
+          @click="emit('dispatch', { type: 'undo' })"
+        >
+          <template #icon>
+            <Undo2 class="toolbar-icon" />
+          </template>
+        </Button>
+      </Tooltip>
+      <Tooltip :title="t('midiEditor.toolbar.redo')">
+        <Button
+          size="small"
+          color="default"
+          variant="text"
+          :disabled="!state.canRedo"
+          :aria-label="t('midiEditor.toolbar.redo')"
+          @click="emit('dispatch', { type: 'redo' })"
+        >
+          <template #icon>
+            <Redo2 class="toolbar-icon" />
+          </template>
+        </Button>
+      </Tooltip>
+    </div>
+    <div
+      class="toolbar-group toolbar-transport-group"
+      :aria-label="t('midiEditor.toolbar.play')"
+      role="group"
+    >
+      <Tooltip :title="t(isPlaying ? 'midiEditor.toolbar.pause' : 'midiEditor.toolbar.play')">
+        <Button
+          size="small"
+          type="primary"
+          shape="circle"
+          :aria-label="t(isPlaying ? 'midiEditor.toolbar.pause' : 'midiEditor.toolbar.play')"
+          @click="isPlaying ? emit('pause') : emit('play')"
+        >
+          <template #icon>
+            <Pause v-if="isPlaying" class="toolbar-icon" fill="currentColor" />
+            <Play v-else class="toolbar-icon ml-px" fill="currentColor" />
+          </template>
+        </Button>
+      </Tooltip>
+      <Tooltip :title="t('midiEditor.toolbar.stop')">
+        <Button
+          size="small"
+          color="default"
+          variant="text"
+          :aria-label="t('midiEditor.toolbar.stop')"
+          @click="emit('stop')"
+        >
+          <template #icon>
+            <Square class="toolbar-icon" fill="currentColor" />
+          </template>
+        </Button>
+      </Tooltip>
+      <Tooltip
+        :title="t(state.project.loop ? 'midiEditor.toolbar.clearLoopTip' : 'midiEditor.toolbar.loopTip')"
+        :trigger="['hover', 'focus']"
+      >
+        <!-- 禁用按钮无法接收指针事件，外层保留提示的悬停与键盘焦点入口。 -->
+        <span class="inline-flex" :tabindex="state.project.loop ? undefined : 0">
+          <Button
+            size="small"
+            color="primary"
+            :variant="state.project.loop ? 'filled' : 'text'"
+            :disabled="!state.project.loop"
+            :aria-label="t('midiEditor.toolbar.loop')"
+            @click="emit('dispatch', { type: 'loop-change', loop: null })"
+          >
+            <template #icon>
+              <Repeat class="toolbar-icon" />
+            </template>
+          </Button>
+        </span>
+      </Tooltip>
+    </div>
+    <div class="toolbar-group toolbar-settings-group">
       <div class="toolbar-field">
-        <span class="toolbar-label">{{ t('midiEditor.toolbar.snap') }}</span>
+        <Tooltip :title="t('midiEditor.toolbar.snapTip')">
+          <span class="toolbar-label">{{ t('midiEditor.toolbar.snap') }}</span>
+        </Tooltip>
         <Select
           class="toolbar-snap"
+          :aria-label="t('midiEditor.toolbar.snap')"
+          :style="{ width: '104px', flex: '0 0 104px' }"
+          :popup-match-select-width="160"
           size="small"
           :value="state.snap"
           :options="snapOptions"
@@ -140,237 +224,177 @@ function handleSnap(value: unknown): void {
           @change="handleSnap"
         />
       </div>
-    </Tooltip>
 
-    <div
-      class="inline-flex items-center gap-0.5"
-      role="group"
-      :aria-label="t('midiEditor.toolbar.tool')"
-    >
-      <Tooltip
-        v-for="tool in toolOptions"
-        :key="tool.value"
-        :trigger="['hover', 'focus']"
+      <Popover
+        v-model:open="settingsOpen"
+        trigger="click"
+        placement="bottomRight"
+        :get-popup-container="getMainWindowPopupContainer"
       >
-        <template #title>
-          <div class="font-semibold">
-            {{ t(`midiEditor.toolbar.${tool.value}`) }}
+        <template #content>
+          <div id="midi-song-settings" class="editor-settings">
+            <h3 class="settings-title">
+              {{ t('midiEditor.toolbar.songSettings') }}
+            </h3>
+
+            <label class="toolbar-field">
+              <Tooltip :title="t('midiEditor.toolbar.bpmTip')">
+                <span class="toolbar-label">{{ t('midiEditor.toolbar.bpm') }}</span>
+              </Tooltip>
+              <EditorNumberInput
+                class="toolbar-bpm"
+                :style="{ width: '100px' }"
+                size="small"
+                :min="MIN_BPM"
+                :max="MAX_BPM"
+                :precision="2"
+                :step="1"
+                :value="bpm"
+                @commit="handleBpm"
+              />
+            </label>
+
+            <div class="toolbar-field">
+              <Tooltip :title="t('midiEditor.toolbar.timeSignatureTip')">
+                <span class="toolbar-label">{{ t('midiEditor.toolbar.timeSignature') }}</span>
+              </Tooltip>
+              <Select
+                class="toolbar-meter"
+                :style="{ width: '80px', flex: '0 0 80px' }"
+                :popup-match-select-width="120"
+                :list-height="224"
+                size="small"
+                :value="meter.numerator"
+                :options="numeratorOptions"
+                :get-popup-container="getMainWindowPopupContainer"
+                @change="handleNumerator"
+              />
+              <span class="toolbar-label">/</span>
+              <Select
+                class="toolbar-meter"
+                :style="{ width: '80px', flex: '0 0 80px' }"
+                :popup-match-select-width="120"
+                :list-height="224"
+                size="small"
+                :value="meter.denominator"
+                :options="denominatorOptions"
+                :get-popup-container="getMainWindowPopupContainer"
+                @change="handleDenominator"
+              />
+            </div>
+
+            <h3 class="settings-title settings-divider">
+              {{ t('midiEditor.toolbar.displaySettings') }}
+            </h3>
+            <div class="settings-display">
+              <Tooltip :title="t('midiEditor.toolbar.velocityLaneTip')">
+                <Button
+                  size="small"
+                  color="primary"
+                  :variant="showVelocity ? 'filled' : 'text'"
+                  :aria-pressed="showVelocity"
+                  :aria-label="t('midiEditor.toolbar.velocityLane')"
+                  @click="emit('update:showVelocity', !showVelocity)"
+                >
+                  <template #icon>
+                    <SlidersVertical class="toolbar-icon" />
+                  </template>
+                  {{ t('midiEditor.toolbar.velocityLane') }}
+                </Button>
+              </Tooltip>
+              <Tooltip :title="t('midiEditor.toolbar.playableHighlightTip')">
+                <Button
+                  size="small"
+                  color="primary"
+                  :variant="showPlayable ? 'filled' : 'text'"
+                  :aria-pressed="showPlayable"
+                  :aria-label="t('midiEditor.toolbar.playableHighlight')"
+                  @click="emit('update:showPlayable', !showPlayable)"
+                >
+                  <template #icon>
+                    <Gamepad2 class="toolbar-icon" />
+                  </template>
+                  {{ t('midiEditor.toolbar.playableHighlight') }}
+                </Button>
+              </Tooltip>
+            </div>
           </div>
-          <div>{{ t(`midiEditor.help.${tool.help}`) }}</div>
         </template>
         <Button
           size="small"
-          color="primary"
-          :variant="state.tool === tool.value ? 'filled' : 'text'"
-          :aria-label="t(`midiEditor.toolbar.${tool.value}`)"
-          :aria-pressed="state.tool === tool.value"
-          @click="emit('dispatch', { type: 'set-tool', tool: tool.value })"
+          color="default"
+          variant="text"
+          class="song-settings-trigger"
+          :aria-expanded="settingsOpen"
+          aria-controls="midi-song-settings"
+          :title="t('midiEditor.toolbar.songSettings')"
+          :aria-label="t('midiEditor.toolbar.songSettings')"
         >
           <template #icon>
-            <component
-              :is="tool.icon"
-              class="toolbar-icon"
-            />
+            <Settings2 class="toolbar-icon" />
           </template>
-        </Button>
-      </Tooltip>
-    </div>
-
-    <span class="toolbar-divider" />
-
-    <Tooltip :title="t('midiEditor.toolbar.undo')">
-      <Button
-        size="small"
-        color="primary"
-        variant="link"
-        :disabled="!state.canUndo"
-        :aria-label="t('midiEditor.toolbar.undo')"
-        @click="emit('dispatch', { type: 'undo' })"
-      >
-        <template #icon>
-          <Undo2 class="toolbar-icon" />
-        </template>
-      </Button>
-    </Tooltip>
-    <Tooltip :title="t('midiEditor.toolbar.redo')">
-      <Button
-        size="small"
-        color="primary"
-        variant="link"
-        :disabled="!state.canRedo"
-        :aria-label="t('midiEditor.toolbar.redo')"
-        @click="emit('dispatch', { type: 'redo' })"
-      >
-        <template #icon>
-          <Redo2 class="toolbar-icon" />
-        </template>
-      </Button>
-    </Tooltip>
-
-    <span class="toolbar-divider" />
-
-    <Tooltip :title="t(isPlaying ? 'midiEditor.toolbar.pause' : 'midiEditor.toolbar.play')">
-      <Button
-        size="small"
-        type="primary"
-        shape="circle"
-        :aria-label="t(isPlaying ? 'midiEditor.toolbar.pause' : 'midiEditor.toolbar.play')"
-        @click="isPlaying ? emit('pause') : emit('play')"
-      >
-        <template #icon>
-          <Pause
-            v-if="isPlaying"
-            class="toolbar-icon"
-            fill="currentColor"
-          />
-          <Play
-            v-else
-            class="toolbar-icon ml-px"
-            fill="currentColor"
-          />
-        </template>
-      </Button>
-    </Tooltip>
-    <Tooltip :title="t('midiEditor.toolbar.stop')">
-      <Button
-        size="small"
-        color="primary"
-        variant="link"
-        :aria-label="t('midiEditor.toolbar.stop')"
-        @click="emit('stop')"
-      >
-        <template #icon>
-          <Square
-            class="toolbar-icon"
-            fill="currentColor"
-          />
-        </template>
-      </Button>
-    </Tooltip>
-    <Tooltip
-      :title="t(state.project.loop ? 'midiEditor.toolbar.clearLoopTip' : 'midiEditor.toolbar.loopTip')"
-      :trigger="['hover', 'focus']"
-    >
-      <!-- 禁用按钮无法接收指针事件，外层保留提示的悬停与键盘焦点入口。 -->
-      <span
-        class="inline-flex"
-        :tabindex="state.project.loop ? undefined : 0"
-      >
-        <Button
-          size="small"
-          color="primary"
-          :variant="state.project.loop ? 'solid' : 'link'"
-          :disabled="!state.project.loop"
-          :aria-label="t('midiEditor.toolbar.loop')"
-          @click="emit('dispatch', { type: 'loop-change', loop: null })"
-        >
-          <template #icon>
-            <Repeat class="toolbar-icon" />
-          </template>
-        </Button>
-      </span>
-    </Tooltip>
-
-    <span class="toolbar-divider" />
-
-    <Tooltip :title="t('midiEditor.toolbar.velocityLaneTip')">
-      <Button
-        size="small"
-        color="primary"
-        :variant="showVelocity ? 'solid' : 'link'"
-        :aria-pressed="showVelocity"
-        :aria-label="t('midiEditor.toolbar.velocityLane')"
-        @click="emit('update:showVelocity', !showVelocity)"
-      >
-        <template #icon>
-          <SlidersVertical class="toolbar-icon" />
-        </template>
-      </Button>
-    </Tooltip>
-    <Tooltip :title="t('midiEditor.toolbar.playableHighlightTip')">
-      <Button
-        size="small"
-        color="primary"
-        :variant="showPlayable ? 'solid' : 'link'"
-        :aria-pressed="showPlayable"
-        :aria-label="t('midiEditor.toolbar.playableHighlight')"
-        @click="emit('update:showPlayable', !showPlayable)"
-      >
-        <template #icon>
-          <Gamepad2 class="toolbar-icon" />
-        </template>
-      </Button>
-    </Tooltip>
-
-    <Popover
-      placement="bottomRight"
-      trigger="click"
-      :get-popup-container="getMainWindowPopupContainer"
-    >
-      <template #content>
-        <ul class="editor-help-list">
-          <li
-            v-for="line in helpLines"
-            :key="line"
+          <span class="song-settings-summary"
+            >{{ Math.round(bpm * 100) / 100 }} BPM ·
+            {{ meter.numerator }}/{{ meter.denominator }}</span
           >
-            {{ line }}
-          </li>
-        </ul>
-      </template>
-      <Button
-        size="small"
-        color="primary"
-        variant="link"
-        class="ml-auto"
-        :aria-label="t('midiEditor.toolbar.help')"
+          <ChevronDown class="toolbar-chevron" />
+        </Button>
+      </Popover>
+      <Popover
+        placement="bottomRight"
+        trigger="click"
+        :get-popup-container="getMainWindowPopupContainer"
       >
-        <template #icon>
-          <CircleHelp class="toolbar-icon" />
+        <template #content>
+          <ul class="editor-help-list">
+            <li v-for="line in helpLines" :key="line">
+              {{ line }}
+            </li>
+          </ul>
         </template>
-      </Button>
-    </Popover>
+        <Button
+          size="small"
+          color="default"
+          variant="text"
+          :aria-label="t('midiEditor.toolbar.help')"
+        >
+          <template #icon>
+            <CircleHelp class="toolbar-icon" />
+          </template>
+        </Button>
+      </Popover>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .editor-toolbar {
-  @apply flex flex-wrap items-center gap-2 border-b border-primary/10 px-3 py-2;
+  @apply flex shrink-0 items-center justify-between gap-3 border-b border-primary/10 px-3 py-2;
+  container-type: inline-size;
 }
-
-.toolbar-field {
-  @apply flex items-center gap-1;
-}
-
-.toolbar-label {
-  @apply text-xs;
-  color: var(--color-muted);
-}
-
-.toolbar-bpm {
-  width: 88px;
-}
-
-.toolbar-meter {
-  width: 58px;
-}
-
-.toolbar-snap {
-  width: 84px;
-}
-
-.toolbar-divider {
-  @apply mx-1 h-5 w-px;
-  background: var(--border-primary-15);
-}
-
-.toolbar-icon {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2.2;
-}
-
-.editor-help-list {
-  @apply flex max-w-sm flex-col gap-1.5 text-xs leading-5;
-  color: var(--color-muted-dark);
+.toolbar-group { @apply flex shrink-0 items-center gap-1; }
+.toolbar-edit-group { @apply gap-2; }
+.toolbar-transport-group { @apply rounded-lg bg-primary/10 px-2 py-0.5; }
+.toolbar-settings-group { @apply gap-2; }
+.toolbar-field { @apply flex items-center justify-between gap-2 whitespace-nowrap; }
+.toolbar-label { @apply text-xs; color: var(--color-muted-dark); }
+.toolbar-icon { width: 16px; height: 16px; stroke-width: 2; }
+.toolbar-chevron { width: 12px; height: 12px; }
+.toolbar-group :deep(.ant-btn) { box-shadow: none; }
+.toolbar-group :deep(.ant-btn-text:not(:disabled):not(.ant-btn-color-primary)) { color: var(--color-muted-dark); }
+.toolbar-edit-group > :first-child { @apply mr-2 rounded-md bg-primary/10 p-0.5; }
+.toolbar-separator { @apply mx-1 h-4 w-px bg-primary/15; }
+.toolbar-settings-group :deep(.song-settings-trigger) { width: 174px; }
+.song-settings-summary { @apply text-xs tabular-nums; }
+.editor-settings { @apply flex flex-col gap-3; width: 244px; }
+.settings-title { @apply m-0 text-xs font-semibold; color: var(--color-foreground); }
+.settings-divider { @apply border-t border-primary/10 pt-3; }
+.settings-display { @apply flex flex-col items-stretch gap-1; }
+.settings-display :deep(.ant-btn) { @apply justify-start; }
+.editor-help-list { @apply flex max-w-sm flex-col gap-1.5 text-xs leading-5; color: var(--color-muted-dark); }
+@container (max-width: 650px) {
+  .song-settings-summary { display: none; }
+  .toolbar-settings-group :deep(.song-settings-trigger) { width: 30px; padding: 0; }
+  .toolbar-chevron { display: none; }
 }
 </style>

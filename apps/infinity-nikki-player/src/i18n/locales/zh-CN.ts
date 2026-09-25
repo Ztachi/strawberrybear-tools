@@ -544,10 +544,16 @@ export default {
     confirmDeleteTrack: '音轨“{name}”包含 {count} 个音符，删除后不可恢复，确定删除吗？',
     lastTrack: '至少保留一条音轨',
     toolbar: {
+      songSettings: '乐曲设置',
+      displaySettings: '显示',
+      compact: '简约',
+      detailed: '详细',
+      detailTip: '切换音符属性面板：详细模式展开量化和移调操作。',
       bpm: 'BPM',
       bpmTip: '设置每分钟拍数，数值越大播放越快；含多个速度变化的曲目会先确认是否统一速度。',
       timeSignature: '拍号',
-      timeSignatureTip: '左侧为每小节的拍数，右侧为一拍对应的音符时值；例如 3/4 表示每小节三个四分音符。',
+      timeSignatureTip:
+        '左侧为每小节的拍数，右侧为一拍对应的音符时值；例如 3/4 表示每小节三个四分音符。',
       snap: '吸附',
       snapTip: '设置添加、移动和拉伸音符时对齐的网格，也用于量化；按住 Alt 拖动可临时关闭吸附。',
       snapOff: '关闭',
@@ -562,7 +568,8 @@ export default {
       stop: '停止',
       loop: '循环区间',
       clearLoop: '清除循环',
-      loopTip: '按住 Alt 在时间标尺上拖拽，设置循环试听区间；双击标尺清除。设置后可点击此按钮清除循环。',
+      loopTip:
+        '按住 Alt 在时间标尺上拖拽，设置循环试听区间；双击标尺清除。设置后可点击此按钮清除循环。',
       clearLoopTip: '点击清除当前循环区间；也可双击时间标尺清除，或按住 Alt 拖拽标尺重新设置。',
       velocityLane: '力度条',
       velocityLaneTip: '显示或隐藏底部力度条；上下拖动柱子调整音符力度，选中多个音符时会一起修改。',
@@ -585,11 +592,14 @@ export default {
       velocity: '力度',
       quantize: '量化',
       quantizeStart: '量化起点',
-      quantizeStartTip: '先选择音符，再将起点对齐到当前吸附网格，保持音符长度不变；吸附关闭时不作修改。',
+      quantizeStartTip:
+        '先选择音符，再将起点对齐到当前吸附网格，保持音符长度不变；吸附关闭时不作修改。',
       quantizeLength: '量化长度',
-      quantizeLengthTip: '将选中音符的长度调整为当前吸附网格的整数倍，保持起点不变；吸附关闭时不作修改。',
+      quantizeLengthTip:
+        '将选中音符的长度调整为当前吸附网格的整数倍，保持起点不变；吸附关闭时不作修改。',
       transpose: '移调',
-      transposeTip: '将选中音符整体移动 {semitones} 个半音，保持起点和长度不变；12 个半音为一个八度。',
+      transposeTip:
+        '将选中音符整体移动 {semitones} 个半音，保持起点和长度不变；12 个半音为一个八度。',
       octaveUp: '+八度',
       octaveDown: '-八度',
       semitoneUp: '+1',
@@ -612,11 +622,13 @@ export default {
     },
     help: {
       title: '编辑器操作说明',
-      selectTool: '选择工具：点击选中，Shift 加选；空白处拖拽框选；双击空白落音符；拖动音符移动、拖动左右边缘拉伸；Alt 拖动关闭吸附。',
+      selectTool:
+        '选择工具：点击选中，Shift 加选；空白处拖拽框选；双击空白落音符；拖动音符移动、拖动左右边缘拉伸；Alt 拖动关闭吸附。',
       drawTool: '画笔工具：点击即落音符，按住横向拖动设定长度。',
       loop: '循环：在标尺上 Alt+拖拽设置循环区间，双击标尺清除。',
       velocity: '力度：底部力度条上下拖动柱子；选中多颗音符时一并修改。',
-      shortcuts: '快捷键：Delete 删除，Ctrl+A 全选，Ctrl+C/X/V 复制剪切粘贴，Ctrl+D 复制一份，Ctrl+Z / Ctrl+Shift+Z 撤销重做，方向键微调（Shift 为八度/小节），空格播放暂停，Esc 取消选择，V/B 切换工具。',
+      shortcuts:
+        '快捷键：Delete 删除，Ctrl+A 全选，Ctrl+C/X/V 复制剪切粘贴，Ctrl+D 复制一份，Ctrl+Z / Ctrl+Shift+Z 撤销重做，方向键微调（Shift 为八度/小节），空格播放暂停，Esc 取消选择，V/B 切换工具。',
       playback: '试听只播放当前项目，不触发游戏按键；开始试听时会暂停全局播放器。',
     },
   },
