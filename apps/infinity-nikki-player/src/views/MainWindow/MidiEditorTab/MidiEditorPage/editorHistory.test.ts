@@ -191,6 +191,31 @@ describe('continuous editor changes', () => {
     }
   )
 
+  it('keeps a low-PPQ note length visually stable after committing it', async () => {
+    const project = handle.session.toProject()
+    handle.session.replaceProject({
+      ...project,
+      document: {
+        ...project.document,
+        ticksPerBeat: 120,
+        notes: project.document.notes.map((note) => ({
+          ...note,
+          startTick: 120,
+          endTick: 150,
+        })),
+      },
+    })
+    handle.dispatch({ type: 'select-all' })
+    mount('inspector')
+    const lengthInput = controls('InputNumber')[1]!
+
+    await fire(lengthInput, 'onChange', 0.26)
+    await fire(lengthInput, 'onBlur', {})
+
+    expect(handle.state.value.document.notes[0]!.endTick).toBe(151)
+    expect(lengthInput.props.value).toBe(0.26)
+  })
+
   it('commits BPM once on Enter without committing again on blur', async () => {
     mount('toolbar')
     const input = controls('InputNumber')[0]!

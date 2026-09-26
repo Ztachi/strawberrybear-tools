@@ -77,10 +77,32 @@ function formatPosition(tick: number): string {
   // bar 与 beat 均已从 1 计，与标尺一致。
   return `${position.bar}.${position.beat}.${String(Math.round(position.tickInBeat)).padStart(3, '0')}`
 }
-/** 长度以拍数展示，便于与吸附网格对应。 */
+
+/**
+ * @description: 把整数 tick 格式化为可再次换回同一 tick 的最短拍数小数
+ * @param {number} ticks 音符长度 tick
+ * @param {number} ticksPerBeat 每四分音符 tick 数
+ * @return {number} 适合在数字输入框中编辑的拍数
+ */
+function formatEditableBeatLength(ticks: number, ticksPerBeat: number): number {
+  const safeTicksPerBeat = Math.max(1, Math.round(ticksPerBeat))
+  const exact = ticks / safeTicksPerBeat
+  for (let precision = 0; precision <= 6; precision += 1) {
+    const factor = 10 ** precision
+    const candidate = Math.round(exact * factor) / factor
+    // MIDI 只能保存整数 tick；优先展示能无损换回当前 tick 的最短小数，避免低 PPQ 曲目失焦后跳值。
+    if (Math.round(candidate * safeTicksPerBeat) === ticks) return candidate
+  }
+  return Math.round(exact * 1_000_000) / 1_000_000
+}
+
+/** 长度以可往返的拍数展示，便于与吸附网格对应。 */
 const lengthBeats = computed(() =>
   single.value
-    ? Math.round(((single.value.endTick - single.value.startTick) / props.state.document.ticksPerBeat) * 1000) / 1000
+    ? formatEditableBeatLength(
+        single.value.endTick - single.value.startTick,
+        props.state.document.ticksPerBeat
+      )
     : null
 )
 
