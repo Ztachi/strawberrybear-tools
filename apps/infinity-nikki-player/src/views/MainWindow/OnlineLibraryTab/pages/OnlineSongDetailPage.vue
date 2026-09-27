@@ -9,6 +9,7 @@ import { Button, Popover, Spin, TypographyText } from 'antdv-next'
 import { Check, Download, Music2, Play, Square } from 'lucide-vue-next'
 import { feedback as toast } from '@/lib/feedback'
 import { sanitizeMidiFilename, stripMidiExtension } from '@/lib/midiDisplay'
+import { backOrReplaceWithFreshMainPage } from '@/router/mainNavigation'
 import {
   downloadOnlineMidiSongFile,
   type OnlineMidiSong,
@@ -242,11 +243,7 @@ async function importSong(): Promise<void> {
 }
 
 function navigateBack(): void {
-  if (window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push({ name: 'online-library' })
+  void backOrReplaceWithFreshMainPage(router, { name: 'online-library' })
 }
 
 function handleScroll(): void {

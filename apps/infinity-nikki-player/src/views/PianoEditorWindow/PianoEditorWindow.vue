@@ -204,10 +204,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ConfigProvider
-    v-bind="infinityNikkiConfigProviderProps"
-    :locale="configLocale"
-  >
+  <ConfigProvider v-bind="infinityNikkiConfigProviderProps" :locale="configLocale">
     <AntApp>
       <main class="detached-editor">
         <template v-if="state">
@@ -226,10 +223,7 @@ onBeforeUnmount(() => {
                 @command="send({ kind: 'playback', mediaId: playback.mediaId, command: $event })"
               >
                 <template #actions>
-                  <PreviewQueueButton
-                    :open="queueOpen"
-                    @click="queueOpen = true"
-                  />
+                  <PreviewQueueButton :open="queueOpen" @click="queueOpen = true" />
                 </template>
               </PreviewPlaybackControls>
             </template>
@@ -250,21 +244,17 @@ onBeforeUnmount(() => {
             :labels="state.labels"
             :restore="restore"
             detached
+            show-edit
             @seek="send({ kind: 'seek', seconds: $event })"
             @seek-preview="send({ kind: 'preview', seconds: $event })"
             @state-change="queueViewport"
             @toggle-track="send({ kind: 'toggle-track', trackId: $event })"
             @migrate="dock"
+            @edit="send({ kind: 'edit' })"
           />
         </template>
-        <Spin
-          v-else
-          class="m-auto"
-        />
-        <div
-          ref="queuePortal"
-          class="detached-editor-popup-root"
-        />
+        <Spin v-else class="m-auto" />
+        <div ref="queuePortal" class="detached-editor-popup-root" />
         <PianoQueueDrawer
           v-if="queuePortal"
           v-model:open="queueOpen"
@@ -277,11 +267,7 @@ onBeforeUnmount(() => {
           v-if="loading"
           class="absolute inset-0 flex items-center justify-center bg-white/60"
         />
-        <p
-          v-if="error || playback.error || state?.error"
-          role="status"
-          class="detached-error"
-        >
+        <p v-if="error || playback.error || state?.error" role="status" class="detached-error">
           {{ error || playback.error || state?.error }}
         </p>
       </main>

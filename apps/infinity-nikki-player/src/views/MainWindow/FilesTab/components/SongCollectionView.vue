@@ -3,7 +3,16 @@
  * @description: Song collection list
  * @description Shared by all songs and playlist song pages.
  */
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -56,6 +65,7 @@ const confirmDialog = ref<{
 let backToTopRegistration: FloatingActionRegistration | null = null
 let locateCurrentRegistration: FloatingActionRegistration | null = null
 let confirmPromise: Promise<boolean> | null = null
+let pageInteractionsActive = false
 
 const SCROLL_THRESHOLD = 200
 const ROW_ESTIMATED_SIZE = 74
@@ -231,7 +241,8 @@ async function addSelectedToSongList(info: { key: string | number }): Promise<vo
 }
 
 function handleScroll(): void {
-  backToTopRegistration?.setVisible((scrollElement.value?.scrollTop ?? 0) > SCROLL_THRESHOLD)
+  const scrollTop = scrollElement.value?.scrollTop ?? 0
+  backToTopRegistration?.setVisible(scrollTop > SCROLL_THRESHOLD)
 }
 
 function scrollToTop(): void {
@@ -289,24 +300,48 @@ watch(
   { immediate: true }
 )
 
-onMounted(() => {
+/**
+ * @description: 缓存页重新可见时恢复全局交互与虚拟列表测量
+ * @return {void}
+ */
+function activatePageInteractions(): void {
+  if (pageInteractionsActive) return
+  pageInteractionsActive = true
+  // TanStack Virtual 持有虚拟列表偏移；KeepAlive 激活后交还给它恢复滚动容器。
+  const virtualScrollOffset = rowVirtualizer.value.scrollOffset
   window.addEventListener('keydown', handleWindowKeydown)
   backToTopRegistration = mainWindowUiStore.registerBackToTop(scrollToTop)
   locateCurrentRegistration = mainWindowUiStore.registerLocateCurrent(() => {
     void locateCurrentSong()
   })
-  handleScroll()
   locateCurrentRegistration.setVisible(currentSongInCollection.value)
-})
+  void nextTick(() => {
+    rowVirtualizer.value.measure()
+    if (virtualScrollOffset !== null) rowVirtualizer.value.scrollToOffset(virtualScrollOffset)
+    handleScroll()
+  })
+}
 
-onUnmounted(() => {
+/**
+ * @description: 缓存页隐藏时注销全局交互并关闭临时浮层
+ * @return {void}
+ */
+function deactivatePageInteractions(): void {
+  if (!pageInteractionsActive) return
+  pageInteractionsActive = false
   window.removeEventListener('keydown', handleWindowKeydown)
   backToTopRegistration?.()
   backToTopRegistration = null
   locateCurrentRegistration?.()
   locateCurrentRegistration = null
+  closeMenu()
   resolveConfirmDialog(false)
-})
+}
+
+onMounted(activatePageInteractions)
+onActivated(activatePageInteractions)
+onDeactivated(deactivatePageInteractions)
+onUnmounted(deactivatePageInteractions)
 </script>
 
 <template>

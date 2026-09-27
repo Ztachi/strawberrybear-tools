@@ -2,7 +2,15 @@
 /**
  * @description: MIDI 项目列表页：搜索、本地分页、多选、导入导出与行操作
  */
-import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  h,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
 import type { HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -31,6 +39,7 @@ import {
 } from '@/features/midi-editor/projectIo'
 import { formatDuration } from '@/views/MainWindow/FilesTab/utils'
 import { usePlayerStore } from '@/stores/player'
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { useSongListStore } from '@/stores/songLists'
 import { useListActionMenu } from '@/composables/useListActionMenu'
 import ListActionMenu from '@/views/MainWindow/components/ListActionMenu.vue'
@@ -39,6 +48,7 @@ const { t, locale } = useI18n()
 const router = useRouter()
 const projectStore = useMidiProjectStore()
 const playerStore = usePlayerStore()
+const mainWindowUi = useMainWindowUiStore()
 const songListStore = useSongListStore()
 
 /** 页大小持久化键。 */
@@ -222,20 +232,37 @@ async function runRowAction(
   }
 }
 
-function createBlankProject(): Promise<unknown> {
+function focusDetachedEditor(projectId?: string): boolean {
+  const result = mainWindowUi.focusDetachedMidiEditor(projectId)
+  if (result === 'none') return false
+  if (result === 'other' || !projectId) {
+    toast.warning(t('midiEditor.detachedBusy'), { richColors: true })
+  }
+  return true
+}
+
+function createBlankProject(): Promise<unknown> | undefined {
+  if (focusDetachedEditor()) return
   return router.push({ name: 'midi-editor-create' })
 }
-function editProject(project: MidiProjectSummary): Promise<unknown> {
+function editProject(project: MidiProjectSummary): Promise<unknown> | undefined {
   closeActionMenu()
+  if (focusDetachedEditor(project.id)) return
   return router.push({ name: 'midi-editor-edit', params: { id: project.id } })
 }
-function createFromProject(project: MidiProjectSummary): Promise<unknown> {
+function createFromProject(project: MidiProjectSummary): Promise<unknown> | undefined {
   closeActionMenu()
+  if (focusDetachedEditor()) return
   return router.push({ name: 'midi-editor-create', query: { fromProject: project.id } })
 }
 
 async function deleteProject(project: MidiProjectSummary): Promise<void> {
   closeActionMenu()
+  if (mainWindowUi.detachedMidiEditorProjectId === project.id) {
+    mainWindowUi.focusDetachedMidiEditor(project.id)
+    toast.warning(t('midiEditor.activeProjectCannotDelete'), { richColors: true })
+    return
+  }
   const confirmed = await confirmAction(
     t('actions.delete'),
     t('midiEditor.confirmDelete', { name: project.name })
@@ -253,6 +280,11 @@ async function deleteProject(project: MidiProjectSummary): Promise<void> {
 async function deleteSelected(): Promise<void> {
   const projects = selectedProjects.value
   if (projects.length === 0) return
+  if (projects.some((project) => project.id === mainWindowUi.detachedMidiEditorProjectId)) {
+    mainWindowUi.focusDetachedMidiEditor(mainWindowUi.detachedMidiEditorProjectId ?? undefined)
+    toast.warning(t('midiEditor.activeProjectCannotDelete'), { richColors: true })
+    return
+  }
   const confirmed = await confirmAction(
     t('midiEditor.batchDelete'),
     t('midiEditor.confirmBatchDelete', { count: projects.length })
@@ -505,9 +537,17 @@ onMounted(() => {
     toast.error(t('midiEditor.loadFailed'), { description: String(error), richColors: true })
   })
 })
-onBeforeUnmount(() => {
+/**
+ * @description: 页面进入 KeepAlive 缓存前关闭菜单和确认框
+ * @return {void}
+ */
+function dismissTransientUi(): void {
+  closeActionMenu()
   resolveActionConfirm(false)
-})
+}
+
+onDeactivated(dismissTransientUi)
+onBeforeUnmount(dismissTransientUi)
 </script>
 
 <template>

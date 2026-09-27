@@ -32,6 +32,7 @@ export const router = createRouter({
       path: '/files/all',
       name: 'files-all',
       component: AllSongsPage,
+      meta: { keepAlive: true },
     },
     {
       path: '/files/midi/:filename',
@@ -42,6 +43,7 @@ export const router = createRouter({
       path: '/files/song-lists/:id',
       name: 'files-song-list-detail',
       component: SongListDetailPage,
+      meta: { keepAlive: true },
     },
     {
       path: '/files/song-lists/:id/edit',
@@ -52,6 +54,7 @@ export const router = createRouter({
       path: '/templates',
       name: 'templates',
       component: TemplateEditor,
+      meta: { keepAlive: true },
     },
     {
       path: '/templates/new',
@@ -67,17 +70,20 @@ export const router = createRouter({
       path: '/midi-editor',
       name: 'midi-editor',
       component: MidiEditorTab,
+      meta: { keepAlive: true },
     },
     {
       // query.from=<曲库文件名> 时以该 MIDI 为初始内容
       path: '/midi-editor/new',
       name: 'midi-editor-create',
       component: MidiEditorPage,
+      meta: { detachableEditor: true },
     },
     {
       path: '/midi-editor/:id/edit',
       name: 'midi-editor-edit',
       component: MidiEditorPage,
+      meta: { detachableEditor: true },
     },
     {
       path: '/keyboard',
@@ -88,6 +94,7 @@ export const router = createRouter({
       path: '/online-library',
       name: 'online-library',
       component: OnlineLibraryTab,
+      meta: { keepAlive: true },
     },
     {
       path: '/online-library/song/:id',

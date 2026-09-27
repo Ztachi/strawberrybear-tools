@@ -49,6 +49,7 @@ test('拍号下拉可以点击、滚动，并将更改写入编辑会话', async
   await popup.locator('.ant-select-item-option').filter({ hasText: /^8$/ }).click()
   await expect(page.locator('.toolbar-meter').nth(1)).toContainText('8')
   await page.locator('.toolbar-snap').click()
+  await expect(popup.locator('.ant-select-item-option').first()).toContainText('关闭')
   await popup
     .locator('.ant-select-item-option')
     .filter({ hasText: /^1\/8$/ })
@@ -56,35 +57,28 @@ test('拍号下拉可以点击、滚动，并将更改写入编辑会话', async
   await expect(page.locator('.toolbar-snap')).toContainText('1/8')
 })
 
-test('全屏编辑填满窗口，切换保留项目，退出编辑恢复全局播放条', async ({ page }) => {
+test('编辑页使用与播放详情一致的独立窗口入口，退出后恢复全局播放条', async ({ page }) => {
   await expect(page.locator('.global-music-player')).toBeAttached()
   await expect(page.locator('.global-music-player')).toBeHidden()
+  await expect(page.getByRole('button', { name: '全屏编辑', exact: true })).toHaveCount(0)
+  const detach = page
+    .getByRole('region', { name: '音轨总览', exact: true })
+    .getByRole('button', { name: '在独立窗口中打开', exact: true })
+  await expect(detach).toBeVisible()
+
   const name = page.locator('.midi-editor-name input, input.midi-editor-name')
   const originalName = await name.inputValue()
-  await name.fill('全屏测试项目')
+  await name.fill('独立窗口测试项目')
   await name.blur()
-  const before = await page.locator('.midi-editor-body').boundingBox()
-  await page.getByRole('button', { name: '全屏编辑', exact: true }).click()
-  await expect(page.locator('.window-title-bar')).toBeHidden()
-  const bounds = await page.locator('.midi-editor-page').boundingBox()
-  expect(bounds).toMatchObject({ x: 0, y: 0, width: 1100, height: 850 })
-  expect((await page.locator('.midi-editor-body').boundingBox())!.height).toBeGreaterThan(
-    before!.height
-  )
-  await expect(name).toHaveValue('全屏测试项目')
+  await expect(name).toHaveValue('独立窗口测试项目')
   await openSettings(page)
   await page.locator('.toolbar-meter').first().click()
   await page
     .locator('.ant-select-dropdown:visible .ant-select-item-option')
     .filter({ hasText: /^3$/ })
     .click()
-  await page.getByRole('button', { name: '退出全屏编辑', exact: true }).click()
-  await expect(page.locator('.window-title-bar')).toBeVisible()
-  await expect(name).toHaveValue('全屏测试项目')
+  await expect(name).toHaveValue('独立窗口测试项目')
   await expect(page.locator('.toolbar-meter').first()).toContainText('3')
-  await page.getByRole('button', { name: '全屏编辑', exact: true }).click()
-  await page.keyboard.press('Escape')
-  await expect(page.locator('.window-title-bar')).toBeVisible()
   await page.getByRole('button', { name: /撤销/ }).click()
   // 项目名称不进入音符历史，恢复名称后直接退出无改动项目。
   await name.fill(originalName)
@@ -92,6 +86,186 @@ test('全屏编辑填满窗口，切换保留项目，退出编辑恢复全局�
   await expect(page.getByRole('button', { name: /撤销/ })).toBeDisabled()
   await page.getByRole('button', { name: /取\s*消/ }).click()
   await expect(page.locator('.global-music-player')).toBeVisible()
+})
+
+test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑状态', async ({ page }) => {
+  const opening = page.waitForEvent('popup')
+  await page
+    .getByRole('region', { name: '音轨总览', exact: true })
+    .getByRole('button', { name: '在独立窗口中打开', exact: true })
+    .click()
+  const popup = await opening
+
+  await expect(popup.locator('.window-title-bar')).toHaveCount(1)
+  await expect(popup.locator('.midi-editor-header')).toHaveCount(0)
+  await expect(popup.locator('.editor-toolbar')).toBeVisible()
+  await expect(page.getByText('此项目正在独立窗口中编辑', { exact: true })).toBeVisible()
+  await expect(popup.locator('.detached-error')).toHaveCount(0)
+
+  const name = popup.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('独立窗口中的项目名')
+  await name.blur()
+  await expect(name).toHaveValue('独立窗口中的项目名')
+
+  await page.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  await expect(page.locator('.editor-toolbar')).toBeVisible()
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+    '独立窗口中的项目名'
+  )
+  await expect(page.locator('.editor-window-error')).toHaveCount(0)
+})
+
+test('主窗口离开编辑页并切歌后，还原独立窗口仍恢复原编辑会话', async ({ page }) => {
+  const opening = page.waitForEvent('popup')
+  await page
+    .getByRole('region', { name: '音轨总览', exact: true })
+    .getByRole('button', { name: '在独立窗口中打开', exact: true })
+    .click()
+  const popup = await opening
+  const detachedName = popup.locator('.midi-editor-name input, input.midi-editor-name')
+  await detachedName.fill('切换播放后仍保留的项目')
+  await detachedName.blur()
+
+  await page.evaluate(() => window.midiEditorFixture.navigate('/navigation-away'))
+  await page.evaluate(() => window.midiEditorFixture.switchMainWindowSong())
+  await expect(page.getByText('此项目正在独立窗口中编辑', { exact: true })).toBeVisible()
+  await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  await expect(page.locator('.editor-toolbar')).toBeVisible()
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+    '切换播放后仍保留的项目'
+  )
+  await expect(page.locator('.editor-window-error')).toHaveCount(0)
+})
+
+test('歌曲列表进入详情再返回时保留原滚动位置', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  const songList = page.locator('.song-scroll')
+  await expect(page.locator('.song-row').first()).toBeVisible()
+  await songList.evaluate((element) => {
+    element.scrollTop = 1800
+    element.dispatchEvent(new Event('scroll'))
+  })
+  await expect.poll(() => songList.evaluate((element) => element.scrollTop)).toBeGreaterThan(1500)
+  const scrollTop = await songList.evaluate((element) => element.scrollTop)
+  await page.evaluate(() => window.midiEditorFixture.navigate('/files/midi/navigation-40.mid'))
+  await page.getByRole('button', { name: '返回歌曲列表', exact: true }).click()
+
+  await expect(songList).toBeVisible()
+  await expect
+    .poll(() => songList.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(scrollTop - 2)
+})
+
+test('MIDI 工程列表进入编辑页再返回时保留搜索条件', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?list=1')
+  const search = page.getByPlaceholder('搜索项目名称', { exact: true })
+  await search.fill('Counting Stars')
+  await expect(page.locator('.project-table-row')).toHaveCount(1)
+
+  await page.evaluate(() => window.midiEditorFixture.navigate('/navigation-away'))
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor'))
+
+  await expect(search).toHaveValue('Counting Stars')
+  await expect(page.locator('.project-table-row')).toHaveCount(1)
+})
+
+test('从栏目重新进入列表使用全新实例，从编辑页返回恢复原实例', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?list=1')
+  const search = page.getByPlaceholder('搜索项目名称', { exact: true })
+  await search.fill('Counting Stars')
+  await expect(page.locator('.project-table-row')).toHaveCount(1)
+
+  await page.evaluate(() => window.midiEditorFixture.navigate('/navigation-away'))
+  await page.getByRole('button', { name: 'MIDI 编辑', exact: true }).click()
+
+  await expect(page.getByPlaceholder('搜索项目名称', { exact: true })).toHaveCount(1)
+  await expect(search).toHaveValue('')
+  await search.fill('MIDI 工程 20')
+  await expect(page.locator('.project-table-row')).toHaveCount(1)
+
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/project-20'))
+  await page.evaluate(() => window.midiEditorFixture.back())
+
+  await expect(page.getByPlaceholder('搜索项目名称', { exact: true })).toHaveCount(1)
+  await expect(search).toHaveValue('MIDI 工程 20')
+  await expect(page.locator('.project-table-row')).toHaveCount(1)
+})
+
+test('歌单歌曲列表进入详情再返回时保留原滚动位置', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?playlist=1')
+  const songList = page.locator('.song-scroll')
+  const search = page.getByPlaceholder('搜索歌曲', { exact: true })
+  await search.fill('布局')
+  await expect(page.locator('.song-row').first()).toBeVisible()
+  await songList.evaluate((element) => {
+    element.scrollTop = 1800
+    element.dispatchEvent(new Event('scroll'))
+  })
+  await expect.poll(() => songList.evaluate((element) => element.scrollTop)).toBeGreaterThan(1500)
+  const scrollTop = await songList.evaluate((element) => element.scrollTop)
+  await page.evaluate(() => {
+    ;(window as Window & { playlistScrollElement?: Element | null }).playlistScrollElement =
+      document.querySelector('.song-scroll')
+  })
+
+  await page.evaluate(() => window.midiEditorFixture.navigate('/files/midi/navigation-40.mid'))
+  await page.getByRole('button', { name: '返回歌曲列表', exact: true }).click()
+
+  await expect(songList).toBeVisible()
+  await expect(search).toHaveValue('布局')
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { playlistScrollElement?: Element | null }).playlistScrollElement ===
+        document.querySelector('.song-scroll')
+    )
+  ).toBe(true)
+  await expect
+    .poll(() => songList.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(scrollTop - 2)
+})
+
+test('模板列表进入编辑页再返回时保留搜索条件和选择', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?templates=1')
+  const search = page.getByPlaceholder('搜索模板名称', { exact: true })
+  await search.fill('演奏模板 23')
+  const row = page.locator('.template-table-row')
+  await expect(row).toHaveCount(1)
+  await row.click()
+  await expect(row).toHaveClass(/template-row-selected/)
+
+  await page.evaluate(() => window.midiEditorFixture.navigate('/templates/template-23/edit'))
+  await page.getByRole('button', { name: '返回上一列表', exact: true }).click()
+
+  await expect(search).toHaveValue('演奏模板 23')
+  await expect(row).toHaveCount(1)
+  await expect(row).toHaveClass(/template-row-selected/)
+})
+
+test('在线曲库进入详情再返回时保留筛选与滚动位置', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?online=1')
+  const viewport = page.locator('.online-library .virtual-scroll')
+  const search = page.getByPlaceholder('搜索曲名、作者、标签', { exact: true })
+  await search.fill('验收作者')
+  await expect(page.locator('.online-library .song-card').first()).toBeVisible()
+  await viewport.evaluate((element) => {
+    element.scrollTop = 1800
+    element.dispatchEvent(new Event('scroll'))
+  })
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(1500)
+  const scrollTop = await viewport.evaluate((element) => element.scrollTop)
+
+  await page.evaluate(() => window.midiEditorFixture.navigate('/online-library/song/online-20'))
+  await page.getByRole('button', { name: '返回上一列表', exact: true }).click()
+
+  await expect(search).toHaveValue('验收作者')
+  await expect(viewport).toBeVisible()
+  await expect
+    .poll(() => viewport.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(scrollTop - 2)
 })
 
 test('未保存项目退出时只确认一次', async ({ page }) => {
@@ -122,7 +296,7 @@ test('MIDI 项目列表的更多按钮和整行右键共用操作菜单', async 
   await songListMenuItem.click()
   await expect(page.getByText('已添加到歌单', { exact: true })).toBeVisible()
 
-  await page.getByRole('button', { name: '更多操作', exact: true }).click()
+  await row.getByRole('button', { name: '更多操作', exact: true }).click()
   const visibleMenu = page.locator('.ant-dropdown:visible')
   await expect(visibleMenu.getByText('导出 .mid', { exact: true }).last()).toBeVisible()
   await expect(visibleMenu.getByText('添加到播放器', { exact: true }).last()).toBeVisible()

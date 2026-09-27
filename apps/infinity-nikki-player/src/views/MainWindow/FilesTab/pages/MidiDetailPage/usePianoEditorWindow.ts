@@ -19,6 +19,7 @@ import { createPianoEditorWindowPort } from '@/platform/tauri/pianoEditorWindow'
  * @param onSeek 提交一次当前歌曲定位。
  * @param onPreview 更新临时定位，不调用音频 seek。
  * @param onToggleTrack 仍由主页面执行既有轨道开关动作。
+ * @param onEdit 从独立详情切换到当前歌曲的编辑器。
  * @returns 分离状态、视口与打开/还原动作。
  */
 export function usePianoEditorWindow(
@@ -26,7 +27,8 @@ export function usePianoEditorWindow(
   transport: Readonly<Ref<PianoRollTransport>>,
   onSeek: (seconds: number) => void,
   onPreview: (seconds: number | null) => void,
-  onToggleTrack: (trackId: string) => void
+  onToggleTrack: (trackId: string) => void,
+  onEdit: () => void
 ) {
   const ui = useMainWindowUiStore()
   const queue = usePreviewQueue()
@@ -56,6 +58,7 @@ export function usePianoEditorWindow(
       if (command.kind === 'auto-switch') ui.autoSwitchDetail = command.enabled
       if (command.kind === 'playback') void playback.execute(command.command)
       if (command.kind === 'toggle-track') onToggleTrack(command.trackId)
+      if (command.kind === 'edit') onEdit()
       if (command.kind === 'seek') onSeek(command.seconds)
       if (command.kind === 'preview') onPreview(command.seconds)
       if (command.kind === 'viewport') {

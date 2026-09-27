@@ -39,9 +39,9 @@ const props = defineProps<{
   editing?: PianoRollProps['editing']
   /** 总览轨道行右侧操作位渲染器（编辑模式下的轨道菜单）。 */
   renderTrackActions?: PianoRollProps['renderTrackActions']
-  /** 隐藏“独立窗口”按钮；编辑器不支持跨窗口编辑。 */
+  /** 隐藏“独立窗口”按钮。 */
   hideDetach?: boolean
-  /** 显示“编辑此 MIDI”入口；仅主窗口详情页可用。 */
+  /** 在预览态显示“编辑此 MIDI”入口；主窗口与独立详情共用。 */
   showEdit?: boolean
 }>()
 const emit = defineEmits<{
@@ -190,10 +190,7 @@ defineExpose({ getState, setTransport, openTrack })
     class="detail-body piano-workspace"
     :style="{ '--piano-editor-height': `${editorHeightPercent}%` }"
   >
-    <PianoTrackHosts
-      :labels="pianoTrackLabelHosts"
-      :toggles="pianoTrackToggleHosts"
-    />
+    <PianoTrackHosts :labels="pianoTrackLabelHosts" :toggles="pianoTrackToggleHosts" />
     <div
       class="piano-overview-host"
       :class="{ 'piano-overview-host--with-editor': isPianoEditorOpen }"
@@ -226,11 +223,7 @@ defineExpose({ getState, setTransport, openTrack })
           <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
         </template>
         <template #corner="{ view, viewport }">
-          <PianoRollFollowButton
-            :view="view"
-            :viewport="viewport"
-            :labels="labels"
-          />
+          <PianoRollFollowButton :view="view" :viewport="viewport" :labels="labels" />
           <Tooltip :title="t('midi.pianoRoll.hideEmptyTracks')">
             <Button
               class="piano-filter-button"
@@ -250,17 +243,10 @@ defineExpose({ getState, setTransport, openTrack })
         </template>
         <template #toolbar="{ view, viewport }">
           <div class="piano-roll-app-toolbar">
-            <PianoRollControls
-              :view="view"
-              :viewport="viewport"
-              :labels="labels"
-            />
+            <PianoRollControls :view="view" :viewport="viewport" :labels="labels" />
             <div class="piano-roll-trailing-actions">
               <slot name="toolbar-actions" />
-              <Tooltip
-                v-if="showEdit"
-                :title="t('midiEditor.editThisMidi')"
-              >
+              <Tooltip v-if="showEdit" :title="t('midiEditor.editThisMidi')">
                 <Button
                   color="primary"
                   variant="link"
@@ -268,10 +254,7 @@ defineExpose({ getState, setTransport, openTrack })
                   @click="emit('edit')"
                 >
                   <template #icon>
-                    <Pencil
-                      class="size-[18px]"
-                      :stroke-width="2.2"
-                    />
+                    <Pencil class="size-[18px]" :stroke-width="2.2" />
                   </template>
                 </Button>
               </Tooltip>
@@ -416,6 +399,4 @@ defineExpose({ getState, setTransport, openTrack })
   @apply outline-none;
   box-shadow: inset 0 0 0 2px var(--color-primary-active);
 }
-
-
 </style>

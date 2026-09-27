@@ -66,7 +66,11 @@ function fixture() {
     mode: 'sequential',
     error: '',
   }
-  const queue = { title: 'Queue', error: '', items: [{ id: 'a.mid', title: 'A', durationMs: 1000, trackCount: 1, noteCount: 1 }] }
+  const queue = {
+    title: 'Queue',
+    error: '',
+    items: [{ id: 'a.mid', title: 'A', durationMs: 1000, trackCount: 1, noteCount: 1 }],
+  }
   const host = new PianoEditorSession({
     queue: () => queue,
     playback: () => playback,
@@ -126,7 +130,9 @@ describe('detached piano editor session', () => {
     await f.host.open()
     f.request({ kind: 'ready' })
     await flush()
-    expect(f.updates.some((update) => update.kind === 'queue' && update.queue.items[0]?.id === 'a.mid')).toBe(true)
+    expect(
+      f.updates.some((update) => update.kind === 'queue' && update.queue.items[0]?.id === 'a.mid')
+    ).toBe(true)
     f.state.loading = true
     f.host.updateState(true)
     f.request({ kind: 'queue-play', queueRevision: 0, mediaId: 'a.mid' })
@@ -140,7 +146,9 @@ describe('detached piano editor session', () => {
     f.request({ kind: 'queue-play', queueRevision: 1, mediaId: 'b.mid' })
     expect(f.commands).toHaveLength(2)
     await flush()
-    expect(f.updates.some((update) => update.kind === 'queue' && update.queueRevision === 1)).toBe(true)
+    expect(f.updates.some((update) => update.kind === 'queue' && update.queueRevision === 1)).toBe(
+      true
+    )
     await f.host.dock()
   })
 
@@ -154,7 +162,26 @@ describe('detached piano editor session', () => {
     f.request({ kind: 'auto-switch', enabled: true }, 0)
     f.request({ kind: 'auto-switch', enabled: false }, 0, 'old-session')
     f.request({ kind: 'auto-switch', enabled: 'yes' as unknown as boolean })
-    expect(f.commands).toEqual([{ kind: 'auto-switch', enabled: true, session: expect.any(String), revision: 0, sequence: expect.any(Number) }])
+    expect(f.commands).toEqual([
+      {
+        kind: 'auto-switch',
+        enabled: true,
+        session: expect.any(String),
+        revision: 0,
+        sequence: expect.any(Number),
+      },
+    ])
+    await f.host.dock()
+  })
+
+  it('forwards the edit action from the detached detail for the current song', async () => {
+    const f = fixture()
+    await f.host.open()
+    f.request({ kind: 'ready' })
+    await flush()
+    f.request({ kind: 'edit' })
+
+    expect(f.commands).toEqual([expect.objectContaining({ kind: 'edit' })])
     await f.host.dock()
   })
 

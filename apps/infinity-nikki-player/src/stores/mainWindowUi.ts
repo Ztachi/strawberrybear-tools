@@ -21,10 +21,12 @@ export type FloatingActionRegistration = (() => void) & {
 export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
   /** 仅当前应用会话的详情跟随偏好，首次关闭；不参与 Player 状态机。 */
   const autoSwitchDetail = ref(false)
-  /** 编辑页全屏布局仅在当前页面存活，离开时由编辑页清理。 */
-  const midiEditorExpanded = ref(false)
+  /** 独立 MIDI 编辑窗口的当前项目；非空时主路由必须缓存对应编辑会话。 */
+  const detachedMidiEditorProjectId = ref<string | null>(null)
+  const detachedMidiEditorStatus = ref<'docked' | 'opening' | 'detached'>('docked')
   const canBackToTop = ref(false)
   const canLocateCurrent = ref(false)
+  let focusMidiEditorWindowHandler: (() => Promise<void>) | null = null
 
   // 右下角悬浮按钮是全局入口，但实际目标会随界面焦点变化。
   // 页面先注册，抽屉/浮层打开后再注册并位于栈顶；关闭时出栈，按钮自然回到下层页面。
@@ -127,9 +129,40 @@ export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
     syncLocateCurrentVisible()
   }
 
+  /**
+   * @description: 注册当前独立 MIDI 编辑窗口
+   * @param {string} projectId 项目 ID
+   * @param {() => Promise<void>} focus 激活窗口动作
+   * @return {void}
+   */
+  function registerDetachedMidiEditor(projectId: string, focus: () => Promise<void>): void {
+    detachedMidiEditorProjectId.value = projectId
+    focusMidiEditorWindowHandler = focus
+  }
+
+  function setDetachedMidiEditorStatus(status: 'docked' | 'opening' | 'detached'): void {
+    detachedMidiEditorStatus.value = status
+    if (status === 'docked') {
+      detachedMidiEditorProjectId.value = null
+      focusMidiEditorWindowHandler = null
+    }
+  }
+
+  /**
+   * @description: 若已有独立编辑窗口则激活它
+   * @param {string} [projectId] 用户准备编辑的项目 ID
+   * @return {'none' | 'same' | 'other'} 没有窗口、同项目或其他项目
+   */
+  function focusDetachedMidiEditor(projectId?: string): 'none' | 'same' | 'other' {
+    if (!detachedMidiEditorProjectId.value || !focusMidiEditorWindowHandler) return 'none'
+    void focusMidiEditorWindowHandler()
+    return !projectId || projectId === detachedMidiEditorProjectId.value ? 'same' : 'other'
+  }
+
   return {
     autoSwitchDetail,
-    midiEditorExpanded,
+    detachedMidiEditorProjectId,
+    detachedMidiEditorStatus,
     canBackToTop,
     canLocateCurrent,
     registerBackToTop,
@@ -140,5 +173,8 @@ export const useMainWindowUiStore = defineStore('mainWindowUi', () => {
     triggerLocateCurrent,
     clearBackToTop,
     clearLocateCurrent,
+    registerDetachedMidiEditor,
+    setDetachedMidiEditorStatus,
+    focusDetachedMidiEditor,
   }
 })

@@ -20,7 +20,7 @@ export function createPianoEditorClientPort(): EditorClientPort {
       current.listen<EditorUpdate>(PIANO_EDITOR_UPDATE, (event) => callback(event.payload)),
     send: async (request) => current.emitTo('main', PIANO_EDITOR_REQUEST, request),
     setTitle: async (title) => current.setTitle(title),
-    show: async () => invoke('show_piano_editor'),
+    show: async () => invoke('show_detached_editor'),
     destroy: async () => current.destroy(),
     onCloseRequested: async (callback) =>
       current.onCloseRequested((event) => {

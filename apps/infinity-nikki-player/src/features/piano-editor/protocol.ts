@@ -32,7 +32,7 @@ export interface PianoWorkspaceState {
 }
 
 export type EditorCommand =
-  | { kind: 'ready' | 'shown' | 'dock' | 'ping' }
+  | { kind: 'ready' | 'shown' | 'dock' | 'ping' | 'edit' }
   | { kind: 'queue-play'; queueRevision: number; mediaId: string }
   | { kind: 'auto-switch'; enabled: boolean }
   | { kind: 'seek'; seconds: number }

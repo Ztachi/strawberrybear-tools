@@ -3,7 +3,14 @@
  * @description: TemplateEditor - 模板管理页主体
  * @description 保留模板列表、工具栏、批量操作和分页等页面核心内容。
  */
-import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
+import {
+  computed,
+  h,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+  watch,
+} from 'vue'
 import type { HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -541,9 +548,17 @@ watch(
   }
 )
 
-onBeforeUnmount(() => {
+/**
+ * @description: 页面进入 KeepAlive 缓存前关闭菜单和确认框
+ * @return {void}
+ */
+function dismissTransientUi(): void {
+  closeMenu()
   resolveActionConfirm(false)
-})
+}
+
+onDeactivated(dismissTransientUi)
+onBeforeUnmount(dismissTransientUi)
 
 defineExpose({
   /**

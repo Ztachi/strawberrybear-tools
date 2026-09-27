@@ -60,7 +60,10 @@ for (const [locale, width] of [
     await expect(follow).toHaveAttribute('aria-pressed', 'true')
     await follow.click()
     await expect(follow).toHaveAttribute('aria-pressed', 'false')
-    await expect(overview.locator('.pr-corner button').first()).toHaveAttribute('aria-pressed', 'true')
+    await expect(overview.locator('.pr-corner button').first()).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
     await expect
       .poll(() => row.evaluate((element) => element.getBoundingClientRect().height))
       .toBeLessThan(initialHeight)
@@ -143,7 +146,9 @@ test('an all-empty MIDI retains a usable filter to reveal its tracks', async ({ 
   })
 })
 
-test('Escape cancels a playhead drag before closing the details on a second press', async ({ page }) => {
+test('Escape cancels a playhead drag before closing the details on a second press', async ({
+  page,
+}) => {
   await openDetail(page)
   await page.locator('.pr-track[data-track-id="1"] .pr-track-select').dblclick()
   const editor = page.locator('.detail-piano-editor')
@@ -166,7 +171,9 @@ test('Escape cancels a playhead drag before closing the details on a second pres
 })
 
 for (const variant of ['overview', 'editor'] as const) {
-  test(`actual ${variant} trackpad vertical wheel preserves Follow in the pane and gutter`, async ({ page }) => {
+  test(`actual ${variant} trackpad vertical wheel preserves Follow in the pane and gutter`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1100, height: 620 })
     await openDetail(page)
     await page.getByRole('button', { name: '隐藏没有音符的音轨', exact: true }).click()
@@ -176,22 +183,29 @@ for (const variant of ['overview', 'editor'] as const) {
     await expect(editor).toBeVisible()
     const before = await page.evaluate(() => window.midiDetailFixture.snapshot())
     const current = variant === 'overview' ? overview : editor
-    const other = variant === 'overview' ? editor : overview
-    const follow = current.locator('.piano-roll-app-toolbar button[aria-pressed]').first()
-    const otherFollow = other.locator('.piano-roll-app-toolbar button[aria-pressed]').first()
+    // Follow 位于卷帘 corner 插槽；总览先于详情挂载，按稳定的视图顺序取对应按钮。
+    const followButtons = page.locator('.piano-follow-button')
+    const follow = followButtons.nth(variant === 'overview' ? 0 : 1)
+    const otherFollow = followButtons.nth(variant === 'overview' ? 1 : 0)
     const scroll = current.locator('.pr-scroll')
 
     // 用真实 antd Slider 制造横向可滚范围，避免内容恰好铺满时掩盖横向杂量。
     const zoom = current.locator('.piano-roll-app-slider').first().getByRole('slider')
     await zoom.focus()
     await page.keyboard.press('End')
-    await expect.poll(() => scroll.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
-    await expect.poll(() => scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+    await expect
+      .poll(() => scroll.evaluate((element) => element.scrollWidth > element.clientWidth))
+      .toBe(true)
+    await expect
+      .poll(() => scroll.evaluate((element) => element.scrollHeight > element.clientHeight))
+      .toBe(true)
 
     for (const surface of ['.pr-scroll', '.pr-gutter']) {
-      if (await follow.getAttribute('aria-pressed') === 'false') await follow.click()
+      if ((await follow.getAttribute('aria-pressed')) === 'false') await follow.click()
       await expect(follow).toHaveAttribute('aria-pressed', 'true')
-      await scroll.evaluate((element) => { element.scrollTop = 0 })
+      await scroll.evaluate((element) => {
+        element.scrollTop = 0
+      })
       const initialLeft = await scroll.evaluate((element) => element.scrollLeft)
       await current.locator(surface).hover()
       for (let gesture = 0; gesture < 16; gesture += 1) {
@@ -202,9 +216,12 @@ for (const variant of ['overview', 'editor'] as const) {
         // Wheel 是异步原生输入；必须等后续 scroll 落地，不能在旧的选中态上误判通过。
         await page.waitForTimeout(80)
         await expect(follow).toHaveAttribute('aria-pressed', 'true')
-        await expect(follow).toHaveClass(/ant-btn-primary/)
+        await expect(follow).toHaveClass(/ant-btn-color-primary/)
+        await expect(follow).toHaveClass(/ant-btn-variant-solid/)
         await expect(otherFollow).toHaveAttribute('aria-pressed', 'true')
-        expect(await scroll.evaluate((element) => element.scrollLeft)).toBeLessThanOrEqual(initialLeft + 6)
+        expect(await scroll.evaluate((element) => element.scrollLeft)).toBeLessThanOrEqual(
+          initialLeft + 6
+        )
       }
       expect(await scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
       await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBe(initialLeft)
@@ -213,17 +230,33 @@ for (const variant of ['overview', 'editor'] as const) {
       await page.mouse.wheel(Math.ceil(visibleWidth / 4) + 20, 6)
       await expect(follow).toHaveAttribute('aria-pressed', 'false')
       await expect(otherFollow).toHaveAttribute('aria-pressed', 'true')
-      await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBeGreaterThan(initialLeft)
+      await expect
+        .poll(() => scroll.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(initialLeft)
     }
     expect(await page.evaluate(() => window.midiDetailFixture.snapshot())).toEqual(before)
   })
 }
 
 for (const copy of [
-  { locale: 'zh-CN', title: '钢琴卷帘操作说明', done: '知道了', filter: '隐藏没有音符的音轨', readOnly: '当前版本' },
-  { locale: 'en-US', title: 'Piano Roll Guide', done: 'Got it', filter: 'Hide tracks without notes', readOnly: 'Current version' },
+  {
+    locale: 'zh-CN',
+    title: '钢琴卷帘操作说明',
+    done: '知道了',
+    filter: '隐藏没有音符的音轨',
+    readOnly: '当前版本',
+  },
+  {
+    locale: 'en-US',
+    title: 'Piano Roll Guide',
+    done: 'Got it',
+    filter: 'Hide tracks without notes',
+    readOnly: 'Current version',
+  },
 ]) {
-  test(`actual ${copy.locale} help dialog is complete, accessible and isolated from playback`, async ({ page }) => {
+  test(`actual ${copy.locale} help dialog is complete, accessible and isolated from playback`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 780, height: 680 })
     await openDetail(page, `?locale=${copy.locale}`)
     await page.locator('.pr-track[data-track-id="1"] .pr-track-select').dblclick()
@@ -243,7 +276,11 @@ for (const copy of [
     expect(filterBox!.height).toBe(20)
     expect(780 - helpBox!.x - helpBox!.width).toBeLessThanOrEqual(28)
     // 图标按钮悬浮只改变颜色，不改变几何位置；link 不显示方块背景。
-    for (const button of [help, ...await cornerButtons.all(), page.locator('.piano-roll-trailing-action').first()]) {
+    for (const button of [
+      help,
+      ...(await cornerButtons.all()),
+      page.locator('.piano-roll-trailing-action').first(),
+    ]) {
       await page.mouse.move(0, 0)
       const before = await button.boundingBox()
       const iconBefore = await button.locator('svg').boundingBox()
@@ -251,10 +288,16 @@ for (const copy of [
       await page.waitForTimeout(300)
       expect(await button.boundingBox()).toEqual(before)
       expect(await button.locator('svg').boundingBox()).toEqual(iconBefore)
-      expect(Math.abs(iconBefore!.x + iconBefore!.width / 2 - before!.x - before!.width / 2)).toBeLessThan(1)
-      expect(Math.abs(iconBefore!.y + iconBefore!.height / 2 - before!.y - before!.height / 2)).toBeLessThan(1)
+      expect(
+        Math.abs(iconBefore!.x + iconBefore!.width / 2 - before!.x - before!.width / 2)
+      ).toBeLessThan(1)
+      expect(
+        Math.abs(iconBefore!.y + iconBefore!.height / 2 - before!.y - before!.height / 2)
+      ).toBeLessThan(1)
     }
-    expect(await help.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
+    expect(await help.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
+      'rgba(0, 0, 0, 0)'
+    )
     await help.hover()
     await expect(page.getByRole('tooltip', { name: copy.title })).toBeVisible()
     await help.click()
@@ -276,11 +319,17 @@ for (const copy of [
     await dialog.getByText(copy.readOnly, { exact: true }).scrollIntoViewIfNeeded()
     await expect(dialog.getByText(copy.readOnly, { exact: true })).toBeVisible()
     await expect(dialog.getByRole('button', { name: copy.done, exact: true })).toBeVisible()
-    await page.screenshot({ path: test.info().outputPath(`midi-detail-help-end-${copy.locale}.png`) })
+    await page.screenshot({
+      path: test.info().outputPath(`midi-detail-help-end-${copy.locale}.png`),
+    })
     await page.keyboard.press('Escape')
     await expect(dialog).toBeHidden()
     await expect(editor).toBeVisible()
-    expect(await originalEditor!.evaluate((element) => element === document.querySelector('.detail-piano-editor'))).toBe(true)
+    expect(
+      await originalEditor!.evaluate(
+        (element) => element === document.querySelector('.detail-piano-editor')
+      )
+    ).toBe(true)
     await help.click()
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: copy.done, exact: true }).click()

@@ -46,7 +46,8 @@ async fn smoke_check_titlebar(app: AppHandle) -> Result<(), String> {
                         let button = (window as id)
                             .standardWindowButton_(NSWindowButton::NSWindowCloseButton);
                         let container = button.superview().superview();
-                        let inset = NSView::frame(container).size.height - NSView::frame(button).size.height;
+                        let inset = NSView::frame(container).size.height
+                            - NSView::frame(button).size.height;
                         if (inset - 20.0).abs() > 0.5 {
                             return Err(format!("Initial traffic light inset: {inset}"));
                         }
@@ -96,7 +97,7 @@ fn main() {
     context.config_mut().build.dev_url = Some("http://localhost:1432".parse().expect("test URL"));
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            piano_window::show_piano_editor,
+            piano_window::show_detached_editor,
             smoke_check_titlebar,
             smoke_probe,
             smoke_select_track,

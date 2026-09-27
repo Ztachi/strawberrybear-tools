@@ -4,9 +4,27 @@
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
 import { mainPageIdentity } from '@/router/pageIdentity'
-import { computed, nextTick, onMounted, onUnmounted, provide, ref } from 'vue'
+import { freshMainPageLocation } from '@/router/mainNavigation'
+import {
+  computed,
+  defineComponent,
+  h,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  provide,
+  ref,
+  type Component,
+  type PropType,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterView, isNavigationFailure, useRoute, useRouter } from 'vue-router'
+import {
+  RouterView,
+  isNavigationFailure,
+  useRoute,
+  useRouter,
+  type RouteLocationNormalizedLoaded,
+} from 'vue-router'
 import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
@@ -32,10 +50,56 @@ const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 const songListStore = useSongListStore()
-const isMidiEditing = computed(() =>
-  route.name === 'midi-editor-create' || route.name === 'midi-editor-edit'
-)
-const isEditorExpanded = computed(() => isMidiEditing.value && mainWindowUiStore.midiEditorExpanded)
+const isMidiEditing = computed(() => route.meta.detachableEditor === true)
+
+/** Vue KeepAlive 使用 LRU 淘汰，限制长时间浏览大量歌单时的驻留实例数。 */
+const MAIN_ROUTE_CACHE_MAX = 12
+
+/**
+ * @description: 创建供 KeepAlive 按名称匹配的路由页面宿主
+ * @param {string} name - 宿主组件名
+ * @return {Component} 带稳定单根节点的路由页面宿主
+ */
+function createRoutePageHost(name: string) {
+  return defineComponent({
+    name,
+    props: {
+      page: { type: [Object, Function] as PropType<Component>, required: true },
+      editor: Boolean,
+    },
+    setup(props) {
+      return () =>
+        h(
+          'section',
+          {
+            class: ['route-page-host', { 'route-page-host--editor': props.editor }],
+          },
+          [h(props.page)]
+        )
+    },
+  })
+}
+
+const DefaultRoutePageHost = createRoutePageHost('DefaultRoutePageHost')
+const MidiEditorRouteHost = createRoutePageHost('MidiEditorRouteHost')
+const CachedRoutePageHost = createRoutePageHost('CachedRoutePageHost')
+
+/** 路由声明的页面常驻缓存；独立编辑器仅在窗口分离期间临时加入缓存。 */
+const cachedRouteHostNames = computed(() => [
+  'CachedRoutePageHost',
+  ...(mainWindowUiStore.detachedMidiEditorStatus === 'docked' ? [] : ['MidiEditorRouteHost']),
+])
+
+/**
+ * @description: 根据路由元信息选择普通、缓存或独立编辑宿主
+ * @param {RouteLocationNormalizedLoaded} pageRoute - 当前路由
+ * @return {Component} 对应的具名宿主组件
+ */
+function getRoutePageHost(pageRoute: RouteLocationNormalizedLoaded): Component {
+  if (pageRoute.meta.detachableEditor) return MidiEditorRouteHost
+  if (pageRoute.meta.keepAlive) return CachedRoutePageHost
+  return DefaultRoutePageHost
+}
 
 /** 主窗口支持的页签路由值。 */
 type MainWindowTab = 'files' | 'templates' | 'midi-editor' | 'online'
@@ -340,7 +404,9 @@ async function ensureFilesTabForImport(): Promise<boolean> {
   if (activeTab.value === 'files') return true
 
   // 路由离开守卫会处理模板编辑页的未保存确认。
-  const failure = await router.push({ name: 'files-all', query: route.query })
+  const failure = await router.push(
+    freshMainPageLocation({ name: 'files-all', query: route.query })
+  )
   return !isNavigationFailure(failure)
 }
 
@@ -371,10 +437,11 @@ async function handleMainNavigate(
       query: route.query,
     } as RouteLocationRaw)
 
-  if (normalizedNextTab === activeTab.value && !targetRoute) return true
-
   // 路由离开守卫会处理模板编辑页的未保存确认。
-  await router.push(routeTarget)
+  const replacesCurrentEntry = router.resolve(routeTarget).fullPath === route.fullPath
+  await router.push(
+    freshMainPageLocation(routeTarget, { replace: replacesCurrentEntry })
+  )
   return true
 }
 
@@ -523,7 +590,9 @@ async function selectFile() {
     await handleImportPaths(files)
     // 多个文件时关闭详情
     if (files.length > 1) {
-      await router.push({ name: 'files-all', query: route.query })
+      await router.push(
+        freshMainPageLocation({ name: 'files-all', query: route.query })
+      )
     }
   }
 }
@@ -610,7 +679,6 @@ provide(midiImportActionsKey, {
     <!-- 正常模式内容：用 v-show 保留 DOM 和滚动状态，避免退出悬浮后页面重新创建 -->
     <div v-show="!settingsStore.isOverlayMode" class="normal-mode-shell">
       <AppHeader
-        v-show="!isEditorExpanded"
         :title="t('app.title')"
         :has-accessibility="playerStore.hasAccessibility"
         @open-accessibility-settings="openAccessibilitySettings"
@@ -622,26 +690,21 @@ provide(midiImportActionsKey, {
       <!-- 主内容区 -->
       <main id="main-window-body" class="content">
         <div id="main-window-portal-root" class="content-portal-root" />
-        <div
-          class="main-content-shell"
-          :class="{ 'main-content-shell--expanded': isEditorExpanded }"
-        >
-          <SongListSidebar
-            v-show="!isEditorExpanded"
-            :request-navigate="handleMainNavigate"
-          />
+        <div class="main-content-shell">
+          <SongListSidebar :request-navigate="handleMainNavigate" />
 
           <section class="route-content">
             <section class="route-page-stage">
-              <RouterView v-slot="{ Component, route: pageRoute }">
+              <RouterView v-slot="{ Component: RouteComponent, route: pageRoute }">
                 <Transition name="main-page">
-                  <section
-                    :key="mainPageIdentity(pageRoute)"
-                    class="route-page-host"
-                    :class="{ 'route-page-host--editor': isMidiEditing }"
-                  >
-                    <component :is="Component" />
-                  </section>
+                  <KeepAlive :include="cachedRouteHostNames" :max="MAIN_ROUTE_CACHE_MAX">
+                    <component
+                      :is="getRoutePageHost(pageRoute)"
+                      :key="mainPageIdentity(pageRoute, router.options.history.state)"
+                      :page="RouteComponent"
+                      :editor="isMidiEditing"
+                    />
+                  </KeepAlive>
                 </Transition>
               </RouterView>
             </section>
@@ -651,7 +714,6 @@ provide(midiImportActionsKey, {
         </div>
 
         <FloatingActionGroup
-          v-show="!isEditorExpanded"
           :show-back-to-top="mainWindowUiStore.canBackToTop"
           :show-locate-current="mainWindowUiStore.canLocateCurrent"
           :back-to-top-title="t('actions.backToTop')"
@@ -765,10 +827,6 @@ provide(midiImportActionsKey, {
 
 .main-content-shell {
   @apply flex h-full min-h-0 gap-2 px-2 pb-2;
-}
-
-.main-content-shell--expanded {
-  @apply gap-0 p-0;
 }
 
 .route-content {

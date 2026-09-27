@@ -52,8 +52,13 @@ const denominatorOptions = METER_DENOMINATORS.map((value) => ({ value, label: St
 
 const bpm = computed(() => tempoToBpm(props.state.document.tempoMap[0]?.microsecondsPerQuarter ?? 0))
 const meter = computed(() => props.state.document.timeSignatureMap[0] ?? { numerator: 4, denominator: 4 })
+/** 关闭是吸附的基础状态，固定放在首项，避免藏在长列表末尾。 */
+const orderedSnapResolutions = [
+  'off',
+  ...SNAP_RESOLUTIONS.filter((value) => value !== 'off'),
+] as const
 const snapOptions = computed(() =>
-  SNAP_RESOLUTIONS.map((value) => ({
+  orderedSnapResolutions.map((value) => ({
     value,
     title: '',
     label:

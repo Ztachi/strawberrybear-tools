@@ -1,15 +1,24 @@
 import { createProject } from '@strawberrybear/midi-editor'
-import { createApp, h } from 'vue'
+import { createApp, defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
 import { mockIPC } from '@tauri-apps/api/mocks'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { i18n } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import MainWindow from '@/views/MainWindow/index.vue'
+import { MIDI_PROJECT_EDITOR_WINDOW_PORT } from '@/features/midi-project-editor-window'
+import { usePlayerStore } from '@/stores/player'
 import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
 import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
+import AllSongsPage from '@/views/MainWindow/FilesTab/pages/AllSongsPage.vue'
+import SongListDetailPage from '@/views/MainWindow/FilesTab/pages/SongListDetailPage.vue'
+import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
+import OnlineLibraryTab from '@/views/MainWindow/OnlineLibraryTab/index.vue'
+import { useOnlineMidiLibraryStore } from '@/stores/onlineMidiLibrary'
+import type { OnlineMidiSong } from '@/lib/onlineMidiLibraryApi'
 import type { MidiInfo } from '@/types'
+import { browserMidiProjectEditorWindowPort } from './midi-project-editor-window-port'
 import '@/style.css'
 
 const midi: MidiInfo = {
@@ -26,6 +35,27 @@ const midi: MidiInfo = {
   melody_note_count: 0,
   tracks: [],
   events: [],
+}
+
+const fixtureQuery = new URLSearchParams(location.search)
+const showNavigationFixture = fixtureQuery.has('navigation')
+const showPlaylistFixture = fixtureQuery.has('playlist')
+const showTemplateList = fixtureQuery.has('templates')
+const showOnlineList = fixtureQuery.has('online')
+const navigationMidiLibrary = Array.from(
+  { length: 80 },
+  (_, index): MidiInfo => ({
+    ...midi,
+    filename: `navigation-${String(index + 1).padStart(2, '0')}.mid`,
+    file_path: `/fixture/navigation-${String(index + 1).padStart(2, '0')}.mid`,
+    title: `导航测试歌曲 ${String(index + 1).padStart(2, '0')}`,
+  })
+)
+const switchedMidi: MidiInfo = {
+  ...midi,
+  filename: 'main-window-switched.mid',
+  file_path: '/fixture/main-window-switched.mid',
+  title: '主窗口切换后的歌曲',
 }
 
 const project = createProject({
@@ -58,6 +88,49 @@ const projectSummary = {
   meta: project.meta,
 }
 
+const projectSummaries = Array.from({ length: 60 }, (_, index) => ({
+  ...projectSummary,
+  id: index === 0 ? projectSummary.id : `project-${index + 1}`,
+  name: index === 0 ? projectSummary.name : `MIDI 工程 ${String(index + 1).padStart(2, '0')}`,
+  updatedAt: projectSummary.updatedAt + index,
+}))
+
+const templateFixtures = Array.from({ length: 60 }, (_, index) => ({
+  id: `template-${index + 1}`,
+  name: `演奏模板 ${String(index + 1).padStart(2, '0')}`,
+  is_builtin: index < 2,
+  mappings: [],
+}))
+
+const onlineSongFixtures = Array.from(
+  { length: 80 },
+  (_, index): OnlineMidiSong => ({
+    id: `online-${index + 1}`,
+    title: `在线曲目 ${String(index + 1).padStart(2, '0')}`,
+    slug: `online-${index + 1}`,
+    authorName: '验收作者',
+    description: '用于验证在线曲库返回后仍保留筛选与滚动位置。',
+    genreTypes: ['game'],
+    sourceType: 'original',
+    licenseType: 'authorized',
+    difficultyType: 'normal',
+    tags: ['验收'],
+    durationMs: 120000,
+    trackCount: 2,
+    noteCount: 320,
+    fileSize: 4096,
+    sha256: `fixture-${index + 1}`,
+    originalFilename: `online-${index + 1}.mid`,
+    downloadFilename: `online-${index + 1}.mid`,
+    entryDate: 1700000000000 + index,
+    sort: 80 - index,
+    published: 1,
+    publishedAt: 1700000000000 + index,
+    createdAt: 1700000000000 + index,
+    updatedAt: 1700000000000 + index,
+  })
+)
+
 // 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
 mockIPC((command) => {
   if (command === 'load_midi_project') return project
@@ -77,23 +150,27 @@ mockIPC((command) => {
       created_at: 1,
       updated_at: 2,
     }
-  if (command === 'get_midi_projects') return showProjectList ? [projectSummary] : []
+  if (command === 'get_midi_projects') return showProjectList ? projectSummaries : []
   if (command === 'get_song_lists')
-    return showProjectList
+    return showProjectList || showPlaylistFixture
       ? [
           {
             id: 'favorites',
             name: '常用歌单',
             description: '',
             cover_filename: null,
-            song_filenames: [],
+            song_filenames: showPlaylistFixture
+              ? navigationMidiLibrary.map((song) => song.filename)
+              : [],
             created_at: 1,
             updated_at: 1,
           },
         ]
       : []
-  if (['get_templates', 'extract_melody', 'extract_all_notes'].includes(command)) return []
-  if (command === 'get_midi_library') return [midi]
+  if (command === 'get_templates') return showTemplateList ? templateFixtures : []
+  if (['extract_melody', 'extract_all_notes'].includes(command)) return []
+  if (command === 'get_midi_library')
+    return showNavigationFixture || showPlaylistFixture ? navigationMidiLibrary : [midi]
   if (command === 'load_midi_config') return { ...midi, disabled_tracks: [] }
   if (command === 'load_midi_project_draft') return null
   if (command === 'check_accessibility') return true
@@ -119,28 +196,157 @@ mockIPC((command) => {
   throw new Error(`Unexpected native command in MIDI editor fixture: ${command}`)
 })
 i18n.global.locale.value = 'zh-CN'
+const NavigationDetailFixture = defineComponent({
+  name: 'NavigationDetailFixture',
+  setup() {
+    const fixtureRouter = useRouter()
+    return () =>
+      h(
+        'button',
+        {
+          class: 'navigation-detail-back',
+          onClick: () => fixtureRouter.back(),
+        },
+        '返回歌曲列表'
+      )
+  },
+})
+const NavigationBackFixture = defineComponent({
+  name: 'NavigationBackFixture',
+  setup() {
+    const fixtureRouter = useRouter()
+    return () =>
+      h(
+        'button',
+        {
+          class: 'navigation-back',
+          onClick: () => fixtureRouter.back(),
+        },
+        '返回上一列表'
+      )
+  },
+})
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
-    { name: 'midi-editor-edit', path: '/midi-editor/:id', component: MidiEditorPage },
-    { name: 'midi-editor-create', path: '/midi-editor/new', component: MidiEditorPage },
-    { name: 'midi-editor', path: '/midi-editor', component: MidiEditorTab },
+    {
+      name: 'midi-editor-edit',
+      path: '/midi-editor/:id',
+      component: MidiEditorPage,
+      meta: { detachableEditor: true },
+    },
+    {
+      name: 'midi-editor-create',
+      path: '/midi-editor/new',
+      component: MidiEditorPage,
+      meta: { detachableEditor: true },
+    },
+    {
+      name: 'midi-editor',
+      path: '/midi-editor',
+      component: MidiEditorTab,
+      meta: { keepAlive: true },
+    },
+    {
+      name: 'files-all',
+      path: '/files/all',
+      component: AllSongsPage,
+      meta: { keepAlive: true },
+    },
+    {
+      name: 'files-midi-detail',
+      path: '/files/midi/:filename',
+      component: NavigationDetailFixture,
+    },
+    {
+      name: 'files-song-list-detail',
+      path: '/files/song-lists/:id',
+      component: SongListDetailPage,
+      meta: { keepAlive: true },
+    },
+    {
+      name: 'templates',
+      path: '/templates',
+      component: TemplateEditor,
+      meta: { keepAlive: true },
+    },
+    {
+      name: 'templates-edit',
+      path: '/templates/:id/edit',
+      component: NavigationBackFixture,
+    },
+    {
+      name: 'online-library',
+      path: '/online-library',
+      component: OnlineLibraryTab,
+      meta: { keepAlive: true },
+    },
+    {
+      name: 'online-library-song-detail',
+      path: '/online-library/song/:id',
+      component: NavigationBackFixture,
+    },
+    {
+      name: 'navigation-away',
+      path: '/navigation-away',
+      component: { render: () => h('p', { class: 'navigation-away' }, '主窗口中的其他页面') },
+    },
   ],
 })
 await router.push(
-  showProjectList
-    ? '/midi-editor'
-    : new URLSearchParams(location.search).has('populated')
-      ? '/midi-editor/fixture'
-      : '/midi-editor/new'
+  showNavigationFixture
+    ? '/files/all'
+    : showPlaylistFixture
+      ? '/files/song-lists/favorites'
+      : showTemplateList
+        ? '/templates'
+        : showOnlineList
+          ? '/online-library'
+          : showProjectList
+            ? '/midi-editor'
+            : fixtureQuery.has('populated')
+              ? '/midi-editor/fixture'
+              : '/midi-editor/new'
 )
+const pinia = createPinia()
+if (showOnlineList) {
+  useOnlineMidiLibraryStore(pinia).setSongs(onlineSongFixtures, Date.now())
+}
+
+declare global {
+  interface Window {
+    midiEditorFixture: {
+      navigate: (path: string) => Promise<void>
+      back: () => void
+      switchMainWindowSong: () => Promise<void>
+    }
+  }
+}
+
+window.midiEditorFixture = {
+  async navigate(path: string): Promise<void> {
+    await router.push(path)
+  },
+  back(): void {
+    router.back()
+  },
+  async switchMainWindowSong(): Promise<void> {
+    await usePlayerStore(pinia).selectMidiInQueue(
+      switchedMidi,
+      [switchedMidi],
+      { id: 'all', title: '全部歌曲' },
+      { persistSelection: false }
+    )
+  },
+}
 createApp({
   render: () =>
     h(ConfigProvider, infinityNikkiConfigProviderProps, {
       default: () => h(AntApp, null, { default: () => h(MainWindow) }),
     }),
 })
-  .use(createPinia())
+  .use(pinia)
   .use(i18n)
   .use(router)
+  .provide(MIDI_PROJECT_EDITOR_WINDOW_PORT, browserMidiProjectEditorWindowPort())
   .mount('#app')

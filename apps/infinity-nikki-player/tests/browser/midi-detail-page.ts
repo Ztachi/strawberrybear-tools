@@ -107,6 +107,11 @@ const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { name: 'files-midi-detail', path: '/midi/:filename', component: MidiDetailPage },
+    {
+      name: 'midi-editor-create',
+      path: '/midi-editor/new',
+      component: { render: () => h('p', { class: 'midi-editor-route-fixture' }, 'Editor') },
+    },
     { path: '/away', component: { render: () => h('p', 'Library') } },
   ],
 })
@@ -149,7 +154,9 @@ window.midiDetailFixture = {
     player.previewCurrentTime = 4000
   },
   setQueue: (filenames) => {
-    player.previewQueueItems = player.midiLibrary.filter((item) => filenames.includes(item.filename))
+    player.previewQueueItems = player.midiLibrary.filter((item) =>
+      filenames.includes(item.filename)
+    )
   },
   startClock: () => {
     window.midiDetailFixture.play(midi.filename)

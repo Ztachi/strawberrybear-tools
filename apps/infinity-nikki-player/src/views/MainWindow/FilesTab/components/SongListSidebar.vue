@@ -28,6 +28,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSongListStore } from '@/stores/songLists'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import { saveSettings } from '@/lib/settings'
+import { freshMainPageLocation } from '@/router/mainNavigation'
 import type { SongList } from '@/types'
 import type { RouteLocationRaw } from 'vue-router'
 import { buildCollectionContext, getSongListSongs } from '../utils'
@@ -97,7 +98,12 @@ async function navigateMain(tab: MainWindowTab, target?: RouteLocationRaw): Prom
   if (props.requestNavigate) {
     return (await props.requestNavigate(tab, target)) !== false
   }
-  await router.push(target ?? getDefaultRoute(tab))
+  const routeTarget = target ?? getDefaultRoute(tab)
+  await router.push(
+    freshMainPageLocation(routeTarget, {
+      replace: router.resolve(routeTarget).fullPath === route.fullPath,
+    })
+  )
   return true
 }
 

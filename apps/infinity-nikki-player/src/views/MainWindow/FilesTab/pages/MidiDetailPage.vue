@@ -12,7 +12,10 @@ import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
 import { usePianoRollLabels } from '@/components/PianoWorkspace/usePianoRollLabels'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import { usePlayerStore } from '@/stores/player'
+import { useMainWindowUiStore } from '@/stores/mainWindowUi'
+import { feedback as toast } from '@/lib/feedback'
 import { getMidiDisplayArtist, getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
+import { backOrReplaceWithFreshMainPage } from '@/router/mainNavigation'
 import { formatDuration } from '../utils'
 import { adaptMidiToPianoRoll, applyPianoTrackEnabled } from './MidiDetailPage/pianoRollAdapter'
 import { usePianoDetailSeek } from './MidiDetailPage/usePianoDetailSeek'
@@ -23,6 +26,7 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const playerStore = usePlayerStore()
+const mainWindowUi = useMainWindowUiStore()
 
 const filename = computed(() => String(route.params.filename ?? ''))
 // 区分路由换曲的中间态与加载已结束但没有数据；失效文件不能让浮窗永久停在加载中。
@@ -90,7 +94,8 @@ const editorWindow = usePianoEditorWindow(
   pianoRollTransport,
   seekPianoRoll,
   previewPianoSeek,
-  togglePianoTrack
+  togglePianoTrack,
+  () => void openMidiEditor(true)
 )
 const isEditorDetached = editorWindow.detached
 const editorWindowStatus = editorWindow.status
@@ -149,18 +154,19 @@ function togglePianoTrack(trackId: string): void {
  * @description: 以当前 MIDI 为初始内容进入编辑器新建页
  * @return {Promise<void>}
  */
-async function openMidiEditor(): Promise<void> {
-  await router.push({ name: 'midi-editor-create', query: { from: filename.value } })
+async function openMidiEditor(detached = false): Promise<void> {
+  if (mainWindowUi.focusDetachedMidiEditor() !== 'none') {
+    toast.warning(t('midiEditor.detachedBusy'), { richColors: true })
+    return
+  }
+  await router.push({
+    name: 'midi-editor-create',
+    query: { from: filename.value, ...(detached ? { detached: '1' } : {}) },
+  })
 }
 
 function navigateBack(): void {
-  // 页面级主动返回的兜底逻辑保留：当前自定义标题栏已经提供后退按钮（与浏览器历史栈同步），
-  // 但 missing-state 等异常分支仍需要主动跳转到文件页，因此函数不能删除。
-  if (window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push({ name: 'files-all' })
+  void backOrReplaceWithFreshMainPage(router, { name: 'files-all' })
 }
 
 async function playDetailMidi(): Promise<void> {
@@ -221,43 +227,23 @@ onBeforeUnmount(() => {
             <span
               class="absolute inset-0 flex items-center justify-center bg-slate-950/45 text-white opacity-0 transition-opacity group-hover/detail-cover:opacity-100"
             >
-              <Pause
-                v-if="isDetailPlaying"
-                class="size-7 stroke-0"
-                fill="currentColor"
-              />
-              <Play
-                v-else
-                class="ml-1 size-7 stroke-0"
-                fill="currentColor"
-              />
+              <Pause v-if="isDetailPlaying" class="size-7 stroke-0" fill="currentColor" />
+              <Play v-else class="ml-1 size-7 stroke-0" fill="currentColor" />
             </span>
           </Button>
         </Tooltip>
 
         <div class="detail-main">
-          <Popover
-            :content="detailDisplayName"
-            placement="topLeft"
-          >
+          <Popover :content="detailDisplayName" placement="topLeft">
             <h1 class="detail-title">
               {{ detailDisplayTitle }}
             </h1>
           </Popover>
-          <p
-            v-if="detailAuthor"
-            class="detail-author"
-          >
+          <p v-if="detailAuthor" class="detail-author">
             {{ detailAuthor }}
           </p>
-          <div
-            v-if="detailDescription"
-            class="description-row"
-          >
-            <p
-              ref="descriptionRef"
-              class="detail-description"
-            >
+          <div v-if="detailDescription" class="description-row">
+            <p ref="descriptionRef" class="detail-description">
               {{ detailDescription }}
             </p>
             <Popover
@@ -272,24 +258,14 @@ onBeforeUnmount(() => {
                   {{ detailDescription }}
                 </div>
               </template>
-              <Button
-                type="link"
-                class="description-detail-link"
-              >
+              <Button type="link" class="description-detail-link">
                 {{ t('onlineLibrary.detail.actions.detail') }}
               </Button>
             </Popover>
           </div>
           <div class="detail-stats">
-            <div
-              v-for="stat in detailStats"
-              :key="stat.key"
-              class="detail-stat"
-            >
-              <component
-                :is="stat.icon"
-                class="detail-stat-icon"
-              />
+            <div v-for="stat in detailStats" :key="stat.key" class="detail-stat">
+              <component :is="stat.icon" class="detail-stat-icon" />
               <span class="detail-stat-value">{{ stat.value }}</span>
               <span class="detail-stat-label">{{ stat.label }}</span>
             </div>
@@ -321,53 +297,35 @@ onBeforeUnmount(() => {
           @migrate="detachPianoWorkspace"
           @edit="openMidiEditor"
         />
-        <div
-          v-else
-          class="m-auto flex items-center gap-3"
-        >
+        <div v-else class="m-auto flex items-center gap-3">
           <Button
             type="primary"
             :aria-label="t('midi.pianoRoll.focusWindow')"
             @click="editorWindow.open"
           >
             <template #icon>
-              <ExternalLink
-                class="size-4"
-                :stroke-width="2"
-              />
+              <ExternalLink class="size-4" :stroke-width="2" />
             </template>
             {{ t('midi.pianoRoll.focusWindow') }}
           </Button>
-          <Button
-            class="nikki-outline-btn"
-            @click="editorWindow.dock"
-          >
+          <Button class="nikki-outline-btn" @click="editorWindow.dock">
             {{ t('midi.pianoRoll.dock') }}
           </Button>
         </div>
-        <p
-          v-if="editorWindowError"
-          class="piano-seek-error"
-          role="alert"
-        >
+        <p v-if="editorWindowError" class="piano-seek-error" role="alert">
           {{ t('midi.pianoRoll.windowFailed', { error: editorWindowError }) }}
         </p>
-        <p
-          v-if="pianoSeekError"
-          class="piano-seek-error"
-          role="status"
-        >
+        <p v-if="pianoSeekError" class="piano-seek-error" role="status">
           {{ pianoSeekError }}
         </p>
       </div>
     </template>
 
-    <section
-      v-else
-      class="missing-state"
-    >
+    <section v-else class="missing-state">
       <Music2 class="missing-icon" />
-      <span>{{ playerStore.isDetailLoading ? t('onlineLibrary.loading') : t('midi.notFound') }}</span>
+      <span
+        >{{ playerStore.isDetailLoading ? t('onlineLibrary.loading') : t('midi.notFound') }}</span
+      >
       <Button @click="navigateBack">
         {{ t('songList.allSongs') }}
       </Button>

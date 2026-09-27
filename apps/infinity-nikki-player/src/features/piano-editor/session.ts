@@ -206,8 +206,10 @@ export class PianoEditorSession {
       return
     }
     if (request.kind === 'queue-play') {
-      if (request.queueRevision === this.queueRevision &&
-          this.options.queue().items.some((item) => item.id === request.mediaId))
+      if (
+        request.queueRevision === this.queueRevision &&
+        this.options.queue().items.some((item) => item.id === request.mediaId)
+      )
         this.options.onCommand(request)
       return
     }
@@ -236,7 +238,8 @@ export class PianoEditorSession {
     if (request.kind === 'shown') {
       clearTimeout(this.timer)
       this.options.onStatus('detached')
-    } else if (request.kind === 'viewport' && validWorkspace(request.viewport))
+    } else if (request.kind === 'edit') this.options.onCommand(request)
+    else if (request.kind === 'viewport' && validWorkspace(request.viewport))
       this.options.onCommand(request)
     else if (
       request.kind === 'toggle-track' &&
@@ -287,8 +290,12 @@ export class PianoEditorSession {
         } else if (this.queuePending) {
           this.queuePending = false
           await this.options.port.send({
-            kind: 'queue', session, revision: this.revision, sequence: ++this.sequence,
-            queue: this.options.queue(), queueRevision: this.queueRevision,
+            kind: 'queue',
+            session,
+            revision: this.revision,
+            sequence: ++this.sequence,
+            queue: this.options.queue(),
+            queueRevision: this.queueRevision,
           })
         } else if (this.playbackPending) {
           this.playbackPending = false

@@ -23,6 +23,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         pianoEditor: resolve(__dirname, 'piano-editor.html'),
+        midiProjectEditor: resolve(__dirname, 'midi-project-editor.html'),
       },
     },
     target: 'esnext',

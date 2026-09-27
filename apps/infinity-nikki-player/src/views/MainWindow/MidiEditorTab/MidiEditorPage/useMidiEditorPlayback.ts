@@ -4,52 +4,11 @@
  * 与全局播放器互斥：开始试听即暂停全局试听，全局试听恢复时暂停编辑器；绝不触发游戏按键。
  */
 import { onBeforeUnmount, shallowRef, watch, type Ref } from 'vue'
-import { createEditorTransport } from '@strawberrybear/midi-editor'
-import type {
-  EditorTransport,
-  EditorTransportState,
-  MidiProjectLoop,
-  SynthPort,
-} from '@strawberrybear/midi-editor'
+import type { EditorTransportState, MidiProjectLoop } from '@strawberrybear/midi-editor'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type { PianoRollTransport } from '@strawberrybear/piano-roll/browser'
-import {
-  ensureAudioRunning,
-  getAudioClock,
-  scheduleNote,
-  type ScheduledNoteHandle,
-} from '@/lib/midiPlayer'
 import { usePlayerStore } from '@/stores/player'
-
-/** 试听单音（点击琴键/选中音符）的默认时长（秒）。 */
-const AUDITION_SECONDS = 0.35
-
-/**
- * @description: 基于共享 soundfont 的发声端口；按音高维护 FIFO，noteOff 释放最早未释放的节点。
- * @return {SynthPort} 端口
- */
-function createSoundfontPort(): SynthPort {
-  const active = new Map<number, ScheduledNoteHandle[]>()
-  return {
-    noteOn(pitch, velocity, when) {
-      const handle = scheduleNote(pitch, velocity, when)
-      if (!handle) return
-      const queue = active.get(pitch)
-      if (queue) queue.push(handle)
-      else active.set(pitch, [handle])
-    },
-    noteOff(pitch, when) {
-      const queue = active.get(pitch)
-      const handle = queue?.shift()
-      handle?.stop(when)
-      if (queue && queue.length === 0) active.delete(pitch)
-    },
-    allNotesOff() {
-      for (const queue of active.values()) for (const handle of queue) handle.stop()
-      active.clear()
-    },
-  }
-}
+import { createMidiEditorPlaybackController } from '@/features/midi-editor/playbackController'
 
 /**
  * @description: 编辑器试听控制
@@ -63,7 +22,6 @@ export function useMidiEditorPlayback(
   onFrame: (frame: PianoRollTransport) => void
 ) {
   const playerStore = usePlayerStore()
-  const synth = createSoundfontPort()
   /** 状态变化（播放/暂停/seek）时更新，供视图 prop 与工具栏使用；逐帧位置走 onFrame。 */
   const transport = shallowRef<PianoRollTransport>({
     positionSeconds: 0,
@@ -72,7 +30,6 @@ export function useMidiEditorPlayback(
   })
   const isPlaying = shallowRef(false)
   const positionSeconds = shallowRef(0)
-  let engine: EditorTransport | null = null
   let frameHandle: number | null = null
 
   function toFrame(state: EditorTransportState): PianoRollTransport {
@@ -89,8 +46,7 @@ export function useMidiEditorPlayback(
   }
   function frame(): void {
     frameHandle = null
-    if (!engine) return
-    const state = engine.getState()
+    const state = controller.getState()
     positionSeconds.value = state.positionSeconds
     onFrame(toFrame(state))
     if (state.isPlaying) frameHandle = requestAnimationFrame(frame)
@@ -105,18 +61,12 @@ export function useMidiEditorPlayback(
     if (!state.isPlaying) stopFrames()
   }
 
-  /** 首次播放时才创建调度器，此时音频上下文已就绪，时钟与 soundfont 同源。 */
-  function ensureEngine(): EditorTransport | null {
-    if (engine || !document.value) return engine
-    engine = createEditorTransport({
-      getDocument: () => document.value!,
-      synth,
-      now: getAudioClock,
-      onChange: handleChange,
-    })
-    engine.setLoop(loop.value ?? null)
-    return engine
-  }
+  const controller = createMidiEditorPlaybackController({
+    getDocument: () => document.value!,
+    getLoop: () => loop.value,
+    onChange: handleChange,
+    pauseExternal: () => playerStore.pausePreviewPlayback(),
+  })
 
   /**
    * @description: 开始试听；先暂停全局播放器的试听
@@ -124,17 +74,14 @@ export function useMidiEditorPlayback(
    * @return {Promise<void>}
    */
   async function play(fromSeconds?: number): Promise<void> {
-    await ensureAudioRunning()
-    const target = ensureEngine()
-    if (!target) return
-    playerStore.pausePreviewPlayback()
-    target.play(fromSeconds)
+    if (!document.value) return
+    await controller.play(fromSeconds)
   }
   function pause(): void {
-    engine?.pause()
+    controller.pause()
   }
   function stop(): void {
-    engine?.stop()
+    controller.stop()
   }
   function toggle(): Promise<void> | void {
     return isPlaying.value ? pause() : play()
@@ -145,12 +92,13 @@ export function useMidiEditorPlayback(
    * @return {void}
    */
   function seek(seconds: number): void {
-    if (engine) engine.seek(seconds)
-    else {
+    if (!document.value) {
       positionSeconds.value = Math.max(0, seconds)
       transport.value = { ...transport.value, positionSeconds: positionSeconds.value }
       onFrame(transport.value)
+      return
     }
+    controller.seek(seconds)
   }
 
   /**
@@ -160,12 +108,11 @@ export function useMidiEditorPlayback(
    * @return {Promise<void>}
    */
   async function audition(pitch: number, velocity: number): Promise<void> {
-    await ensureAudioRunning()
-    scheduleNote(pitch, velocity, getAudioClock(), AUDITION_SECONDS)
+    await controller.audition(pitch, velocity)
   }
 
-  watch(document, () => engine?.invalidate())
-  watch(loop, (next) => engine?.setLoop(next ?? null), { deep: true })
+  watch(document, () => controller.invalidate())
+  watch(loop, (next) => controller.setLoop(next), { deep: true })
   // 全局播放器开始试听时让位，避免两路声音叠加。
   watch(
     () => playerStore.isPreviewPlaying,
@@ -176,11 +123,20 @@ export function useMidiEditorPlayback(
 
   function dispose(): void {
     stopFrames()
-    engine?.dispose()
-    engine = null
-    synth.allNotesOff()
+    controller.dispose()
   }
   onBeforeUnmount(dispose)
 
-  return { transport, isPlaying, positionSeconds, play, pause, stop, toggle, seek, audition, dispose }
+  return {
+    transport,
+    isPlaying,
+    positionSeconds,
+    play,
+    pause,
+    stop,
+    toggle,
+    seek,
+    audition,
+    dispose,
+  }
 }

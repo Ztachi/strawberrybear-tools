@@ -163,6 +163,37 @@ export const infinityNikkiConfigProviderProps: ConfigProviderProps = {
   button: infinityNikkiButtonConfig,
 }
 
+/** MIDI 编辑器在主窗口与独立窗口中共用的紧凑控件规格。 */
+export const midiEditorConfigProviderProps: ConfigProviderProps = {
+  ...infinityNikkiConfigProviderProps,
+  theme: {
+    ...infinityNikkiTheme,
+    token: {
+      ...infinityNikkiTheme.token,
+      borderRadius: 6,
+      controlHeightSM: 28,
+      fontSize: 13,
+    },
+    components: {
+      ...infinityNikkiTheme.components,
+      Button: {
+        ...infinityNikkiTheme.components?.Button,
+        borderRadius: 6,
+        primaryShadow: 'none',
+      },
+      Select: {
+        ...infinityNikkiTheme.components?.Select,
+        borderRadius: 6,
+        borderRadiusLG: 8,
+      },
+      Popover: {
+        ...infinityNikkiTheme.components?.Popover,
+        borderRadiusLG: 10,
+      },
+    },
+  },
+}
+
 /**
  * @description: 获取主内容弹层容器
  * @description Drawer/Popover/Tooltip 默认挂到 body 会覆盖顶部菜单，这里统一优先挂到内容区。
