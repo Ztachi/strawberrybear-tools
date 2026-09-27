@@ -129,7 +129,7 @@ onUnmounted(() => {
 <template>
   <Modal v-model:open="isOpen" :footer="null" width="auto" centered root-class="about-modal-root">
     <!-- 自定义样式对话框内容 -->
-    <div class="about-card">
+    <div data-text-selectable class="about-card">
       <!-- 头部区域：图标、名称、版本 -->
       <div class="about-header">
         <div class="about-icon">

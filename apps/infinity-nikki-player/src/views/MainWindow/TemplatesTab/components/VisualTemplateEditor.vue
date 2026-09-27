@@ -331,7 +331,7 @@ onUnmounted(() => {
       class="template-help-modal"
       centered
     >
-      <div class="template-help-dialog">
+      <div data-text-selectable class="template-help-dialog">
         <section v-for="section in helpSections" :key="section.title" class="template-help-section">
           <h3>{{ section.title }}</h3>
           <ul>

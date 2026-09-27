@@ -295,7 +295,9 @@ onBeforeUnmount(() => {
         <template v-else>
           <span>{{ t('onlineLibrary.detail.notFound') }}</span>
           <span class="missing-tip">{{ t('onlineLibrary.detail.notFoundDescription') }}</span>
-          <span class="missing-tip">{{ errorMessage }}</span>
+          <span class="missing-tip" role="alert">
+            {{ errorMessage }}
+          </span>
         </template>
         <Button @click="navigateBack">
           {{ t('onlineLibrary.detail.back') }}
@@ -311,10 +313,10 @@ onBeforeUnmount(() => {
           <div class="detail-main">
             <div class="title-row">
               <div class="min-w-0">
-                <h1 class="detail-title">
+                <h1 data-text-selectable class="detail-title">
                   {{ displaySongTitle(song) }}
                 </h1>
-                <p class="detail-author">
+                <p data-text-selectable class="detail-author">
                   {{ displaySongAuthor(song) }}
                 </p>
               </div>
@@ -323,6 +325,7 @@ onBeforeUnmount(() => {
             <div class="description-row">
               <p
                 ref="descriptionRef"
+                data-text-selectable
                 class="detail-description"
                 :class="{ muted: isDescriptionEmpty }"
               >
@@ -336,7 +339,7 @@ onBeforeUnmount(() => {
                 overlay-class-name="online-song-description-popover"
               >
                 <template #content>
-                  <div class="description-popover-content">
+                  <div data-text-selectable class="description-popover-content">
                     {{ descriptionText }}
                   </div>
                 </template>
@@ -392,7 +395,7 @@ onBeforeUnmount(() => {
           </div>
         </header>
 
-        <section class="metadata-card">
+        <section data-text-selectable class="metadata-card">
           <TypographyText class="metadata-title" strong>
             {{ t('midi.melodyInfo') }}
           </TypographyText>

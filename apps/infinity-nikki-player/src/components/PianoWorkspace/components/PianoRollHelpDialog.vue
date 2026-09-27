@@ -34,23 +34,17 @@ const groups = [
     centered
     :styles="{ body: { maxHeight: '65vh', overflowY: 'auto' } }"
   >
-    <div class="space-y-4 text-sm leading-6 text-[var(--color-foreground)]">
+    <div data-text-selectable class="space-y-4 text-sm leading-6 text-[var(--color-foreground)]">
       <section
         v-for="group in groups"
         :key="group.key"
         :aria-labelledby="`piano-roll-help-${group.key}`"
       >
-        <h3
-          :id="`piano-roll-help-${group.key}`"
-          class="font-semibold"
-        >
+        <h3 :id="`piano-roll-help-${group.key}`" class="font-semibold">
           {{ t(`midi.pianoRoll.help.groups.${group.key}`) }}
         </h3>
         <dl class="mt-2 space-y-2">
-          <div
-            v-for="item in group.items"
-            :key="item"
-          >
+          <div v-for="item in group.items" :key="item">
             <dt class="mr-2 inline font-medium">
               {{ t(`midi.pianoRoll.help.items.${item}.label`) }}
             </dt>
@@ -62,10 +56,7 @@ const groups = [
       </section>
     </div>
     <template #footer>
-      <Button
-        type="primary"
-        @click="open = false"
-      >
+      <Button type="primary" @click="open = false">
         {{ t('midi.pianoRoll.help.done') }}
       </Button>
     </template>

@@ -235,15 +235,15 @@ onBeforeUnmount(() => {
 
         <div class="detail-main">
           <Popover :content="detailDisplayName" placement="topLeft">
-            <h1 class="detail-title">
+            <h1 data-text-selectable class="detail-title">
               {{ detailDisplayTitle }}
             </h1>
           </Popover>
-          <p v-if="detailAuthor" class="detail-author">
+          <p v-if="detailAuthor" data-text-selectable class="detail-author">
             {{ detailAuthor }}
           </p>
           <div v-if="detailDescription" class="description-row">
-            <p ref="descriptionRef" class="detail-description">
+            <p ref="descriptionRef" data-text-selectable class="detail-description">
               {{ detailDescription }}
             </p>
             <Popover
@@ -254,7 +254,7 @@ onBeforeUnmount(() => {
               overlay-class-name="midi-description-popover"
             >
               <template #content>
-                <div class="description-popover-content">
+                <div data-text-selectable class="description-popover-content">
                   {{ detailDescription }}
                 </div>
               </template>

@@ -68,7 +68,9 @@ test('a missing song ends loading in the detached workspace instead of retaining
   await expect(popup.locator('.detached-song-title')).toHaveText('missing.mid')
   await expect(popup.locator('.pr-track')).toHaveCount(0)
   await expect(popup.locator('.ant-spin')).toHaveCount(0)
-  await expect(popup.locator('.detached-error')).toBeVisible()
+  const error = popup.locator('.detached-error')
+  await expect(error).toBeVisible()
+  expect(await error.evaluate((element) => getComputedStyle(element).userSelect)).toBe('text')
   await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
 })
 

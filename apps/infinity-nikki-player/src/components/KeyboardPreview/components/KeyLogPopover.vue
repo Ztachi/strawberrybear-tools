@@ -69,7 +69,7 @@ watch(
 <template>
   <Popover v-model:open="isOpen" placement="left">
     <template #content>
-      <div class="keylog-content flex flex-col max-h-[400px]">
+      <div data-text-selectable class="keylog-content flex flex-col max-h-[400px]">
         <!-- 标题栏 -->
         <div class="px-3 py-2 border-b content-header flex items-center justify-between">
           <h4 class="keylog-title text-sm font-medium">

@@ -405,13 +405,14 @@ onBeforeUnmount(() => {
       class="disclaimer-alert"
     />
 
-    <div v-if="onlineStore.errorMessage && songs.length > 0" class="inline-error">
+    <div v-if="onlineStore.errorMessage && songs.length > 0" class="inline-error" role="alert">
       {{ onlineStore.errorMessage }}
     </div>
 
     <div
       v-if="onlineStore.errorMessage && songs.length === 0 && !isInitialLoading"
       class="state-panel"
+      role="alert"
     >
       <p class="state-title">
         {{ t('onlineLibrary.feedback.loadFailed') }}

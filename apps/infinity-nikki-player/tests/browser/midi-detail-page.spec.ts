@@ -307,6 +307,13 @@ for (const copy of [
     await expect(dialog.locator('dt')).toHaveCount(9)
     await expect(dialog.getByText(copy.readOnly, { exact: true })).toBeAttached()
     const body = dialog.locator('.ant-modal-body')
+    const helpText = dialog.getByText(copy.readOnly, { exact: true })
+    expect(await helpText.evaluate((element) => getComputedStyle(element).userSelect)).toBe('text')
+    expect(
+      await dialog
+        .getByRole('button', { name: copy.done, exact: true })
+        .evaluate((element) => getComputedStyle(element).userSelect)
+    ).toBe('none')
     expect(await body.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
     const box = await dialog.boundingBox()
     expect(box!.x).toBeGreaterThanOrEqual(0)

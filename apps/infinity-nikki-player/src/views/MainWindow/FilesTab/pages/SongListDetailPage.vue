@@ -130,7 +130,7 @@ onBeforeUnmount(deactivatePage)
       <div class="detail-main">
         <div class="title-row">
           <div class="min-w-0">
-            <h1 class="detail-title">
+            <h1 data-text-selectable class="detail-title">
               {{ songList.name }}
             </h1>
             <p class="detail-count">
@@ -140,7 +140,7 @@ onBeforeUnmount(deactivatePage)
         </div>
 
         <div class="description-row">
-          <p ref="descriptionRef" class="detail-description">
+          <p ref="descriptionRef" data-text-selectable class="detail-description">
             {{ descriptionText }}
           </p>
           <Popover
@@ -151,7 +151,7 @@ onBeforeUnmount(deactivatePage)
             overlay-class-name="song-list-description-popover"
           >
             <template #content>
-              <div class="description-popover-content">
+              <div data-text-selectable class="description-popover-content">
                 {{ descriptionText }}
               </div>
             </template>

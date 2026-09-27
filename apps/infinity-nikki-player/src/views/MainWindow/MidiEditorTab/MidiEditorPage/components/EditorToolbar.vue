@@ -380,7 +380,7 @@ function handleDimUnplayable(value: boolean): void {
         :get-popup-container="getMainWindowPopupContainer"
       >
         <template #content>
-          <ul class="editor-help-list">
+          <ul data-text-selectable class="editor-help-list">
             <li v-for="line in helpLines" :key="line">
               {{ line }}
             </li>
