@@ -17,7 +17,7 @@ import {
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Button, ConfigProvider, Input, Tooltip } from 'antdv-next'
-import { Download, ExternalLink, Save, LogOut, X } from 'lucide-vue-next'
+import { ExternalLink } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import { createProject } from '@strawberrybear/midi-editor'
 import type { EditorAction, MidiProject } from '@strawberrybear/midi-editor'
@@ -51,6 +51,8 @@ import { useSettingsStore } from '@/stores/settings'
 import { midiEditorConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import type { MidiInfo } from '@/types'
 import EditorChoiceModal, { type EditorChoiceOption } from './components/EditorChoiceModal.vue'
+import EditorProjectActions from './components/EditorProjectActions.vue'
+import EditorToolbar from './components/EditorToolbar.vue'
 import MidiEditorWorkspace from './components/MidiEditorWorkspace.vue'
 import { useMidiEditorPlayback } from './useMidiEditorPlayback'
 import { useMidiEditorSession, type MidiEditorSessionHandle } from './useMidiEditorSession'
@@ -384,17 +386,32 @@ function writeDraft(): void {
   if (!handle || !hasChanges.value) return
   void projectStore.saveDraft(currentDraftKey.value, handle.session.toProject()).catch(() => {})
 }
-async function exportMidi(): Promise<void> {
+async function exportMidi(): Promise<boolean> {
   const handle = editor.value
-  if (!handle) return
+  if (!handle) return false
   try {
     if (await exportProjectAsMidi(handle.session.toProject())) {
       toast.success(t('midiEditor.midiExported'), { richColors: true })
       editorWindow?.notify('success', t('midiEditor.midiExported'))
+      return true
     }
+    return false
   } catch (error) {
     toast.error(t('midiEditor.exportFailed'), { description: String(error), richColors: true })
     editorWindow?.notify('error', t('midiEditor.exportFailed'), String(error))
+    return false
+  }
+}
+
+/** 切换用于不可演奏提示的键位映射模板。 */
+async function selectKeyTemplate(templateId: string): Promise<void> {
+  try {
+    await settingsStore.selectTemplate(templateId)
+  } catch (error) {
+    toast.error(t('midiEditor.templateSelectFailed'), {
+      description: String(error),
+      richColors: true,
+    })
   }
 }
 // ---------- 离开 ----------
@@ -416,8 +433,8 @@ async function confirmLeaveIfNeeded(): Promise<boolean> {
     t('midiEditor.leaveConfirmDescription'),
     [
       { key: 'cancel', label: t('actions.cancel') },
-      { key: 'discard', label: t('midiEditor.discardAndExit'), danger: true },
-      { key: 'save', label: t('midiEditor.saveAndExit'), primary: true },
+      { key: 'discard', label: t('midiEditor.discardAndClose'), danger: true },
+      { key: 'save', label: t('midiEditor.saveAndClose'), primary: true },
     ]
   )
   if (decision === 'save') return save()
@@ -436,12 +453,10 @@ async function navigateBack(): Promise<void> {
   // 路由守卫是离开确认的唯一入口，避免按钮先询问一次、导航时再询问一次。
   await leaveWithoutNewHistory()
 }
-/**
- * @description: 保存项目后退出编辑器
- * @return {Promise<void>} 保存或导航完成后结束
- */
-async function saveAndExit(): Promise<void> {
-  if (await save()) await leaveWithoutNewHistory()
+/** 保存当前工程，成功后关闭编辑器。 */
+async function saveAndClose(): Promise<void> {
+  if (!(await save())) return
+  await leaveWithoutNewHistory()
 }
 function handleBeforeUnload(event: BeforeUnloadEvent): void {
   if (!hasChanges.value) return
@@ -462,6 +477,8 @@ function createWindowPresentation() {
     showVelocity: showVelocity.value,
     dimUnplayable: dimUnplayable.value,
     playablePitches: playablePitches.value ? [...playablePitches.value] : [],
+    currentTemplateId: settingsStore.currentTemplateId,
+    templates: settingsStore.templates.map(({ id, name }) => ({ id, name })),
     saving: saving.value,
     hasChanges: hasChanges.value,
   }
@@ -522,6 +539,9 @@ function handleEditorWindowCommand(command: MidiProjectEditorRequest): void {
     case 'view-option':
       if (command.option === 'showVelocity') showVelocity.value = command.value
       else dimUnplayable.value = command.value
+      break
+    case 'select-template':
+      void selectKeyTemplate(command.templateId)
       break
     case 'save':
       void save()
@@ -604,7 +624,18 @@ watch(
 )
 
 watch(
-  [state, labels, () => locale.value, showVelocity, dimUnplayable, playablePitches, saving, hasChanges],
+  [
+    state,
+    labels,
+    () => locale.value,
+    showVelocity,
+    dimUnplayable,
+    playablePitches,
+    () => settingsStore.currentTemplateId,
+    () => settingsStore.templates,
+    saving,
+    hasChanges,
+  ],
   () => {
     if (state.value) editorWindow?.updateState()
   }
@@ -665,57 +696,32 @@ onBeforeUnmount(() => {
             <span class="editor-unsaved" :aria-label="t('midiEditor.unsaved')" role="status" />
           </Tooltip>
         </div>
-        <div class="editor-project-actions">
-          <Tooltip :title="t('midiEditor.exportMidi')" :trigger="['hover', 'focus']">
-            <Button
-              size="small"
-              color="primary"
-              variant="text"
-              :disabled="!state"
-              :aria-label="t('midiEditor.exportMidi')"
-              @click="exportMidi"
-            >
-              <template #icon>
-                <Download class="header-action-icon" />
-              </template>
-            </Button>
-          </Tooltip>
-          <span class="header-separator" />
-          <Tooltip :title="t('actions.cancel')" :trigger="['hover', 'focus']">
-            <Button
-              size="small"
-              color="primary"
-              variant="text"
-              :aria-label="t('actions.cancel')"
-              @click="navigateBack"
-            >
-              <template #icon>
-                <X class="header-action-icon" />
-              </template>
-            </Button>
-          </Tooltip>
-          <span class="header-separator" />
-          <Button type="primary" size="small" :loading="saving" :disabled="!state" @click="save">
-            <template #icon>
-              <Save class="header-action-icon" /> </template
-            >{{ t('actions.save') }}
-          </Button>
-          <Tooltip :title="t('midiEditor.saveAndExit')" :trigger="['hover', 'focus']">
-            <Button
-              size="small"
-              color="primary"
-              variant="text"
-              :loading="saving"
-              :disabled="!state"
-              :aria-label="t('midiEditor.saveAndExit')"
-              @click="saveAndExit"
-            >
-              <template #icon>
-                <LogOut class="header-action-icon" />
-              </template>
-            </Button>
-          </Tooltip>
-        </div>
+        <EditorToolbar
+          v-if="state"
+          :show-velocity="showVelocity"
+          :dim-unplayable="dimUnplayable"
+          :current-template-id="settingsStore.currentTemplateId"
+          :templates="settingsStore.templates"
+          :state="state"
+          :is-playing="playback.isPlaying.value"
+          @update:show-velocity="showVelocity = $event"
+          @update:dim-unplayable="dimUnplayable = $event"
+          @select-template="selectKeyTemplate"
+          @dispatch="dispatch"
+          @play="playback.play()"
+          @pause="playback.pause()"
+          @stop="playback.stop()"
+          @set-bpm="setBpm"
+          @set-meter="setMeter"
+        />
+        <EditorProjectActions
+          :saving="saving"
+          :disabled="!state"
+          @save="save"
+          @export="exportMidi"
+          @close="navigateBack"
+          @save-and-close="saveAndClose"
+        />
       </header>
 
       <section v-if="loadError" class="midi-editor-missing">
@@ -729,23 +735,17 @@ onBeforeUnmount(() => {
         <MidiEditorWorkspace
           v-if="editorWindowStatus !== 'detached'"
           ref="workspace"
-          v-model:show-velocity="showVelocity"
-          v-model:dim-unplayable="dimUnplayable"
           :state="state"
           :transport="playback.transport.value"
           :labels="labels"
-          :is-playing="playback.isPlaying.value"
+          :show-velocity="showVelocity"
+          :dim-unplayable="dimUnplayable"
           :playable-pitches="playablePitches"
           :opening="editorWindowStatus === 'opening'"
           :restore="workspaceRestore"
           @dispatch="dispatch"
-          @play="playback.play()"
-          @pause="playback.pause()"
-          @stop="playback.stop()"
           @seek="playback.seek"
           @audition="playback.audition"
-          @set-bpm="setBpm"
-          @set-meter="setMeter"
           @remove-track="removeTrack"
           @state-change="rememberWorkspace"
           @migrate="openDetachedEditor"
@@ -786,21 +786,14 @@ onBeforeUnmount(() => {
 }
 
 .midi-editor-header {
-  @apply flex shrink-0 items-center justify-between gap-3 border-b border-primary/10 px-3 py-2;
+  @apply flex shrink-0 items-center gap-2 border-b border-primary/10 px-3 py-2;
 }
 
 /* 输入与按钮来自多根组件，尺寸样式通过容器的 deep 选择器稳定作用于最终 DOM。 */
-.editor-project-identity { @apply flex min-w-0 flex-1 items-center gap-2; }
-.editor-project-identity :deep(.midi-editor-name) { width: 100%; min-width: 0; max-width: 360px; font-weight: 600; }
-.editor-project-actions { @apply flex shrink-0 items-center gap-1; }
+.editor-project-identity { @apply flex min-w-0 shrink items-center gap-2; width: min(240px, 24vw); }
+.editor-project-identity :deep(.midi-editor-name) { width: 100%; min-width: 0; font-weight: 600; }
+.midi-editor-header > :deep(.editor-toolbar) { margin-right: auto; }
 .editor-unsaved { @apply size-1.5 shrink-0 rounded-full bg-primary; }
-.header-separator { @apply mx-1 h-4 w-px bg-primary/15; }
-
-.header-action-icon {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2.35;
-}
 
 .midi-editor-missing {
   @apply flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm;

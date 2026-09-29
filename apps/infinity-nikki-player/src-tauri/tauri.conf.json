@@ -44,7 +44,13 @@
     "active": true,
     "targets": ["dmg", "nsis"],
     "createUpdaterArtifacts": true,
-    "icon": ["icons/icon.png", "icons/icon.icns"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "resources": ["en.lproj", "zh-Hans.lproj", "templates", "midi", "presentmon"],
     "macOS": {
       "minimumSystemVersion": "10.15",
@@ -52,7 +58,8 @@
     },
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico"
       }
     }
   },

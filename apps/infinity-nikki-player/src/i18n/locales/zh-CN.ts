@@ -484,6 +484,8 @@ export default {
     importHint: '支持 .json / .zip 项目文件与 .mid 文件',
     exportProject: '导出项目',
     exportMidi: '导出 .mid',
+    moreActions: '更多操作',
+    closeEditor: '关闭',
     addToLibrary: '添加到播放器',
     batchExport: '批量导出',
     batchDelete: '批量删除',
@@ -502,6 +504,7 @@ export default {
     confirmBatchDelete: '确定要删除已选的 {count} 个项目吗？',
     saved: '项目已保存',
     saveFailed: '保存项目失败',
+    templateSelectFailed: '切换映射模板失败',
     deleted: '项目已删除',
     batchDeleted: '已删除 {count} 个项目',
     deleteFailed: '删除项目失败',
@@ -533,8 +536,8 @@ export default {
     loadDraftPrompt: '检测到上次未保存的项目草稿，是否加载？按取消会保留草稿并返回。',
     leaveConfirmTitle: '有未保存的项目改动',
     leaveConfirmDescription: '离开编辑页前请选择保存改动或直接丢弃。',
-    saveAndExit: '保存并退出',
-    discardAndExit: '直接退出',
+    saveAndClose: '保存并关闭',
+    discardAndClose: '不保存并关闭',
     trackDefaultName: '音轨 {index}',
     trackCopyName: '{name} 副本',
     addTrack: '新增音轨',
@@ -560,6 +563,9 @@ export default {
       snap: '吸附',
       snapTip:
         '设置添加、移动和拉伸音符时对齐的网格，也用于量化；拖动时按住 Option/Alt 可临时关闭吸附。',
+      snapEnabled: '启用吸附',
+      snapToBar: '按小节吸附',
+      snapResolution: '节拍网格',
       snapOff: '关闭',
       snapBar: '小节',
       tool: '工具',
@@ -628,7 +634,11 @@ export default {
       setLoopToSelection: '按选区设置循环',
     },
     help: {
-      title: '编辑器操作说明',
+      menuLabel: '帮助',
+      title: 'MIDI 编辑器帮助',
+      done: '知道了',
+      intro:
+        '这里汇总 MIDI 编辑器的界面、音符与音轨编辑、试听、吸附、工程操作和键盘快捷键。文本输入框或菜单获得焦点时，编辑器快捷键会自动暂停，避免误操作。',
       selectTool:
         '选择工具：点击选中，Shift 加选；空白处拖拽框选；双击空白落音符；拖动音符移动、拖动左右边缘拉伸；按住 Option/Alt 拖动可关闭吸附。',
       drawTool: '画笔工具：点击即落音符，按住横向拖动设定长度。',
@@ -637,6 +647,161 @@ export default {
       shortcuts:
         '快捷键：Delete/Backspace 删除，Command/Ctrl+A 全选，Command/Ctrl+C/X/V 复制剪切粘贴，Command/Ctrl+D 复制一份，Command/Ctrl+Z 撤销，Command/Ctrl+Shift+Z 重做；方向键微调（Shift 为八度/小节），空格播放暂停，Esc 取消选择，V/B 切换工具。',
       playback: '试听只播放当前项目，不触发游戏按键；开始试听时会暂停全局播放器。',
+      sections: {
+        start: {
+          title: '快速开始',
+          items: {
+            layout: {
+              label: '界面布局',
+              description:
+                '顶部用于项目命名、编辑工具、试听和设置；中部是音轨总览与钢琴卷帘；底部音符面板用于精确编辑当前选区。',
+            },
+            overview: {
+              label: '总览与详情',
+              description:
+                '在音轨总览中单击选择音轨，双击打开钢琴卷帘详情；详情打开后可单击其他音轨切换，再次双击当前音轨可关闭详情。',
+            },
+            template: {
+              label: '按键模板',
+              description:
+                '键盘图标用于选择游戏按键映射模板。开启“不可演奏音符置灰”后，超出模板可演奏范围的音符只会被提示和置灰，不会被删除。',
+            },
+          },
+        },
+        notes: {
+          title: '音符编辑',
+          items: {
+            select: {
+              label: '选择工具',
+              description:
+                '单击选择，Shift 单击加选，空白处拖拽框选；双击空白新增音符。拖动音符可移动，拖动左右边缘可改变长度。',
+            },
+            draw: {
+              label: '画笔工具',
+              description: '单击空白位置添加一个音符；按住并横向拖动可在创建时直接设定音符长度。',
+            },
+            inspector: {
+              label: '音符属性',
+              description:
+                '选中音符后可编辑音高、长度和力度，并可量化起点或长度、按半音或八度整体移调。多选时，批量操作会应用到全部选中音符。',
+            },
+            contextMenu: {
+              label: '右键菜单',
+              description:
+                '右键音符或空白区域可使用剪切、复制、粘贴、复制一份、量化、移调、力度预设、按选区循环和删除等操作。',
+            },
+          },
+        },
+        tracks: {
+          title: '音轨管理',
+          items: {
+            trackView: {
+              label: '新增与查看',
+              description:
+                '总览左上角的加号可新增音轨并立即打开详情。每条音轨展示自己的音符内容，可在总览和详情间切换编辑。',
+            },
+            trackManage: {
+              label: '音轨菜单',
+              description:
+                '音轨右侧菜单支持重命名、修改颜色、切换打击乐、复制音轨、调整顺序和删除；工程始终至少保留一条音轨。',
+            },
+            trackEnabled: {
+              label: '启用状态',
+              description:
+                '音轨开关用于控制该音轨是否启用。关闭前请确认这符合当前编曲意图，音符数据本身会继续保留。',
+            },
+          },
+        },
+        playback: {
+          title: '试听与循环',
+          items: {
+            transport: {
+              label: '播放控制',
+              description:
+                '顶部播放按钮用于播放或暂停，停止按钮会结束试听并回到停止状态；空格键也可快速切换播放和暂停。',
+            },
+            seek: {
+              label: '定位与跟随',
+              description:
+                '在时间标尺上定位播放头；播放时可使用跟随功能让当前播放位置保持在视野内。',
+            },
+            loop: {
+              label: '循环区间',
+              description:
+                '按住 Option/Alt 在标尺上拖拽设置循环，或通过右键菜单按选区设置；双击标尺或点击已启用的循环按钮可清除。',
+            },
+            preview: {
+              label: '试听范围',
+              description:
+                '编辑器只试听当前工程，不会向游戏发送按键；开始试听时会自动暂停主界面的全局播放器。',
+            },
+          },
+        },
+        settings: {
+          title: '吸附与显示',
+          items: {
+            snap: {
+              label: '网格吸附',
+              description:
+                '开启后，移动、拉伸和绘制会对齐所选节拍网格。勾选按小节吸附时节拍选项会停用；编辑手势中按住 Option/Alt 可临时绕过吸附。',
+            },
+            song: {
+              label: '乐曲设置',
+              description:
+                '可调整整曲 BPM 与拍号。对于包含多段速度或拍号变化的 MIDI，确认修改后会替换为整曲统一设置。',
+            },
+            display: {
+              label: '显示设置',
+              description:
+                '可显示或隐藏底部力度条，并根据当前按键模板将不可演奏音符置灰，便于发现需要移调或改编的位置。',
+            },
+            view: {
+              label: '视图浏览',
+              description:
+                '使用时间缩放调整横向密度，使用适合全曲快速查看整体；音轨较多时可隐藏没有音符的音轨。',
+            },
+          },
+        },
+        files: {
+          title: '保存与导出',
+          items: {
+            save: {
+              label: '保存工程',
+              description:
+                '右上角保存图标或 Command/Ctrl+S 会保存可继续编辑的工程；项目名称旁的状态点表示仍有未保存改动。',
+            },
+            export: {
+              label: '导出 MIDI',
+              description:
+                '“导出 .mid”生成标准 MIDI 文件，适合在其他编曲软件中继续使用；导出不会代替工程保存。',
+            },
+            leave: {
+              label: '离开编辑器',
+              description:
+                '“保存并关闭”会先保存工程再离开；“关闭”在存在改动时会要求选择保存、丢弃或取消，防止误丢内容。',
+            },
+          },
+        },
+      },
+      shortcutTitle: '键盘快捷键',
+      shortcutItems: {
+        save: { keys: 'Command/Ctrl + S', description: '保存工程' },
+        undo: { keys: 'Command/Ctrl + Z', description: '撤销上一步编辑' },
+        redo: { keys: 'Command/Ctrl + Shift + Z / Y', description: '重做' },
+        selectAll: { keys: 'Command/Ctrl + A', description: '选择全部音符' },
+        clipboard: { keys: 'Command/Ctrl + C / X / V', description: '复制、剪切、粘贴' },
+        duplicate: { keys: 'Command/Ctrl + D', description: '复制一份选中音符' },
+        delete: { keys: 'Delete / Backspace', description: '删除选中音符' },
+        horizontal: { keys: '← / →', description: '按网格左右微调；按住 Shift 按小节移动' },
+        vertical: { keys: '↑ / ↓', description: '上下移动一个半音；按住 Shift 移动一个八度' },
+        playback: { keys: '空格', description: '播放或暂停试听' },
+        clearSelection: { keys: 'Esc', description: '取消音符选择' },
+        tools: { keys: 'V / B', description: '切换选择工具 / 画笔工具' },
+        snapOverride: {
+          keys: 'Option / Alt',
+          description: '编辑手势中临时绕过吸附；标尺拖拽时设置循环',
+        },
+      },
     },
   },
   pagination: {

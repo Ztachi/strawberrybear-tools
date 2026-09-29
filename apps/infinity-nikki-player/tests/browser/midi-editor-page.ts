@@ -102,6 +102,28 @@ const templateFixtures = Array.from({ length: 60 }, (_, index) => ({
   mappings: [],
 }))
 
+/** MIDI 编辑器使用小型可演奏集，便于验证切换模板后的置灰结果。 */
+const editorTemplateFixtures = [
+  {
+    id: 'editor-template-piano',
+    name: '钢琴常用键',
+    is_builtin: false,
+    mappings: [
+      { pitch: 60, key: 'A' },
+      { pitch: 64, key: 'S' },
+    ],
+  },
+  {
+    id: 'editor-template-upper',
+    name: '高音演奏键',
+    is_builtin: false,
+    mappings: [
+      { pitch: 67, key: 'D' },
+      { pitch: 69, key: 'F' },
+    ],
+  },
+]
+
 const onlineSongFixtures = Array.from(
   { length: 80 },
   (_, index): OnlineMidiSong => ({
@@ -134,6 +156,8 @@ const onlineSongFixtures = Array.from(
 // 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
 mockIPC((command) => {
   if (command === 'load_midi_project') return project
+  if (command === 'save_midi_project')
+    return { ...projectSummary, id: 'saved-fixture', updatedAt: Date.now() }
   if (command === 'import_midi_buffer')
     return {
       ...midi,
@@ -167,7 +191,8 @@ mockIPC((command) => {
           },
         ]
       : []
-  if (command === 'get_templates') return showTemplateList ? templateFixtures : []
+  if (command === 'get_templates')
+    return showTemplateList ? templateFixtures : editorTemplateFixtures
   if (['extract_melody', 'extract_all_notes'].includes(command)) return []
   if (command === 'get_midi_library')
     return showNavigationFixture || showPlaylistFixture ? navigationMidiLibrary : [midi]

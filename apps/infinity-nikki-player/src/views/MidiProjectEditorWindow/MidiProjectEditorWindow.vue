@@ -2,8 +2,7 @@
 /** 独立 MIDI 项目编辑窗口；编辑状态与持久化仍由主窗口中的会话负责。 */
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { App as AntApp, Button, ConfigProvider, Input, Spin, Tooltip } from 'antdv-next'
-import { Download, LogOut, Save, X } from 'lucide-vue-next'
+import { App as AntApp, ConfigProvider, Input, Spin, Tooltip } from 'antdv-next'
 import type { EditorAction } from '@strawberrybear/midi-editor'
 import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import WindowTitleBar from '@/components/WindowTitleBar/WindowTitleBar.vue'
@@ -26,6 +25,8 @@ import { useMidiEditorPlayback } from '@/views/MainWindow/MidiEditorTab/MidiEdit
 import EditorChoiceModal, {
   type EditorChoiceOption,
 } from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorChoiceModal.vue'
+import EditorProjectActions from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorProjectActions.vue'
+import EditorToolbar from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorToolbar.vue'
 
 const port =
   inject<MidiProjectEditorClientPort | undefined>(MIDI_PROJECT_EDITOR_CLIENT_PORT, undefined) ??
@@ -242,6 +243,13 @@ function setViewOption(option: 'showVelocity' | 'dimUnplayable', value: boolean)
   void send({ kind: 'view-option', option, value })
 }
 
+/** 先更新子窗口选中态，再由主窗口持久化并回传可演奏音高。 */
+function selectKeyTemplate(templateId: string): void {
+  const current = presentation.value
+  if (current) presentation.value = { ...current, currentTemplateId: templateId }
+  void send({ kind: 'select-template', templateId })
+}
+
 async function exitEditor(): Promise<void> {
   if (!presentation.value?.hasChanges) {
     playback.stop()
@@ -253,8 +261,8 @@ async function exitEditor(): Promise<void> {
     t('midiEditor.leaveConfirmDescription'),
     [
       { key: 'cancel', label: t('actions.cancel') },
-      { key: 'discard', label: t('midiEditor.discardAndExit'), danger: true },
-      { key: 'save', label: t('midiEditor.saveAndExit'), primary: true },
+      { key: 'discard', label: t('midiEditor.discardAndClose'), danger: true },
+      { key: 'save', label: t('midiEditor.saveAndClose'), primary: true },
     ]
   )
   if (decision === 'save' || decision === 'discard') {
@@ -263,7 +271,7 @@ async function exitEditor(): Promise<void> {
   }
 }
 
-async function saveAndExit(): Promise<void> {
+async function saveAndClose(): Promise<void> {
   playback.stop()
   await send({ kind: 'exit', mode: 'save' })
 }
@@ -371,63 +379,32 @@ onBeforeUnmount(() => {
                   />
                 </Tooltip>
               </div>
+              <EditorToolbar
+                :show-velocity="presentation.showVelocity"
+                :dim-unplayable="presentation.dimUnplayable"
+                :current-template-id="presentation.currentTemplateId"
+                :templates="presentation.templates"
+                :state="state"
+                :is-playing="playback.isPlaying.value"
+                @update:show-velocity="setViewOption('showVelocity', $event)"
+                @update:dim-unplayable="setViewOption('dimUnplayable', $event)"
+                @select-template="selectKeyTemplate"
+                @dispatch="dispatch"
+                @play="playEditor"
+                @pause="playback.pause()"
+                @stop="playback.stop()"
+                @set-bpm="setBpm"
+                @set-meter="setMeter"
+              />
             </template>
             <template #actions>
-              <div class="editor-project-actions">
-                <Tooltip :title="t('midiEditor.exportMidi')" :trigger="['hover', 'focus']">
-                  <Button
-                    size="small"
-                    color="primary"
-                    variant="text"
-                    :aria-label="t('midiEditor.exportMidi')"
-                    @click="send({ kind: 'export' })"
-                  >
-                    <template #icon>
-                      <Download class="header-action-icon" />
-                    </template>
-                  </Button>
-                </Tooltip>
-                <span class="header-separator" />
-                <Tooltip :title="t('actions.cancel')" :trigger="['hover', 'focus']">
-                  <Button
-                    size="small"
-                    color="primary"
-                    variant="text"
-                    :aria-label="t('actions.cancel')"
-                    @click="exitEditor"
-                  >
-                    <template #icon>
-                      <X class="header-action-icon" />
-                    </template>
-                  </Button>
-                </Tooltip>
-                <span class="header-separator" />
-                <Button
-                  type="primary"
-                  size="small"
-                  :loading="presentation.saving"
-                  @click="send({ kind: 'save' })"
-                >
-                  <template #icon>
-                    <Save class="header-action-icon" />
-                  </template>
-                  {{ t('actions.save') }}
-                </Button>
-                <Tooltip :title="t('midiEditor.saveAndExit')" :trigger="['hover', 'focus']">
-                  <Button
-                    size="small"
-                    color="primary"
-                    variant="text"
-                    :loading="presentation.saving"
-                    :aria-label="t('midiEditor.saveAndExit')"
-                    @click="saveAndExit"
-                  >
-                    <template #icon>
-                      <LogOut class="header-action-icon" />
-                    </template>
-                  </Button>
-                </Tooltip>
-              </div>
+              <EditorProjectActions
+                :saving="presentation.saving"
+                @save="send({ kind: 'save' })"
+                @export="send({ kind: 'export' })"
+                @close="exitEditor"
+                @save-and-close="saveAndClose"
+              />
             </template>
           </WindowTitleBar>
 
@@ -436,22 +413,14 @@ onBeforeUnmount(() => {
             :state="state"
             :transport="playback.transport.value"
             :labels="presentation.labels"
-            :is-playing="playback.isPlaying.value"
             :playable-pitches="playablePitches"
             :show-velocity="presentation.showVelocity"
             :dim-unplayable="presentation.dimUnplayable"
             :restore="restore"
             detached
-            @update:show-velocity="setViewOption('showVelocity', $event)"
-            @update:dim-unplayable="setViewOption('dimUnplayable', $event)"
             @dispatch="dispatch"
-            @play="playEditor"
-            @pause="playback.pause()"
-            @stop="playback.stop()"
             @seek="playback.seek"
             @audition="playback.audition"
-            @set-bpm="setBpm"
-            @set-meter="setMeter"
             @remove-track="removeTrack"
             @state-change="queueViewport"
             @migrate="dockEditor"
@@ -480,8 +449,8 @@ onBeforeUnmount(() => {
 }
 
 .editor-project-identity {
-  @apply flex min-w-0 items-center gap-2;
-  width: min(360px, 34vw);
+  @apply flex min-w-0 shrink items-center gap-2;
+  width: min(220px, 23vw);
   -webkit-app-region: no-drag;
 }
 .editor-project-identity :deep(.midi-editor-name) {
@@ -489,12 +458,6 @@ onBeforeUnmount(() => {
   min-width: 0;
   font-weight: 600;
 }
-.editor-project-actions {
-  @apply flex shrink-0 items-center gap-1;
-  -webkit-app-region: no-drag;
-}
 .editor-unsaved { @apply size-1.5 shrink-0 rounded-full bg-primary; }
-.header-separator { @apply mx-1 h-4 w-px bg-primary/15; }
-.header-action-icon { width: 16px; height: 16px; stroke-width: 2.35; }
 .detached-error { @apply m-0 px-3 py-1 text-sm; color: var(--color-error); }
 </style>

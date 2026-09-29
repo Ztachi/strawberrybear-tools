@@ -44,6 +44,8 @@ function fixture() {
     showVelocity: false,
     dimUnplayable: false,
     playablePitches: [],
+    currentTemplateId: null,
+    templates: [],
     saving: false,
     hasChanges: false,
   }

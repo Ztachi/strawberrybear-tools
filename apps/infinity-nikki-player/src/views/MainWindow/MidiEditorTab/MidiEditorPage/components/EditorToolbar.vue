@@ -1,26 +1,27 @@
 <script setup lang="ts">
 /**
- * @description: MIDI 编辑器工具栏：速度/拍号/吸附/工具/撤销重做/试听/显示开关
+ * @description: MIDI 编辑器紧凑工具栏：速度/拍号/吸附/工具/撤销重做/试听/显示开关
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Popover, Select, Switch, Tooltip } from 'antdv-next'
+import { Button, Checkbox, Popover, Select, Switch, Tooltip } from 'antdv-next'
 import {
   CircleAlert,
-  CircleHelp,
-  Settings2,
-  ChevronDown,
+  KeyboardMusic,
+  Magnet,
   MousePointer2,
   Pause,
   Pencil,
   Play,
   Redo2,
   Repeat,
+  Settings2,
   Square,
   Undo2,
 } from 'lucide-vue-next'
 import { MAX_BPM, MIN_BPM, SNAP_RESOLUTIONS, tempoToBpm } from '@strawberrybear/midi-editor'
 import type { EditorAction, EditorSessionState, SnapResolution } from '@strawberrybear/midi-editor'
+import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import EditorNumberInput from './EditorNumberInput.vue'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 
@@ -29,6 +30,8 @@ const props = defineProps<{
   isPlaying: boolean
   showVelocity: boolean
   dimUnplayable: boolean
+  currentTemplateId: string | null
+  templates: readonly { id: string; name: string }[]
 }>()
 const emit = defineEmits<{
   dispatch: [action: EditorAction]
@@ -39,8 +42,11 @@ const emit = defineEmits<{
   'set-meter': [numerator: number, denominator: number]
   'update:showVelocity': [value: boolean]
   'update:dimUnplayable': [value: boolean]
+  'select-template': [templateId: string]
 }>()
 const { t } = useI18n()
+const snapSettingsOpen = ref(false)
+const templateSettingsOpen = ref(false)
 const settingsOpen = ref(false)
 
 /** 拍号可选分子/分母；分母限定为 2 的幂以符合 SMF 规范。 */
@@ -52,33 +58,32 @@ const denominatorOptions = METER_DENOMINATORS.map((value) => ({ value, label: St
 
 const bpm = computed(() => tempoToBpm(props.state.document.tempoMap[0]?.microsecondsPerQuarter ?? 0))
 const meter = computed(() => props.state.document.timeSignatureMap[0] ?? { numerator: 4, denominator: 4 })
-/** 关闭是吸附的基础状态，固定放在首项，避免藏在长列表末尾。 */
-const orderedSnapResolutions = [
-  'off',
-  ...SNAP_RESOLUTIONS.filter((value) => value !== 'off'),
-] as const
-const snapOptions = computed(() =>
-  orderedSnapResolutions.map((value) => ({
-    value,
-    title: '',
-    label:
-      value === 'bar'
-        ? t('midiEditor.toolbar.snapBar')
-        : value === 'off'
-          ? t('midiEditor.toolbar.snapOff')
-          : value,
-  }))
+type BeatSnapResolution = Exclude<SnapResolution, 'off' | 'bar'>
+const DEFAULT_BEAT_SNAP: BeatSnapResolution = '1/16'
+/** 下拉框只负责节拍网格；开关和按小节吸附使用独立控件表达。 */
+const beatSnapResolutions = SNAP_RESOLUTIONS.filter(
+  (value): value is BeatSnapResolution => value !== 'off' && value !== 'bar'
+)
+const snapOptions = beatSnapResolutions.map((value) => ({ value, title: '', label: value }))
+const lastBeatSnap = ref<BeatSnapResolution>(DEFAULT_BEAT_SNAP)
+const snapEnabled = computed(() => props.state.snap !== 'off')
+const snapToBar = computed(() => props.state.snap === 'bar')
+const beatSnap = computed(() => {
+  const current = props.state.snap
+  return current !== 'off' && current !== 'bar' ? current : lastBeatSnap.value
+})
+
+watch(
+  () => props.state.snap,
+  (value) => {
+    if (value !== 'off' && value !== 'bar') lastBeatSnap.value = value
+  },
+  { immediate: true }
 )
 const toolOptions = [
   { value: 'select', icon: MousePointer2, help: 'selectTool' },
   { value: 'draw', icon: Pencil, help: 'drawTool' },
 ] as const
-const helpLines = computed(() =>
-  (['selectTool', 'drawTool', 'loop', 'velocity', 'shortcuts', 'playback'] as const).map((key) =>
-    t(`midiEditor.help.${key}`)
-  )
-)
-
 function handleBpm(value: number | string | null): void {
   const next = Number(value)
   if (Number.isFinite(next) && next >= MIN_BPM && next <= MAX_BPM && next !== bpm.value) {
@@ -91,8 +96,20 @@ function handleNumerator(value: unknown): void {
 function handleDenominator(value: unknown): void {
   emit('set-meter', meter.value.numerator, Number(value))
 }
-function handleSnap(value: unknown): void {
-  emit('dispatch', { type: 'set-snap', resolution: value as SnapResolution })
+function setSnap(resolution: SnapResolution): void {
+  emit('dispatch', { type: 'set-snap', resolution })
+}
+function handleSnapEnabled(value: boolean): void {
+  setSnap(value ? lastBeatSnap.value : 'off')
+}
+function handleSnapToBar(): void {
+  setSnap(snapToBar.value ? lastBeatSnap.value : 'bar')
+}
+function handleBeatSnap(value: unknown): void {
+  const resolution = value as BeatSnapResolution
+  if (!beatSnapResolutions.includes(resolution)) return
+  lastBeatSnap.value = resolution
+  setSnap(resolution)
 }
 /**
  * @description: 更新力度条显示状态
@@ -176,6 +193,7 @@ function handleDimUnplayable(value: boolean): void {
         </Button>
       </Tooltip>
     </div>
+    <span class="toolbar-separator" />
     <div
       class="toolbar-group toolbar-transport-group"
       :aria-label="t('midiEditor.toolbar.play')"
@@ -229,36 +247,124 @@ function handleDimUnplayable(value: boolean): void {
         </span>
       </Tooltip>
     </div>
+    <span class="toolbar-separator" />
     <div class="toolbar-group toolbar-settings-group">
-      <div class="toolbar-field">
-        <span class="toolbar-label toolbar-label-with-help">
-          {{ t('midiEditor.toolbar.snap') }}
-          <Tooltip :title="t('midiEditor.toolbar.snapTip')" :trigger="['hover', 'focus']">
-            <CircleAlert
-              class="property-help-icon"
-              tabindex="0"
-              role="img"
-              :aria-label="t('midiEditor.toolbar.snapTip')"
+      <Popover
+        v-model:open="templateSettingsOpen"
+        :trigger="['hover', 'click']"
+        placement="bottomRight"
+        :mouse-enter-delay="0.12"
+        :mouse-leave-delay="0.14"
+        :get-popup-container="getMainWindowPopupContainer"
+      >
+        <template #content>
+          <div id="midi-template-settings" class="template-settings">
+            <h3 class="settings-title">
+              {{ t('player.template') }}
+            </h3>
+            <KeyTemplateSelect
+              class="editor-template-select"
+              width="224px"
+              size="small"
+              :model-value="currentTemplateId"
+              :templates="templates"
+              :list-height="224"
+              :popup-match-select-width="260"
+              :get-popup-container="getMainWindowPopupContainer"
+              @update:model-value="emit('select-template', $event)"
             />
-          </Tooltip>
-        </span>
-        <Select
-          class="toolbar-snap"
-          :aria-label="t('midiEditor.toolbar.snap')"
-          :style="{ width: '104px', flex: '0 0 104px' }"
-          :popup-match-select-width="160"
+          </div>
+        </template>
+        <Button
           size="small"
-          :value="state.snap"
-          :options="snapOptions"
-          :get-popup-container="getMainWindowPopupContainer"
-          @change="handleSnap"
-        />
-      </div>
+          color="primary"
+          variant="text"
+          class="settings-icon-trigger"
+          :aria-expanded="templateSettingsOpen"
+          aria-controls="midi-template-settings"
+          :aria-label="t('player.template')"
+        >
+          <template #icon>
+            <KeyboardMusic class="toolbar-icon" />
+          </template>
+        </Button>
+      </Popover>
+
+      <Popover
+        v-model:open="snapSettingsOpen"
+        :trigger="['hover', 'click']"
+        placement="bottomRight"
+        :mouse-enter-delay="0.12"
+        :mouse-leave-delay="0.14"
+        :get-popup-container="getMainWindowPopupContainer"
+      >
+        <template #content>
+          <div id="midi-snap-settings" class="snap-settings">
+            <h3 class="settings-title settings-title-with-help">
+              {{ t('midiEditor.toolbar.snap') }}
+              <Tooltip :title="t('midiEditor.toolbar.snapTip')" :trigger="['hover', 'focus']">
+                <CircleAlert
+                  class="property-help-icon"
+                  tabindex="0"
+                  role="img"
+                  :aria-label="t('midiEditor.toolbar.snapTip')"
+                />
+              </Tooltip>
+            </h3>
+
+            <label class="settings-switch-row">
+              <span>{{ t('midiEditor.toolbar.snapEnabled') }}</span>
+              <Switch
+                size="small"
+                :checked="snapEnabled"
+                :aria-label="t('midiEditor.toolbar.snapEnabled')"
+                @change="handleSnapEnabled"
+              />
+            </label>
+
+            <div v-if="snapEnabled" class="snap-settings-options">
+              <Checkbox :checked="snapToBar" @change="handleSnapToBar">
+                {{ t('midiEditor.toolbar.snapToBar') }}
+              </Checkbox>
+              <label class="toolbar-field">
+                <span class="toolbar-label">{{ t('midiEditor.toolbar.snapResolution') }}</span>
+                <Select
+                  class="toolbar-snap"
+                  :aria-label="t('midiEditor.toolbar.snapResolution')"
+                  :style="{ width: '100px', flex: '0 0 100px' }"
+                  :popup-match-select-width="148"
+                  size="small"
+                  :disabled="snapToBar"
+                  :value="beatSnap"
+                  :options="snapOptions"
+                  :get-popup-container="getMainWindowPopupContainer"
+                  @change="handleBeatSnap"
+                />
+              </label>
+            </div>
+          </div>
+        </template>
+        <Button
+          size="small"
+          color="primary"
+          variant="text"
+          class="settings-icon-trigger"
+          :aria-expanded="snapSettingsOpen"
+          aria-controls="midi-snap-settings"
+          :aria-label="t('midiEditor.toolbar.snap')"
+        >
+          <template #icon>
+            <Magnet class="toolbar-icon" />
+          </template>
+        </Button>
+      </Popover>
 
       <Popover
         v-model:open="settingsOpen"
-        trigger="click"
+        :trigger="['hover', 'click']"
         placement="bottomRight"
+        :mouse-enter-delay="0.12"
+        :mouse-leave-delay="0.14"
         :get-popup-container="getMainWindowPopupContainer"
       >
         <template #content>
@@ -360,40 +466,13 @@ function handleDimUnplayable(value: boolean): void {
           size="small"
           color="primary"
           variant="text"
-          class="song-settings-trigger"
+          class="settings-icon-trigger song-settings-trigger"
           :aria-expanded="settingsOpen"
           aria-controls="midi-song-settings"
           :aria-label="t('midiEditor.toolbar.songSettings')"
         >
           <template #icon>
             <Settings2 class="toolbar-icon" />
-          </template>
-          <span class="song-settings-summary">
-            {{ Math.round(bpm * 100) / 100 }} BPM · {{ meter.numerator }}/{{ meter.denominator }}
-          </span>
-          <ChevronDown class="toolbar-chevron" />
-        </Button>
-      </Popover>
-      <Popover
-        placement="bottomRight"
-        trigger="click"
-        :get-popup-container="getMainWindowPopupContainer"
-      >
-        <template #content>
-          <ul data-text-selectable class="editor-help-list">
-            <li v-for="line in helpLines" :key="line">
-              {{ line }}
-            </li>
-          </ul>
-        </template>
-        <Button
-          size="small"
-          color="primary"
-          variant="text"
-          :aria-label="t('midiEditor.toolbar.help')"
-        >
-          <template #icon>
-            <CircleHelp class="toolbar-icon" />
           </template>
         </Button>
       </Popover>
@@ -403,33 +482,28 @@ function handleDimUnplayable(value: boolean): void {
 
 <style scoped>
 .editor-toolbar {
-  @apply flex shrink-0 items-center justify-between gap-3 border-b border-primary/10 px-3 py-2;
-  container-type: inline-size;
+  @apply flex min-w-0 shrink-0 items-center gap-1.5;
+  -webkit-app-region: no-drag;
 }
 .toolbar-group { @apply flex shrink-0 items-center gap-1; }
-.toolbar-edit-group { @apply gap-2; }
+.toolbar-edit-group { @apply gap-1; }
 .toolbar-transport-group { @apply rounded-lg bg-primary/10 px-2 py-0.5; }
-.toolbar-settings-group { @apply gap-2; }
+.toolbar-settings-group { @apply gap-1.5; }
 .toolbar-field { @apply flex items-center justify-between gap-2 whitespace-nowrap; }
 .toolbar-label { @apply text-xs; color: var(--color-muted-dark); }
 .toolbar-label-with-help, .settings-title-with-help { @apply flex items-center gap-1; }
 .property-help-icon { @apply cursor-help; width: 13px; height: 13px; color: var(--color-muted); }
 .toolbar-icon { width: 16px; height: 16px; stroke-width: 2; }
-.toolbar-chevron { width: 12px; height: 12px; }
 .toolbar-group :deep(.ant-btn) { box-shadow: none; }
 .toolbar-edit-group > :first-child { @apply mr-2 rounded-md bg-primary/10 p-0.5; }
-.toolbar-separator { @apply mx-1 h-4 w-px bg-primary/15; }
-.toolbar-settings-group :deep(.song-settings-trigger) { width: 174px; }
-.song-settings-summary { @apply text-xs tabular-nums; }
+.toolbar-separator { @apply mx-0.5 h-4 w-px shrink-0 bg-primary/15; }
+.toolbar-settings-group :deep(.settings-icon-trigger) { width: 30px; min-width: 30px; padding: 0; }
+.snap-settings { @apply flex flex-col gap-3; width: 224px; }
+.template-settings { @apply flex flex-col gap-3; width: 224px; }
+.snap-settings-options { @apply flex flex-col gap-3 border-t border-primary/10 pt-3 text-xs; color: var(--color-muted-dark); }
 .editor-settings { @apply flex flex-col gap-3; width: 244px; }
 .settings-title { @apply m-0 text-xs font-semibold; color: var(--color-foreground); }
 .settings-divider { @apply border-t border-primary/10 pt-3; }
 .settings-display { @apply flex flex-col gap-2; }
 .settings-switch-row { @apply flex cursor-pointer items-center justify-between gap-6 text-xs; color: var(--color-muted-dark); }
-.editor-help-list { @apply flex max-w-sm flex-col gap-1.5 text-xs leading-5; color: var(--color-muted-dark); }
-@container (max-width: 650px) {
-  .song-settings-summary { display: none; }
-  .toolbar-settings-group :deep(.song-settings-trigger) { width: 30px; padding: 0; }
-  .toolbar-chevron { display: none; }
-}
 </style>

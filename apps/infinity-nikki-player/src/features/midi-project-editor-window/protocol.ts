@@ -26,6 +26,8 @@ export interface MidiProjectEditorPresentation {
   showVelocity: boolean
   dimUnplayable: boolean
   playablePitches: number[]
+  currentTemplateId: string | null
+  templates: { id: string; name: string }[]
   saving: boolean
   hasChanges: boolean
 }
@@ -37,6 +39,7 @@ export type MidiProjectEditorCommand =
   | { kind: 'playback-position'; seconds: number }
   | { kind: 'viewport'; viewport: PianoWorkspaceState }
   | { kind: 'view-option'; option: 'showVelocity' | 'dimUnplayable'; value: boolean }
+  | { kind: 'select-template'; templateId: string }
   | { kind: 'save' | 'export' }
   | { kind: 'exit'; mode: 'save' | 'discard' }
 

@@ -15,7 +15,6 @@ import {
   type PianoTrackActionsRegistry,
 } from '@/components/PianoWorkspace/usePianoTrackHosts'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
-import EditorToolbar from './EditorToolbar.vue'
 import NoteContextMenu, { type NoteContextMenuTarget } from './NoteContextMenu.vue'
 import NoteInspector from './NoteInspector.vue'
 import TrackActionsMenu from './TrackActionsMenu.vue'
@@ -24,7 +23,6 @@ const props = defineProps<{
   state: EditorSessionState
   transport: PianoRollTransport
   labels: PianoRollLabels
-  isPlaying: boolean
   playablePitches: ReadonlySet<number> | null
   showVelocity: boolean
   dimUnplayable: boolean
@@ -35,18 +33,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   dispatch: [action: EditorAction]
-  play: []
-  pause: []
-  stop: []
   seek: [seconds: number]
   audition: [pitch: number, velocity: number]
-  'set-bpm': [bpm: number]
-  'set-meter': [numerator: number, denominator: number]
   'remove-track': [track: PianoRollTrack]
   'state-change': [state: PianoWorkspaceState]
   migrate: []
-  'update:showVelocity': [value: boolean]
-  'update:dimUnplayable': [value: boolean]
 }>()
 
 const { t } = useI18n()
@@ -112,10 +103,6 @@ function openPendingTrack(): void {
   if (created) workspace.value?.openTrack(created.id)
 }
 
-function setMeter(numerator: number, denominator: number): void {
-  emit('set-meter', numerator, denominator)
-}
-
 watch(() => props.state.document.tracks.length, openPendingTrack)
 
 defineExpose({
@@ -126,21 +113,6 @@ defineExpose({
 </script>
 
 <template>
-  <EditorToolbar
-    :show-velocity="showVelocity"
-    :dim-unplayable="dimUnplayable"
-    :state="state"
-    :is-playing="isPlaying"
-    @update:show-velocity="emit('update:showVelocity', $event)"
-    @update:dim-unplayable="emit('update:dimUnplayable', $event)"
-    @dispatch="emit('dispatch', $event)"
-    @play="emit('play')"
-    @pause="emit('pause')"
-    @stop="emit('stop')"
-    @set-bpm="emit('set-bpm', $event)"
-    @set-meter="setMeter"
-  />
-
   <div class="midi-editor-body">
     <PianoWorkspace
       ref="workspace"

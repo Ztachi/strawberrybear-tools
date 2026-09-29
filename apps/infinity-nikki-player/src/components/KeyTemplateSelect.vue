@@ -17,14 +17,23 @@ defineOptions({
  * @description: 键位映射模板选择器展示参数
  * @property {string | number} [width] - 选择器宽度，数字按 px 处理
  * @property {StyleValue} [style] - 透传并合并到 Select 根节点的样式
+ * @property {string | null} [modelValue] - 受控模式下的当前模板 ID
+ * @property {readonly { id: string; name: string }[]} [templates] - 受控模式下的模板摘要
  */
 const props = defineProps<{
   width?: string | number
   style?: StyleValue
+  modelValue?: string | null
+  templates?: readonly { id: string; name: string }[]
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [templateId: string]
 }>()
 
-const { t } = useI18n()
-const settingsStore = useSettingsStore()
+const { t, te } = useI18n()
+/** 组件生命周期内不切换受控模式，避免两套状态同时写入。 */
+const controlled = props.templates !== undefined || props.modelValue !== undefined
+const settingsStore = controlled ? null : useSettingsStore()
 
 /** 透传调用方传入的 class、弹层 class、list-height 等 antdv-next Select 参数。 */
 const attrs = useAttrs()
@@ -39,13 +48,19 @@ const isSelecting = ref(false)
  * @return {string} 用户可见模板名称
  */
 function getTemplateDisplayName(name: string, id: string): string {
-  const builtinName = t(`template.builtinNames.${id}` as any)
-  return builtinName && builtinName !== `template.builtinNames.${id}` ? builtinName : name
+  const translationKey = `template.builtinNames.${id}`
+  return te(translationKey) ? t(translationKey) : name
 }
+
+/** 未传入受控数据时直接复用全局模板状态。 */
+const availableTemplates = computed(() => props.templates ?? settingsStore?.templates ?? [])
+const selectedTemplateId = computed(() =>
+  controlled ? props.modelValue : settingsStore?.currentTemplateId
+)
 
 /** antdv-next Select 使用的模板选项，label 用于显示和搜索过滤。 */
 const templateOptions = computed(() =>
-  settingsStore.templates.map((template) => ({
+  availableTemplates.value.map((template) => ({
     label: getTemplateDisplayName(template.name, template.id),
     value: template.id,
   }))
@@ -73,9 +88,15 @@ async function handleTemplateChange(value: unknown): Promise<void> {
     return
   }
 
+  // 独立窗口等受控场景由宿主持久化，避免多 WebView 各自维护一套模板状态。
+  if (controlled) {
+    emit('update:modelValue', value)
+    return
+  }
+
   isSelecting.value = true
   try {
-    await settingsStore.selectTemplate(value)
+    await settingsStore?.selectTemplate(value)
   } finally {
     isSelecting.value = false
   }
@@ -88,7 +109,7 @@ async function handleTemplateChange(value: unknown): Promise<void> {
     show-search
     option-filter-prop="label"
     :style="selectStyle"
-    :value="settingsStore.currentTemplateId ?? undefined"
+    :value="selectedTemplateId ?? undefined"
     :options="templateOptions"
     :placeholder="t('player.noTemplate')"
     :loading="isSelecting"

@@ -21,10 +21,9 @@ vi.mock('antdv-next', async () => {
       },
     })
   return Object.fromEntries(
-    ['Button', 'InputNumber', 'Slider', 'Tooltip', 'Popover', 'Select', 'Switch'].map((name) => [
-      name,
-      control(name),
-    ])
+    ['Button', 'Checkbox', 'InputNumber', 'Slider', 'Tooltip', 'Popover', 'Select', 'Switch'].map(
+      (name) => [name, control(name)]
+    )
   )
 })
 vi.mock('@/theme/infinityNikkiTheme', () => ({ getMainWindowPopupContainer: () => null }))
@@ -93,6 +92,8 @@ function mount(target: 'inspector' | 'toolbar'): void {
                 isPlaying: false,
                 showVelocity: false,
                 dimUnplayable: false,
+                currentTemplateId: null,
+                templates: [],
                 onDispatch: handle.dispatch,
                 onSetBpm: (bpm: number) => handle.dispatch({ type: 'set-tempo', bpm }),
               })

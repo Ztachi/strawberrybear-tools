@@ -11,9 +11,143 @@ async function openSettings(page: Page): Promise<void> {
   }
 }
 
+async function openSnapSettings(page: Page): Promise<void> {
+  const trigger = page.getByRole('button', { name: '吸附', exact: true })
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
+  await expect(page.getByRole('switch', { name: '启用吸附', exact: true })).toBeVisible()
+}
+
+async function openTemplateSettings(page: Page): Promise<void> {
+  const trigger = page.getByRole('button', { name: '映射模板', exact: true })
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
+  await expect(page.locator('.editor-template-select:visible')).toBeVisible()
+}
+
+async function openEditorMoreActions(page: Page): Promise<void> {
+  const trigger = page.getByRole('button', { name: '更多操作', exact: true })
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
+  await expect(page.getByRole('menu')).toBeVisible()
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/tests/browser/midi-editor-page.html')
   await expect(page.locator('.editor-toolbar')).toBeVisible()
+})
+
+test('编辑操作合并到单层标题栏，次要操作通过悬浮菜单收纳', async ({ page }) => {
+  await expect(page.locator('.midi-editor-header > .editor-toolbar')).toBeVisible()
+  await expect(page.locator('.midi-editor-page > .editor-toolbar')).toHaveCount(0)
+  await expect(page.locator('.editor-project-actions').getByRole('button')).toHaveCount(2)
+  await expect
+    .poll(() =>
+      page
+        .locator('.midi-editor-name input, input.midi-editor-name')
+        .evaluate((element) => element.getBoundingClientRect().width)
+    )
+    .toBeLessThanOrEqual(240)
+
+  const save = page.getByRole('button', { name: '保存', exact: true })
+  await expect(save).toHaveText('')
+  await save.hover()
+  await expect(page.getByRole('tooltip').filter({ hasText: '保存' })).toBeVisible()
+
+  await page.getByRole('button', { name: '更多操作', exact: true }).hover()
+  const menu = page.getByRole('menu')
+  await expect(menu.getByRole('menuitem')).toHaveText(['导出 .mid', '帮助', '保存并关闭', '关闭'])
+  await expect(menu.getByRole('menuitem', { name: '关闭', exact: true })).toHaveClass(
+    /ant-btn-dangerous/
+  )
+  await expect
+    .poll(() => page.locator('.ant-popover:visible').evaluate((element) => element.clientWidth))
+    .toBeLessThan(160)
+  await menu.getByRole('menuitem', { name: '帮助', exact: true }).click()
+  const help = page.getByRole('dialog', { name: 'MIDI 编辑器帮助', exact: true })
+  await expect(help).toBeVisible()
+  await expect(page.locator('.editor-more-menu:visible')).toHaveCount(0)
+  await expect(help.getByRole('heading', { name: '快速开始', exact: true })).toBeVisible()
+  await expect(help.getByRole('heading', { name: '音符编辑', exact: true })).toBeVisible()
+  await expect(help.getByRole('heading', { name: '音轨管理', exact: true })).toBeVisible()
+  await expect(help.getByRole('heading', { name: '试听与循环', exact: true })).toBeVisible()
+  await expect(help.getByRole('heading', { name: '吸附与显示', exact: true })).toBeVisible()
+  await expect(help.getByRole('heading', { name: '保存与导出', exact: true })).toBeVisible()
+  await expect(help.getByRole('heading', { name: '键盘快捷键', exact: true })).toBeVisible()
+  await expect(help.getByText('Command/Ctrl + S', { exact: true })).toBeVisible()
+  await expect(help.getByText('Option / Alt', { exact: true })).toBeVisible()
+  await help.getByRole('button', { name: '知道了', exact: true }).click()
+  await expect(help).toBeHidden()
+})
+
+test('保存并关闭会先保存工程，再直接离开编辑器', async ({ page }) => {
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('保存并关闭测试项目')
+  await name.blur()
+  await openEditorMoreActions(page)
+  await page.getByRole('menuitem', { name: '保存并关闭', exact: true }).click()
+
+  await expect(page.getByText('项目已保存', { exact: true })).toBeVisible()
+  await expect(page.getByText('有未保存的项目改动', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.global-music-player')).toBeVisible()
+})
+
+test('吸附设置将总开关、小节模式和节拍选项分开表达', async ({ page }) => {
+  await openSnapSettings(page)
+  const enabled = page.getByRole('switch', { name: '启用吸附', exact: true })
+  const snapToBar = page.getByRole('checkbox', { name: '按小节吸附', exact: true })
+  const resolution = page.locator('.toolbar-snap:visible')
+
+  await expect(enabled).toBeChecked()
+  await expect(snapToBar).not.toBeChecked()
+  await expect(resolution).not.toHaveClass(/ant-select-disabled/)
+
+  await snapToBar.click()
+  await expect(snapToBar).toBeChecked()
+  await expect(resolution).toHaveClass(/ant-select-disabled/)
+  await snapToBar.click()
+  await expect(snapToBar).not.toBeChecked()
+  await expect(resolution).not.toHaveClass(/ant-select-disabled/)
+
+  await resolution.click()
+  const popup = page.locator('.ant-select-dropdown:visible')
+  await expect(popup).toBeVisible()
+  await expect(popup.locator('.ant-select-item-option')).toHaveCount(9)
+  await expect(popup.getByText('关闭', { exact: true })).toHaveCount(0)
+  await expect(popup.getByText('小节', { exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await enabled.click()
+  await expect(enabled).not.toBeChecked()
+  await expect(snapToBar).toHaveCount(0)
+  await expect(resolution).toHaveCount(0)
+  await enabled.click()
+  await expect(enabled).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: '按小节吸附', exact: true })).not.toBeChecked()
+  await expect(page.locator('.toolbar-snap:visible')).not.toHaveClass(/ant-select-disabled/)
+})
+
+test('映射模板复用虚拟键盘选择器，切换后立即更新不可演奏提示', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+
+  const trigger = page.getByRole('button', { name: '映射模板', exact: true })
+  await expect(trigger).toHaveText('')
+  await openTemplateSettings(page)
+  const templateSelect = page.locator('.editor-template-select:visible')
+  await expect(templateSelect).toContainText('钢琴常用键')
+
+  await openSettings(page)
+  await page.getByRole('switch', { name: '不可演奏音符置灰', exact: true }).click()
+  await page.locator('.detail-piano-roll .pr-scroll').dblclick({ position: { x: 200, y: 150 } })
+  await page.locator('.detail-piano-editor .pr-scroll').click({ position: { x: 150, y: 130 } })
+  await page.keyboard.press('ControlOrMeta+a')
+  await expect(page.getByText('20 个音符不可演奏', { exact: true })).toBeVisible()
+
+  await openTemplateSettings(page)
+  await page.locator('.editor-template-select:visible').click()
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: '高音演奏键' })
+    .click()
+  await expect(page.getByText('24 个音符不可演奏', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /撤销/ })).toBeDisabled()
 })
 
 test('拍号下拉可以点击、滚动，并将更改写入编辑会话', async ({ page }) => {
@@ -48,8 +182,9 @@ test('拍号下拉可以点击、滚动，并将更改写入编辑会话', async
   await page.locator('.toolbar-meter').nth(1).click()
   await popup.locator('.ant-select-item-option').filter({ hasText: /^8$/ }).click()
   await expect(page.locator('.toolbar-meter').nth(1)).toContainText('8')
+  await openSnapSettings(page)
   await page.locator('.toolbar-snap').click()
-  await expect(popup.locator('.ant-select-item-option').first()).toContainText('关闭')
+  await expect(popup.locator('.ant-select-item-option').first()).toContainText('1/1')
   await popup
     .locator('.ant-select-item-option')
     .filter({ hasText: /^1\/8$/ })
@@ -84,7 +219,8 @@ test('编辑页使用与播放详情一致的独立窗口入口，退出后恢�
   await name.fill(originalName)
   await name.blur()
   await expect(page.getByRole('button', { name: /撤销/ })).toBeDisabled()
-  await page.getByRole('button', { name: /取\s*消/ }).click()
+  await openEditorMoreActions(page)
+  await page.getByRole('menuitem', { name: '关闭', exact: true }).click()
   await expect(page.locator('.global-music-player')).toBeVisible()
 })
 
@@ -98,7 +234,7 @@ test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑�
 
   await expect(popup.locator('.window-title-bar')).toHaveCount(1)
   await expect(popup.locator('.midi-editor-header')).toHaveCount(0)
-  await expect(popup.locator('.editor-toolbar')).toBeVisible()
+  await expect(popup.locator('.window-title-bar .editor-toolbar')).toBeVisible()
   await expect(page.getByText('此项目正在独立窗口中编辑', { exact: true })).toBeVisible()
   await expect(popup.locator('.detached-error')).toHaveCount(0)
 
@@ -106,6 +242,16 @@ test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑�
   await name.fill('独立窗口中的项目名')
   await name.blur()
   await expect(name).toHaveValue('独立窗口中的项目名')
+
+  await popup.getByRole('button', { name: '映射模板', exact: true }).click()
+  const templateSelect = popup.locator('.editor-template-select:visible')
+  await expect(templateSelect).toContainText('钢琴常用键')
+  await templateSelect.click()
+  await popup
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: '高音演奏键' })
+    .click()
+  await expect(templateSelect).toContainText('高音演奏键')
 
   await page.getByRole('button', { name: '还原到主窗口', exact: true }).click()
   await expect.poll(() => popup.isClosed()).toBe(true)
@@ -273,11 +419,12 @@ test('未保存项目退出时只确认一次', async ({ page }) => {
   await name.fill('待退出项目')
   await name.blur()
 
-  await page.getByRole('button', { name: '取消', exact: true }).click()
+  await openEditorMoreActions(page)
+  await page.getByRole('menuitem', { name: '关闭', exact: true }).click()
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toBeVisible()
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toHaveCount(1)
 
-  await page.getByRole('button', { name: '直接退出', exact: true }).click()
+  await page.getByRole('button', { name: '不保存并关闭', exact: true }).click()
   await expect(page.locator('.editor-toolbar')).toBeHidden()
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toHaveCount(0)
 })
@@ -317,10 +464,11 @@ for (const width of [900, 1100, 1440]) {
         true
       )
     }
+    await openSnapSettings(page)
     await page.locator('.toolbar-snap').click()
     const popup = page.locator('.ant-select-dropdown:visible')
     await expect(popup).toBeVisible()
-    await expect.poll(() => popup.evaluate((el) => el.getBoundingClientRect().width)).toBe(160)
+    await expect.poll(() => popup.evaluate((el) => el.getBoundingClientRect().width)).toBe(148)
     await popup.hover()
     await page.mouse.wheel(0, 500)
     await popup
@@ -330,10 +478,10 @@ for (const width of [900, 1100, 1440]) {
     await expect(page.locator('.toolbar-snap')).toContainText('1/16t')
     expect(
       await page.locator('.toolbar-snap').evaluate((el) => el.getBoundingClientRect().width)
-    ).toBe(104)
+    ).toBe(100)
     await expect(page.getByRole('button', { name: '添加到播放器', exact: true })).toHaveCount(0)
-    await page.getByRole('button', { name: '导出 .mid', exact: true }).hover()
-    await expect(page.getByRole('tooltip').filter({ hasText: '导出 .mid' })).toBeVisible()
+    await page.getByRole('button', { name: '更多操作', exact: true }).hover()
+    await expect(page.getByRole('menuitem', { name: '导出 .mid', exact: true })).toBeVisible()
   })
 }
 
