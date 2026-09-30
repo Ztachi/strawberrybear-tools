@@ -111,6 +111,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: false
+          make_latest: false
           prerelease: false
           generate_release_notes: false
           tag_name: infinity-nikki-stylist-office@v${{ steps.version.outputs.version }}

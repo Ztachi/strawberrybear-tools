@@ -14,12 +14,14 @@
 import { computed, ref, onMounted, onUnmounted, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
+import { getVersion } from '@tauri-apps/api/app'
 import { listen } from '@tauri-apps/api/event'
 import { DiscordFilled, QqOutlined } from '@antdv-next/icons'
 import { Download, ExternalLink, Loader2, RefreshCw } from 'lucide-vue-next'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import appLogo from '@/assets/images/logo.png'
 import { Modal, TypographyParagraph } from 'antdv-next'
+import AppUpdateStatus from '@/components/AppUpdateStatus.vue'
 
 const { t, tm } = useI18n()
 const updater = useAppUpdater()
@@ -50,6 +52,7 @@ const version = ref('')
 let unlisten: (() => void) | undefined
 
 const updaterButtonText = computed(() => {
+  if (updater.state.value.phase === 'ready') return t('updater.installNow')
   if (updater.isChecking.value) return t('updater.checking')
   if (updater.isInstalling.value) return t('updater.installing')
   if (updater.isDownloading.value) {
@@ -93,7 +96,7 @@ const contacts = computed<AboutContact[]>(() => {
  */
 async function show() {
   if (!version.value) {
-    version.value = await invoke<string>('get_app_version')
+    version.value = await getVersion()
   }
   isOpen.value = true
 }
@@ -158,6 +161,8 @@ onUnmounted(() => {
       <!-- 分隔线 -->
       <div class="about-divider" />
 
+      <AppUpdateStatus />
+
       <!-- 描述文本 -->
       <p class="about-description">
         {{ t('about.description') }}
@@ -197,8 +202,8 @@ onUnmounted(() => {
 
 <style scoped>
 .about-card {
-  width: 340px;
-  max-width: 340px;
+  width: min(440px, calc(100vw - 48px));
+  max-width: 440px;
   padding: 32px 28px 24px;
   display: flex;
   flex-direction: column;

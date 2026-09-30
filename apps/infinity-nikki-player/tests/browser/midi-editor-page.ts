@@ -6,6 +6,12 @@ import { mockIPC } from '@tauri-apps/api/mocks'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getAntdvLocale, i18n } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
+import { appUpdaterKey } from '@/composables/useAppUpdater'
+import {
+  createUpdaterController,
+  initialUpdateState,
+  type UpdateSnapshot,
+} from '@/features/app-updater/controller'
 import MainWindow from '@/views/MainWindow/index.vue'
 import { MIDI_PROJECT_EDITOR_WINDOW_PORT } from '@/features/midi-project-editor-window'
 import { usePlayerStore } from '@/stores/player'
@@ -176,7 +182,43 @@ const onlineSongFixtures = Array.from(
 )
 
 // 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
-mockIPC((command) => {
+const savedDrafts: { key: string; name: string }[] = []
+let draftFailure = false
+let installCalls = 0
+let updateState = { ...initialUpdateState(), revision: 0, currentVersion: '1.2.0' }
+let updateListener: (state: UpdateSnapshot) => void = () => {}
+function emitUpdate(values: Partial<UpdateSnapshot>): UpdateSnapshot {
+  updateState = { ...updateState, ...values, revision: updateState.revision + 1 }
+  updateListener(updateState)
+  return updateState
+}
+// 仅替换原生安装边界，实际调用主窗口保护和编辑页的草稿注册，绝不执行真实安装。
+const updater = createUpdaterController({
+  getState: async () => updateState,
+  subscribe: async (callback) => {
+    updateListener = callback
+    return () => {}
+  },
+  onResume: () => () => {},
+  check: async () => updateState,
+  download: async () => emitUpdate({ phase: 'ready' }),
+  cancel: async () => emitUpdate({ phase: 'available' }),
+  install: async () => {
+    installCalls++
+    return emitUpdate({ phase: 'installing' })
+  },
+  openDownload: async () => {},
+  exportDiagnostics: async () => null,
+})
+await updater.start()
+mockIPC((command, payload) => {
+  if (command === 'stop_playback') return
+  if (command === 'save_midi_project_draft') {
+    if (draftFailure) throw new Error('测试草稿保存失败')
+    const draft = payload as { key: string; project: { name: string } }
+    savedDrafts.push({ key: draft.key, name: draft.project.name })
+    return
+  }
   if (command === 'load_midi_project') return project
   if (command === 'save_midi_project')
     return { ...projectSummary, id: 'saved-fixture', updatedAt: Date.now() }
@@ -222,15 +264,7 @@ mockIPC((command) => {
   if (command === 'load_midi_project_draft') return null
   if (command === 'check_accessibility') return true
   if (command === 'has_saved_overlay_window_state') return false
-  if (
-    [
-      'save_midi_project_draft',
-      'delete_midi_project_draft',
-      'save_midi_config',
-      'save_settings',
-    ].includes(command)
-  )
-    return
+  if (['delete_midi_project_draft', 'save_midi_config', 'save_settings'].includes(command)) return
   if (command === 'load_settings')
     return {
       locale: 'zh-CN',
@@ -366,11 +400,26 @@ declare global {
       navigate: (path: string) => Promise<void>
       back: () => void
       switchMainWindowSong: () => Promise<void>
+      runUpdate: () => Promise<{
+        installs: number
+        drafts: { key: string; name: string }[]
+        phase: string
+      }>
+      failDraft: (fail: boolean) => void
     }
   }
 }
 
 window.midiEditorFixture = {
+  async runUpdate() {
+    if (updater.state.value.phase !== 'ready')
+      emitUpdate({ phase: 'available', targetVersion: '1.2.1' })
+    await updater.downloadAndInstallUpdate()
+    return { installs: installCalls, drafts: savedDrafts, phase: updater.state.value.phase }
+  },
+  failDraft(fail: boolean): void {
+    draftFailure = fail
+  },
   async navigate(path: string): Promise<void> {
     await router.push(path)
   },
@@ -400,4 +449,5 @@ createApp({
   .use(i18n)
   .use(router)
   .provide(MIDI_PROJECT_EDITOR_WINDOW_PORT, browserMidiProjectEditorWindowPort())
+  .provide(appUpdaterKey, updater)
   .mount('#app')

@@ -24,6 +24,8 @@ import type { EditorAction, MidiProject } from '@strawberrybear/midi-editor'
 import { createTimeline } from '@strawberrybear/piano-roll/core'
 import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import { usePianoRollLabels } from '@/components/PianoWorkspace/usePianoRollLabels'
+import { useAppUpdater } from '@/composables/useAppUpdater'
+import { createMidiDraftWriter } from '@/features/midi-editor/draftWriter'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import {
   MidiProjectEditorWindowSession,
@@ -65,6 +67,9 @@ const router = useRouter()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 const projectStore = useMidiProjectStore()
+const updater = useAppUpdater()
+const updateLocked = computed(() => updater.isPreparing.value || updater.isInstalling.value)
+const draftWriter = createMidiDraftWriter((key, project) => projectStore.saveDraft(key, project))
 const mainWindowUi = useMainWindowUiStore()
 const labels = usePianoRollLabels()
 const editorWindowPort =
@@ -200,7 +205,7 @@ function disposeEditor(): void {
 
 function installEditorShortcuts(): void {
   const handle = editor.value
-  if (!handle || uninstallShortcuts || editorWindowStatus.value === 'detached' || !pageActive) return
+  if (!handle || uninstallShortcuts || updateLocked.value || editorWindowStatus.value === 'detached' || !pageActive) return
   uninstallShortcuts = handle.installShortcuts({
     togglePlayback: () => void playback.toggle(),
     save: () => void save(),
@@ -218,6 +223,10 @@ function uninstallEditorShortcuts(): void {
   uninstallShortcuts?.()
   uninstallShortcuts = null
 }
+watch(updateLocked, (locked) => {
+  if (locked) uninstallEditorShortcuts()
+  else installEditorShortcuts()
+}, { flush: 'sync' })
 
 /**
  * @description: 载入路由指向的项目并建立会话；检测到草稿时询问用户
@@ -273,6 +282,7 @@ async function loadFromRoute(): Promise<void> {
 
 // ---------- 编辑动作 ----------
 function dispatch(action: EditorAction): void {
+  if (updateLocked.value) return
   editor.value?.dispatch(action)
 }
 function rememberWorkspace(next: PianoWorkspaceState): void {
@@ -362,6 +372,7 @@ async function save(): Promise<boolean> {
       createdAt: summary.createdAt,
       updatedAt: summary.updatedAt,
     })
+    await draftWriter.flush().catch(() => {})
     await projectStore.deleteDraft(previousDraftKey).catch(() => {})
     draftLoaded.value = false
     persisted.value = true
@@ -380,10 +391,15 @@ async function save(): Promise<boolean> {
     saving.value = false
   }
 }
-function writeDraft(): void {
+/** 等待当前快照落盘；更新安装不能依赖 beforeunload 的异步保存。 */
+async function flushDraft(): Promise<void> {
   const handle = editor.value
   if (!handle || !hasChanges.value) return
-  void projectStore.saveDraft(currentDraftKey.value, handle.session.toProject()).catch(() => {})
+  await draftWriter.write(currentDraftKey.value, handle.session.toProject())
+}
+function writeDraft(): void {
+  if (saving.value || updateLocked.value) return
+  void flushDraft().catch(() => {})
 }
 async function exportMidi(): Promise<boolean> {
   const handle = editor.value
@@ -480,6 +496,7 @@ function createWindowPresentation() {
     templates: settingsStore.templates.map(({ id, name }) => ({ id, name })),
     saving: saving.value,
     hasChanges: hasChanges.value,
+    updateLocked: updateLocked.value,
   }
 }
 
@@ -522,6 +539,8 @@ async function exitDetachedEditor(mode: 'save' | 'discard'): Promise<void> {
 }
 
 function handleEditorWindowCommand(command: MidiProjectEditorRequest): void {
+  // 安装准备期间阻止独立窗口的迟到编辑命令改变已落盘的最终快照。
+  if (updateLocked.value && command.kind !== 'viewport' && command.kind !== 'playback-position') return
   switch (command.kind) {
     case 'dispatch':
       dispatch(command.action)
@@ -634,6 +653,7 @@ watch(
     () => settingsStore.templates,
     saving,
     hasChanges,
+    updateLocked,
   ],
   () => {
     if (state.value) editorWindow?.updateState()
@@ -654,6 +674,12 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   draftTimer = window.setInterval(writeDraft, DRAFT_AUTOSAVE_INTERVAL_MS)
 })
+// 缓存中的主页面仍持有独立窗口的编辑状态；仅在会话销毁时解绑，不能在停用时解绑。
+const removeInstallParticipant = updater.registerInstallParticipant(async () => {
+  if (saving.value) throw new Error('MIDI 项目正在保存，请保存完成后重试安装更新')
+  playback.pause()
+  await flushDraft()
+})
 onActivated(() => {
   pageActive = true
   installEditorShortcuts()
@@ -663,6 +689,7 @@ onDeactivated(() => {
   uninstallEditorShortcuts()
 })
 onBeforeUnmount(() => {
+  removeInstallParticipant()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   if (draftTimer !== null) window.clearInterval(draftTimer)
   choice.value.resolve?.('cancel')
@@ -674,7 +701,7 @@ onBeforeUnmount(() => {
 
 <template>
   <ConfigProvider v-bind="midiEditorConfigProviderProps">
-    <section class="midi-editor-page">
+    <section class="midi-editor-page" :inert="updateLocked">
       <header class="midi-editor-header">
         <div class="editor-project-identity">
           <Input

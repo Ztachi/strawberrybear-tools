@@ -321,6 +321,8 @@ infinity-nikki-player/
 
 ## 文档索引
 
+自动更新相关说明：[机制与发布](docs/auto-update.md)、[故障排查与旧版迁移](docs/update-troubleshooting.md)、[升级验收记录](docs/update-validation.md)。
+
 | 文档                                   | 说明                |
 | -------------------------------------- | ------------------- |
 | [文档索引](docs/README.md)             | 应用文档入口        |

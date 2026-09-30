@@ -958,15 +958,53 @@ export default {
     downloading: 'Downloading',
     downloadingProgress: 'Downloading {progress}%',
     installing: 'Installing',
-    installedTitle: 'Update installed',
-    relaunching: 'Relaunching the app',
     noUpdateTitle: 'You are up to date',
     noUpdateDescription: 'No update is available for this version',
     checkFailed: 'Update check failed',
     installFailed: 'Update failed',
-    installFailedDescription: 'Please try again later. Details were logged to the console.',
+    installFailedDescription:
+      'Retry or install manually. Export local diagnostics for troubleshooting.',
     openRelease: 'Open releases',
     retry: 'Check again',
+    preparing: 'Confirming unsaved changes',
+    installNow: 'Install and restart',
+    retryDownload: 'Retry update',
+    cancelDownload: 'Cancel download',
+    manualGithub: 'Download (GitHub)',
+    manualDownload: 'Download manually',
+    manualMirror: 'Download (mirror)',
+    exportDiagnostics: 'Export diagnostics',
+    diagnosticsExported: 'Diagnostics exported',
+    lastChecked: 'Last attempt: {time}',
+    notApplied: 'Previous update has not taken effect',
+    notAppliedDescription:
+      'The target was {version}; you are running {current}. Retry or install manually, and check which installation you opened.',
+    applied: 'Confirmed running version {version}',
+    sources: { mirror: 'Mirror', github: 'GitHub direct' },
+    phases: {
+      idle: 'Updates have not been checked',
+      checking: 'Checking for updates',
+      upToDate: 'No newer version found',
+      available: 'An update is available',
+      downloading: 'Downloading and verifying',
+      ready: 'Download verified. Ready to install and restart',
+      installing: 'Installing. Version will be verified after restart',
+      error: 'Update failed',
+    },
+    errors: {
+      timeout: 'The update source timed out. Retry or download manually.',
+      network:
+        'Update sources are unavailable. Check your connection, retry, or download manually.',
+      invalidManifest:
+        'The source returned invalid version information. Retry later or download manually.',
+      signature:
+        'Signature verification failed. Installation was blocked. Download again or install manually.',
+      unsupportedPlatform: 'The source has no package for this platform. Check the release page.',
+      storage:
+        'Could not save the installation record. Check disk space and permissions, then retry.',
+      operationFailed:
+        'The operation could not finish. You can retry, install manually, or export diagnostics.',
+    },
   },
   about: {
     title: 'About',

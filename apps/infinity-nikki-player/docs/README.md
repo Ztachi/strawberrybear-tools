@@ -5,6 +5,9 @@
 ## 文档索引
 
 - [用户指南](USER_GUIDE.md)
+- [自动更新机制](auto-update.md)
+- [更新故障排查](update-troubleshooting.md)
+- [升级验收记录](update-validation.md)
 - [设计文档](design/README.md)
 - [UI 组件指南](design/ui-guide.md)
 - [antdv-next 框架规范](design/ui-framework.md)

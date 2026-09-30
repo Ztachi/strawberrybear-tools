@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** 独立 MIDI 项目编辑窗口；编辑状态与持久化仍由主窗口中的会话负责。 */
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { App as AntApp, ConfigProvider, Input, Spin, Tooltip } from 'antdv-next'
 import type { EditorAction } from '@strawberrybear/midi-editor'
@@ -35,6 +35,7 @@ const params = new URLSearchParams(window.location.search)
 const session = params.get('session') ?? ''
 const { t, locale } = useI18n()
 const presentation = shallowRef<MidiProjectEditorPresentation | null>(null)
+const updateLocked = computed(() => presentation.value?.updateLocked === true)
 const restore = shallowRef<PianoWorkspaceState>()
 const workspace = ref<InstanceType<typeof MidiEditorWorkspace> | null>(null)
 const error = ref('')
@@ -60,6 +61,9 @@ const playablePitches = computed<ReadonlySet<number> | null>(() => {
 const playback = useMidiEditorPlayback(
   activeDocument, loop, (transport) => workspace.value?.setTransport(transport), playablePitches
 )
+watch(updateLocked, (locked) => {
+  if (locked) playback.pause()
+})
 const configLocale = computed(() => getAntdvLocale(locale.value))
 const choice = ref<{
   open: boolean
@@ -128,11 +132,13 @@ async function confirm(
 }
 
 function dispatch(action: EditorAction): void {
+  if (updateLocked.value) return
   void send({ kind: 'dispatch', action })
 }
 
 /** 独立窗口自己排程音符；开始前只请主窗口停掉可能仍在播放的全局试听。 */
 async function playEditor(): Promise<void> {
+  if (updateLocked.value) return
   // 音频准备必须直接发生在点击手势内；主窗口暂停请求不阻塞本窗口的 AudioContext。
   void send({ kind: 'prepare-playback' })
   await playback.play()
@@ -159,7 +165,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function handleWindowKeydown(event: KeyboardEvent): void {
-  if (!state.value || event.defaultPrevented || isTypingTarget(event.target)) {
+  if (updateLocked.value || !state.value || event.defaultPrevented || isTypingTarget(event.target)) {
     shortcuts.end()
     return
   }
@@ -353,7 +359,7 @@ onBeforeUnmount(() => {
 <template>
   <ConfigProvider v-bind="midiEditorConfigProviderProps" :locale="configLocale">
     <AntApp>
-      <main class="detached-midi-editor">
+      <main class="detached-midi-editor" :inert="updateLocked">
         <template v-if="presentation && state">
           <WindowTitleBar :snap-layouts="false">
             <template #title>

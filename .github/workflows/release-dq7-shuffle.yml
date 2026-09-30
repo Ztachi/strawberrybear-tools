@@ -95,6 +95,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: false
+          make_latest: false
           prerelease: false
           generate_release_notes: false
           tag_name: dq7-shuffle@v${{ steps.version.outputs.version }}

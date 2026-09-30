@@ -30,6 +30,8 @@ export interface MidiProjectEditorPresentation {
   templates: { id: string; name: string }[]
   saving: boolean
   hasChanges: boolean
+  /** 主窗口准备安装更新时，暂停独立窗口试听并锁定编辑。 */
+  updateLocked?: boolean
 }
 
 export type MidiProjectEditorCommand =

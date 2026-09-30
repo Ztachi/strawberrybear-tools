@@ -56,6 +56,53 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.editor-toolbar')).toBeVisible()
 })
 
+test('更新安装前等待真实 MIDI 页面保存草稿', async ({ page }) => {
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('安装前的编辑草稿')
+  await name.blur()
+  const result = await page.evaluate(() => window.midiEditorFixture.runUpdate())
+  expect(result.installs).toBe(1)
+  expect(result.drafts.at(-1)?.name).toBe('安装前的编辑草稿')
+  await expect(page.locator('.midi-editor-page')).toHaveAttribute('inert', '')
+})
+
+test('更新草稿保存失败后仍能编辑，重试安装保存最新内容', async ({ page }) => {
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('第一次保存')
+  await name.blur()
+  await page.evaluate(() => window.midiEditorFixture.failDraft(true))
+  const failed = await page.evaluate(() => window.midiEditorFixture.runUpdate())
+  expect(failed.installs).toBe(0)
+  expect(failed.phase).toBe('ready')
+  await expect(page.locator('.midi-editor-page')).not.toHaveAttribute('inert', '')
+  await name.fill('失败后继续修改')
+  await name.blur()
+  await page.evaluate(() => window.midiEditorFixture.failDraft(false))
+  const retried = await page.evaluate(() => window.midiEditorFixture.runUpdate())
+  expect(retried.installs).toBe(1)
+  expect(retried.drafts.at(-1)?.name).toBe('失败后继续修改')
+})
+
+test('主窗口导航离开后，更新仍保存独立编辑窗口的草稿', async ({ page }) => {
+  const opening = page.waitForEvent('popup')
+  await page
+    .getByRole('region', { name: '音轨总览', exact: true })
+    .getByRole('button', { name: '在独立窗口中打开', exact: true })
+    .click()
+  const popup = await opening
+  const name = popup.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('独立窗口的最新修改')
+  await name.blur()
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+    '独立窗口的最新修改'
+  )
+  await page.evaluate(() => window.midiEditorFixture.navigate('/navigation-away'))
+  const result = await page.evaluate(() => window.midiEditorFixture.runUpdate())
+  expect(result.installs).toBe(1)
+  expect(result.drafts.at(-1)?.name).toBe('独立窗口的最新修改')
+  await expect(popup.locator('.detached-midi-editor')).toHaveAttribute('inert', '')
+})
+
 test('编辑操作合并到单层标题栏，次要操作通过悬浮菜单收纳', async ({ page }) => {
   await expect(page.locator('.midi-editor-header > .editor-toolbar')).toBeVisible()
   await expect(page.locator('.midi-editor-page > .editor-toolbar')).toHaveCount(0)

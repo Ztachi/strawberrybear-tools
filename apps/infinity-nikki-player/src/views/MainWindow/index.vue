@@ -7,15 +7,12 @@ import { mainPageIdentity } from '@/router/pageIdentity'
 import { freshMainPageLocation } from '@/router/mainNavigation'
 import {
   computed,
-  defineComponent,
-  h,
   nextTick,
   onMounted,
   onUnmounted,
   provide,
   ref,
   type Component,
-  type PropType,
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -42,6 +39,8 @@ import GlobalMusicPlayer from '@/components/GlobalMusicPlayer/index.vue'
 import { isSupportedLocale } from '@/i18n'
 import { midiImportActionsKey } from './importActions'
 import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
+import { useAppUpdater } from '@/composables/useAppUpdater'
+import { createRoutePageHost, type RoutePageLeaveGuard } from './routePageHost'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -54,31 +53,6 @@ const isMidiEditing = computed(() => route.meta.detachableEditor === true)
 
 /** Vue KeepAlive 使用 LRU 淘汰，限制长时间浏览大量歌单时的驻留实例数。 */
 const MAIN_ROUTE_CACHE_MAX = 12
-
-/**
- * @description: 创建供 KeepAlive 按名称匹配的路由页面宿主
- * @param {string} name - 宿主组件名
- * @return {Component} 带稳定单根节点的路由页面宿主
- */
-function createRoutePageHost(name: string) {
-  return defineComponent({
-    name,
-    props: {
-      page: { type: [Object, Function] as PropType<Component>, required: true },
-      editor: Boolean,
-    },
-    setup(props) {
-      return () =>
-        h(
-          'section',
-          {
-            class: ['route-page-host', { 'route-page-host--editor': props.editor }],
-          },
-          [h(props.page)]
-        )
-    },
-  })
-}
 
 const DefaultRoutePageHost = createRoutePageHost('DefaultRoutePageHost')
 const MidiEditorRouteHost = createRoutePageHost('MidiEditorRouteHost')
@@ -100,6 +74,19 @@ function getRoutePageHost(pageRoute: RouteLocationNormalizedLoaded): Component {
   if (pageRoute.meta.keepAlive) return CachedRoutePageHost
   return DefaultRoutePageHost
 }
+const updater = useAppUpdater()
+/** 当前路由页面复用自身编辑保护，避免依赖进程退出时的 beforeunload。 */
+const activePage = ref<RoutePageLeaveGuard | null>(null)
+const removeInstallPreparation = updater.setPrepareInstall(async () => {
+  if (activePage.value?.confirmLeaveIfNeeded && !(await activePage.value.confirmLeaveIfNeeded())) {
+    return false
+  }
+  await playerStore.stopPreviewPlayback()
+  // 安装准备必须传播停止失败，不能使用会吞掉错误的普通停止按钮方法。
+  await invoke('stop_playback')
+  return true
+})
+onUnmounted(removeInstallPreparation)
 
 /** 主窗口支持的页签路由值。 */
 type MainWindowTab = 'files' | 'templates' | 'midi-editor' | 'online'
@@ -700,6 +687,7 @@ provide(midiImportActionsKey, {
                   <KeepAlive :include="cachedRouteHostNames" :max="MAIN_ROUTE_CACHE_MAX">
                     <component
                       :is="getRoutePageHost(pageRoute)"
+                      ref="activePage"
                       :key="mainPageIdentity(pageRoute, router.options.history.state)"
                       :page="RouteComponent"
                       :editor="isMidiEditing"
