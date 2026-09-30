@@ -12,8 +12,22 @@ export const appUpdaterKey: InjectionKey<AppUpdaterController> = Symbol('appUpda
 
 const appUpdater = createUpdaterController(tauriAppUpdater, (key) => {
   const message = i18n.global.t(`updater.${key}`)
-  if (key === 'checkFailed' || key === 'installFailed') feedback.error(message)
-  else feedback.info(message)
+  if (key === 'checkFailed' || key === 'installFailed') {
+    const code = appUpdater.lastError.value?.code ?? 'operationFailed'
+    const knownCodes = [
+      'timeout',
+      'network',
+      'invalidManifest',
+      'signature',
+      'unsupportedPlatform',
+      'storage',
+    ]
+    feedback.error(message, {
+      description: i18n.global.t(
+        `updater.errors.${knownCodes.includes(code) ? code : 'operationFailed'}`
+      ),
+    })
+  } else feedback.info(message)
 })
 
 /** @returns 当前应用的更新器；测试实例不会污染真实流程。 */

@@ -58,6 +58,8 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
    * @return {void}
    */
   function dispatch(action: EditorAction): void {
+    // 菜单之外的指令也必须遵守量化依赖，避免独立窗口或迟到点击绕过禁用态。
+    if (action.type === 'quantize' && state.value.snap === 'off') return
     nudgeGesture = null
     session.dispatch(action)
   }

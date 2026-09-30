@@ -108,10 +108,15 @@ export function useMidiEditorPlayback(
    * @description: 试听单个音高（点击琴键/改音高时）
    * @param {number} pitch 音高
    * @param {number} velocity 力度
+   * @param {number} [durationSeconds] 音符真实时长；琴键试听省略时使用默认短音
    * @return {Promise<void>}
    */
-  async function audition(pitch: number, velocity: number): Promise<void> {
-    await controller.audition(pitch, velocity)
+  async function audition(
+    pitch: number,
+    velocity: number,
+    durationSeconds?: number
+  ): Promise<void> {
+    await controller.audition(pitch, velocity, durationSeconds)
   }
 
   watch(document, () => controller.invalidate())

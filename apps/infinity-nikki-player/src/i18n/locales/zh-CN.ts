@@ -918,7 +918,7 @@ export default {
     downloading: '下载中',
     downloadingProgress: '下载中 {progress}%',
     installing: '安装中',
-    noUpdateTitle: '已是最新版本',
+    noUpdateTitle: '未发现新版本',
     noUpdateDescription: '当前版本无需更新',
     checkFailed: '检查更新失败',
     installFailed: '更新失败',

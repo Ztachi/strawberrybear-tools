@@ -113,7 +113,13 @@ export type PianoRollEditIntent =
     }
   | { type: 'delete'; noteIds: string[] }
   | { type: 'loop-change'; loop: PianoRollLoopRange | null }
-  | { type: 'audition'; pitch: number; velocity: number }
+  | {
+      type: 'audition'
+      pitch: number
+      velocity: number
+      /** 按原始 tempo map 换算的音符时长，单位秒。 */
+      durationSeconds?: number
+    }
   | {
       type: 'context-menu'
       noteId: string | null

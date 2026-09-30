@@ -270,6 +270,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
             color="primary"
             variant="outlined"
             :aria-label="t('midiEditor.inspector.quantizeStart')"
+            :disabled="state.snap === 'off'"
             @click="emit('dispatch', { type: 'quantize', start: true })"
           >
             {{ t('midiEditor.inspector.start') }}
@@ -279,6 +280,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
             color="primary"
             variant="outlined"
             :aria-label="t('midiEditor.inspector.quantizeLength')"
+            :disabled="state.snap === 'off'"
             @click="emit('dispatch', { type: 'quantize', start: false, length: true })"
           >
             {{ t('midiEditor.inspector.length') }}

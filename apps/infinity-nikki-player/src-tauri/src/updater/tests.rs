@@ -40,6 +40,14 @@ impl Drop for Server {
     }
 }
 async fn serve(body: Vec<u8>, length: Option<usize>, delay: Duration) -> Server {
+    serve_status(body, length, delay, "200 OK").await
+}
+async fn serve_status(
+    body: Vec<u8>,
+    length: Option<usize>,
+    delay: Duration,
+    status: &'static str,
+) -> Server {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/update", listener.local_addr().unwrap());
     let requests = Arc::new(AtomicUsize::new(0));
@@ -56,7 +64,7 @@ async fn serve(body: Vec<u8>, length: Option<usize>, delay: Duration) -> Server 
                 let size = length
                     .map(|value| format!("Content-Length: {value}\r\n"))
                     .unwrap_or_default();
-                let header = format!("HTTP/1.1 200 OK\r\nConnection: close\r\n{size}\r\n");
+                let header = format!("HTTP/1.1 {status}\r\nConnection: close\r\n{size}\r\n");
                 let _ = stream.write_all(header.as_bytes()).await;
                 tokio::time::sleep(delay).await;
                 let _ = stream.write_all(&body).await;
@@ -84,6 +92,48 @@ fn test_app() -> tauri::App<MockRuntime> {
         .manage(UpdaterService::new("0.1.0".into()))
         .build(context)
         .unwrap()
+}
+
+#[tokio::test]
+async fn unpublished_manifest_is_no_update_but_service_failure_is_not() {
+    let app = test_app();
+    let missing = serve_status(Vec::new(), Some(0), Duration::ZERO, "404 Not Found").await;
+    assert!(check_source(
+        app.updater_builder().target("windows-x86_64").no_proxy(),
+        Source::Github,
+        &missing.url
+    )
+    .await
+    .unwrap()
+    .is_none());
+    let unavailable = serve_status(
+        Vec::new(),
+        Some(0),
+        Duration::ZERO,
+        "503 Service Unavailable",
+    )
+    .await;
+    assert_eq!(
+        check_source(
+            app.updater_builder().target("windows-x86_64").no_proxy(),
+            Source::Github,
+            &unavailable.url
+        )
+        .await
+        .err()
+        .unwrap()
+        .code,
+        "network"
+    );
+    let empty = serve_status(Vec::new(), Some(0), Duration::ZERO, "204 No Content").await;
+    assert!(check_source(
+        app.updater_builder().target("windows-x86_64").no_proxy(),
+        Source::Mirror,
+        &empty.url
+    )
+    .await
+    .unwrap()
+    .is_none());
 }
 
 #[tokio::test]

@@ -129,6 +129,8 @@ function persistEditorViewport(viewport: Readonly<PianoRollViewport>): void {
   changed()
 }
 function previewPianoSeek(seconds: number | null): void {
+  // 编辑器拖动播放头只同步画面，松手后才提交一次音频定位。
+  if (props.editing) setTransport({ ...props.transport, positionSeconds: seconds ?? props.transport.positionSeconds, isPlaying: false })
   emit('seek-preview', seconds)
 }
 function seekPianoRoll(seconds: number): void {
@@ -175,6 +177,11 @@ function openTrack(trackId: string): void {
   selectPianoTrack(trackId)
   if (props.document.tracks.some((track) => track.id === trackId)) isPianoEditorOpen.value = true
 }
+/** 显式新增音轨后解除空轨筛选，再打开详情，保证新增结果在总览可见。 */
+function revealTrack(trackId: string): void {
+  hideEmptyPianoTracks.value = false
+  openTrack(trackId)
+}
 function forwardEditIntent(intent: PianoRollEditIntent): void {
   emit('edit-intent', intent)
 }
@@ -183,7 +190,7 @@ watch(() => props.restore, restoreWorkspace, { flush: 'post' })
 watch([selectedTrackId, isPianoEditorOpen, hideEmptyPianoTracks, editorHeightPercent], changed, {
   flush: 'post',
 })
-defineExpose({ getState, setTransport, openTrack })
+defineExpose({ getState, setTransport, openTrack, revealTrack })
 </script>
 
 <template>

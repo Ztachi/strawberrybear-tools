@@ -7,6 +7,29 @@ import type {} from './fixture'
 test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 let bundle: string
+test('暂停定位时两个跟随视图同步到播放头，关闭跟随后保留手动视口', async ({ page }) => {
+  await page.evaluate(() => {
+    window.fixture.overview.setTimeZoom(120)
+    window.fixture.editor.setTimeZoom(240)
+    window.fixture.setTime(60, false)
+  })
+  await waitForPaint(page)
+  const states = await page.evaluate(() => [
+    window.fixture.overview.getViewport(),
+    window.fixture.editor.getViewport(),
+  ])
+  expect(states.every((state) => state.scrollLeft > 0 && state.follow)).toBe(true)
+  await page.evaluate(() => {
+    window.fixture.editor.setFollow(false)
+    window.fixture.setTime(80, false)
+  })
+  expect(await page.evaluate(() => window.fixture.editor.getViewport().scrollLeft)).toBe(
+    states[1]!.scrollLeft
+  )
+  expect(
+    await page.evaluate(() => window.fixture.overview.getViewport().scrollLeft)
+  ).toBeGreaterThan(states[0]!.scrollLeft)
+})
 /** 公共控制器在 RAF 中统一提交图层；读取命中位置之前等待真实绘制完成。 */
 async function waitForPaint(page: Page): Promise<void> {
   await page.evaluate(
@@ -38,6 +61,50 @@ test.beforeEach(async ({ page }) => {
   )
   await expect(page.locator('#overview .pr-empty')).toBeHidden()
   await expect(page.locator('#editor .pr-empty')).toBeHidden()
+})
+
+test('总览保留左侧名称，右侧不绘制重复名称，单音预览垂直居中', async ({ page }) => {
+  for (const width of [720, 1100]) {
+    await page.setViewportSize({ width, height: 850 })
+    const drawing = await page.evaluate(async () => {
+      const texts: string[] = []
+      const notes: { y: number; height: number }[] = []
+      const pane = document.querySelector('#overview .pr-pane')!
+      const grid = pane.querySelectorAll('canvas')[0]!
+      const noteCanvas = pane.querySelectorAll('canvas')[1]!
+      const fillText = CanvasRenderingContext2D.prototype.fillText
+      const fillRect = CanvasRenderingContext2D.prototype.fillRect
+      CanvasRenderingContext2D.prototype.fillText = function (...args) {
+        if (this.canvas === grid) texts.push(args[0])
+        return fillText.apply(this, args)
+      }
+      CanvasRenderingContext2D.prototype.fillRect = function (...args) {
+        if (this.canvas === noteCanvas) notes.push({ y: args[1], height: args[3] })
+        return fillRect.apply(this, args)
+      }
+      try {
+        window.fixture.overview.setDocument({
+          ticksPerBeat: 480,
+          durationTicks: 1920,
+          tempoMap: [],
+          timeSignatureMap: [],
+          tracks: [{ id: 'single', name: '保留左侧音轨名', enabled: true, isPercussion: false }],
+          notes: [{ id: 'note', trackId: 'single', pitch: 60, velocity: 100, startTick: 0, endTick: 480 }],
+        })
+        window.fixture.overview.setTransport({ positionSeconds: 0, isPlaying: false, playbackRate: 1 })
+        // 等待视口调整和实际静态图层重绘，不把 DOM 更新当作 Canvas 绘制完成。
+        await new Promise<void>((resolve) => setTimeout(resolve, 250))
+        return { texts, note: notes.at(-1), height: pane.clientHeight }
+      } finally {
+        CanvasRenderingContext2D.prototype.fillText = fillText
+        CanvasRenderingContext2D.prototype.fillRect = fillRect
+      }
+    })
+    await expect(page.locator('#overview .pr-track-label-host')).toHaveText('保留左侧音轨名')
+    expect(drawing.texts).toEqual([])
+    expect(drawing.note).toBeDefined()
+    expect(drawing.note!.y + drawing.note!.height / 2).toBeCloseTo(drawing.height / 2)
+  }
 })
 
 test('two instances keep zoom, scroll and Follow independent', async ({ page }) => {

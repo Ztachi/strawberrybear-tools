@@ -55,28 +55,6 @@ export function layoutTrackRows(
   })
 }
 
-/** 在轨道区域内以省略号裁剪名称，避免 Canvas 的 maxWidth 压缩长文本。 */
-function fitCanvasLabel(
-  context: CanvasRenderingContext2D,
-  value: string,
-  maxWidth: number
-): string {
-  if (maxWidth <= 0) return ''
-  if (context.measureText(value).width <= maxWidth) return value
-  const ellipsis = '…'
-  if (context.measureText(ellipsis).width > maxWidth) return ''
-  const characters = Array.from(value)
-  let low = 0
-  let high = characters.length
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2)
-    if (context.measureText(`${characters.slice(0, middle).join('')}${ellipsis}`).width <= maxWidth)
-      low = middle
-    else high = middle - 1
-  }
-  return `${characters.slice(0, low).join('')}${ellipsis}`
-}
-
 /**
  * 解析轨道在总览中的内容区域。
  *
@@ -309,19 +287,6 @@ export function drawGrid(
         context.stroke()
       }
       context.globalAlpha = 1
-      if (regionWidth >= 16 && regionLeft < width && regionLeft + regionWidth > 0) {
-        context.save()
-        context.beginPath()
-        context.rect(regionLeft, regionTop, regionWidth, regionHeight)
-        context.clip()
-        context.fillStyle = theme.colors.text
-        context.font = `12px ${theme.metrics.fontFamily}`
-        const labelX = Math.max(4, regionLeft + 8)
-        const labelWidth = Math.max(0, Math.min(width, regionLeft + regionWidth) - labelX - 8)
-        const label = fitCanvasLabel(context, row.track.name, labelWidth)
-        context.fillText(label, labelX, regionTop + 17)
-        context.restore()
-      }
     }
   }
 }
@@ -344,7 +309,9 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
     const range = frame.index.getPitchRange(row.track.id)
     const low = (range?.min ?? 48) - 3
     const high = (range?.max ?? 84) + 3
-    const scale = (row.height - 34) / Math.max(12, high - low)
+    // 名称由左侧轨道栏展示；音符居中使用完整预览高度，只保留上下安全间距。
+    const scale = (row.height - 15) / Math.max(12, high - low)
+    const middlePitch = (high + low) / 2
     for (const note of frame.index.query(row.track.id, startTick, endTick)) {
       const start = timeline.tickToSeconds(note.startTick) * timeZoom - scrollLeft
       const end = timeline.tickToSeconds(note.endTick) * timeZoom - scrollLeft
@@ -352,7 +319,7 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
       const y =
         frame.variant === 'editor'
           ? (127 - note.pitch) * pitchZoom - scrollTop + 1
-          : row.top - scrollTop + 23 + (high - note.pitch) * scale
+          : row.top - scrollTop + (row.height - noteHeight) / 2 + (middlePitch - note.pitch) * scale
       if (y > height || y + noteHeight < 0) continue
       const x = Math.max(-2, start)
       const w = Math.min(width + 2, Math.max(start + 2, end)) - x
@@ -381,7 +348,6 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
       }
     }
     context.globalAlpha = 1
-    // 总览名称在 drawGrid 中随内容区域裁剪，避免长名称穿过轨道边界。
   }
 }
 

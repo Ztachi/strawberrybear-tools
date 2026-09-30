@@ -703,8 +703,11 @@ export function createView(
     },
     setTransport(next) {
       if (destroyed) return
+      const repositioned = next.positionSeconds !== transport.positionSeconds
       transport = next
-      if (transport.isPlaying) catchPlayhead()
+      // 暂停时的外部定位也要更新跟随视口；相同的静止帧不干扰用户浏览。
+      if (repositioned && !transport.isPlaying) navigation?.cancel()
+      if (transport.isPlaying || repositioned) catchPlayhead()
       scheduleRender()
     },
     setSelectedTrack(trackId) {

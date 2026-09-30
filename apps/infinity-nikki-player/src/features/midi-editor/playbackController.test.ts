@@ -5,6 +5,24 @@ import { createMidiEditorPlaybackController } from './playbackController'
 afterEach(() => vi.useRealTimers())
 
 describe('MIDI editor playback controller', () => {
+  it('同一音符每次点击都按传入时长重新排程', async () => {
+    const project = previewProject()
+    const schedule = vi.fn(() => ({ stop: vi.fn() }))
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => project.document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => 10,
+      scheduleNote: schedule,
+    })
+    await controller.audition(60, 100, 1.25)
+    await controller.audition(60, 100, 1.25)
+    expect(schedule.mock.calls).toEqual([
+      [60, 100, 10, 1.25],
+      [60, 100, 10, 1.25],
+    ])
+    controller.dispose()
+  })
   function previewProject() {
     return createProject({
       name: '模板试听回归',

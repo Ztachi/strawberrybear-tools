@@ -37,7 +37,11 @@ async function origin(page: Page): Promise<{ left: number; top: number }> {
     return { left: rect.left, top: rect.top }
   })
 }
-async function pointFor(page: Page, tick: number, pitch: number): Promise<{ x: number; y: number }> {
+async function pointFor(
+  page: Page,
+  tick: number,
+  pitch: number
+): Promise<{ x: number; y: number }> {
   const [base, local] = await Promise.all([
     origin(page),
     page.evaluate(({ tick, pitch }) => window.editing.point(tick, pitch), { tick, pitch }),
@@ -53,7 +57,9 @@ test('click selects and auditions, shift toggles', async ({ page }) => {
   await page.mouse.click(a.x, a.y)
   let list = await intents(page)
   expect(list[0]).toEqual({ type: 'select', noteIds: ['a'], mode: 'replace' })
-  expect(list[1]).toEqual({ type: 'audition', pitch: 60, velocity: 100 })
+  expect(list[1]).toEqual({ type: 'audition', pitch: 60, velocity: 100, durationSeconds: 0.5 })
+  await page.mouse.click(a.x, a.y)
+  expect((await intents(page)).filter((intent) => intent.type === 'audition')).toHaveLength(2)
   const b = await pointFor(page, 1700, 64)
   await page.keyboard.down('Shift')
   await page.mouse.click(b.x, b.y)
@@ -76,6 +82,27 @@ test('dragging a note body emits a snapped move for the whole selection', async 
   expect(move).toEqual({ type: 'move', noteIds: ['a', 'b'], deltaTick: 480, deltaPitch: 2 })
   // 拖动期间音高变化会发出试听
   expect(list.some((intent) => intent.type === 'audition' && intent.pitch === 62)).toBe(true)
+})
+
+test('跨速度变化的音符试听时长使用分段时间轴', async ({ page }) => {
+  await page.evaluate(() => {
+    const next = {
+      ...window.editing.document,
+      tempoMap: [
+        { tick: 0, microsecondsPerQuarter: 500000 },
+        { tick: 720, microsecondsPerQuarter: 1000000 },
+      ],
+    }
+    window.editing.editor.setDocument(next)
+  })
+  const a = await pointFor(page, 700, 60)
+  await page.mouse.click(a.x, a.y)
+  expect((await intents(page)).find((intent) => intent.type === 'audition')).toEqual({
+    type: 'audition',
+    pitch: 60,
+    velocity: 100,
+    durationSeconds: 0.75,
+  })
 })
 
 test('dragging the right edge resizes', async ({ page }) => {
@@ -159,7 +186,10 @@ test('velocity lane drag previews and commits', async ({ page }) => {
 test('alt-drag on the ruler sets a loop and double click clears it', async ({ page }) => {
   const ruler = page.locator('#editor .pr-ruler')
   const box = (await ruler.boundingBox())!
-  const [from, to] = await page.evaluate(() => [window.editing.point(970, 60).x, window.editing.point(1910, 60).x])
+  const [from, to] = await page.evaluate(() => [
+    window.editing.point(970, 60).x,
+    window.editing.point(1910, 60).x,
+  ])
   await page.keyboard.down('Alt')
   await page.mouse.move(box.x + from, box.y + 10)
   await page.mouse.down()

@@ -11,20 +11,22 @@
  * @description: 关于对话框组件
  * @description 监听 Tauri 菜单的 show_about 事件显示，包含应用图标、版本号和描述信息
  */
-import { computed, ref, onMounted, onUnmounted, type Component } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { listen } from '@tauri-apps/api/event'
 import { DiscordFilled, QqOutlined } from '@antdv-next/icons'
-import { Download, ExternalLink, Loader2, RefreshCw } from 'lucide-vue-next'
-import { useAppUpdater } from '@/composables/useAppUpdater'
+import { ExternalLink } from 'lucide-vue-next'
 import appLogo from '@/assets/images/logo.png'
-import { Modal, TypographyParagraph } from 'antdv-next'
+import { Button, Modal, TypographyParagraph } from 'antdv-next'
 import AppUpdateStatus from '@/components/AppUpdateStatus.vue'
+import { useMainWindowUiStore, type FloatingActionRegistration } from '@/stores/mainWindowUi'
 
 const { t, tm } = useI18n()
-const updater = useAppUpdater()
+const ui = useMainWindowUiStore()
+const aboutBody = ref<HTMLElement | null>(null)
+let backToTop: FloatingActionRegistration | undefined
 
 /**
  * @description: 关于页联系方式配置项
@@ -44,33 +46,16 @@ const contactIconMap: Record<string, Component> = {
 
 /** 对话框打开状态 @return {boolean} */
 const isOpen = ref(false)
+watch(isOpen, (open) => {
+  backToTop?.()
+  backToTop = open ? ui.registerBackToTop(() => aboutBody.value?.scrollTo({ top: 0, behavior: 'smooth' })) : undefined
+})
 
 /** 应用版本号 @return {string} */
 const version = ref('')
 
 /** 事件监听取消函数 */
 let unlisten: (() => void) | undefined
-
-const updaterButtonText = computed(() => {
-  if (updater.state.value.phase === 'ready') return t('updater.installNow')
-  if (updater.isChecking.value) return t('updater.checking')
-  if (updater.isInstalling.value) return t('updater.installing')
-  if (updater.isDownloading.value) {
-    return updater.progress.value === null
-      ? t('updater.downloading')
-      : t('updater.downloadingProgress', { progress: updater.progress.value })
-  }
-  if (updater.hasUpdate.value) return t('updater.updateNow')
-  return t('updater.checkNow')
-})
-
-const updaterButtonIcon = computed(() => {
-  if (updater.isChecking.value || updater.isDownloading.value || updater.isInstalling.value) {
-    return Loader2
-  }
-  if (updater.hasUpdate.value) return Download
-  return RefreshCw
-})
 
 /** 当前语言下的联系方式列表，直接由 i18n 的 about.contacts 数组驱动。 */
 const contacts = computed<AboutContact[]>(() => {
@@ -109,15 +94,6 @@ async function openLink() {
   await invoke('open_url', { url: 'https://ztachi.com/tools/infinity-nikki-player' })
 }
 
-async function handleUpdaterClick() {
-  if (updater.hasUpdate.value) {
-    await updater.downloadAndInstallUpdate()
-    return
-  }
-
-  await updater.checkUpdate({ notifyNoUpdate: true, silent: false })
-}
-
 /** 组件挂载时监听 show_about 事件 */
 onMounted(async () => {
   unlisten = await listen('show_about', () => show())
@@ -126,11 +102,19 @@ onMounted(async () => {
 /** 组件卸载时取消事件监听 */
 onUnmounted(() => {
   unlisten?.()
+  backToTop?.()
 })
 </script>
 
 <template>
-  <Modal v-model:open="isOpen" :footer="null" width="auto" centered root-class="about-modal-root">
+  <Modal
+    v-model:open="isOpen"
+    :footer="null"
+    width="min(440px, calc(100vw - 32px))"
+    centered
+    root-class="about-modal-root"
+    :styles="{ body: { padding: 0 }, container: { padding: 0 } }"
+  >
     <!-- 自定义样式对话框内容 -->
     <div data-text-selectable class="about-card">
       <!-- 头部区域：图标、名称、版本 -->
@@ -143,87 +127,70 @@ onUnmounted(() => {
         </h2>
         <div class="about-version-row">
           <span class="about-version-badge">v{{ version }}</span>
-          <button
-            class="about-update-btn"
-            :disabled="updater.isBusy.value"
-            @click="handleUpdaterClick"
-          >
-            <component
-              :is="updaterButtonIcon"
-              :size="12"
-              :class="{ spinning: updater.isBusy.value }"
-            />
-            {{ updaterButtonText }}
-          </button>
         </div>
+        <AppUpdateStatus />
       </div>
 
       <!-- 分隔线 -->
       <div class="about-divider" />
 
-      <AppUpdateStatus />
+      <div
+        ref="aboutBody"
+        class="about-body min-h-0 w-full overflow-y-auto text-center"
+        @scroll="backToTop?.setVisible((aboutBody?.scrollTop ?? 0) > 200)"
+      >
+        <!-- 描述文本 -->
+        <p class="about-description">
+          {{ t('about.description') }}
+        </p>
 
-      <!-- 描述文本 -->
-      <p class="about-description">
-        {{ t('about.description') }}
-      </p>
-
-      <div class="about-contact">
-        <span class="about-contact-title">{{ t('about.contact') }}</span>
-        <div class="about-contact-list">
-          <div v-for="contact in contacts" :key="contact.type" class="about-contact-row">
-            <span class="about-contact-platform">
-              <component
-                :is="contactIconMap[contact.type]"
-                v-if="contactIconMap[contact.type]"
-                class="about-contact-icon"
-              />
-              {{ contact.label }}
-            </span>
-            <TypographyParagraph
-              class="about-contact-account"
-              :copyable="{ text: contact.account }"
-              underline
-            >
-              {{ contact.account }}
-            </TypographyParagraph>
+        <div class="about-contact">
+          <span class="about-contact-title">{{ t('about.contact') }}</span>
+          <div class="about-contact-list">
+            <div v-for="contact in contacts" :key="contact.type" class="about-contact-row">
+              <span class="about-contact-platform">
+                <component
+                  :is="contactIconMap[contact.type]"
+                  v-if="contactIconMap[contact.type]"
+                  class="about-contact-icon"
+                />
+                {{ contact.label }}
+              </span>
+              <TypographyParagraph
+                class="about-contact-account"
+                :copyable="{ text: contact.account }"
+                underline
+              >
+                {{ contact.account }}
+              </TypographyParagraph>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 外部链接按钮 -->
-      <button class="about-link-btn" @click="openLink">
-        <ExternalLink :size="14" />
-        {{ t('about.learnMore') }}
-      </button>
+        <!-- 外部链接按钮 -->
+        <Button type="link" @click="openLink">
+          <template #icon>
+            <ExternalLink class="size-3.5" :stroke-width="2" />
+          </template>
+          {{ t('about.learnMore') }}
+        </Button>
+      </div>
     </div>
   </Modal>
 </template>
 
 <style scoped>
 .about-card {
-  width: min(440px, calc(100vw - 48px));
-  max-width: 440px;
-  padding: 32px 28px 24px;
+  max-height: calc(100dvh - 64px);
+  padding: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0;
 }
 
-:deep(.about-modal-root .ant-modal-content) {
-  padding: 0;
-}
-
-:deep(.about-modal-root .ant-modal-body) {
-  padding: 0;
-}
-
-:deep(.about-modal-root .ant-modal-close) {
-  color: var(--color-primary);
-}
-
 .about-header {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -274,39 +241,8 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-.about-update-btn {
-  min-height: 24px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  color: var(--color-primary);
-  background: var(--bg-white-80);
-  border: 1px solid var(--border-primary-20);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.about-update-btn:hover:not(:disabled) {
-  color: white;
-  border-color: transparent;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  box-shadow: var(--shadow-pink-sm);
-}
-
-.about-update-btn:disabled {
-  cursor: progress;
-  opacity: 0.8;
-}
-
-.spinning {
-  animation: spin 0.8s linear infinite;
-}
-
 .about-divider {
+  flex-shrink: 0;
   width: 100%;
   height: 1px;
   background: var(--border-primary-15);
@@ -376,32 +312,5 @@ onUnmounted(() => {
 
 :deep(.about-contact-account .ant-typography-copy) {
   color: var(--color-primary);
-}
-
-.about-link-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 20px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
-  color: var(--color-foreground);
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(247, 192, 193, 0.35);
-  transition: opacity 0.15s, box-shadow 0.15s;
-}
-
-.about-link-btn:hover {
-  opacity: 0.88;
-  box-shadow: 0 4px 16px rgba(247, 192, 193, 0.45);
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

@@ -36,7 +36,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   dispatch: [action: EditorAction]
   seek: [seconds: number]
-  audition: [pitch: number, velocity: number]
+  audition: [pitch: number, velocity: number, durationSeconds?: number]
   'remove-track': [track: PianoRollTrack]
   'state-change': [state: PianoWorkspaceState]
   migrate: []
@@ -66,7 +66,7 @@ const editing = computed<PianoRollProps['editing']>(() => ({
 
 function handleIntent(intent: PianoRollEditIntent): void {
   if (intent.type === 'audition') {
-    emit('audition', intent.pitch, intent.velocity)
+    emit('audition', intent.pitch, intent.velocity, intent.durationSeconds)
     return
   }
   if (intent.type === 'context-menu') {
@@ -105,7 +105,7 @@ function openPendingTrack(): void {
   if (tracks.length <= pendingOpenTrackCount) return
   pendingOpenTrackCount = null
   const created = tracks.at(-1)
-  if (created) workspace.value?.openTrack(created.id)
+  if (created) workspace.value?.revealTrack(created.id)
 }
 
 watch(() => props.state.document.tracks.length, openPendingTrack)

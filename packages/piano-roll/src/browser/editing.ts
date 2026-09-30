@@ -333,12 +333,19 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
       const selected = options!.selectedNoteIds
       if (!selected.has(hit.note.id)) {
         emit({ type: 'select', noteIds: [hit.note.id], mode: shift ? 'add' : 'replace' })
-        // 意图同步应用后选区已包含该音符；本地也当作已选中处理。
-        emit({ type: 'audition', pitch: hit.note.pitch, velocity: hit.note.velocity })
       } else if (shift) {
         emit({ type: 'select', noteIds: [hit.note.id], mode: 'toggle' })
         return
       }
+      // 试听属于点击行为，不依赖选区是否发生变化；变速音符按分段时间轴计算时长。
+      const timeline = host.timeline()
+      emit({
+        type: 'audition',
+        pitch: hit.note.pitch,
+        velocity: hit.note.velocity,
+        durationSeconds:
+          timeline.tickToSeconds(hit.note.endTick) - timeline.tickToSeconds(hit.note.startTick),
+      })
       host.scroll.setPointerCapture(event.pointerId)
       if (hit.part === 'body') beginMove(event, hit)
       else beginResize(event, hit)

@@ -352,9 +352,10 @@ function renameProject(event: Event): void {
 // ---------- 保存 / 草稿 / 导出 ----------
 /**
  * @description: 保存项目；新建模式首次保存后切换到编辑路由
+ * @param {boolean} updateRoute 是否切换到编辑路由；离开确认中关闭以保留目标导航
  * @return {Promise<boolean>} 是否保存成功
  */
-async function save(): Promise<boolean> {
+async function save(updateRoute = true): Promise<boolean> {
   const handle = editor.value
   if (!handle || saving.value) return false
   const project = handle.session.toProject()
@@ -379,7 +380,7 @@ async function save(): Promise<boolean> {
     currentDraftKey.value = `edit-${summary.id}`
     toast.success(t('midiEditor.saved'), { richColors: true })
     editorWindow?.notify('success', t('midiEditor.saved'))
-    if (!wasPersisted && editorWindowStatus.value === 'docked') {
+    if (updateRoute && !wasPersisted && editorWindowStatus.value === 'docked') {
       await router.replace({ name: 'midi-editor-edit', params: { id: summary.id } })
     }
     return true
@@ -452,7 +453,8 @@ async function confirmLeaveIfNeeded(): Promise<boolean> {
       { key: 'save', label: t('midiEditor.saveAndClose'), primary: true },
     ]
   )
-  if (decision === 'save') return save()
+  // 离开守卫已经持有目标导航，首次保存不能再 replace 而取消它。
+  if (decision === 'save') return save(false)
   if (decision === 'discard') {
     await projectStore.deleteDraft(currentDraftKey.value).catch(() => {})
     draftLoaded.value = false
@@ -470,7 +472,7 @@ async function navigateBack(): Promise<void> {
 }
 /** 保存当前工程，成功后关闭编辑器。 */
 async function saveAndClose(): Promise<void> {
-  if (!(await save())) return
+  if (!(await save(false))) return
   await leaveWithoutNewHistory()
 }
 function handleBeforeUnload(event: BeforeUnloadEvent): void {

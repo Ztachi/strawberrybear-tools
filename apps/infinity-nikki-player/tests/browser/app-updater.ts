@@ -1,5 +1,7 @@
 /** 独立页面注入测试适配器，不注入真实 Tauri 更新对象或全局模拟开关。 */
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import { feedback } from '@/lib/feedback'
 import { mockIPC } from '@tauri-apps/api/mocks'
 import {
   createUpdaterController,
@@ -30,6 +32,7 @@ if (scenario === 'error')
     targetVersion: null,
     lastError: { stage: 'check', code: 'network', message: '断网', source: 'github' },
   }
+if (scenario === 'unpublished') state = { ...state, phase: 'upToDate', targetVersion: null }
 if (scenario === 'notApplied')
   state.lastInstall = {
     fromVersion: '1.2.0',
@@ -68,7 +71,7 @@ const adapter: UpdaterAdapter = {
   onResume: () => () => {},
   check: async () => {
     calls.push('check')
-    return update(scenario === 'error' ? {} : { phase: 'available' })
+    return update(scenario === 'error' || scenario === 'unpublished' ? {} : { phase: 'available' })
   },
   download: () => {
     calls.push('download')
@@ -101,7 +104,11 @@ const adapter: UpdaterAdapter = {
     return '/fixture/diagnostics.zip'
   },
 }
-const controller = createUpdaterController(adapter)
+const controller = createUpdaterController(adapter, (key) => {
+  const message = i18n.global.t(`updater.${key}`)
+  if (key === 'checkFailed' || key === 'installFailed') feedback.error(message)
+  else feedback.info(message)
+})
 controller.setPrepareInstall(async () => {
   calls.push('prepare')
   return false
@@ -119,4 +126,4 @@ window.updaterFixture = {
   },
 }
 await controller.start()
-createApp(Fixture).use(i18n).provide(appUpdaterKey, controller).mount('#app')
+createApp(Fixture).use(i18n).use(createPinia()).provide(appUpdaterKey, controller).mount('#app')

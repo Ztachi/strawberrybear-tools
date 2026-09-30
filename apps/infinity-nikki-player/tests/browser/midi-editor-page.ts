@@ -261,6 +261,7 @@ mockIPC((command, payload) => {
   if (command === 'get_midi_library')
     return showNavigationFixture || showPlaylistFixture ? navigationMidiLibrary : [midi]
   if (command === 'load_midi_config') return { ...midi, disabled_tracks: [] }
+  if (command === 'parse_midi_file') return [midi, []]
   if (command === 'load_midi_project_draft') return null
   if (command === 'check_accessibility') return true
   if (command === 'has_saved_overlay_window_state') return false
@@ -385,11 +386,15 @@ await router.push(
           ? '/online-library'
           : showProjectList
             ? '/midi-editor'
-            : fixtureQuery.has('populated')
-              ? '/midi-editor/fixture'
-              : '/midi-editor/new'
+            : fixtureQuery.has('source')
+              ? '/midi-editor/new?from=layout-fixture.mid'
+              : fixtureQuery.has('populated')
+                ? '/midi-editor/fixture'
+                : '/midi-editor/new'
 )
 const pinia = createPinia()
+// 详情进入编辑器时曲库已载入；夹具按真实前置状态装配，不等待主窗口的异步初始化。
+if (fixtureQuery.has('source')) usePlayerStore(pinia).midiLibrary = [midi]
 if (showOnlineList) {
   useOnlineMidiLibraryStore(pinia).setSongs(onlineSongFixtures, Date.now())
 }

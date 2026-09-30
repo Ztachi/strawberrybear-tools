@@ -172,9 +172,59 @@ async fn check_source(
         })
         .build()
         .map_err(|e| UpdateError::from_plugin("check", &e, source))?;
-    let update = updater
-        .check()
-        .await
+    let result = updater.check().await;
+    // 官方插件将所有非成功 HTTP 状态合并为 ReleaseNotFound，不能据此猜测是 404。
+    // 仅在此分支补读实际状态，并共用本次检查剩余的时间预算。
+    if matches!(result, Err(tauri_plugin_updater::Error::ReleaseNotFound)) {
+        let remaining = CHECK_TIMEOUT.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            return Err(UpdateError::new(
+                "check",
+                "timeout",
+                "更新源响应超时",
+                Some(source),
+            ));
+        }
+        let response = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(remaining)
+            .build()
+            .map_err(|error| UpdateError::new("check", "network", error, Some(source)))?
+            .get(endpoint)
+            .header(reqwest::header::USER_AGENT, "InfinityNikkiPlayer-Updater")
+            .send()
+            .await
+            .map_err(|error| {
+                UpdateError::new(
+                    "check",
+                    if error.is_timeout() {
+                        "timeout"
+                    } else {
+                        "network"
+                    },
+                    error,
+                    Some(source),
+                )
+            })?;
+        let status = response.status();
+        log::info!(
+            "更新源状态确认，来源={source:?}，HTTP={status}，耗时={}毫秒",
+            started.elapsed().as_millis()
+        );
+        if status == reqwest::StatusCode::NOT_FOUND {
+            log::info!("更新清单尚未发布，来源={source:?}，暂无更新");
+            return Ok(None);
+        }
+        if !status.is_success() {
+            return Err(UpdateError::new(
+                "check",
+                "network",
+                format!("更新源返回 HTTP {status}"),
+                Some(source),
+            ));
+        }
+    }
+    let update = result
         .inspect_err(|error| {
             log::warn!(
                 "更新检查失败，来源={source:?}，耗时={}毫秒：{error}",

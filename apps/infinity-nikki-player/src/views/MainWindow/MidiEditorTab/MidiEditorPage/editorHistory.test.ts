@@ -137,6 +137,23 @@ afterEach(() => {
 })
 
 describe('continuous editor changes', () => {
+  it('关闭吸附时两个量化按钮置灰且指令不改变文档，重新开启后恢复', async () => {
+    mount('inspector')
+    handle.dispatch({ type: 'set-snap', resolution: 'off' })
+    await nextTick()
+    const quantize = controls('Button').filter((control) =>
+      String(control.props['aria-label']).includes('quantize')
+    )
+    expect(quantize).toHaveLength(2)
+    expect(quantize.every((control) => control.props.disabled)).toBe(true)
+    const before = handle.state.value.document
+    handle.dispatch({ type: 'quantize' })
+    expect(handle.state.value.document).toBe(before)
+    expect(handle.state.value.canUndo).toBe(false)
+    handle.dispatch({ type: 'set-snap', resolution: '1/16' })
+    await nextTick()
+    expect(quantize.every((control) => !control.props.disabled)).toBe(true)
+  })
   it('previews a velocity drag and commits only once on release', async () => {
     mount('inspector')
     const slider = controls('Slider')[0]!

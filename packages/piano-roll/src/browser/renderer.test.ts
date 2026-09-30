@@ -49,6 +49,8 @@ describe('overview track regions', () => {
 /** 只替换 Canvas 边界，记录真实渲染逻辑选择的颜色与透明度。 */
 function canvasFixture() {
   const fills: { color: string; alpha: number; region: boolean }[] = []
+  const texts: string[] = []
+  const rectangles: { x: number; y: number; width: number; height: number }[] = []
   const context = {
     fillStyle: '',
     strokeStyle: '',
@@ -64,11 +66,14 @@ function canvasFixture() {
     restore() {},
     rect() {},
     clip() {},
-    fillText() {},
+    fillText(value: string) {
+      texts.push(value)
+    },
     stroke() {},
     measureText: (value: string) => ({ width: value.length * 7 }),
-    fillRect() {
+    fillRect(x: number, y: number, width: number, height: number) {
       fills.push({ color: this.fillStyle, alpha: this.globalAlpha, region: false })
+      rectangles.push({ x, y, width, height })
     },
     fill() {
       fills.push({ color: this.fillStyle, alpha: this.globalAlpha, region: true })
@@ -81,7 +86,7 @@ function canvasFixture() {
     ownerDocument: { defaultView: { devicePixelRatio: 1 } },
     getContext: () => context,
   } as unknown as HTMLCanvasElement
-  return { canvas, fills }
+  return { canvas, fills, texts, rectangles }
 }
 
 function colorFrame(variant: RenderFrame['variant'], color?: string): RenderFrame {
@@ -107,6 +112,48 @@ function colorFrame(variant: RenderFrame['variant'], color?: string): RenderFram
     pitchZoom: 10,
   }
 }
+
+describe('总览音符空间', () => {
+  it('轨道名称只在左侧展示，内容区域不重复绘制名称', () => {
+    const grid = canvasFixture()
+    const ruler = canvasFixture()
+    drawGrid(grid.canvas, ruler.canvas, colorFrame('overview'))
+    expect(grid.texts).toEqual([])
+    expect(ruler.texts.length).toBeGreaterThan(0)
+  })
+
+  for (const height of [56, 100, 180]) {
+    it(`${height}px 行高的单音居中，不再预留名称高度`, () => {
+      const notes = canvasFixture()
+      const frame = colorFrame('overview')
+      frame.rows[0]!.height = height
+      frame.height = height
+      drawNotes(notes.canvas, frame)
+      expect(notes.rectangles).toHaveLength(1)
+      const note = notes.rectangles[0]!
+      expect(note.y + note.height / 2).toBe(height / 2)
+    })
+  }
+
+  it('宽音域使用上下完整预览空间，音符不越过相邻轨道', () => {
+    const notes = canvasFixture()
+    const frame = colorFrame('overview')
+    frame.index = createNoteIndex([0, 127].map((pitch) => ({
+      id: `note-${pitch}`,
+      trackId: 'music',
+      pitch,
+      velocity: 100,
+      startTick: 0,
+      endTick: 480,
+    })))
+    frame.rows[0]!.top = 100
+    frame.height = 200
+    drawNotes(notes.canvas, frame)
+    expect(notes.rectangles).toHaveLength(2)
+    expect(notes.rectangles.every((note) => note.y >= 106 && note.y + note.height <= 194)).toBe(true)
+    expect(Math.min(...notes.rectangles.map((note) => note.y))).toBeLessThan(110)
+  })
+})
 
 describe('音轨颜色', () => {
   for (const variant of ['overview', 'editor'] as const) {

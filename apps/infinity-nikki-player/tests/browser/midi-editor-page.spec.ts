@@ -159,7 +159,8 @@ test('编辑操作合并到单层标题栏，次要操作通过悬浮菜单收�
   await expect(help).toBeHidden()
 })
 
-test('保存并关闭会先保存工程，再直接离开编辑器', async ({ page }) => {
+test('首次保存并关闭会先保存工程，再直接离开编辑器', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html')
   const name = page.locator('.midi-editor-name input, input.midi-editor-name')
   await name.fill('保存并关闭测试项目')
   await name.blur()
@@ -169,6 +170,34 @@ test('保存并关闭会先保存工程，再直接离开编辑器', async ({ pa
   await expect(page.getByText('项目已保存', { exact: true })).toBeVisible()
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toHaveCount(0)
   await expect(page.locator('.global-music-player')).toBeVisible()
+})
+
+test('从详情导入的新项目在离开确认中保存后继续原目标导航', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?source')
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('详情导入修改')
+  await name.blur()
+  // 不等待导航完成，否则测试自身也会卡在离开确认上。
+  await page.evaluate(() => {
+    void window.midiEditorFixture.navigate('/navigation-away')
+  })
+  await page.getByRole('dialog').getByRole('button', { name: '保存并关闭', exact: true }).click()
+  await expect(page.locator('.navigation-away')).toBeVisible()
+  await expect(page.getByText('项目已保存', { exact: true })).toBeVisible()
+})
+
+test('隐藏空音轨后新增会解除筛选并显示新音轨', async ({ page }) => {
+  const tracks = page.locator('.pr-track')
+  // 新建项目有一条空轨；先等待初始绘制，再等待筛选生效，避免读取上一帧数量。
+  await expect(tracks).toHaveCount(1)
+  const before = await tracks.count()
+  const filter = page.getByRole('button', { name: '隐藏没有音符的音轨', exact: true })
+  await filter.click()
+  await expect(filter).toHaveAttribute('aria-pressed', 'true')
+  await expect(tracks).toHaveCount(0)
+  await page.getByRole('button', { name: '新增音轨', exact: true }).click()
+  await expect(filter).toHaveAttribute('aria-pressed', 'false')
+  await expect(tracks).toHaveCount(before + 1)
 })
 
 test('工具提示可移入、选中文字并复制，音轨把手不展示提示', async ({ page }) => {

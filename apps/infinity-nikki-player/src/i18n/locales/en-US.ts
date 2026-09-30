@@ -958,7 +958,7 @@ export default {
     downloading: 'Downloading',
     downloadingProgress: 'Downloading {progress}%',
     installing: 'Installing',
-    noUpdateTitle: 'You are up to date',
+    noUpdateTitle: 'No update found',
     noUpdateDescription: 'No update is available for this version',
     checkFailed: 'Update check failed',
     installFailed: 'Update failed',
