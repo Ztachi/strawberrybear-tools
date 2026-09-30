@@ -121,6 +121,8 @@ export default {
       help: {
         title: 'Piano Roll Guide',
         done: 'Got it',
+        intro:
+          'The piano roll arranges notes by time and pitch to help you inspect melodies, compare tracks, and locate passages. The overview shows all tracks; the detail view shows one track with its keyboard and notes.',
         groups: {
           tracks: 'Browse tracks',
           view: 'Zoom and follow',
@@ -140,7 +142,7 @@ export default {
           filter: {
             label: 'Empty tracks',
             description:
-              'Tracks without notes are hidden by default. Click the filter to show all tracks; filtering preserves track switches and open details.',
+              'Use the filter to switch between tracks with notes and all tracks. Song preview hides empty tracks by default; the MIDI editor shows them so you can add notes.',
           },
           zoom: {
             label: 'Independent zoom',
@@ -165,12 +167,12 @@ export default {
           resize: {
             label: 'Resize and close',
             description:
-              'Drag the thin top edge of details to resize, or focus it and use Up/Down. Click the red close button on the right, or press Esc within details, to close.',
+              'Drag the thin top edge of details to resize, or focus it and use Up/Down. Use the close button on the right to return to the full overview.',
           },
-          readOnly: {
-            label: 'Current version',
+          workspace: {
+            label: 'Browse and edit',
             description:
-              'Notes are read-only. You can inspect and seek, but cannot yet add, delete, move, resize, or change the velocity of notes.',
+              'The piano roll in song details helps you browse and seek during playback. Choose Edit This MIDI to draw, move, resize, and change note velocity in the MIDI editor. See its Help menu for editing instructions.',
           },
         },
       },
@@ -561,6 +563,30 @@ export default {
     trackDefaultName: 'Track {index}',
     trackCopyName: '{name} copy',
     addTrack: 'Add Track',
+    editTrack: 'Edit Track',
+    presetTrackColors: 'Preset colors',
+    tour: {
+      tracks: {
+        title: 'Start with the track overview',
+        description:
+          'See each track and its position in the song. Use the plus button to add a track and the switches to control which tracks are enabled.',
+      },
+      edit: {
+        title: 'Double-click a track to edit',
+        description:
+          'Double-click a track name or its content to open the piano roll, or choose Edit Track at the top of its menu. Click other tracks to switch while details are open.',
+      },
+      sort: {
+        title: 'Drag the handle to reorder',
+        description:
+          'Drag the handle on the left immediately, including with Mac Three Finger Drag. You can also hold the track name for about 0.3 seconds before dragging. Switches and menus work independently.',
+      },
+      tools: {
+        title: 'Edit, preview, and save',
+        description:
+          'Move and resize notes with Select, or add notes with Draw. Selecting notes in details opens the inspector. Preview and set snapping from the header, save on the right, and find the full guide in the Help menu.',
+      },
+    },
     dragTrack: 'Drag to reorder: {name}',
     renameTrack: 'Rename Track',
     trackColor: 'Track Color',
@@ -576,8 +602,7 @@ export default {
       songSettingsTip:
         'Set the song BPM and meter. Songs with multiple changes ask before they are unified.',
       displaySettings: 'Display',
-      displaySettingsTip:
-        'Show or hide the velocity lane and dim unplayable notes without changing MIDI data.',
+      displaySettingsTip: 'Show or hide the velocity lane without changing MIDI data.',
       bpm: 'BPM',
       bpmTip:
         'Set beats per minute; higher values play faster. Songs with tempo changes require confirmation before replacing them with one tempo.',
@@ -609,7 +634,10 @@ export default {
       velocityLane: 'Velocity Lane',
       velocityLaneTip:
         'Show or hide the bottom velocity lane. Drag bars vertically to adjust velocity; selected notes change together.',
-      unplayableDim: 'Dim Unplayable Notes',
+      templatePreview: 'Preview by Template',
+      templatePreviewHelp: 'About Preview by Template',
+      templatePreviewTip:
+        'Audition playable notes using the current template and dim notes outside it to check the performance.',
       help: 'Help',
       replaceTempoTitle: 'Replace with a single tempo',
       replaceTempoDescription:
@@ -623,7 +651,6 @@ export default {
       title: 'Notes',
       noteTip:
         'Edit the pitch, position, length, and velocity of selected notes. Batch actions apply to the whole selection.',
-      noSelection: 'No note selected',
       selectedCount: '{count} notes selected',
       pitch: 'Pitch',
       start: 'Start',
@@ -670,7 +697,24 @@ export default {
       contents: 'Help contents',
       overviewTitle: 'How to use the editor',
       intro:
-        'This guide covers the MIDI editor layout, note and track editing, preview, snapping, project actions, and keyboard shortcuts. Editor shortcuts pause while a text field or menu has focus to prevent accidental edits.',
+        'Find a track in the overview, open its details to edit notes, then preview and save your project. Start with these three essential actions and use the contents on the left for settings and shortcuts.',
+      essentials: {
+        edit: {
+          label: 'Double-click a track to open the editor',
+          description:
+            'Double-click its name or overview content, or choose Edit Track from its menu. Click another track to switch while details are open.',
+        },
+        sort: {
+          label: 'Drag the left handle to reorder tracks',
+          description:
+            'Drag the handle immediately, including with Mac Three Finger Drag. You can also hold the track name for about 0.3 seconds before dragging.',
+        },
+        notes: {
+          label: 'Select notes to edit their properties',
+          description:
+            'Select or box-select notes in details to show pitch, length, velocity, and batch actions. Clearing the selection or closing details hides the inspector.',
+        },
+      },
       selectTool:
         'Select tool: click to select, Shift to add; drag on empty space for box selection; double-click empty space to add a note; drag a note to move, drag its edges to resize; hold Option/Alt to disable snapping.',
       drawTool: 'Draw tool: click to add a note, drag horizontally to set its length.',
@@ -687,17 +731,17 @@ export default {
             layout: {
               label: 'Layout',
               description:
-                'Use the header for the project name, editing tools, preview, and settings. The center contains the track overview and piano roll; the note inspector at the bottom edits the current selection precisely.',
+                'Use the header for the project name, tools, preview, and settings. The center contains the overview and piano-roll detail; selecting notes with details open shows the inspector at the bottom.',
             },
             overview: {
-              label: 'Overview and Detail',
+              label: 'Double-click to open track details',
               description:
-                'Click a track in the overview to select it and double-click to open its piano-roll detail. In detail view, click another track to switch or double-click the current track to close it.',
+                'Click a track to select it and double-click to open details, or choose Edit Track from its menu. Click another track to switch while details are open, or double-click the current track to close it.',
             },
             template: {
               label: 'Key Template',
               description:
-                'Use the keyboard icon to select the in-game key mapping. When dimming is enabled, notes outside the playable range are highlighted and dimmed but never deleted.',
+                'Use the keyboard icon to select a key template and enable Preview by Template. Playback and individual audition use the playable notes in the current template, while notes outside it are dimmed to help check the performance and identify passages that need arranging. Turn it off to audition all notes.',
             },
           },
         },
@@ -717,7 +761,7 @@ export default {
             inspector: {
               label: 'Note Properties',
               description:
-                'Edit pitch, length, and velocity, quantize starts or lengths, and transpose by semitone or octave. Batch actions apply to every selected note.',
+                'Selecting notes with details open shows the inspector for pitch, length, velocity, quantization, and transposition. Batch actions apply to every selected note. Clearing the selection or closing details hides the inspector.',
             },
             contextMenu: {
               label: 'Context Menu',
@@ -737,7 +781,7 @@ export default {
             trackManage: {
               label: 'Reorder and Track Menu',
               description:
-                'Press and hold the information area of a track row for about 0.3 seconds, then drag vertically to reorder it, or drag immediately from the handle on the left. On a Mac with Three Finger Drag enabled, start from the handle without waiting. The switch and more menu never start sorting. The menu also supports rename, recolor, percussion, duplicate, move up, move down, and delete. A project always keeps at least one track.',
+                'Hold a track name for about 0.3 seconds, then drag vertically, or drag immediately from the left handle. On a Mac with Three Finger Drag enabled, start from the handle. The menu provides editing, rename, recolor, percussion, duplicate, move up, move down, and delete. The color picker offers presets and custom colors. Tracks share one default color; choosing a color updates the menu swatch, overview notes and region, and detail notes together. Colors are saved with the project. A project always keeps at least one track.',
             },
             trackEnabled: {
               label: 'Enabled State',
@@ -787,7 +831,7 @@ export default {
             display: {
               label: 'Display Settings',
               description:
-                'Show or hide the velocity lane and dim notes that cannot be played by the current key template to find passages that need arranging or transposition.',
+                'Show or hide the velocity lane in Song Settings. Preview by Template in the key-template popover dims and mutes notes outside the template to identify passages that need arranging or transposing.',
             },
             view: {
               label: 'Navigate the View',
@@ -818,6 +862,8 @@ export default {
         },
       },
       shortcutTitle: 'Keyboard Shortcuts',
+      shortcutTip:
+        'Editor shortcuts pause while an input, menu, or dialog has focus. Select text and press Command/Ctrl+C to copy help content.',
       shortcutItems: {
         save: { keys: 'Command/Ctrl + S', description: 'Save the project' },
         undo: { keys: 'Command/Ctrl + Z', description: 'Undo the previous edit' },

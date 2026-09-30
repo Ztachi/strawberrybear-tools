@@ -58,6 +58,7 @@ function handleLocateCurrent() {
   <FloatButtonGroup shape="square" style="right:10px">
     <FloatButton
       v-if="showBackToTop"
+      :aria-label="backToTopTitle"
       :tooltip="{ title: backToTopTitle, placement: 'left' }"
       @click="handleBackToTop"
     >
@@ -68,6 +69,7 @@ function handleLocateCurrent() {
 
     <FloatButton
       v-if="showLocateCurrent"
+      :aria-label="locateCurrentTitle"
       :tooltip="{ title: locateCurrentTitle, placement: 'left' }"
       @click="handleLocateCurrent"
     >

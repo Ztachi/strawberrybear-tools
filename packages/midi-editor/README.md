@@ -58,6 +58,8 @@ const bytes = encodeMidi(session.getState().document, { name: session.getState()
 
 ## 项目文件
 
+新建、新增或从 MIDI 导入的轨道不自动分配颜色，缺省配色交给宿主视图主题。`addTrack(document, { color })` 与 `updateTrack` 可显式设置颜色，复制、排序和工程保存会保留它。`TRACK_PALETTE` 仅作为颜色选择器的预设色表，不再作为自动配色策略。
+
 `MidiProject` 是持久化形态：`schemaVersion`、`id`、`name`、时间戳、来源、`meta` 摘要、`loop` 与完整 `document`。`session.toProject()` 会重算 `meta` 与 `updatedAt`，保存成功后调用 `session.markSaved()` 清除 dirty。
 
 ## 验证

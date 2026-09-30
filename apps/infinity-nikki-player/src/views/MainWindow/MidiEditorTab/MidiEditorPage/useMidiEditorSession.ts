@@ -29,11 +29,12 @@ export interface EditorShortcutHandlers {
  * @return {boolean} 是否在输入控件内
  */
 function isTypingTarget(target: EventTarget | null): boolean {
+  if (window.getSelection?.()?.toString()) return true
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable) return true
   // Slider 的焦点在 div，不能只识别 input；控件自己的空格/方向键不能再触发编辑器。
   return !!target.closest(
-    'input, textarea, select, button, [contenteditable="true"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menu"], [role="dialog"], [role="listbox"]'
+    'input, textarea, select, button, [contenteditable="true"], [data-text-selectable], [role="tooltip"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menu"], [role="dialog"], [role="listbox"]'
   )
 }
 
@@ -63,10 +64,19 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
 
   function nudge(event: KeyboardEvent, deltaTick: number, deltaPitch: number): void {
     if (!event.repeat || nudgeGesture?.key !== event.key || nudgeGesture.shift !== event.shiftKey) {
-      nudgeGesture = { key: event.key, shift: event.shiftKey, coalesceKey: `nudge-${++nudgeSequence}` }
+      nudgeGesture = {
+        key: event.key,
+        shift: event.shiftKey,
+        coalesceKey: `nudge-${++nudgeSequence}`,
+      }
     }
     // 每次独立按下使用新 key；自动重复实时更新画面，但只保留一个撤销节点。
-    session.dispatch({ type: 'nudge', deltaTick, deltaPitch, coalesceKey: nudgeGesture.coalesceKey })
+    session.dispatch({
+      type: 'nudge',
+      deltaTick,
+      deltaPitch,
+      coalesceKey: nudgeGesture.coalesceKey,
+    })
   }
 
   /**
@@ -84,7 +94,8 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
     if (mod || !event.key.startsWith('Arrow')) nudgeGesture = null
     const key = event.key.toLowerCase()
     // 长按方向键允许连续微调；保存、粘贴、复制一份和播放切换按一次只执行一次。
-    if (event.repeat && (key === ' ' || (mod && ['s', 'c', 'x', 'v', 'd'].includes(key)))) return true
+    if (event.repeat && (key === ' ' || (mod && ['s', 'c', 'x', 'v', 'd'].includes(key))))
+      return true
     const current = state.value
     // 方向键时间微调步长：吸附关闭时退回一拍。
     const step = session.snapStep() || current.document.ticksPerBeat
@@ -182,7 +193,9 @@ export function useMidiEditorSession(project: MidiProject, options: EditorSessio
     const listener = (event: KeyboardEvent): void => {
       if (handleKeydown(event, handlers)) event.preventDefault()
     }
-    const endGesture = (): void => { nudgeGesture = null }
+    const endGesture = (): void => {
+      nudgeGesture = null
+    }
     const keyup = (event: KeyboardEvent): void => {
       if (event.key === nudgeGesture?.key) endGesture()
     }

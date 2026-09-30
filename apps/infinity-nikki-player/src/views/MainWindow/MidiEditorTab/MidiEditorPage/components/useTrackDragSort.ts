@@ -286,6 +286,7 @@ export function useTrackDragSort(options: TrackDragSortOptions): void {
       if (!target || !row || !trackId || !gutter.contains(row)) return
 
       const handle = target.closest<HTMLElement>('.track-drag-handle')
+      if (!handle && !target.closest('.pr-track-select')) return
       const independentControl = target.closest<HTMLElement>(
         '.pr-track-toggle-host, .pr-track-actions-host'
       )

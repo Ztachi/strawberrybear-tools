@@ -53,13 +53,13 @@ const state = computed(() =>
 )
 const activeDocument = computed(() => state.value?.document ?? null)
 const loop = computed(() => state.value?.project.loop ?? null)
-const playback = useMidiEditorPlayback(activeDocument, loop, (transport) =>
-  workspace.value?.setTransport(transport)
-)
 const playablePitches = computed<ReadonlySet<number> | null>(() => {
   const current = presentation.value
   return current?.dimUnplayable ? new Set(current.playablePitches) : null
 })
+const playback = useMidiEditorPlayback(
+  activeDocument, loop, (transport) => workspace.value?.setTransport(transport), playablePitches
+)
 const configLocale = computed(() => getAntdvLocale(locale.value))
 const choice = ref<{
   open: boolean
@@ -150,10 +150,11 @@ const shortcuts = new MidiEditorShortcutController({
 })
 
 function isTypingTarget(target: EventTarget | null): boolean {
+  if (window.getSelection()?.toString()) return true
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable) return true
   return !!target.closest(
-    'input, textarea, select, button, [contenteditable="true"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menu"], [role="dialog"], [role="listbox"]'
+    'input, textarea, select, button, [contenteditable="true"], [data-text-selectable], [role="tooltip"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menu"], [role="dialog"], [role="listbox"]'
   )
 }
 
@@ -350,11 +351,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ConfigProvider
-    v-bind="midiEditorConfigProviderProps"
-    :locale="configLocale"
-    :tooltip="{ styles: { root: { pointerEvents: 'none' } } }"
-  >
+  <ConfigProvider v-bind="midiEditorConfigProviderProps" :locale="configLocale">
     <AntApp>
       <main class="detached-midi-editor">
         <template v-if="presentation && state">

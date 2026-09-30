@@ -32,6 +32,8 @@ const props = defineProps<{
   document: PianoRollDocument
   transport: PianoRollTransport
   labels: PianoRollLabels
+  /** 总览与详情共用的宿主主题，省略时使用公共卷帘默认主题。 */
+  theme?: PianoRollProps['theme']
   restore?: PianoWorkspaceState
   detached?: boolean
   opening?: boolean
@@ -201,6 +203,7 @@ defineExpose({ getState, setTransport, openTrack })
         class="detail-piano-roll"
         variant="overview"
         :document="document"
+        :theme="theme"
         :transport="transport"
         :labels="overviewPianoRollLabels"
         :selected-track-id="selectedTrackId"
@@ -313,6 +316,7 @@ defineExpose({ getState, setTransport, openTrack })
       <PianoEditorPanel
         ref="editorPanel"
         :document="document"
+        :theme="theme"
         :transport="transport"
         :labels="labels"
         :selected-track-id="selectedTrackId"

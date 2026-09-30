@@ -244,14 +244,14 @@ for (const copy of [
     title: '钢琴卷帘操作说明',
     done: '知道了',
     filter: '隐藏没有音符的音轨',
-    readOnly: '当前版本',
+    readOnly: '查看与编辑',
   },
   {
     locale: 'en-US',
     title: 'Piano Roll Guide',
     done: 'Got it',
     filter: 'Hide tracks without notes',
-    readOnly: 'Current version',
+    readOnly: 'Browse and edit',
   },
 ]) {
   test(`actual ${copy.locale} help dialog is complete, accessible and isolated from playback`, async ({

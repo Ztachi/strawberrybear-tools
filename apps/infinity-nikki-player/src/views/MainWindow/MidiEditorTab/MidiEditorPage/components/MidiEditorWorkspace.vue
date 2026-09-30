@@ -15,9 +15,11 @@ import {
   type PianoTrackActionsRegistry,
 } from '@/components/PianoWorkspace/usePianoTrackHosts'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
+import { midiEditorPianoRollTheme } from '@/theme/infinityNikkiTheme'
 import NoteContextMenu, { type NoteContextMenuTarget } from './NoteContextMenu.vue'
 import NoteInspector from './NoteInspector.vue'
 import TrackActionsMenu from './TrackActionsMenu.vue'
+import MidiEditorTour from './MidiEditorTour.vue'
 
 const props = defineProps<{
   state: EditorSessionState
@@ -43,8 +45,10 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const VELOCITY_LANE_HEIGHT = 72
 const workspace = ref<InstanceType<typeof PianoWorkspace> | null>(null)
+const workspaceRoot = ref<HTMLElement | null>(null)
 const contextTarget = ref<NoteContextMenuTarget | null>(null)
 const selectedTrackId = ref<string | null>(null)
+const editorOpen = ref(props.restore?.editorOpen ?? false)
 const trackActions: PianoTrackActionsRegistry = createPianoHostRegistry()
 let pendingOpenTrackCount: number | null = null
 
@@ -74,6 +78,7 @@ function handleIntent(intent: PianoRollEditIntent): void {
 
 function rememberWorkspace(state: PianoWorkspaceState): void {
   selectedTrackId.value = state.selectedTrackId
+  editorOpen.value = state.editorOpen
   emit('state-change', state)
 }
 
@@ -113,11 +118,12 @@ defineExpose({
 </script>
 
 <template>
-  <div class="midi-editor-body">
+  <div ref="workspaceRoot" class="midi-editor-body">
     <PianoWorkspace
       ref="workspace"
       :filename="`midi-editor:${state.project.id}`"
       :document="state.document"
+      :theme="midiEditorPianoRollTheme"
       :transport="transport"
       :labels="labels"
       :editing="editing"
@@ -150,7 +156,13 @@ defineExpose({
     </PianoWorkspace>
   </div>
 
+  <MidiEditorTour
+    :root="workspaceRoot"
+    :ready="!detached && !opening && trackActions.hosts.size > 0"
+  />
+
   <NoteInspector
+    v-if="editorOpen"
     :state="state"
     :playable-pitches="playablePitches"
     @dispatch="emit('dispatch', $event)"
@@ -159,6 +171,7 @@ defineExpose({
   <TrackActionsMenu
     :hosts="trackActions.hosts"
     :tracks="state.document.tracks"
+    @edit-track="workspace?.openTrack($event)"
     @dispatch="emit('dispatch', $event)"
     @remove-track="emit('remove-track', $event)"
   />
@@ -185,11 +198,7 @@ defineExpose({
 
 .midi-editor-body :deep(.pr-track) {
   padding-left: 30px;
-}
-
-.midi-editor-body :deep(.pr-track),
-.midi-editor-body :deep(.pr-track-select) {
-  cursor: grab;
+  cursor: default;
 }
 
 .midi-editor-body :deep(.pr-view[data-track-sorting='true']),

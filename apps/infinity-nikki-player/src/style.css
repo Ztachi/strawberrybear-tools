@@ -118,6 +118,8 @@
   [data-text-selectable],
   [role='alert'],
   [role='status'],
+  .ant-tooltip-container,
+  .ant-tooltip-unique-container,
   .ant-notification-notice-message,
   .ant-notification-notice-description {
     -webkit-user-select: text;

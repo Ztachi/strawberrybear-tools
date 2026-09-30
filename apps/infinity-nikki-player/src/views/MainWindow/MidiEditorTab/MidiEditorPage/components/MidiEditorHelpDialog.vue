@@ -50,6 +50,7 @@ const shortcuts = [
 ] as const
 
 const content = ref<HTMLElement | null>(null)
+const essentialActions = ['edit', 'sort', 'notes'] as const
 const anchorItems = computed<NonNullable<AnchorProps['items']>>(() => [
   {
     key: 'overview',
@@ -117,6 +118,18 @@ function preventHistoryChange(event: MouseEvent): void {
           <p class="mb-0 mt-2 text-[var(--color-muted-dark)]">
             {{ t('midiEditor.help.intro') }}
           </p>
+          <dl class="mb-0 mt-3 space-y-2">
+            <div v-for="action in essentialActions" :key="action">
+              <dt
+                :class="['font-semibold', action === 'edit' ? 'text-[var(--color-danger)]' : 'text-[var(--color-primary-active)]']"
+              >
+                {{ t(`midiEditor.help.essentials.${action}.label`) }}
+              </dt>
+              <dd class="m-0 text-[var(--color-muted-dark)]">
+                {{ t(`midiEditor.help.essentials.${action}.description`) }}
+              </dd>
+            </div>
+          </dl>
         </section>
 
         <section
@@ -139,7 +152,9 @@ function preventHistoryChange(event: MouseEvent): void {
           </h3>
           <dl class="mt-3 space-y-2.5">
             <div v-for="item in section.items" :key="item">
-              <dt class="font-medium">
+              <dt
+                :class="['font-medium', section.key === 'start' && item === 'overview' ? 'text-[var(--color-danger)]' : '']"
+              >
                 {{ t(`midiEditor.help.sections.${section.key}.items.${item}.label`) }}
               </dt>
               <dd class="m-0 text-[var(--color-muted-dark)]">
@@ -161,6 +176,9 @@ function preventHistoryChange(event: MouseEvent): void {
             <Keyboard class="size-4 shrink-0 text-primary" :stroke-width="2.2" />
             {{ t('midiEditor.help.shortcutTitle') }}
           </h3>
+          <p class="mt-2 text-[var(--color-muted-dark)]">
+            {{ t('midiEditor.help.shortcutTip') }}
+          </p>
           <dl class="mt-3 grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
             <div
               v-for="shortcut in shortcuts"

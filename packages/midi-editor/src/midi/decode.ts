@@ -6,7 +6,6 @@ import type {
   TempoPoint,
   TimeSignaturePoint,
 } from '@strawberrybear/piano-roll/core'
-import { TRACK_PALETTE } from '../commands/tracks'
 import { fromMidiText } from './text'
 
 /** 解码选项。 */
@@ -23,9 +22,13 @@ export interface DecodeMidiOptions {
  * @param {DecodeMidiOptions} options 命名与空轨策略
  * @return {PianoRollDocument} 文档；tempo/拍号来自所有轨的 meta 事件
  */
-export function decodeMidi(bytes: ArrayLike<number>, options: DecodeMidiOptions = {}): PianoRollDocument {
+export function decodeMidi(
+  bytes: ArrayLike<number>,
+  options: DecodeMidiOptions = {}
+): PianoRollDocument {
   const data = parseMidi(bytes)
-  const ppq = data.header.ticksPerBeat && data.header.ticksPerBeat > 0 ? data.header.ticksPerBeat : 480
+  const ppq =
+    data.header.ticksPerBeat && data.header.ticksPerBeat > 0 ? data.header.ticksPerBeat : 480
   const tempoMap: TempoPoint[] = []
   const timeSignatureMap: TimeSignaturePoint[] = []
   const tracks: PianoRollTrack[] = []
@@ -52,7 +55,11 @@ export function decodeMidi(bytes: ArrayLike<number>, options: DecodeMidiOptions 
           tempoMap.push({ tick, microsecondsPerQuarter: event.microsecondsPerBeat })
           break
         case 'timeSignature':
-          timeSignatureMap.push({ tick, numerator: event.numerator, denominator: event.denominator })
+          timeSignatureMap.push({
+            tick,
+            numerator: event.numerator,
+            denominator: event.denominator,
+          })
           break
         case 'noteOn':
         case 'noteOff': {
@@ -87,13 +94,13 @@ export function decodeMidi(bytes: ArrayLike<number>, options: DecodeMidiOptions 
       }
     }
     // 未关闭的音符延续到轨尾。
-    for (const stack of open.values()) for (const note of stack) note.endTick = Math.max(note.startTick + 1, tick)
+    for (const stack of open.values())
+      for (const note of stack) note.endTick = Math.max(note.startTick + 1, tick)
     durationTicks = Math.max(durationTicks, tick)
     if (trackNotes.length === 0 && !options.keepEmptyTracks) return
     tracks.push({
       id,
       name: name || options.trackName?.(tracks.length + 1) || `Track ${tracks.length + 1}`,
-      color: TRACK_PALETTE[tracks.length % TRACK_PALETTE.length],
       isPercussion: percussion,
       enabled: true,
       startTick: 0,
@@ -107,7 +114,9 @@ export function decodeMidi(bytes: ArrayLike<number>, options: DecodeMidiOptions 
     durationTicks,
     ticksPerBeat: ppq,
     tempoMap: tempoMap.length ? tempoMap : [{ tick: 0, microsecondsPerQuarter: 500_000 }],
-    timeSignatureMap: timeSignatureMap.length ? timeSignatureMap : [{ tick: 0, numerator: 4, denominator: 4 }],
+    timeSignatureMap: timeSignatureMap.length
+      ? timeSignatureMap
+      : [{ tick: 0, numerator: 4, denominator: 4 }],
     tracks,
     notes,
   }

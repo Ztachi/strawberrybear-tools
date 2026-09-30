@@ -4,7 +4,7 @@ import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
 import { mockIPC } from '@tauri-apps/api/mocks'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
-import { i18n } from '@/i18n'
+import { getAntdvLocale, i18n } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import MainWindow from '@/views/MainWindow/index.vue'
 import { MIDI_PROJECT_EDITOR_WINDOW_PORT } from '@/features/midi-project-editor-window'
@@ -38,6 +38,8 @@ const midi: MidiInfo = {
 }
 
 const fixtureQuery = new URLSearchParams(location.search)
+// 常规回归聚焦编辑行为；只有首次引导验收使用未完成引导的状态。
+if (!fixtureQuery.has('tour')) localStorage.setItem('nikki:midi-editor-tour-seen', 'true')
 const showNavigationFixture = fixtureQuery.has('navigation')
 const showPlaylistFixture = fixtureQuery.has('playlist')
 const showTemplateList = fixtureQuery.has('templates')
@@ -79,6 +81,26 @@ const project = createProject({
     ),
   },
 })
+if (fixtureQuery.has('colors')) {
+  const track = project.document.tracks[0]!
+  const tracks = [
+    track,
+    { ...track, id: 'bass', name: 'Bass' },
+    { ...track, id: 'strings', name: 'Strings' },
+  ]
+  project.document = {
+    ...project.document,
+    tracks,
+    notes: project.document.notes.flatMap((note) =>
+      tracks.map((item, index) => ({
+        ...note,
+        id: `${item.id}-${note.id}`,
+        trackId: item.id,
+        pitch: note.pitch - index * 12,
+      }))
+    ),
+  }
+}
 const showProjectList = new URLSearchParams(location.search).has('list')
 const projectSummary = {
   id: project.id,
@@ -366,9 +388,13 @@ window.midiEditorFixture = {
 }
 createApp({
   render: () =>
-    h(ConfigProvider, infinityNikkiConfigProviderProps, {
-      default: () => h(AntApp, null, { default: () => h(MainWindow) }),
-    }),
+    h(
+      ConfigProvider,
+      { ...infinityNikkiConfigProviderProps, locale: getAntdvLocale(i18n.global.locale.value) },
+      {
+        default: () => h(AntApp, null, { default: () => h(MainWindow) }),
+      }
+    ),
 })
   .use(pinia)
   .use(i18n)

@@ -279,13 +279,24 @@ export function drawGrid(
       const regionWidth = region.width
       const regionTop = y + 3
       const regionHeight = Math.max(1, row.height - 6)
+      const selectedTrack = row.track.id === frame.selectedTrackId
       context.fillStyle =
-        row.track.id === frame.selectedTrackId
+        row.track.color ||
+        (selectedTrack
           ? theme.colors.trackSelected
           : row.track.enabled
             ? theme.colors.trackEnabled
-            : theme.colors.trackDisabled
-      context.globalAlpha = row.track.enabled ? 1 : 0.32
+            : theme.colors.trackDisabled)
+      // 自定义色用浅色区域区分音轨，选中只增强透明度，不改回主题粉色。
+      context.globalAlpha = row.track.color
+        ? row.track.enabled
+          ? selectedTrack
+            ? 0.2
+            : 0.12
+          : 0.04
+        : row.track.enabled
+          ? 1
+          : 0.32
       const radius = Math.min(5, regionHeight / 2, regionWidth / 2)
       const visibleLeft = Math.max(-radius, regionLeft)
       const visibleRight = Math.min(width + radius, regionLeft + regionWidth)
@@ -293,7 +304,7 @@ export function drawGrid(
         context.beginPath()
         context.roundRect(visibleLeft, regionTop, visibleRight - visibleLeft, regionHeight, radius)
         context.fill()
-        context.strokeStyle = theme.colors.border
+        context.strokeStyle = row.track.color || theme.colors.border
         context.globalAlpha = row.track.enabled ? 0.65 : 0.25
         context.stroke()
       }
@@ -354,9 +365,8 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
         ? theme.colors.noteSelected
         : unplayable
           ? theme.colors.noteUnplayable
-          : frame.variant === 'overview'
-            ? theme.colors.overviewNote
-            : row.track.color || theme.colors.editorNote
+          : row.track.color ||
+            (frame.variant === 'overview' ? theme.colors.overviewNote : theme.colors.editorNote)
       context.fillRect(x, y, w, noteHeight)
       if (frame.variant === 'editor') {
         context.strokeStyle = isSelected ? theme.colors.text : theme.colors.noteOutline

@@ -2,7 +2,7 @@ import type { PianoRollDocument, PianoRollTrack } from '@strawberrybear/piano-ro
 import { createNoteId, createTrackId } from '../ids'
 import type { TrackPatch } from '../model'
 
-/** 轨道默认配色，按新增顺序循环取用，保证多轨在总览中可区分。 */
+/** 供宿主颜色选择器使用的预设色；未指定颜色的轨道沿用视图主题。 */
 export const TRACK_PALETTE: readonly string[] = [
   '#e8788a',
   '#5b9bd5',
@@ -25,7 +25,7 @@ export interface AddTrackInput {
 }
 
 /**
- * @description: 新增一条空轨；颜色缺省时从调色板按序取用。
+ * @description: 新增一条空轨；只保留显式指定的颜色，缺省配色由宿主主题决定。
  * @param {PianoRollDocument} document 源文档
  * @param {AddTrackInput} input 轨道参数
  * @return {{ document: PianoRollDocument; track: PianoRollTrack }} 新文档与新轨
@@ -38,7 +38,7 @@ export function addTrack(
   const track: PianoRollTrack = {
     id: createTrackId(new Set(document.tracks.map((item) => item.id))),
     name: input.name?.trim() || input.defaultName?.(index) || `Track ${index}`,
-    color: input.color ?? TRACK_PALETTE[(index - 1) % TRACK_PALETTE.length],
+    ...(input.color ? { color: input.color } : {}),
     isPercussion: input.isPercussion ?? false,
     enabled: true,
     ...(input.channel !== undefined ? { channel: input.channel } : {}),
@@ -86,9 +86,9 @@ export function updateTrack(
     if (patch.channel === null || !Number.isInteger(patch.channel)) delete next.channel
     else next.channel = Math.min(15, Math.max(0, patch.channel))
   }
-  const unchanged = (Object.keys(next) as (keyof PianoRollTrack)[]).every(
-    (key) => next[key] === current[key]
-  ) && Object.keys(next).length === Object.keys(current).length
+  const unchanged =
+    (Object.keys(next) as (keyof PianoRollTrack)[]).every((key) => next[key] === current[key]) &&
+    Object.keys(next).length === Object.keys(current).length
   if (unchanged) return document
   const tracks = document.tracks.slice()
   tracks[index] = next

@@ -4,7 +4,8 @@
  */
 import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Dropdown, Input, Modal, Tooltip } from 'antdv-next'
+import { Button, ColorPicker, Dropdown, Input, Modal } from 'antdv-next'
+import type { Color } from 'antdv-next'
 import {
   ArrowDown,
   ArrowUp,
@@ -12,7 +13,6 @@ import {
   Drum,
   GripVertical,
   MoreVertical,
-  Palette,
   Pencil,
   Trash2,
 } from 'lucide-vue-next'
@@ -21,7 +21,7 @@ import type { EditorAction } from '@strawberrybear/midi-editor'
 import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import type { PianoRollTrackActionsContext } from '@strawberrybear/piano-roll/browser'
 import type { PianoTrackHost } from '@/components/PianoWorkspace/usePianoTrackHosts'
-import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
+import { getMainWindowPopupContainer, MIDI_EDITOR_DEFAULT_TRACK_COLOR } from '@/theme/infinityNikkiTheme'
 import { useTrackDragSort } from './useTrackDragSort'
 
 const props = defineProps<{
@@ -30,6 +30,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   dispatch: [action: EditorAction]
+  'edit-track': [trackId: string]
   /** 删除需由页面确认（含音符时提示）。 */
   'remove-track': [track: PianoRollTrack]
 }>()
@@ -37,6 +38,7 @@ const { t } = useI18n()
 
 const menuIconClass = 'align-middle size-4 shrink-0 -translate-y-px'
 const openTrackId = ref<string | null>(null)
+const colorTrackId = ref<string | null>(null)
 const rename = ref<{ open: boolean; trackId: string; name: string }>({ open: false, trackId: '', name: '' })
 
 useTrackDragSort({
@@ -56,6 +58,21 @@ function swatch(color: string) {
 }
 
 const trackIndex = computed(() => new Map(props.tracks.map((track, index) => [track.id, index])))
+const colorPresets = computed(() => [{
+  label: t('midiEditor.presetTrackColors'),
+  colors: [...TRACK_PALETTE],
+}])
+
+function trackColor(track: PianoRollTrack): string {
+  return track.color || MIDI_EDITOR_DEFAULT_TRACK_COLOR
+}
+
+function changeTrackColor(track: PianoRollTrack, color: Color): void {
+  const next = color.toHexString()
+  if (next.toLowerCase() !== trackColor(track).toLowerCase()) {
+    emit('dispatch', { type: 'update-track', trackId: track.id, patch: { color: next } })
+  }
+}
 
 /**
  * @description: 生成某条轨道的菜单项
@@ -66,12 +83,13 @@ function menuItems(track: PianoRollTrack) {
   const index = trackIndex.value.get(track.id) ?? 0
   const count = props.tracks.length
   return [
+    { key: 'edit', label: t('midiEditor.editTrack'), icon: icon(Pencil) },
+    { type: 'divider' as const },
     { key: 'rename', label: t('midiEditor.renameTrack'), icon: icon(Pencil) },
     {
       key: 'color',
       label: t('midiEditor.trackColor'),
-      icon: icon(Palette),
-      children: TRACK_PALETTE.map((color) => ({ key: `color:${color}`, label: color, icon: swatch(color) })),
+      icon: swatch(trackColor(track)),
     },
     {
       key: 'percussion',
@@ -96,11 +114,13 @@ function handleMenuClick(track: PianoRollTrack, info: { key: string | number }):
   const key = String(info.key)
   openTrackId.value = null
   const index = trackIndex.value.get(track.id) ?? 0
-  if (key.startsWith('color:')) {
-    emit('dispatch', { type: 'update-track', trackId: track.id, patch: { color: key.slice('color:'.length) } })
-    return
-  }
   switch (key) {
+    case 'edit':
+      emit('edit-track', track.id)
+      return
+    case 'color':
+      colorTrackId.value = track.id
+      return
     case 'rename':
       rename.value = { open: true, trackId: track.id, name: track.name }
       return
@@ -145,42 +165,51 @@ function submitRename(): void {
 
 <template>
   <Teleport v-for="[, host] in hosts" :key="host.id" :to="host.container">
-    <Tooltip :title="t('midiEditor.dragTrack', { name: host.context.track.name })">
-      <Button
-        type="text"
-        size="small"
-        class="track-drag-handle"
-        :aria-label="t('midiEditor.dragTrack', { name: host.context.track.name })"
-        @click.stop
-        @dblclick.stop
-      >
-        <template #icon>
-          <GripVertical class="size-4" :stroke-width="2.2" />
-        </template>
-      </Button>
-    </Tooltip>
-
-    <Dropdown
-      :open="openTrackId === host.context.track.id"
-      :trigger="['click']"
-      placement="bottomRight"
-      :get-popup-container="getMainWindowPopupContainer"
-      :menu="menuFor(host.context.track)"
-      @update:open="openTrackId = $event ? host.context.track.id : null"
+    <Button
+      type="text"
+      size="small"
+      class="track-drag-handle"
+      :aria-label="t('midiEditor.dragTrack', { name: host.context.track.name })"
+      @click.stop
+      @dblclick.stop
     >
-      <Button
-        type="text"
-        size="small"
-        class="track-actions-button"
-        :aria-label="`${t('midiEditor.actions')}: ${host.context.track.name}`"
-        @click.stop
-        @dblclick.stop
+      <template #icon>
+        <GripVertical class="size-4" :stroke-width="2.2" />
+      </template>
+    </Button>
+
+    <ColorPicker
+      :open="colorTrackId === host.context.track.id"
+      :value="trackColor(host.context.track)"
+      :presets="colorPresets"
+      disabled-alpha
+      :get-popup-container="getMainWindowPopupContainer"
+      placement="bottomRight"
+      @open-change="!$event && (colorTrackId = null)"
+      @change-complete="changeTrackColor(host.context.track, $event)"
+    >
+      <Dropdown
+        :open="openTrackId === host.context.track.id"
+        :trigger="['click']"
+        placement="bottomRight"
+        :get-popup-container="getMainWindowPopupContainer"
+        :menu="menuFor(host.context.track)"
+        @update:open="openTrackId = $event ? host.context.track.id : null"
       >
-        <template #icon>
-          <MoreVertical class="size-4" :stroke-width="2.3" />
-        </template>
-      </Button>
-    </Dropdown>
+        <Button
+          type="text"
+          size="small"
+          class="track-actions-button"
+          :aria-label="`${t('midiEditor.actions')}: ${host.context.track.name}`"
+          @click.stop
+          @dblclick.stop
+        >
+          <template #icon>
+            <MoreVertical class="size-4" :stroke-width="2.3" />
+          </template>
+        </Button>
+      </Dropdown>
+    </ColorPicker>
   </Teleport>
 
   <Modal

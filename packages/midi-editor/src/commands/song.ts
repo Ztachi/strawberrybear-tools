@@ -57,8 +57,7 @@ export function setTimeSignature(
   denominator: number
 ): PianoRollDocument {
   const top = Math.min(32, Math.max(1, Math.round(Number.isFinite(numerator) ? numerator : 4)))
-  const bottom =
-    [1, 2, 4, 8, 16, 32].includes(denominator) ? denominator : 4
+  const bottom = [1, 2, 4, 8, 16, 32].includes(denominator) ? denominator : 4
   const [first] = document.timeSignatureMap
   if (
     document.timeSignatureMap.length === 1 &&
@@ -111,7 +110,7 @@ export function createEmptyDocument(trackName = 'Track 1', trackId = 'track-1'):
     ticksPerBeat: DEFAULT_PPQ,
     tempoMap: [{ tick: 0, microsecondsPerQuarter: bpmToTempo(DEFAULT_BPM) }],
     timeSignatureMap: [{ tick: 0, numerator: 4, denominator: 4 }],
-    tracks: [{ id: trackId, name: trackName, color: '#e8788a', isPercussion: false, enabled: true }],
+    tracks: [{ id: trackId, name: trackName, isPercussion: false, enabled: true }],
     notes: [],
   }
 }

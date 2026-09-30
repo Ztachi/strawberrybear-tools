@@ -87,11 +87,23 @@ describe('notes commands', () => {
 })
 
 describe('tracks commands', () => {
+  it('默认音轨不分配颜色，显式颜色在复制和排序后保留', () => {
+    const empty = createEmptyDocument()
+    expect(empty.tracks.every((track) => track.color === undefined)).toBe(true)
+    const added = addTrack(empty)
+    expect(added.track).not.toHaveProperty('color')
+    const custom = addTrack(added.document, { color: '#123456' })
+    expect(custom.track.color).toBe('#123456')
+    const duplicate = duplicateTrack(custom.document, custom.track.id)
+    expect(duplicate.track?.color).toBe('#123456')
+    expect(reorderTrack(duplicate.document, custom.track.id, 0).tracks[0]!.color).toBe('#123456')
+  })
+
   it('adds, updates, duplicates, reorders and removes tracks', () => {
     let doc = fixture()
     doc = addTrack(doc, { defaultName: (i) => `音轨 ${i}` }).document
     expect(doc.tracks[2]!.name).toBe('音轨 3')
-    expect(doc.tracks[2]!.color).toBeDefined()
+    expect(doc.tracks[2]!.color).toBeUndefined()
     doc = updateTrack(doc, 't1', { name: '  ', color: '#000', channel: 20 })
     expect(doc.tracks[0]!.name).toBe('Lead')
     expect(doc.tracks[0]!.channel).toBe(15)
@@ -124,7 +136,12 @@ describe('song commands', () => {
 
   it('extends duration to cover notes by whole bars', () => {
     const doc = fixture()
-    const { document } = addNote(doc, { trackId: 't1', pitch: 60, startTick: 20000, endTick: 20100 })
+    const { document } = addNote(doc, {
+      trackId: 't1',
+      pitch: 60,
+      startTick: 20000,
+      endTick: 20100,
+    })
     const covered = ensureDurationCovers(document)
     // 20100 / 1920 = 10.47 → (10 + 2) 小节
     expect(covered.durationTicks).toBe(12 * 1920)

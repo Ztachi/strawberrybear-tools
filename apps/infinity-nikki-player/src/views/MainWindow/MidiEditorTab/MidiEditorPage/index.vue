@@ -99,17 +99,16 @@ let editorWindow: MidiProjectEditorWindowSession | null = null
 let endingDetachedEditor = false
 let pageActive = true
 
-const playback = useMidiEditorPlayback(activeDocument, loop, (frame) =>
-  workspace.value?.setTransport(frame)
-)
-
 const isEditRoute = computed(() => route.name === 'midi-editor-edit')
-/** 当前映射模板可演奏的音高集合；关闭不可演奏音符置灰时为 null。 */
+/** 按模板试听与置灰共享同一集合；关闭时为 null，缺少模板时全部静音。 */
 const playablePitches = computed(() => {
   if (!dimUnplayable.value) return null
   const template = settingsStore.templates.find((item) => item.id === settingsStore.currentTemplateId)
-  return template ? new Set(template.mappings.map((mapping) => mapping.pitch)) : null
+  return new Set(template?.mappings.map((mapping) => mapping.pitch) ?? [])
 })
+const playback = useMidiEditorPlayback(
+  activeDocument, loop, (frame) => workspace.value?.setTransport(frame), playablePitches
+)
 
 // ---------- 通用选择弹窗 ----------
 const choice = ref<{
@@ -674,10 +673,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ConfigProvider
-    v-bind="midiEditorConfigProviderProps"
-    :tooltip="{ styles: { root: { pointerEvents: 'none' } } }"
-  >
+  <ConfigProvider v-bind="midiEditorConfigProviderProps">
     <section class="midi-editor-page">
       <header class="midi-editor-header">
         <div class="editor-project-identity">

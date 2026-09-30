@@ -42,7 +42,7 @@ export interface PianoRollTrack {
   channel?: number
   /** 是否为打击乐轨道。 */
   isPercussion: boolean
-  /** 可选 CSS 颜色；未指定时由渲染器选择。 */
+  /** 可选 CSS 颜色；用于总览区域、总览音符与详情音符，未指定时沿用视图主题。 */
   color?: string
   /** 轨道是否启用；与轨道选择状态独立。 */
   enabled: boolean

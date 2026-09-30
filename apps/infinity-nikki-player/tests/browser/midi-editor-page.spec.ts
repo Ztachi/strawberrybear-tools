@@ -1,5 +1,27 @@
 import { expect, test, type Page } from '@playwright/test'
 
+/** 检查实际 Canvas 像素，避免只验证菜单状态而遗漏总览的颜色绘制。 */
+async function noteColorPixels(page: Page, pane: string, rgb: number[]): Promise<number> {
+  return page
+    .locator(`${pane} .pr-pane > canvas`)
+    .nth(1)
+    .evaluate((element, color) => {
+      const canvas = element as HTMLCanvasElement
+      const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+      let count = 0
+      for (let index = 0; index < data.length; index += 4) {
+        if (
+          data[index] === color[0] &&
+          data[index + 1] === color[1] &&
+          data[index + 2] === color[2] &&
+          data[index + 3] === 255
+        )
+          count += 1
+      }
+      return count
+    }, rgb)
+}
+
 async function openSettings(page: Page): Promise<void> {
   if (
     (await page
@@ -65,6 +87,11 @@ test('编辑操作合并到单层标题栏，次要操作通过悬浮菜单收�
   await expect(help).toBeVisible()
   await expect(page.locator('.editor-more-menu:visible')).toHaveCount(0)
   await expect(help.getByRole('heading', { name: '快速开始', exact: true })).toBeVisible()
+  await expect(help.getByText('双击音轨，打开编辑详情', { exact: true })).toHaveCSS(
+    'color',
+    'rgb(239, 68, 68)'
+  )
+  await page.screenshot({ path: test.info().outputPath('midi-editor-help.png') })
   await expect(help.getByRole('heading', { name: '音符编辑', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '音轨管理', exact: true })).toBeVisible()
   await expect(help.getByText(/Mac 开启“三指拖移”后请从把手开始/)).toBeVisible()
@@ -95,6 +122,204 @@ test('保存并关闭会先保存工程，再直接离开编辑器', async ({ pa
   await expect(page.getByText('项目已保存', { exact: true })).toBeVisible()
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toHaveCount(0)
   await expect(page.locator('.global-music-player')).toBeVisible()
+})
+
+test('工具提示可移入、选中文字并复制，音轨把手不展示提示', async ({ page }) => {
+  await openSnapSettings(page)
+  await page.locator('.snap-settings .property-help-icon').hover()
+  const tooltip = page
+    .locator('.ant-tooltip:visible')
+    .filter({ hasText: '设置添加、移动和拉伸音符时' })
+  await expect(tooltip).toBeVisible()
+  await tooltip.hover()
+  await page.waitForTimeout(250)
+  await expect(tooltip).toBeVisible()
+  expect(
+    await tooltip
+      .locator('.ant-tooltip-container')
+      .evaluate((el) => getComputedStyle(el).userSelect)
+  ).toBe('text')
+  await tooltip.locator('.ant-tooltip-container').evaluate((el) => {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    const recordCopy = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'c') return
+      document.body.dataset.copyIntercepted = String(event.defaultPrevented)
+      window.removeEventListener('keydown', recordCopy)
+    }
+    window.addEventListener('keydown', recordCopy)
+  })
+  await page.keyboard.press('ControlOrMeta+c')
+  await expect(page.locator('body')).toHaveAttribute('data-copy-intercepted', 'false')
+  await page.evaluate(() => window.getSelection()?.removeAllRanges())
+  await page.keyboard.press('Escape')
+  const handle = page.locator('.track-drag-handle').first()
+  await handle.hover()
+  await expect(page.getByRole('tooltip').filter({ hasText: '拖动排序' })).toHaveCount(0)
+  expect(
+    await page
+      .locator('.pr-track')
+      .first()
+      .evaluate((el) => getComputedStyle(el).cursor)
+  ).toBe('default')
+  expect(await handle.evaluate((el) => getComputedStyle(el).cursor)).toBe('grab')
+})
+
+test('音轨菜单可打开详情、选择预设和自定义颜色，属性栏跟随详情与选区', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+  await expect(page.locator('.note-inspector')).toHaveCount(0)
+  const menuButton = page.locator('.track-actions-button').first()
+  await menuButton.click()
+  await expect(page.getByRole('menuitem').first()).toContainText('编辑音轨')
+  await page.getByRole('menuitem', { name: '编辑音轨', exact: true }).click()
+  await expect(page.locator('.detail-piano-editor')).toBeVisible()
+  await expect(page.locator('.note-inspector')).toHaveCount(0)
+  await page.locator('.detail-piano-editor .pr-scroll').click({ position: { x: 150, y: 130 } })
+  await page.keyboard.press('ControlOrMeta+a')
+  await expect(page.locator('.note-inspector')).toBeVisible()
+  await page.getByRole('button', { name: '关闭钢琴卷帘', exact: true }).click()
+  await expect(page.locator('.note-inspector')).toHaveCount(0)
+  await menuButton.click()
+  await page.getByRole('menuitem', { name: '音轨颜色', exact: true }).click()
+  const picker = page.locator('.ant-color-picker:visible')
+  await expect(picker).toBeVisible()
+  await expect(picker.getByText('预设颜色', { exact: true })).toBeVisible()
+  await picker.locator('.ant-color-picker-presets-color').nth(1).click()
+  await expect(picker.locator('.ant-color-picker-presets-color').nth(1)).toHaveClass(
+    /color-checked/
+  )
+  await expect(page.getByRole('button', { name: /撤销/ })).toBeEnabled()
+  await page.screenshot({ path: test.info().outputPath('track-color-picker.png') })
+  await page.mouse.click(500, 90)
+  await menuButton.click()
+  const swatch = page
+    .getByRole('menuitem', { name: '音轨颜色', exact: true })
+    .locator('span[style*="background"]')
+  await expect(swatch).toHaveAttribute('style', /91, 155, 213|#5b9bd5/i)
+  await page.getByRole('menuitem', { name: '音轨颜色', exact: true }).click()
+  const hex = picker.locator('.ant-color-picker-hex-input input')
+  await hex.fill('123456')
+  await hex.press('Enter')
+  await page.mouse.click(500, 90)
+  await menuButton.click()
+  await expect(swatch).toHaveAttribute('style', /18, 52, 86|#123456/)
+  await page.screenshot({ path: test.info().outputPath('track-menu.png') })
+})
+
+test('音轨缺省颜色一致，自定义颜色同时呈现在菜单、总览区域与详情，支持撤销重做', async ({
+  page,
+}) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1&colors=1')
+  const menus = page.locator('.track-actions-button')
+  await expect(menus).toHaveCount(3)
+  for (let index = 0; index < 3; index += 1) {
+    await menus.nth(index).click()
+    await expect(
+      page
+        .getByRole('menuitem', { name: '音轨颜色', exact: true })
+        .locator('span[style*="background"]')
+    ).toHaveCSS('background-color', 'rgb(227, 111, 134)')
+    await page.mouse.click(700, 90)
+    await expect(page.locator('.ant-dropdown:visible')).toHaveCount(0)
+  }
+  await page.locator('.pr-track-select').first().dblclick()
+  await expect
+    .poll(() => noteColorPixels(page, '.detail-piano-editor', [227, 111, 134]))
+    .toBeGreaterThan(20)
+  await page.getByRole('button', { name: '关闭钢琴卷帘', exact: true }).click()
+  for (const [index, hex] of [
+    [0, '5b9bd5'],
+    [1, '6cbf84'],
+  ] as const) {
+    await menus.nth(index).click()
+    await page.getByRole('menuitem', { name: '音轨颜色', exact: true }).click()
+    const input = page.locator('.ant-color-picker:visible .ant-color-picker-hex-input input')
+    await input.fill(hex)
+    await input.press('Enter')
+    await page.mouse.click(700, 90)
+    await expect(page.locator('.ant-color-picker:visible')).toHaveCount(0)
+    await expect(page.locator('.ant-dropdown:visible')).toHaveCount(0)
+  }
+  for (const rgb of [
+    [91, 155, 213],
+    [108, 191, 132],
+    [227, 111, 134],
+  ]) {
+    await expect.poll(() => noteColorPixels(page, '.detail-piano-roll', rgb)).toBeGreaterThan(20)
+  }
+  const regions = await page
+    .locator('.detail-piano-roll .pr-pane > canvas')
+    .first()
+    .evaluate((element) => {
+      const canvas = element as HTMLCanvasElement
+      return [0, 1, 2].map((index) => [
+        ...canvas
+          .getContext('2d')!
+          .getImageData(
+            Math.floor(canvas.width * 0.9),
+            Math.floor((canvas.height * (index + 0.5)) / 3),
+            1,
+            1
+          ).data,
+      ])
+    })
+  expect(regions[0]![2]).toBeGreaterThan(regions[0]![0]!)
+  expect(regions[1]![1]).toBeGreaterThan(regions[1]![0]!)
+  expect(regions[2]![0]).toBeGreaterThan(regions[2]![1]!)
+  await page.screenshot({ path: test.info().outputPath('track-colors-overview.png') })
+  await page.locator('.pr-track-select').first().dblclick()
+  await expect
+    .poll(() => noteColorPixels(page, '.detail-piano-editor', [91, 155, 213]))
+    .toBeGreaterThan(20)
+  await menus.first().click()
+  await expect(
+    page
+      .getByRole('menuitem', { name: '音轨颜色', exact: true })
+      .locator('span[style*="background"]')
+  ).toHaveCSS('background-color', 'rgb(91, 155, 213)')
+  await page.keyboard.press('Escape')
+  await page.locator('.pr-track-select').nth(1).click()
+  await expect
+    .poll(() => noteColorPixels(page, '.detail-piano-editor', [108, 191, 132]))
+    .toBeGreaterThan(20)
+  await page.getByRole('button', { name: /撤销/ }).click()
+  await expect.poll(() => noteColorPixels(page, '.detail-piano-roll', [108, 191, 132])).toBe(0)
+  await expect
+    .poll(() => noteColorPixels(page, '.detail-piano-editor', [227, 111, 134]))
+    .toBeGreaterThan(20)
+  await page.getByRole('button', { name: /重做/ }).click()
+  await expect
+    .poll(() => noteColorPixels(page, '.detail-piano-editor', [108, 191, 132]))
+    .toBeGreaterThan(20)
+})
+
+test('首次引导介绍音轨编辑与排序，完成后再次进入不重复展示', async ({ page }) => {
+  await page.evaluate(() => localStorage.removeItem('nikki:midi-editor-tour-seen'))
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1&tour=1')
+  const tour = page.locator('.ant-tour:visible')
+  await expect(tour).toContainText('从音轨总览开始')
+  await expect(page.locator('.ant-tour-mask mask rect[fill="black"]')).toHaveCount(1)
+  await page.screenshot({ path: test.info().outputPath('midi-editor-tour.png') })
+  await tour.getByRole('button', { name: '下一步' }).click()
+  await expect(tour).toContainText('双击音轨，打开编辑详情')
+  await tour.getByRole('button', { name: '下一步' }).click()
+  await expect(tour).toContainText('拖动把手，调整音轨顺序')
+  const spotlight = page.locator('.ant-tour-mask mask rect[fill="black"]')
+  await expect(spotlight).toHaveCount(1)
+  await expect(spotlight).toHaveAttribute('width', '34')
+  await expect(spotlight).toHaveAttribute('height', '40')
+  await page.screenshot({ path: test.info().outputPath('midi-editor-tour-sort.png') })
+  await tour.getByRole('button', { name: '下一步' }).click()
+  await expect(tour).toContainText('编辑、试听并保存')
+  await tour.getByRole('button', { name: '结束导览' }).click()
+  await expect(tour).toHaveCount(0)
+  await page.reload()
+  await expect(page.locator('.editor-toolbar')).toBeVisible()
+  await expect(tour).toHaveCount(0)
 })
 
 test('吸附设置将总开关、小节模式和节拍选项分开表达', async ({ page }) => {
@@ -141,8 +366,7 @@ test('映射模板复用虚拟键盘选择器，切换后立即更新不可演�
   const templateSelect = page.locator('.editor-template-select:visible')
   await expect(templateSelect).toContainText('钢琴常用键')
 
-  await openSettings(page)
-  await page.getByRole('switch', { name: '不可演奏音符置灰', exact: true }).click()
+  await page.getByRole('switch', { name: '按模板试听', exact: true }).click()
   await page.locator('.detail-piano-roll .pr-scroll').dblclick({ position: { x: 200, y: 150 } })
   await page.locator('.detail-piano-editor .pr-scroll').click({ position: { x: 150, y: 130 } })
   await page.keyboard.press('ControlOrMeta+a')
@@ -330,12 +554,16 @@ test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑�
   await popup.getByRole('button', { name: '映射模板', exact: true }).click()
   const templateSelect = popup.locator('.editor-template-select:visible')
   await expect(templateSelect).toContainText('钢琴常用键')
+  await expect(templateSelect).toHaveClass(/ant-select-disabled/)
+  await popup.getByRole('switch', { name: '按模板试听', exact: true }).click()
+  await expect(templateSelect).not.toHaveClass(/ant-select-disabled/)
   await templateSelect.click()
   await popup
     .locator('.ant-select-dropdown:visible .ant-select-item-option')
     .filter({ hasText: '高音演奏键' })
     .click()
   await expect(templateSelect).toContainText('高音演奏键')
+  await expect(popup.getByRole('switch', { name: '按模板试听', exact: true })).toBeChecked()
 
   await page.getByRole('button', { name: '还原到主窗口', exact: true }).click()
   await expect.poll(() => popup.isClosed()).toBe(true)
@@ -344,6 +572,9 @@ test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑�
     '独立窗口中的项目名'
   )
   await expect(page.locator('.editor-window-error')).toHaveCount(0)
+  await openTemplateSettings(page)
+  await expect(page.getByRole('switch', { name: '按模板试听', exact: true })).toBeChecked()
+  await expect(page.locator('.editor-template-select:visible')).toContainText('高音演奏键')
 })
 
 test('主窗口离开编辑页并切歌后，还原独立窗口仍恢复原编辑会话', async ({ page }) => {
@@ -379,6 +610,13 @@ test('歌曲列表进入详情再返回时保留原滚动位置', async ({ page 
     element.dispatchEvent(new Event('scroll'))
   })
   await expect.poll(() => songList.evaluate((element) => element.scrollTop)).toBeGreaterThan(1500)
+  const backToTop = page.getByRole('button', { name: '返回顶部', exact: true })
+  await expect(backToTop).toBeVisible()
+  const floatingSize = await backToTop.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return { width: rect.width, height: rect.height }
+  })
+  expect(floatingSize).toEqual({ width: 30, height: 30 })
   const scrollTop = await songList.evaluate((element) => element.scrollTop)
   await page.evaluate(() => window.midiEditorFixture.navigate('/files/midi/navigation-40.mid'))
   await page.getByRole('button', { name: '返回歌曲列表', exact: true }).click()
@@ -569,17 +807,67 @@ for (const width of [900, 1100, 1440]) {
   })
 }
 
-test('乐曲设置使用语义正确的开关，并保持显示选项不进入历史记录', async ({ page }) => {
+test('力度显示与模板试听各归其位，切换不进入编辑历史', async ({ page }, testInfo) => {
   await page.goto('/tests/browser/midi-editor-page.html?populated=1&single=1')
   await openSettings(page)
   const velocityLane = page.getByRole('switch', { name: '力度条', exact: true })
-  const dimUnplayable = page.getByRole('switch', { name: '不可演奏音符置灰', exact: true })
   await expect(velocityLane).not.toBeChecked()
-  await expect(dimUnplayable).not.toBeChecked()
+  await expect(page.locator('#midi-song-settings').getByRole('switch')).toHaveCount(1)
   await velocityLane.click()
-  await dimUnplayable.click()
   await expect(velocityLane).toBeChecked()
-  await expect(dimUnplayable).toBeChecked()
+  await openTemplateSettings(page)
+  const templatePreview = page
+    .locator('#midi-template-settings')
+    .getByRole('switch', { name: '按模板试听', exact: true })
+  const templateSelect = page.locator('.editor-template-select:visible')
+  await expect(templatePreview).not.toBeChecked()
+  await expect(templateSelect).toHaveClass(/ant-select-disabled/)
+  await expect(templateSelect.getByRole('combobox')).toBeDisabled()
+  const switchBounds = await templatePreview.boundingBox()
+  const selectBounds = await templateSelect.boundingBox()
+  expect(switchBounds!.y + switchBounds!.height).toBeLessThan(selectBounds!.y)
+  await templateSelect.click({ force: true })
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0)
+  await templatePreview.click()
+  await expect(templatePreview).toBeChecked()
+  await expect(templateSelect).not.toHaveClass(/ant-select-disabled/)
+  await expect(templateSelect.getByRole('combobox')).toBeEnabled()
+  const panel = page.locator('#midi-template-settings')
+  const description = '按当前模板试听可演奏音符，并将模板外音符置灰，便于检查演奏效果。'
+  await expect(panel).not.toContainText(description)
+  const help = panel.getByRole('button', { name: '按模板试听说明', exact: true })
+  const title = panel.locator('.toolbar-label-with-help')
+  await expect(title).toContainText('按模板试听')
+  await expect(title.getByRole('button')).toHaveCount(1)
+  await help.hover()
+  const tooltip = page.locator('.ant-tooltip:visible').filter({ hasText: description })
+  await expect(tooltip).toBeVisible()
+  await tooltip.hover()
+  await expect(tooltip).toBeVisible()
+  expect(
+    await tooltip
+      .locator('.ant-tooltip-container')
+      .evaluate((el) => getComputedStyle(el).userSelect)
+  ).toBe('text')
+  await help.focus()
+  await expect(tooltip).toBeVisible()
+  // 说明入口独立于开关，点击查看帮助不应改变试听状态。
+  await help.click()
+  await expect(templatePreview).toBeChecked()
+  expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('template-preview-popover.png') })
+  await templatePreview.click()
+  await expect(templatePreview).not.toBeChecked()
+  await expect(templateSelect).toHaveClass(/ant-select-disabled/)
+  await expect(templateSelect.getByRole('combobox')).toBeDisabled()
+  await expect(templateSelect).toContainText('钢琴常用键')
+  await page.screenshot({
+    path: testInfo.outputPath('template-preview-disabled.png'),
+    animations: 'disabled',
+  })
+  await templatePreview.click()
+  await expect(templateSelect).not.toHaveClass(/ant-select-disabled/)
+  await expect(templateSelect).toContainText('钢琴常用键')
   await expect(page.getByRole('button', { name: /撤销/ })).toBeDisabled()
 })
 

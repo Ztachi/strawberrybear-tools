@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { Button, Checkbox, Popover, Select, Switch, Tooltip } from 'antdv-next'
 import {
   CircleAlert,
+  HelpCircle,
   KeyboardMusic,
   Magnet,
   MousePointer2,
@@ -120,8 +121,8 @@ function handleVelocityLane(value: boolean): void {
   emit('update:showVelocity', value)
 }
 /**
- * @description: 更新不可演奏音符的置灰状态
- * @param {boolean} value - 是否置灰不可演奏音符
+ * @description: 更新按模板试听状态，同时置灰模板外音符
+ * @param {boolean} value - 是否仅试听当前模板内音高
  * @return {void}
  */
 function handleDimUnplayable(value: boolean): void {
@@ -259,13 +260,35 @@ function handleDimUnplayable(value: boolean): void {
       >
         <template #content>
           <div id="midi-template-settings" class="template-settings">
-            <h3 class="settings-title">
-              {{ t('player.template') }}
-            </h3>
+            <div class="settings-switch-row">
+              <span class="settings-title toolbar-label-with-help">
+                {{ t('midiEditor.toolbar.templatePreview') }}
+                <Tooltip
+                  :title="t('midiEditor.toolbar.templatePreviewTip')"
+                  :trigger="['hover', 'focus']"
+                >
+                  <button
+                    type="button"
+                    class="property-help-icon inline-flex shrink-0 items-center justify-center border-0 bg-transparent p-0"
+                    :aria-label="t('midiEditor.toolbar.templatePreviewHelp')"
+                  >
+                    <HelpCircle class="h-full w-full" />
+                  </button>
+                </Tooltip>
+              </span>
+              <Switch
+                size="small"
+                :checked="dimUnplayable"
+                :aria-label="t('midiEditor.toolbar.templatePreview')"
+                @change="handleDimUnplayable"
+              />
+            </div>
             <KeyTemplateSelect
               class="editor-template-select"
               width="224px"
               size="small"
+              :disabled="!dimUnplayable"
+              :aria-label="t('player.template')"
               :model-value="currentTemplateId"
               :templates="templates"
               :list-height="224"
@@ -448,15 +471,6 @@ function handleDimUnplayable(value: boolean): void {
                   :checked="showVelocity"
                   :aria-label="t('midiEditor.toolbar.velocityLane')"
                   @change="handleVelocityLane"
-                />
-              </label>
-              <label class="settings-switch-row">
-                <span>{{ t('midiEditor.toolbar.unplayableDim') }}</span>
-                <Switch
-                  size="small"
-                  :checked="dimUnplayable"
-                  :aria-label="t('midiEditor.toolbar.unplayableDim')"
-                  @change="handleDimUnplayable"
                 />
               </label>
             </div>

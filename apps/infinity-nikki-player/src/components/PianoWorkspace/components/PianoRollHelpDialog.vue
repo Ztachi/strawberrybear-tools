@@ -10,7 +10,7 @@ const open = ref(false)
 const groups = [
   { key: 'tracks', items: ['selection', 'enabled', 'filter'] },
   { key: 'view', items: ['zoom', 'scroll', 'follow'] },
-  { key: 'position', items: ['seek', 'resize', 'readOnly'] },
+  { key: 'position', items: ['seek', 'resize', 'workspace'] },
 ] as const
 </script>
 
@@ -35,6 +35,9 @@ const groups = [
     :styles="{ body: { maxHeight: '65vh', overflowY: 'auto' } }"
   >
     <div data-text-selectable class="space-y-4 text-sm leading-6 text-[var(--color-foreground)]">
+      <p class="m-0 text-[var(--color-muted-dark)]">
+        {{ t('midi.pianoRoll.help.intro') }}
+      </p>
       <section
         v-for="group in groups"
         :key="group.key"

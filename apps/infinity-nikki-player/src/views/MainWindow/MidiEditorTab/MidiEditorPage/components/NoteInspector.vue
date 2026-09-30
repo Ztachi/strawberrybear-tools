@@ -154,7 +154,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
 </script>
 
 <template>
-  <aside class="note-inspector">
+  <aside v-if="selectedNotes.length > 0" class="note-inspector">
     <header class="inspector-header">
       <span class="inspector-title">
         {{ t('midiEditor.inspector.title') }}
@@ -168,11 +168,7 @@ onBeforeUnmount(() => window.removeEventListener('blur', discardVelocity))
         </Tooltip>
       </span>
       <span class="inspector-count">
-        {{
-          selectedNotes.length === 0
-            ? t('midiEditor.inspector.noSelection')
-            : t('midiEditor.inspector.selectedCount', { count: selectedNotes.length })
-        }}
+        {{ t('midiEditor.inspector.selectedCount', { count: selectedNotes.length }) }}
       </span>
     </header>
 

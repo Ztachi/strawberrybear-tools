@@ -15,11 +15,13 @@ import { createMidiEditorPlaybackController } from '@/features/midi-editor/playb
  * @param {Ref<PianoRollDocument | null>} document 当前文档；变化后自动重建事件表
  * @param {Ref<MidiProjectLoop | null | undefined>} loop 循环区间
  * @param {(frame: PianoRollTransport) => void} onFrame 播放中每帧回调，宿主直接推给视图控制器
+ * @param {Ref<ReadonlySet<number> | null>} playablePitches 试听允许的原始音高；null 表示不过滤
  */
 export function useMidiEditorPlayback(
   document: Ref<PianoRollDocument | null>,
   loop: Ref<MidiProjectLoop | null | undefined>,
-  onFrame: (frame: PianoRollTransport) => void
+  onFrame: (frame: PianoRollTransport) => void,
+  playablePitches: Ref<ReadonlySet<number> | null>
 ) {
   const playerStore = usePlayerStore()
   /** 状态变化（播放/暂停/seek）时更新，供视图 prop 与工具栏使用；逐帧位置走 onFrame。 */
@@ -64,6 +66,7 @@ export function useMidiEditorPlayback(
   const controller = createMidiEditorPlaybackController({
     getDocument: () => document.value!,
     getLoop: () => loop.value,
+    getPlayablePitches: () => playablePitches.value,
     onChange: handleChange,
     pauseExternal: () => playerStore.pausePreviewPlayback(),
   })
@@ -112,6 +115,16 @@ export function useMidiEditorPlayback(
   }
 
   watch(document, () => controller.invalidate())
+  // 独立窗口的每次快照都会重建集合，比较音高内容才能避免无关界面更新打断尾音。
+  watch(
+    () =>
+      playablePitches.value == null
+        ? null
+        : Array.from(playablePitches.value)
+            .sort((left, right) => left - right)
+            .join(','),
+    () => controller.invalidate()
+  )
   watch(loop, (next) => controller.setLoop(next), { deep: true })
   // 全局播放器开始试听时让位，避免两路声音叠加。
   watch(

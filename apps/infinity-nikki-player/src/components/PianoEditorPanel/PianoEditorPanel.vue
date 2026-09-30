@@ -20,6 +20,8 @@ const props = defineProps<{
   document: PianoRollDocument
   transport: PianoRollTransport
   labels: PianoRollLabels
+  /** 与总览一致的宿主主题。 */
+  theme?: PianoRollProps['theme']
   selectedTrackId: string | null
   timeZoom?: number
   pitchZoom?: number
@@ -50,6 +52,7 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
     class="detail-piano-editor"
     variant="editor"
     :document="document"
+    :theme="theme"
     :transport="transport"
     :labels="labels"
     :selected-track-id="selectedTrackId"
@@ -66,23 +69,12 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
       <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
     </template>
     <template #corner="{ view, viewport }">
-      <PianoRollFollowButton
-        :view="view"
-        :viewport="viewport"
-        :labels="labels"
-      />
+      <PianoRollFollowButton :view="view" :viewport="viewport" :labels="labels" />
     </template>
     <template #toolbar="{ view, viewport }">
       <div class="piano-roll-app-toolbar">
-        <PianoRollControls
-          :view="view"
-          :viewport="viewport"
-          :labels="labels"
-          editor
-        />
-        <Tooltip
-          :title="labels.close"
-        >
+        <PianoRollControls :view="view" :viewport="viewport" :labels="labels" editor />
+        <Tooltip :title="labels.close">
           <Button
             class="piano-roll-trailing-action"
             type="text"
@@ -92,10 +84,7 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
             @click="emit('close')"
           >
             <template #icon>
-              <X
-                class="size-4"
-                :stroke-width="2"
-              />
+              <X class="size-4" :stroke-width="2" />
             </template>
           </Button>
         </Tooltip>

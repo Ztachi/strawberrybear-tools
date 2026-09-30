@@ -42,6 +42,8 @@ describe('encodeMidi / decodeMidi', () => {
     expect(decoded.timeSignatureMap).toEqual(document.timeSignatureMap)
     // conductor + 3 tracks
     expect(decoded.tracks).toHaveLength(4)
+    // MIDI 不携带编辑器配色，不应在导入时自动给每轨分配不同颜色。
+    expect(decoded.tracks.every((track) => track.color === undefined)).toBe(true)
     expect(decoded.tracks[1]!.name).toBe('主旋律')
     expect(decoded.tracks[1]!.channel).toBe(2)
     expect(decoded.tracks[2]!.isPercussion).toBe(true)
@@ -64,7 +66,12 @@ describe('encodeMidi / decodeMidi', () => {
       { id: 'a', name: '', isPercussion: false, enabled: true },
       { id: 'b', name: '', isPercussion: true, enabled: true },
       { id: 'c', name: '', isPercussion: false, enabled: true, channel: 9 },
-      ...Array.from({ length: 9 }, (_, i) => ({ id: `x${i}`, name: '', isPercussion: false, enabled: true })),
+      ...Array.from({ length: 9 }, (_, i) => ({
+        id: `x${i}`,
+        name: '',
+        isPercussion: false,
+        enabled: true,
+      })),
     ])
     expect(channels.get('a')).toBe(0)
     expect(channels.get('b')).toBe(9)
