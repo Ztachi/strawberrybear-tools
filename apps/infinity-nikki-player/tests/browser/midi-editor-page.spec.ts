@@ -67,12 +67,20 @@ test('编辑操作合并到单层标题栏，次要操作通过悬浮菜单收�
   await expect(help.getByRole('heading', { name: '快速开始', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '音符编辑', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '音轨管理', exact: true })).toBeVisible()
+  await expect(help.getByText(/Mac 开启“三指拖移”后请从把手开始/)).toBeVisible()
   await expect(help.getByRole('heading', { name: '试听与循环', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '吸附与显示', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '保存与导出', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '键盘快捷键', exact: true })).toBeVisible()
   await expect(help.getByText('Command/Ctrl + S', { exact: true })).toBeVisible()
   await expect(help.getByText('Option / Alt', { exact: true })).toBeVisible()
+  const helpContents = help.getByRole('navigation', { name: '帮助目录', exact: true })
+  const helpScroller = help.locator('.midi-editor-help-content')
+  await expect(helpContents).toBeVisible()
+  await helpContents.getByRole('link', { name: '键盘快捷键', exact: true }).click()
+  await expect
+    .poll(() => helpScroller.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(100)
   await help.getByRole('button', { name: '知道了', exact: true }).click()
   await expect(help).toBeHidden()
 })
@@ -148,6 +156,82 @@ test('映射模板复用虚拟键盘选择器，切换后立即更新不可演�
     .click()
   await expect(page.getByText('24 个音符不可演奏', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /撤销/ })).toBeDisabled()
+})
+
+test('音轨信息区可长按排序，拖拽把手可立即排序，并且每次只产生一次可撤销操作', async ({ page }) => {
+  const overview = page.locator('.detail-piano-roll')
+  const addTrack = page.getByRole('button', { name: '新增音轨', exact: true })
+  await addTrack.click()
+  await addTrack.click()
+  await expect(overview.locator('.pr-track')).toHaveCount(3)
+
+  // 新增轨道会打开详情；关闭后给总览留出稳定的拖拽空间。
+  await page.getByRole('button', { name: '关闭钢琴卷帘', exact: true }).click()
+  await expect(page.locator('.detail-piano-editor')).toHaveCount(0)
+  await expect
+    .poll(() =>
+      overview
+        .locator('.pr-track')
+        .first()
+        .evaluate((row) => row.getBoundingClientRect().height)
+    )
+    .toBeGreaterThan(100)
+
+  const visualOrder = () =>
+    overview.locator('.pr-track').evaluateAll((rows) =>
+      rows
+        .map((row) => ({
+          id: (row as HTMLElement).dataset.trackId ?? '',
+          top: row.getBoundingClientRect().top,
+        }))
+        .sort((a, b) => a.top - b.top)
+        .map((row) => row.id)
+    )
+  const initialOrder = await visualOrder()
+  const source = overview.locator(`.pr-track[data-track-id="${initialOrder[0]}"] .pr-track-select`)
+  const target = overview.locator(`.pr-track[data-track-id="${initialOrder[2]}"]`)
+  const sourceBox = await source.boundingBox()
+  expect(sourceBox).not.toBeNull()
+
+  await page.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + sourceBox!.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(320)
+  await expect(overview.locator('.midi-track-drag-ghost')).toBeVisible()
+  const targetBox = await target.boundingBox()
+  expect(targetBox).not.toBeNull()
+  await page.mouse.move(
+    targetBox!.x + targetBox!.width / 2,
+    targetBox!.y + targetBox!.height * 0.8,
+    {
+      steps: 5,
+    }
+  )
+  await expect(overview.locator('.midi-track-drop-indicator')).toBeVisible()
+  await page.mouse.up()
+
+  await expect(overview.locator('.midi-track-drag-ghost')).toHaveCount(0)
+  await expect.poll(visualOrder).toEqual([initialOrder[1], initialOrder[2], initialOrder[0]])
+
+  await page.getByRole('button', { name: /撤销/ }).click()
+  await expect.poll(visualOrder).toEqual(initialOrder)
+
+  const handle = overview
+    .locator(`.pr-track[data-track-id="${initialOrder[0]}"]`)
+    .getByRole('button', { name: /拖动排序/ })
+  const handleBox = await handle.boundingBox()
+  expect(handleBox).not.toBeNull()
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(
+    targetBox!.x + targetBox!.width / 2,
+    targetBox!.y + targetBox!.height * 0.8,
+    { steps: 5 }
+  )
+  await page.mouse.up()
+  await expect.poll(visualOrder).toEqual([initialOrder[1], initialOrder[2], initialOrder[0]])
+
+  await page.getByRole('button', { name: /撤销/ }).click()
+  await expect.poll(visualOrder).toEqual(initialOrder)
 })
 
 test('拍号下拉可以点击、滚动，并将更改写入编辑会话', async ({ page }) => {

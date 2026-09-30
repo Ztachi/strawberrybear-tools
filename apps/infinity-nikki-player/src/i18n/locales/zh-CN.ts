@@ -541,6 +541,7 @@ export default {
     trackDefaultName: '音轨 {index}',
     trackCopyName: '{name} 副本',
     addTrack: '新增音轨',
+    dragTrack: '拖动排序：{name}',
     renameTrack: '重命名音轨',
     trackColor: '音轨颜色',
     duplicateTrack: '复制音轨',
@@ -585,7 +586,7 @@ export default {
       velocityLane: '力度条',
       velocityLaneTip: '显示或隐藏底部力度条；上下拖动柱子调整音符力度，选中多个音符时会一起修改。',
       unplayableDim: '不可演奏音符置灰',
-      help: '快捷键说明',
+      help: '帮助',
       replaceTempoTitle: '替换为单一速度',
       replaceTempoDescription: '该 MIDI 含有多个速度变化，修改 BPM 将替换为整曲单一速度。',
       replaceMeterTitle: '替换为单一拍号',
@@ -637,6 +638,8 @@ export default {
       menuLabel: '帮助',
       title: 'MIDI 编辑器帮助',
       done: '知道了',
+      contents: '帮助目录',
+      overviewTitle: '使用说明',
       intro:
         '这里汇总 MIDI 编辑器的界面、音符与音轨编辑、试听、吸附、工程操作和键盘快捷键。文本输入框或菜单获得焦点时，编辑器快捷键会自动暂停，避免误操作。',
       selectTool:
@@ -701,9 +704,9 @@ export default {
                 '总览左上角的加号可新增音轨并立即打开详情。每条音轨展示自己的音符内容，可在总览和详情间切换编辑。',
             },
             trackManage: {
-              label: '音轨菜单',
+              label: '排序与音轨菜单',
               description:
-                '音轨右侧菜单支持重命名、修改颜色、切换打击乐、复制音轨、调整顺序和删除；工程始终至少保留一条音轨。',
+                '按住音轨行的信息区域约 0.3 秒后上下拖动即可排序；也可直接从左侧拖拽把手开始移动。Mac 开启“三指拖移”后请从把手开始，无需等待长按。开关和更多菜单不会触发排序；菜单仍支持重命名、修改颜色、切换打击乐、复制、上移、下移和删除。工程始终至少保留一条音轨。',
             },
             trackEnabled: {
               label: '启用状态',

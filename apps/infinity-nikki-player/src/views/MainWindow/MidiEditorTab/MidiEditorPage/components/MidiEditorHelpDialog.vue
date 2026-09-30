@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /** MIDI 编辑器完整帮助文档；只负责说明内容与弹框开关。 */
+import { computed, ref } from 'vue'
 import type { Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Modal } from 'antdv-next'
+import { Anchor, Button, Modal } from 'antdv-next'
+import type { AnchorProps } from 'antdv-next'
 import {
   CirclePlay,
   FileOutput,
@@ -46,31 +48,86 @@ const shortcuts = [
   'tools',
   'snapOverride',
 ] as const
+
+const content = ref<HTMLElement | null>(null)
+const anchorItems = computed<NonNullable<AnchorProps['items']>>(() => [
+  {
+    key: 'overview',
+    href: '#midi-editor-help-overview',
+    title: t('midiEditor.help.overviewTitle'),
+  },
+  ...sections.map((section) => ({
+    key: section.key,
+    href: `#midi-editor-help-${section.key}`,
+    title: t(`midiEditor.help.sections.${section.key}.title`),
+  })),
+  {
+    key: 'shortcuts',
+    href: '#midi-editor-help-shortcuts',
+    title: t('midiEditor.help.shortcutTitle'),
+  },
+])
+
+function getContentContainer(): HTMLElement {
+  return content.value ?? document.documentElement
+}
+
+function preventHistoryChange(event: MouseEvent): void {
+  event.preventDefault()
+}
 </script>
 
 <template>
   <Modal
     :open="open"
     :title="t('midiEditor.help.title')"
-    :width="760"
+    :width="860"
     centered
-    :styles="{ body: { maxHeight: '72vh', overflowY: 'auto' } }"
+    :styles="{ body: { height: 'min(72vh, 640px)', overflow: 'hidden' } }"
     @cancel="emit('update:open', false)"
   >
-    <div data-text-selectable class="space-y-5 text-sm leading-6 text-[var(--color-foreground)]">
-      <p class="m-0 text-[var(--color-muted-dark)]">
-        {{ t('midiEditor.help.intro') }}
-      </p>
+    <div
+      data-text-selectable
+      class="grid h-full min-h-0 grid-cols-[168px_minmax(0,1fr)] text-sm leading-6 text-[var(--color-foreground)]"
+    >
+      <aside class="min-h-0 overflow-y-auto border-r border-primary/15 pr-4">
+        <h3 class="mb-3 mt-0 text-xs font-semibold text-[var(--color-muted-dark)]">
+          {{ t('midiEditor.help.contents') }}
+        </h3>
+        <nav :aria-label="t('midiEditor.help.contents')">
+          <Anchor
+            :affix="false"
+            :get-container="getContentContainer"
+            :items="anchorItems"
+            :target-offset="8"
+            @click="preventHistoryChange"
+          />
+        </nav>
+      </aside>
 
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div ref="content" class="midi-editor-help-content min-h-0 overflow-y-auto pl-5 pr-1">
+        <section
+          id="midi-editor-help-overview"
+          class="scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
+          aria-labelledby="midi-editor-help-overview-title"
+        >
+          <h3 id="midi-editor-help-overview-title" class="m-0 text-sm font-semibold">
+            {{ t('midiEditor.help.overviewTitle') }}
+          </h3>
+          <p class="mb-0 mt-2 text-[var(--color-muted-dark)]">
+            {{ t('midiEditor.help.intro') }}
+          </p>
+        </section>
+
         <section
           v-for="section in sections"
+          :id="`midi-editor-help-${section.key}`"
           :key="section.key"
-          class="rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
-          :aria-labelledby="`midi-editor-help-${section.key}`"
+          class="mt-3 scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
+          :aria-labelledby="`midi-editor-help-${section.key}-title`"
         >
           <h3
-            :id="`midi-editor-help-${section.key}`"
+            :id="`midi-editor-help-${section.key}-title`"
             class="m-0 flex items-center gap-2 text-sm font-semibold"
           >
             <component
@@ -91,35 +148,39 @@ const shortcuts = [
             </div>
           </dl>
         </section>
-      </div>
 
-      <section aria-labelledby="midi-editor-help-shortcuts">
-        <h3
+        <section
           id="midi-editor-help-shortcuts"
-          class="m-0 flex items-center gap-2 text-sm font-semibold"
+          class="mt-5 scroll-mt-2"
+          aria-labelledby="midi-editor-help-shortcuts-title"
         >
-          <Keyboard class="size-4 shrink-0 text-primary" :stroke-width="2.2" />
-          {{ t('midiEditor.help.shortcutTitle') }}
-        </h3>
-        <dl class="mt-3 grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
-          <div
-            v-for="shortcut in shortcuts"
-            :key="shortcut"
-            class="grid grid-cols-[minmax(128px,auto)_1fr] items-start gap-3 border-b border-primary/10 pb-2"
+          <h3
+            id="midi-editor-help-shortcuts-title"
+            class="m-0 flex items-center gap-2 text-sm font-semibold"
           >
-            <dt>
-              <kbd
-                class="inline-flex min-h-6 items-center rounded-md border border-primary/20 bg-white/70 px-2 py-0.5 font-mono text-xs text-[var(--color-foreground)] shadow-sm"
-              >
-                {{ t(`midiEditor.help.shortcutItems.${shortcut}.keys`) }}
-              </kbd>
-            </dt>
-            <dd class="m-0 text-[var(--color-muted-dark)]">
-              {{ t(`midiEditor.help.shortcutItems.${shortcut}.description`) }}
-            </dd>
-          </div>
-        </dl>
-      </section>
+            <Keyboard class="size-4 shrink-0 text-primary" :stroke-width="2.2" />
+            {{ t('midiEditor.help.shortcutTitle') }}
+          </h3>
+          <dl class="mt-3 grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+            <div
+              v-for="shortcut in shortcuts"
+              :key="shortcut"
+              class="grid grid-cols-[minmax(128px,auto)_1fr] items-start gap-3 border-b border-primary/10 pb-2"
+            >
+              <dt>
+                <kbd
+                  class="inline-flex min-h-6 items-center rounded-md border border-primary/20 bg-white/70 px-2 py-0.5 font-mono text-xs text-[var(--color-foreground)] shadow-sm"
+                >
+                  {{ t(`midiEditor.help.shortcutItems.${shortcut}.keys`) }}
+                </kbd>
+              </dt>
+              <dd class="m-0 text-[var(--color-muted-dark)]">
+                {{ t(`midiEditor.help.shortcutItems.${shortcut}.description`) }}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </div>
     </div>
 
     <template #footer>

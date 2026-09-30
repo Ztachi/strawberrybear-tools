@@ -4,12 +4,13 @@
  */
 import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Dropdown, Input, Modal } from 'antdv-next'
+import { Button, Dropdown, Input, Modal, Tooltip } from 'antdv-next'
 import {
   ArrowDown,
   ArrowUp,
   CopyPlus,
   Drum,
+  GripVertical,
   MoreVertical,
   Palette,
   Pencil,
@@ -21,6 +22,7 @@ import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import type { PianoRollTrackActionsContext } from '@strawberrybear/piano-roll/browser'
 import type { PianoTrackHost } from '@/components/PianoWorkspace/usePianoTrackHosts'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
+import { useTrackDragSort } from './useTrackDragSort'
 
 const props = defineProps<{
   hosts: ReadonlyMap<HTMLElement, PianoTrackHost<PianoRollTrackActionsContext>>
@@ -36,6 +38,12 @@ const { t } = useI18n()
 const menuIconClass = 'align-middle size-4 shrink-0 -translate-y-px'
 const openTrackId = ref<string | null>(null)
 const rename = ref<{ open: boolean; trackId: string; name: string }>({ open: false, trackId: '', name: '' })
+
+useTrackDragSort({
+  hosts: props.hosts,
+  tracks: () => props.tracks,
+  reorder: (trackId, toIndex) => emit('dispatch', { type: 'reorder-track', trackId, toIndex }),
+})
 
 function icon(component: unknown) {
   return h(component as never, { class: menuIconClass, strokeWidth: 2.2 })
@@ -136,11 +144,22 @@ function submitRename(): void {
 </script>
 
 <template>
-  <Teleport
-    v-for="[, host] in hosts"
-    :key="host.id"
-    :to="host.container"
-  >
+  <Teleport v-for="[, host] in hosts" :key="host.id" :to="host.container">
+    <Tooltip :title="t('midiEditor.dragTrack', { name: host.context.track.name })">
+      <Button
+        type="text"
+        size="small"
+        class="track-drag-handle"
+        :aria-label="t('midiEditor.dragTrack', { name: host.context.track.name })"
+        @click.stop
+        @dblclick.stop
+      >
+        <template #icon>
+          <GripVertical class="size-4" :stroke-width="2.2" />
+        </template>
+      </Button>
+    </Tooltip>
+
     <Dropdown
       :open="openTrackId === host.context.track.id"
       :trigger="['click']"
@@ -158,10 +177,7 @@ function submitRename(): void {
         @dblclick.stop
       >
         <template #icon>
-          <MoreVertical
-            class="size-4"
-            :stroke-width="2.3"
-          />
+          <MoreVertical class="size-4" :stroke-width="2.3" />
         </template>
       </Button>
     </Dropdown>
@@ -175,27 +191,12 @@ function submitRename(): void {
     centered
     @cancel="rename.open = false"
   >
-    <Input
-      v-model:value="rename.name"
-      :maxlength="60"
-      autofocus
-      @press-enter="submitRename"
-    />
+    <Input v-model:value="rename.name" :maxlength="60" autofocus @press-enter="submitRename" />
     <div class="mt-4 flex justify-end gap-2">
-      <Button
-        size="small"
-        color="primary"
-        variant="outlined"
-        @click="rename.open = false"
-      >
+      <Button size="small" color="primary" variant="outlined" @click="rename.open = false">
         {{ t('actions.cancel') }}
       </Button>
-      <Button
-        type="primary"
-        size="small"
-        :disabled="!rename.name.trim()"
-        @click="submitRename"
-      >
+      <Button type="primary" size="small" :disabled="!rename.name.trim()" @click="submitRename">
         {{ t('actions.confirm') }}
       </Button>
     </div>
@@ -203,10 +204,43 @@ function submitRename(): void {
 </template>
 
 <style scoped>
+.track-drag-handle {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 22px;
+  min-width: 22px;
+  height: 28px;
+  padding: 0;
+  color: var(--color-muted-dark);
+  cursor: grab;
+  opacity: 0.7;
+  transform: translateY(-50%);
+  transition:
+    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.track-drag-handle:hover,
+.track-drag-handle:focus-visible {
+  color: var(--color-primary);
+  opacity: 1;
+}
+
+.track-drag-handle:active {
+  cursor: grabbing;
+}
+
 .track-actions-button {
   width: 22px;
   min-width: 22px;
   height: 22px;
   padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-drag-handle {
+    transition: none;
+  }
 }
 </style>

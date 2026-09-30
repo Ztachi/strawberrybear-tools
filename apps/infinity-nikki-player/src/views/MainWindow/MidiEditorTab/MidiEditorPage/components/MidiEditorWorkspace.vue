@@ -182,4 +182,63 @@ defineExpose({
   height: 20px;
   padding: 0;
 }
+
+.midi-editor-body :deep(.pr-track) {
+  padding-left: 30px;
+}
+
+.midi-editor-body :deep(.pr-track),
+.midi-editor-body :deep(.pr-track-select) {
+  cursor: grab;
+}
+
+.midi-editor-body :deep(.pr-view[data-track-sorting='true']),
+.midi-editor-body :deep(.pr-view[data-track-sorting='true'] .pr-track),
+.midi-editor-body :deep(.pr-view[data-track-sorting='true'] .pr-track-select),
+.midi-editor-body :deep(.pr-view[data-track-sorting='true'] .track-drag-handle) {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.midi-editor-body :deep(.midi-track-shifting),
+.midi-editor-body :deep(.midi-track-settling) {
+  transition: transform 180ms cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+.midi-editor-body :deep(.midi-track-drag-source) {
+  opacity: 0.28;
+}
+
+.midi-editor-body :deep(.midi-track-drag-ghost) {
+  position: absolute;
+  z-index: 8;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.96;
+  background: color-mix(in srgb, var(--pr-track-selected, #ffe2e8), white 18%);
+  border: 1px solid var(--pr-primary, #e36f86);
+  border-radius: var(--pr-control-radius, 6px);
+  box-shadow: 0 8px 22px rgb(74 63 63 / 18%);
+  cursor: grabbing;
+  will-change: transform;
+}
+
+.midi-editor-body :deep(.midi-track-drop-indicator) {
+  position: absolute;
+  z-index: 7;
+  right: 0;
+  left: 0;
+  top: -1px;
+  height: 2px;
+  pointer-events: none;
+  background: var(--pr-primary, #e36f86);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pr-primary, #e36f86), transparent 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .midi-editor-body :deep(.midi-track-shifting),
+  .midi-editor-body :deep(.midi-track-settling) {
+    transition: none;
+  }
+}
 </style>

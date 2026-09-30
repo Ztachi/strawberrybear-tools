@@ -561,6 +561,7 @@ export default {
     trackDefaultName: 'Track {index}',
     trackCopyName: '{name} copy',
     addTrack: 'Add Track',
+    dragTrack: 'Drag to reorder: {name}',
     renameTrack: 'Rename Track',
     trackColor: 'Track Color',
     duplicateTrack: 'Duplicate Track',
@@ -609,7 +610,7 @@ export default {
       velocityLaneTip:
         'Show or hide the bottom velocity lane. Drag bars vertically to adjust velocity; selected notes change together.',
       unplayableDim: 'Dim Unplayable Notes',
-      help: 'Shortcuts',
+      help: 'Help',
       replaceTempoTitle: 'Replace with a single tempo',
       replaceTempoDescription:
         'This MIDI has multiple tempo changes. Changing BPM replaces them with one tempo for the whole song.',
@@ -666,6 +667,8 @@ export default {
       menuLabel: 'Help',
       title: 'MIDI Editor Help',
       done: 'Got it',
+      contents: 'Help contents',
+      overviewTitle: 'How to use the editor',
       intro:
         'This guide covers the MIDI editor layout, note and track editing, preview, snapping, project actions, and keyboard shortcuts. Editor shortcuts pause while a text field or menu has focus to prevent accidental edits.',
       selectTool:
@@ -732,9 +735,9 @@ export default {
                 'The plus button in the overview adds a track and opens its detail immediately. Each track shows its own notes and can be edited in overview or detail view.',
             },
             trackManage: {
-              label: 'Track Menu',
+              label: 'Reorder and Track Menu',
               description:
-                'Rename, recolor, mark as percussion, duplicate, reorder, or delete a track from its menu. A project always keeps at least one track.',
+                'Press and hold the information area of a track row for about 0.3 seconds, then drag vertically to reorder it, or drag immediately from the handle on the left. On a Mac with Three Finger Drag enabled, start from the handle without waiting. The switch and more menu never start sorting. The menu also supports rename, recolor, percussion, duplicate, move up, move down, and delete. A project always keeps at least one track.',
             },
             trackEnabled: {
               label: 'Enabled State',
