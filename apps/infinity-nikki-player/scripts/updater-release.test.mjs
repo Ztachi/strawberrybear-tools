@@ -13,6 +13,7 @@ import {
   publishChannel,
   readVersion,
   releaseMode,
+  releaseCommit,
   resolveRelease,
   validateManifest,
   versionChanged,
@@ -84,6 +85,39 @@ test('官方 API 地址映射到同一已上传资产，版本签名及额外字
       version,
       releaseAssets.map((asset) => ({ ...asset, name: '另一份安装包.exe' }))
     )
+  )
+})
+test('草稿临时地址按已匹配的资产身份转换为正式版本地址', () => {
+  const { manifest, assets } = fixture()
+  const releaseAssets = Object.values(manifest.platforms).map((item, index) => ({
+    name: assetName(item.url, version),
+    url: `https://api.github.com/repos/${REPOSITORY}/releases/assets/${index + 1}`,
+    browser_download_url: item.url.replace(`infinity-nikki-player%40v${version}`, 'untagged-draft'),
+  }))
+  const official = structuredClone(manifest)
+  Object.values(official.platforms).forEach((item, index) => {
+    item.url = releaseAssets[index].url
+  })
+  assert.deepEqual(publicManifest(official, version, releaseAssets), manifest)
+  validateManifest(publicManifest(official, version, releaseAssets), version, assets)
+})
+test('仅发布协调代码变化时沿用未公开草稿的原产物提交，应用变化或公开版本不得复用', () => {
+  const current = 'b'.repeat(40)
+  const draft = { draft: true, target_commitish: sha }
+  assert.equal(
+    releaseCommit(current, draft, ['apps/infinity-nikki-player/scripts/updater-release.mjs']),
+    sha
+  )
+  assert.equal(
+    releaseCommit(current, draft, ['.github/workflows/release-infinity-nikki-player.yml']),
+    sha
+  )
+  assert.equal(releaseCommit(sha, draft, []), sha)
+  assert.throws(() => releaseCommit(current, draft, ['apps/infinity-nikki-player/src/App.vue']))
+  assert.throws(() =>
+    releaseCommit(current, { ...draft, draft: false }, [
+      'apps/infinity-nikki-player/scripts/updater-release.mjs',
+    ])
   )
 })
 test('tag 查询 404 后从完整列表恢复草稿，接口异常和重复记录直接失败', () => {

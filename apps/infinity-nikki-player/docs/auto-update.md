@@ -37,7 +37,7 @@ MIDI 编辑会话注册独立的安装前落盘动作：暂停试听，等待当
 
 工作流 `.github/workflows/release-infinity-nikki-player.yml` 全程串行，仅允许 main 发布；版本 PR 应先写入 package.json、Cargo.toml 及 Cargo.lock 中一致的版本，中文 Changeset 生成 CHANGELOG。没有版本值增加的普通提交不发布；Git 提交不可读取直接失败。
 
-1. `prepare` 比较真实版本值，创建或恢复同提交的草稿；tag 查询返回 404 时从完整 Release 列表查找草稿，不能直接当作不存在。不同提交不能复用同版本；已公开版本只允许补齐固定入口。旧版本任务不能覆盖较新发布。
+1. `prepare` 比较真实版本值，创建或恢复同提交的草稿；tag 查询返回 404 时从完整 Release 列表查找草稿，不能直接当作不存在。仅发布协调脚本、对应测试、工作流及本文变更时，可使用修复后的协调脚本继续校验未公开草稿的原提交产物，不重新构建；应用代码变化不得复用同版本。已公开版本只允许同提交补齐固定入口。旧版本任务不能覆盖较新发布。
 2. macOS Apple Silicon 和 Windows x64 依次调用官方 action 上传同一草稿，框架负责构建、签名与标准清单合并。构建后从实际应用包读取版本，并上传对应提交的双平台校验凭据。
 3. `publish` 将官方 action v1 清单中的资产 API 地址，按同一 Release 已上传资产映射为 `browser_download_url`；版本、签名和其他字段不变，不猜测文件名。下载所有已上传产物，校验长度、可用的 GitHub 摘要、平台、版本、对应资产、签名文件，并使用 Minisign 官方工具验证更新签名。缺任一平台、签名或包内版本凭据都不公开。
 4. 上传并回读采用公开下载地址的直连、代理双清单后公开正式 Release，设置 `make_latest: true`。每个正式 Release 永久保留双清单，兼容旧客户端。其他应用及固定清单 Release 使用 `make_latest: false`。

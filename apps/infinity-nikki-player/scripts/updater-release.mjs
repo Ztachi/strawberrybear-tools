@@ -46,6 +46,25 @@ export function releaseMode(version, existing, newestVersion, sha) {
   return existing.draft ? 'build' : 'repair'
 }
 
+/** 发布协调修复可继续校验原草稿；产物提交和应用代码不可替换。 */
+export function releaseCommit(current, existing, changedPaths) {
+  if (!existing || existing.target_commitish === current) return current
+  const coordinatorPaths = new Set([
+    `${APP}/scripts/updater-release.mjs`,
+    `${APP}/scripts/updater-release.test.mjs`,
+    `${APP}/docs/auto-update.md`,
+    '.github/workflows/release-infinity-nikki-player.yml',
+  ])
+  if (
+    !existing.draft ||
+    !/^[a-f0-9]{40}$/.test(existing.target_commitish) ||
+    !changedPaths.length ||
+    changedPaths.some((path) => !coordinatorPaths.has(path))
+  )
+    throw new Error('同版本恢复仅允许修复发布协调代码，应用变化必须升版')
+  return existing.target_commitish
+}
+
 /** 只接受同仓库、同版本的真实资产，清单不允许指向 latest 或其他应用。 */
 export function assetName(url, version) {
   const parsed = new URL(url)
@@ -107,9 +126,14 @@ export function publicManifest(manifest, version, releaseAssets) {
         const asset = releaseAssets.find(
           (asset) => asset.url === item.url || asset.browser_download_url === item.url
         )
-        if (!asset || assetName(asset.browser_download_url, version) !== asset.name)
+        // 草稿在公开前使用 untagged 临时路径；仍按已匹配的资产验证仓库和文件名。
+        const url = asset?.browser_download_url.replace(
+          /\/releases\/download\/untagged-[^/]+\//,
+          `/releases/download/infinity-nikki-player%40v${version}/`
+        )
+        if (!asset || assetName(url, version) !== asset.name)
           throw new Error(`清单链接无法对应当前版本已上传资产：${platform}`)
-        return [platform, { ...item, url: asset.browser_download_url }]
+        return [platform, { ...item, url }]
       })
     ),
   }
@@ -209,20 +233,31 @@ function prepare() {
   const { version } = readVersion()
   const sha = process.env.GITHUB_SHA
   if (!/^[a-f0-9]{40}$/.test(sha ?? '')) throw new Error('发布提交必须是完整 Git SHA')
+  const tag = `infinity-nikki-player@v${version}`
+  let release = findRelease(tag)
   if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch') {
     const previous = JSON.parse(
       execFileSync('git', ['show', `${process.env.BEFORE_SHA}:${APP}/package.json`], {
         encoding: 'utf8',
       })
     ).version
-    if (!versionChanged(previous, version)) {
+    if (!versionChanged(previous, version) && !release?.draft) {
       output({ mode: 'skip' })
       return
     }
   }
-  const tag = `infinity-nikki-player@v${version}`
-  let release = findRelease(tag)
-  const mode = releaseMode(version, release, newestVersion(), sha)
+  // 协调脚本与安装包分离：修复草稿发布逻辑时，继续验证原构建提交的回执。
+  const changedPaths =
+    release && release.target_commitish !== sha
+      ? execFileSync('git', ['diff', '--name-only', release.target_commitish, sha], {
+          encoding: 'utf8',
+        })
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+      : []
+  const releaseSha = releaseCommit(sha, release, changedPaths)
+  const mode = releaseMode(version, release, newestVersion(), releaseSha)
   if (!release)
     release = api('releases', {
       tag_name: tag,
@@ -233,7 +268,12 @@ function prepare() {
       prerelease: false,
       make_latest: 'false',
     })
-  output({ mode, version, release_id: release.id, release_sha: sha })
+  output({
+    mode: releaseSha !== sha ? 'repair' : mode,
+    version,
+    release_id: release.id,
+    release_sha: releaseSha,
+  })
 }
 
 /** 包内版本从平台原生产物读取，在 action 上传之后、公开之前生成验收凭据。 */
@@ -310,7 +350,8 @@ async function publish() {
   const tag = `infinity-nikki-player@v${version}`
   const release = findRelease(tag)
   if (!release) throw new Error('待发布草稿不存在')
-  releaseMode(version, release, newestVersion(), process.env.GITHUB_SHA)
+  const releaseSha = process.env.RELEASE_SHA ?? process.env.GITHUB_SHA
+  releaseMode(version, release, newestVersion(), releaseSha)
   const directory = mkdtempSync(join(tmpdir(), 'nikki-release-'))
   try {
     const assets = new Map(release.assets.map((asset) => [asset.name, downloadAsset(asset)]))
@@ -323,7 +364,7 @@ async function publish() {
       const verification = JSON.parse(assets.get(`bundle-verification-${platform}.json`) ?? 'null')
       if (
         verification?.version !== version ||
-        verification?.sha !== process.env.GITHUB_SHA ||
+        verification?.sha !== releaseSha ||
         verification?.platform !== platform
       )
         throw new Error(`缺少对应提交的包内版本校验：${platform}`)
