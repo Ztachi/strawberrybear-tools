@@ -1,0 +1,2 @@
+# 已签名测试包必须按原始字节检出，Windows 换行转换会使 Minisign 验签失败。
+package.txt -text
