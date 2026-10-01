@@ -55,6 +55,17 @@ fn get_current_playback_timing_profile() -> PlaybackTimingProfile {
     PlaybackTimingProfile::fixed_60fps()
 }
 
+/// 按短周期检查停止请求，长音符和休止符不会阻止安装前释放按键。
+fn wait_playback_delay(duration: Duration, should_stop: &Mutex<bool>) {
+    let started = std::time::Instant::now();
+    while !*should_stop.lock() {
+        let Some(remaining) = duration.checked_sub(started.elapsed()) else {
+            break;
+        };
+        std::thread::sleep(remaining.min(Duration::from_millis(10)));
+    }
+}
+
 /// 播放控制状态
 ///
 /// 使用 Arc<Mutex<>> 实现线程安全的可共享状态
@@ -190,7 +201,10 @@ pub async fn start_playback(
                 let delay_ms = ((event.start_ms as f64 / speed) as u64)
                     .saturating_sub(last_time.elapsed().as_millis() as u64);
                 if delay_ms > 0 {
-                    std::thread::sleep(Duration::from_millis(delay_ms));
+                    wait_playback_delay(Duration::from_millis(delay_ms), &should_stop);
+                }
+                if *should_stop.lock() {
+                    break;
                 }
                 last_time = std::time::Instant::now();
 
@@ -229,7 +243,7 @@ pub async fn start_playback(
                     // 等待音符时长
                     let midi_duration_ms = (event.duration_ms as f64 / speed) as u64;
                     let hold_ms = midi_duration_ms.max(timing_profile.hold_ms);
-                    std::thread::sleep(Duration::from_millis(hold_ms));
+                    wait_playback_delay(Duration::from_millis(hold_ms), &should_stop);
 
                     // 释放按键
                     if let Err(e) = simulator.release_key_sync(event.pitch, mapping) {
@@ -279,6 +293,19 @@ pub async fn start_playback(
 #[cfg(test)]
 mod tests {
     use super::PlaybackTimingProfile;
+
+    #[test]
+    fn stop_interrupts_long_note_wait() {
+        let stop = std::sync::Arc::new(parking_lot::Mutex::new(false));
+        let signal = stop.clone();
+        let started = std::time::Instant::now();
+        let worker = std::thread::spawn(move || {
+            super::wait_playback_delay(std::time::Duration::from_secs(30), &signal);
+        });
+        *stop.lock() = true;
+        worker.join().unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
 
     #[test]
     fn fixed_60fps_uses_recommended_frame_hold() {

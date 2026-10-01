@@ -12,6 +12,8 @@ import OnlineSongDetailPage from '@/views/MainWindow/OnlineLibraryTab/pages/Onli
 import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
 import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
 import KeyboardPage from '@/views/MainWindow/KeyboardPage/index.vue'
+import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
+import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
 
 /** Infinity Nikki Player 主窗口路由实例。 */
 export const router = createRouter({
@@ -30,6 +32,7 @@ export const router = createRouter({
       path: '/files/all',
       name: 'files-all',
       component: AllSongsPage,
+      meta: { keepAlive: true },
     },
     {
       path: '/files/midi/:filename',
@@ -40,6 +43,7 @@ export const router = createRouter({
       path: '/files/song-lists/:id',
       name: 'files-song-list-detail',
       component: SongListDetailPage,
+      meta: { keepAlive: true },
     },
     {
       path: '/files/song-lists/:id/edit',
@@ -50,6 +54,7 @@ export const router = createRouter({
       path: '/templates',
       name: 'templates',
       component: TemplateEditor,
+      meta: { keepAlive: true },
     },
     {
       path: '/templates/new',
@@ -62,6 +67,25 @@ export const router = createRouter({
       component: TemplateEditorPage,
     },
     {
+      path: '/midi-editor',
+      name: 'midi-editor',
+      component: MidiEditorTab,
+      meta: { keepAlive: true },
+    },
+    {
+      // query.from=<曲库文件名> 时以该 MIDI 为初始内容
+      path: '/midi-editor/new',
+      name: 'midi-editor-create',
+      component: MidiEditorPage,
+      meta: { detachableEditor: true },
+    },
+    {
+      path: '/midi-editor/:id/edit',
+      name: 'midi-editor-edit',
+      component: MidiEditorPage,
+      meta: { detachableEditor: true },
+    },
+    {
       path: '/keyboard',
       name: 'keyboard',
       component: KeyboardPage,
@@ -70,6 +94,7 @@ export const router = createRouter({
       path: '/online-library',
       name: 'online-library',
       component: OnlineLibraryTab,
+      meta: { keepAlive: true },
     },
     {
       path: '/online-library/song/:id',

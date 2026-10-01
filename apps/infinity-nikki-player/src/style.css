@@ -98,6 +98,56 @@
       'calt' 1;
     overflow: hidden;
   }
+
+  /*
+   * 桌面应用框架默认不允许选中文字，避免拖动工具栏、列表和按钮时误选标签。
+   * 规则只放在根节点上，让可复制内容用语义属性覆盖；不要再维护业务类名白名单。
+   */
+  html,
+  body,
+  #app {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* 输入内容、错误状态和显式信息正文需要支持系统原生的选择与复制。 */
+  input,
+  textarea,
+  [contenteditable='true'],
+  [contenteditable='plaintext-only'],
+  [data-text-selectable],
+  [role='alert'],
+  [role='status'],
+  .ant-tooltip-container,
+  .ant-tooltip-unique-container,
+  .ant-notification-notice-message,
+  .ant-notification-notice-description {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /*
+   * 可复制正文可能包含操作按钮，例如关于弹窗中的更新与外链按钮。
+   * 交互控件始终保持桌面控件语义，避免拖动按钮文字时产生选区。
+   */
+  button,
+  a,
+  label,
+  summary,
+  input[type='button'],
+  input[type='submit'],
+  input[type='reset'],
+  [role='button'],
+  [role='checkbox'],
+  [role='menuitem'],
+  [role='option'],
+  [role='radio'],
+  [role='slider'],
+  [role='switch'],
+  [role='tab'] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 @layer components {

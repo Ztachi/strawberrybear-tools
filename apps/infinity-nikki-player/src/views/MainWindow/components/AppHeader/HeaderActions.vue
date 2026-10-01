@@ -6,7 +6,7 @@
 import { computed, h } from 'vue'
 import type { VNode } from 'vue'
 import { Button, Dropdown, Tooltip } from 'antdv-next'
-import { QuestionCircleFilled } from '@antdv-next/icons'
+import { ExclamationCircleFilled } from '@antdv-next/icons'
 import { AlertCircle, ChevronDown, Globe2, Languages, Monitor } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { SUPPORTED_LOCALES } from '@/i18n'
@@ -71,7 +71,10 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
 </script>
 
 <template>
-  <div class="flex items-center gap-2" data-tauri-drag-region>
+  <div
+    class="flex items-center gap-2"
+    data-tauri-drag-region
+  >
     <Tooltip
       v-if="!hasAccessibility"
       placement="bottomRight"
@@ -92,7 +95,12 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
       </Button>
     </Tooltip>
 
-    <Button type="primary" size="small" class="overlay-btn" @click="emit('enterOverlayMode')">
+    <Button
+      type="primary"
+      size="small"
+      class="overlay-btn"
+      @click="emit('enterOverlayMode')"
+    >
       <template #icon>
         <Monitor class="header-btn-icon" />
       </template>
@@ -115,18 +123,34 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
         :aria-label="currentLocaleOption.label"
         @click.stop
       >
-        <Languages class="h-[18px] w-[18px] text-muted-foreground" :stroke-width="2.2" />
+        <Languages
+          class="h-[18px] w-[18px] text-muted-foreground"
+          :stroke-width="2.2"
+        />
         <span class="max-w-20 truncate">
           {{ currentLocaleOption.label }}
         </span>
-        <ChevronDown class="h-3.5 w-3.5 text-muted-foreground" :stroke-width="2.2" />
+        <ChevronDown
+          class="h-3.5 w-3.5 text-muted-foreground"
+          :stroke-width="2.2"
+        />
       </Button>
     </Dropdown>
 
-    <Tooltip placement="bottomRight" :title="t('about.title')">
-      <button class="help-btn" :aria-label="t('about.title')" @click="emit('openHelp')">
-        <QuestionCircleFilled class="help-icon" />
-      </button>
+    <Tooltip
+      placement="bottomRight"
+      :title="t('about.title')"
+    >
+      <Button
+        color="primary"
+        variant="link"
+        :aria-label="t('about.title')"
+        @click="emit('openHelp')"
+      >
+        <template #icon>
+          <ExclamationCircleFilled :style="{ fontSize: '25px' }" />
+        </template>
+      </Button>
     </Tooltip>
   </div>
 </template>
@@ -171,16 +195,4 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
   color: var(--color-white);
 }
 
-.help-btn {
-  @apply flex h-8 w-8 items-center justify-center rounded-full transition-colors;
-  color: var(--color-primary);
-}
-
-.help-btn:hover {
-  background: var(--bg-primary-10);
-}
-
-.help-icon {
-  font-size: 25px;
-}
 </style>

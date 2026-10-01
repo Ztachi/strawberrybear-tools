@@ -44,3 +44,22 @@ jobs:
 
       - name: Build, Type check, and Lint
         run: pnpm turbo run build type-check lint --filter=...[HEAD^1]
+
+      - name: 校验播放器发布策略与更新界面状态
+        run: |
+          node --test apps/infinity-nikki-player/scripts/updater-release.test.mjs
+          pnpm --filter @strawberrybear/infinity-nikki-player test
+
+  updater-native:
+    name: 原生更新故障测试
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'apps/infinity-nikki-player/src-tauri -> target'
+      - run: 'cargo test --locked --manifest-path apps/infinity-nikki-player/src-tauri/Cargo.toml updater::'

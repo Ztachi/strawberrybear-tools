@@ -2,13 +2,23 @@
 /**
  * @description: 歌单详情页面
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { Button, Popover } from 'antdv-next'
 import { Edit3, Play } from 'lucide-vue-next'
 import { usePlayerStore } from '@/stores/player'
 import { useSongListStore } from '@/stores/songLists'
+import { freshMainPageLocation } from '@/router/mainNavigation'
 import { buildCollectionContext, getSongListSongs } from '../utils'
 import SongCollectionView from '../components/SongCollectionView.vue'
 import SongListCover from '../components/SongListCover.vue'
@@ -19,7 +29,14 @@ const router = useRouter()
 const playerStore = usePlayerStore()
 const songListStore = useSongListStore()
 
-const songListId = computed(() => String(route.params.id ?? ''))
+/**
+ * 当前缓存实例所属的歌单 ID。
+ *
+ * `useRoute()` 始终指向全局当前路由；页面进入 KeepAlive 后若继续直接计算
+ * `route.params.id`，打开 MIDI 详情时参数会暂时消失并销毁隐藏页中的列表。
+ * 这里让实例持有自己的参数，只在同一详情组件被路由复用时更新。
+ */
+const songListId = ref(String(route.params.id ?? ''))
 const songList = computed(() => songListStore.getSongListById(songListId.value))
 const songs = computed(() => getSongListSongs(songList.value, playerStore.midiLibrary))
 const coverUrl = computed(() =>
@@ -31,6 +48,11 @@ const isDescriptionOverflowing = ref(false)
 const isDescriptionPopoverOpen = ref(false)
 
 let descriptionResizeObserver: ResizeObserver | null = null
+let pageActive = false
+
+onBeforeRouteUpdate((to) => {
+  songListId.value = String(to.params.id ?? '')
+})
 
 function updateDescriptionOverflow(): void {
   const element = descriptionRef.value
@@ -55,11 +77,33 @@ async function playSongList(): Promise<void> {
   )
 }
 
-onMounted(() => {
+/**
+ * @description: 激活缓存歌单页并恢复描述区域测量
+ * @return {void}
+ */
+function activatePage(): void {
+  if (pageActive) return
+  pageActive = true
   descriptionResizeObserver = new ResizeObserver(updateDescriptionOverflow)
   if (descriptionRef.value) descriptionResizeObserver.observe(descriptionRef.value)
   void nextTick(updateDescriptionOverflow)
-})
+}
+
+/**
+ * @description: 停用缓存歌单页并释放观察器与临时浮层
+ * @return {void}
+ */
+function deactivatePage(): void {
+  if (!pageActive) return
+  pageActive = false
+  descriptionResizeObserver?.disconnect()
+  descriptionResizeObserver = null
+  isDescriptionPopoverOpen.value = false
+}
+
+onMounted(activatePage)
+onActivated(activatePage)
+onDeactivated(deactivatePage)
 
 watch(
   descriptionRef,
@@ -75,10 +119,7 @@ watch(descriptionText, () => {
   void nextTick(updateDescriptionOverflow)
 })
 
-onBeforeUnmount(() => {
-  descriptionResizeObserver?.disconnect()
-  descriptionResizeObserver = null
-})
+onBeforeUnmount(deactivatePage)
 </script>
 
 <template>
@@ -89,7 +130,7 @@ onBeforeUnmount(() => {
       <div class="detail-main">
         <div class="title-row">
           <div class="min-w-0">
-            <h1 class="detail-title">
+            <h1 data-text-selectable class="detail-title">
               {{ songList.name }}
             </h1>
             <p class="detail-count">
@@ -99,7 +140,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="description-row">
-          <p ref="descriptionRef" class="detail-description">
+          <p ref="descriptionRef" data-text-selectable class="detail-description">
             {{ descriptionText }}
           </p>
           <Popover
@@ -110,7 +151,7 @@ onBeforeUnmount(() => {
             overlay-class-name="song-list-description-popover"
           >
             <template #content>
-              <div class="description-popover-content">
+              <div data-text-selectable class="description-popover-content">
                 {{ descriptionText }}
               </div>
             </template>
@@ -151,7 +192,9 @@ onBeforeUnmount(() => {
 
   <section v-else class="missing-state">
     <span>{{ t('songList.notFound') }}</span>
-    <Button @click="router.push({ name: 'files-all' })">
+    <Button
+      @click="router.replace(freshMainPageLocation({ name: 'files-all' }, { replace: true }))"
+    >
       {{ t('songList.allSongs') }}
     </Button>
   </section>

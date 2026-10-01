@@ -2,7 +2,7 @@
 /**
  * @description: 应用根组件 - 负责初始化全局状态、错误处理和加载状态管理
  */
-import { computed, onMounted, getCurrentInstance, ref, nextTick } from 'vue'
+import { computed, onMounted, onUnmounted, getCurrentInstance, ref, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -13,7 +13,6 @@ import { usePlayerStore } from './stores/player'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import { getAntdvLocale } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
-import backgroundImageUrl from '@/assets/images/bg.jpeg'
 
 /** 播放器 Store 实例 */
 const playerStore = usePlayerStore()
@@ -31,43 +30,13 @@ const loadingText = ref('loading')
 const currentAntdvLocale = computed(() => getAntdvLocale(locale.value))
 
 /**
- * @description: 预加载首屏背景图
- * @param {string} src - 背景图资源地址
- * @return {Promise<void>} 背景图完成解码或加载后的 Promise
- */
-function preloadImage(src: string): Promise<void> {
-  return new Promise((resolve) => {
-    const image = new Image()
-    image.onload = () => resolve()
-    image.onerror = () => resolve()
-    image.src = src
-    void image.decode?.().then(resolve).catch(() => undefined)
-  })
-}
-
-/**
- * @description: 等待浏览器完成首屏绘制
- * @return {Promise<void>} 下一帧绘制后的 Promise
- */
-function waitForPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve())
-    })
-  })
-}
-
-/**
  * @description: 首屏 loading 准备完成后显示隐藏启动的 Tauri 窗口
  */
 async function showWindowWhenLoadingReady() {
-  loadingText.value = 'loading background'
-  loadingProgress.value = 32
-  await preloadImage(backgroundImageUrl)
-  loadingProgress.value = 58
   await nextTick()
-  await waitForPaint()
+  // 背景交由浏览器加载；隐藏窗口中的图片解码和动画帧都不能作为显示窗口的前置条件。
   await getCurrentWindow().show()
+  loadingProgress.value = 58
 }
 
 /**
@@ -93,12 +62,17 @@ if (app) {
 
 /** 组件挂载完成回调 - 初始化钢琴引擎、设置全局错误处理、监听未处理的 Promise 拒绝 */
 onMounted(async () => {
+  // 原生层独立执行启动检查，订阅不等待音频或背景图初始化。
+  void appUpdater.start()
   await showWindowWhenLoadingReady()
 
   // 初始化钢琴引擎（预热音频上下文）
   loadingText.value = 'loading audio'
   loadingProgress.value = 78
-  await playerStore.initPianoEngine()
+  // 音频预热独立进行；网络音色加载缓慢也不能遮挡更新及手动恢复入口。
+  void playerStore.initPianoEngine().catch((error: unknown) => {
+    showError('音频初始化失败', String(error))
+  })
 
   // 加载完成，隐藏加载屏幕
   loadingProgress.value = 100
@@ -107,9 +81,6 @@ onMounted(async () => {
 
   // 移除背景图片，设置透明背景
   document.body.style.background = 'transparent'
-
-  // 启动后静默检查更新，无更新或检查失败时不打扰用户
-  appUpdater.checkUpdate({ silent: true })
 
   // 监听未处理的 Promise 拒绝
   window.addEventListener('unhandledrejection', (event) => {
@@ -127,6 +98,8 @@ onMounted(async () => {
     return false
   }
 })
+
+onUnmounted(() => appUpdater.dispose())
 </script>
 
 <template>
@@ -146,15 +119,25 @@ onMounted(async () => {
       </Transition>
 
       <!-- 主窗口 -->
-      <MainWindow />
+      <MainWindow :inert="appUpdater.isPreparing.value || appUpdater.isInstalling.value" />
 
       <!-- 关于对话框 -->
       <AboutDialog />
+      <div v-if="appUpdater.isInstalling.value" class="installing-screen" role="status">
+        {{ $t('updater.phases.installing') }}
+      </div>
     </AntApp>
   </ConfigProvider>
 </template>
 
 <style scoped>
+.installing-screen {
+  @apply fixed inset-0 flex items-center justify-center;
+  z-index: 2000;
+  background: var(--bg-white-80);
+  color: var(--color-foreground);
+}
+
 .loading-screen {
   @apply fixed inset-0 flex items-center justify-center z-[100];
   background:

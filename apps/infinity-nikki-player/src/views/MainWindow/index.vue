@@ -3,9 +3,25 @@
  * @description: 主窗口组件
  * @description 包含正常模式和悬浮模式两种 UI 状态，提供文件/文件夹导入、拖拽导入、标签页切换等功能
  */
-import { computed, nextTick, onMounted, onUnmounted, provide, ref } from 'vue'
+import { mainPageIdentity } from '@/router/pageIdentity'
+import { freshMainPageLocation } from '@/router/mainNavigation'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  provide,
+  ref,
+  type Component,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterView, isNavigationFailure, useRoute, useRouter } from 'vue-router'
+import {
+  RouterView,
+  isNavigationFailure,
+  useRoute,
+  useRouter,
+  type RouteLocationNormalizedLoaded,
+} from 'vue-router'
 import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
@@ -23,6 +39,8 @@ import GlobalMusicPlayer from '@/components/GlobalMusicPlayer/index.vue'
 import { isSupportedLocale } from '@/i18n'
 import { midiImportActionsKey } from './importActions'
 import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
+import { useAppUpdater } from '@/composables/useAppUpdater'
+import { createRoutePageHost, type RoutePageLeaveGuard } from './routePageHost'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -31,14 +49,53 @@ const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
 const songListStore = useSongListStore()
+const isMidiEditing = computed(() => route.meta.detachableEditor === true)
+
+/** Vue KeepAlive 使用 LRU 淘汰，限制长时间浏览大量歌单时的驻留实例数。 */
+const MAIN_ROUTE_CACHE_MAX = 12
+
+const DefaultRoutePageHost = createRoutePageHost('DefaultRoutePageHost')
+const MidiEditorRouteHost = createRoutePageHost('MidiEditorRouteHost')
+const CachedRoutePageHost = createRoutePageHost('CachedRoutePageHost')
+
+/** 路由声明的页面常驻缓存；独立编辑器仅在窗口分离期间临时加入缓存。 */
+const cachedRouteHostNames = computed(() => [
+  'CachedRoutePageHost',
+  ...(mainWindowUiStore.detachedMidiEditorStatus === 'docked' ? [] : ['MidiEditorRouteHost']),
+])
+
+/**
+ * @description: 根据路由元信息选择普通、缓存或独立编辑宿主
+ * @param {RouteLocationNormalizedLoaded} pageRoute - 当前路由
+ * @return {Component} 对应的具名宿主组件
+ */
+function getRoutePageHost(pageRoute: RouteLocationNormalizedLoaded): Component {
+  if (pageRoute.meta.detachableEditor) return MidiEditorRouteHost
+  if (pageRoute.meta.keepAlive) return CachedRoutePageHost
+  return DefaultRoutePageHost
+}
+const updater = useAppUpdater()
+/** 当前路由页面复用自身编辑保护，避免依赖进程退出时的 beforeunload。 */
+const activePage = ref<RoutePageLeaveGuard | null>(null)
+const removeInstallPreparation = updater.setPrepareInstall(async () => {
+  if (activePage.value?.confirmLeaveIfNeeded && !(await activePage.value.confirmLeaveIfNeeded())) {
+    return false
+  }
+  await playerStore.stopPreviewPlayback()
+  // 安装准备必须传播停止失败，不能使用会吞掉错误的普通停止按钮方法。
+  await invoke('stop_playback')
+  return true
+})
+onUnmounted(removeInstallPreparation)
 
 /** 主窗口支持的页签路由值。 */
-type MainWindowTab = 'files' | 'templates' | 'online'
+type MainWindowTab = 'files' | 'templates' | 'midi-editor' | 'online'
 
 /** 当前激活的标签页由路由决定，避免刷新后回到默认文件页。 */
 const activeTab = computed<MainWindowTab>(() => {
   // 未知路径会被 router 重定向；重定向完成前按文件页渲染，保持首屏稳定。
   if (route.path.startsWith('/templates')) return 'templates'
+  if (route.path.startsWith('/midi-editor')) return 'midi-editor'
   if (route.path.startsWith('/online-library')) return 'online'
   return 'files'
 })
@@ -334,7 +391,9 @@ async function ensureFilesTabForImport(): Promise<boolean> {
   if (activeTab.value === 'files') return true
 
   // 路由离开守卫会处理模板编辑页的未保存确认。
-  const failure = await router.push({ name: 'files-all', query: route.query })
+  const failure = await router.push(
+    freshMainPageLocation({ name: 'files-all', query: route.query })
+  )
   return !isNavigationFailure(failure)
 }
 
@@ -350,7 +409,7 @@ async function handleMainNavigate(
 ): Promise<boolean> {
   const normalizedNextTab = String(nextTab) as MainWindowTab
   // 左侧菜单只会发出已声明的页签值；这里防御无效值，避免错误 URL 污染应用状态。
-  if (!['files', 'templates', 'online'].includes(normalizedNextTab)) return false
+  if (!['files', 'templates', 'midi-editor', 'online'].includes(normalizedNextTab)) return false
   const routeTarget =
     targetRoute ??
     ({
@@ -359,14 +418,17 @@ async function handleMainNavigate(
           ? 'files-all'
           : normalizedNextTab === 'templates'
             ? 'templates'
-            : 'online-library',
+            : normalizedNextTab === 'midi-editor'
+              ? 'midi-editor'
+              : 'online-library',
       query: route.query,
     } as RouteLocationRaw)
 
-  if (normalizedNextTab === activeTab.value && !targetRoute) return true
-
   // 路由离开守卫会处理模板编辑页的未保存确认。
-  await router.push(routeTarget)
+  const replacesCurrentEntry = router.resolve(routeTarget).fullPath === route.fullPath
+  await router.push(
+    freshMainPageLocation(routeTarget, { replace: replacesCurrentEntry })
+  )
   return true
 }
 
@@ -515,7 +577,9 @@ async function selectFile() {
     await handleImportPaths(files)
     // 多个文件时关闭详情
     if (files.length > 1) {
-      await router.push({ name: 'files-all', query: route.query })
+      await router.push(
+        freshMainPageLocation({ name: 'files-all', query: route.query })
+      )
     }
   }
 }
@@ -618,16 +682,22 @@ provide(midiImportActionsKey, {
 
           <section class="route-content">
             <section class="route-page-stage">
-              <RouterView v-slot="{ Component, route: pageRoute }">
+              <RouterView v-slot="{ Component: RouteComponent, route: pageRoute }">
                 <Transition name="main-page">
-                  <section :key="pageRoute.fullPath" class="route-page-host">
-                    <component :is="Component" />
-                  </section>
+                  <KeepAlive :include="cachedRouteHostNames" :max="MAIN_ROUTE_CACHE_MAX">
+                    <component
+                      :is="getRoutePageHost(pageRoute)"
+                      ref="activePage"
+                      :key="mainPageIdentity(pageRoute, router.options.history.state)"
+                      :page="RouteComponent"
+                      :editor="isMidiEditing"
+                    />
+                  </KeepAlive>
                 </Transition>
               </RouterView>
             </section>
 
-            <GlobalMusicPlayer />
+            <GlobalMusicPlayer v-show="!isMidiEditing" />
           </section>
         </div>
 
@@ -730,11 +800,13 @@ provide(midiImportActionsKey, {
   @apply absolute inset-0 z-40 pointer-events-none;
 }
 
+/* 空白区域保持穿透，实际弹层必须恢复命中；Select 也挂载在此容器内。 */
 .content-portal-root :global(.ant-drawer-root),
 .content-portal-root :global(.ant-drawer-mask),
 .content-portal-root :global(.ant-drawer-wrap),
 .content-portal-root :global(.ant-drawer-content-wrapper),
 .content-portal-root :global(.ant-dropdown),
+.content-portal-root :global(.ant-select-dropdown),
 .content-portal-root :global(.ant-popover),
 .content-portal-root :global(.ant-tooltip),
 .content-portal-root :global(.ant-modal-root) {
@@ -757,6 +829,11 @@ provide(midiImportActionsKey, {
   @apply absolute inset-0 overflow-hidden rounded-2xl p-4;
   background: var(--bg-white-50);
   border: 1px solid var(--border-primary-15);
+}
+
+/* 编辑页已有自己的工具栏和边框，避免再嵌套一层卡片与留白。 */
+.route-page-host--editor {
+  @apply rounded-none border-0 bg-transparent p-0;
 }
 
 .main-page-enter-active,

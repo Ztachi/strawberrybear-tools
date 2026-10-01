@@ -25,7 +25,7 @@ import type {
   NoteEvent,
 } from '@/types'
 import {
-  loadMidiForDuration,
+  getMidiSourceDurationMs,
   setNoteFilter,
   setPitchMapper,
   ensureInstrument,
@@ -162,6 +162,10 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 详情页加载状态 */
   const isDetailLoading = ref(false)
+  /** 详情切换与配置读取共用请求号，旧歌曲结果不能回写新详情。 */
+  let detailRequestId = 0
+  /** 当前歌曲音轨配置也有独立令牌，防止播放列表快速切换串轨。 */
+  let disabledTracksRequestId = 0
 
   /** 播放状态（Rust 后端状态） */
   const playbackState = ref<PlaybackState>({
@@ -282,6 +286,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (midi) {
       currentMidi.value = midi
       await loadDisabledTracks(midi)
+      if (currentMidi.value?.filename !== midi.filename) return
       if (shouldPersistPreviewSelection()) {
         void persistPreviewSelection(midi)
       }
@@ -385,11 +390,13 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function applyConfigToMidi(midi: MidiInfo, config: MidiConfigResponse): void {
-    if (config.duration_ms > 0) midi.duration_ms = config.duration_ms
-    if (config.track_count > 0) midi.track_count = config.track_count
+    // 老配置只负责用户偏好；新解析结果的时间参数不能被旧整数 BPM 时长覆盖。
+    if (midi.duration_ticks === undefined) {
+      if (config.duration_ms > 0) midi.duration_ms = config.duration_ms
+      if (config.ticks_per_beat > 0) midi.ticks_per_beat = config.ticks_per_beat
+      if (config.tempo > 0) midi.tempo = config.tempo
+    }
     if (config.melody_note_count > 0) midi.melody_note_count = config.melody_note_count
-    if (config.ticks_per_beat > 0) midi.ticks_per_beat = config.ticks_per_beat
-    if (config.tempo > 0) midi.tempo = config.tempo
     midi.title = config.title ?? midi.title ?? null
     midi.author_name = config.author_name ?? midi.author_name ?? null
     midi.description = config.description ?? midi.description ?? null
@@ -444,12 +451,6 @@ export const usePlayerStore = defineStore('player', () => {
           // 配置不存在（可能旧文件），使用 Rust 解析的原始值
           // 同时计算准确时长
           try {
-            // 读取 MIDI 文件计算时长
-            const midiData = await invoke<number[]>('read_midi_data', { filename: file.filename })
-            const uint8Array = new Uint8Array(midiData)
-            const { duration } = await loadMidiForDuration(uint8Array.buffer)
-            file.duration_ms = Math.floor(duration)
-
             // 提取旋律获取音符数
             const melody = await invoke<MelodyEvent[]>('extract_melody', {
               events: file.events,
@@ -498,12 +499,6 @@ export const usePlayerStore = defineStore('player', () => {
         await syncActivePreviewQueue()
         return true
       }
-
-      // 通过后端读取 MIDI 文件计算正确时长
-      const midiData = await invoke<number[]>('read_midi_data', { filename: info.filename })
-      const uint8Array = new Uint8Array(midiData)
-      const { duration } = await loadMidiForDuration(uint8Array.buffer)
-      info.duration_ms = Math.floor(duration)
 
       // 提取旋律并获取音符数
       const melody = await invoke<MelodyEvent[]>('extract_melody', {
@@ -579,12 +574,6 @@ export const usePlayerStore = defineStore('player', () => {
         await syncActivePreviewQueue()
         return true
       }
-
-      // 计算时长
-      const midiData = await invoke<number[]>('read_midi_data', { filename: info.filename })
-      const uint8Array = new Uint8Array(midiData)
-      const { duration } = await loadMidiForDuration(uint8Array.buffer)
-      info.duration_ms = Math.floor(duration)
 
       // 提取旋律
       const melody = await invoke<MelodyEvent[]>('extract_melody', {
@@ -1039,6 +1028,7 @@ export const usePlayerStore = defineStore('player', () => {
       queueContext: context,
       persistSelection,
     })
+    if (currentMidi.value?.filename !== midi.filename) return
     if (persistSelection) {
       await persistPreviewSelection(midi)
     }
@@ -1058,6 +1048,7 @@ export const usePlayerStore = defineStore('player', () => {
     options: { persistSelection?: boolean } = {}
   ): Promise<void> {
     await selectMidiInQueue(midi, items, context, options)
+    if (currentMidi.value?.filename !== midi.filename) return
     await startPreview()
   }
 
@@ -1195,14 +1186,19 @@ export const usePlayerStore = defineStore('player', () => {
    * @return Promise
    */
   async function loadDisabledTracks(midi: MidiInfo) {
+    const requestId = ++disabledTracksRequestId
     try {
       const config = await invoke<MidiConfigResponse>('load_midi_config', {
         filename: midi.filename,
       })
+      if (requestId !== disabledTracksRequestId || currentMidi.value?.filename !== midi.filename)
+        return
       applyConfigToMidi(midi, config)
       disabledTracks.value = new Set(config.disabled_tracks)
       disabledTracksVersionRef.value = ++disabledTracksVersion
     } catch (e) {
+      if (requestId !== disabledTracksRequestId || currentMidi.value?.filename !== midi.filename)
+        return
       console.error('加载音轨配置失败:', e)
       disabledTracks.value = new Set()
       disabledTracksVersionRef.value = ++disabledTracksVersion
@@ -1285,48 +1281,50 @@ export const usePlayerStore = defineStore('player', () => {
     tracks: TrackInfo[]
     duration: number
   }> {
-    const [extractedMelody, extractedAllNotes, midiData] = await Promise.all([
+    const [extractedMelody, extractedAllNotes] = await Promise.all([
       invoke<MelodyEvent[]>('extract_melody', {
         events: midi.events,
         ticksPerBeat: midi.ticks_per_beat,
+        // 旧游戏按键提取路径维持既有参数，卷帘/试听另走原始 tempo map。
         tempo: 500000,
       }),
       invoke<MelodyEvent[]>('extract_all_notes', {
         events: midi.events,
         ticksPerBeat: midi.ticks_per_beat,
+        // 旧游戏按键提取路径维持既有参数，卷帘/试听另走原始 tempo map。
         tempo: 500000,
       }),
-      invoke<number[]>('read_midi_data', {
-        filename: midi.file_path,
-      }),
     ])
-    const uint8Array = new Uint8Array(midiData)
-    const { duration } = await loadMidiForDuration(uint8Array.buffer)
     return {
       melody: extractedMelody,
       allNotes: extractedAllNotes,
-      tracks: buildTracksFromEvents(midi.events as any),
-      duration,
+      tracks: buildTracksFromEvents(midi.events),
+      // Rust 解析已经按完整 tempo map 计算时长；详情页不能再用 midi-player-js 的另一套时间轴覆盖它。
+      duration: getMidiSourceDurationMs(midi),
     }
   }
 
   /**
    * @description: 加载详情页音轨屏蔽设置
    * @param {MidiInfo} midi - MIDI 文件
+   * @param {number} requestId - 详情加载请求号
    * @return {Promise<void>} 无返回值
    */
-  async function loadDetailDisabledTracks(midi: MidiInfo): Promise<void> {
+  async function loadDetailDisabledTracks(midi: MidiInfo, requestId: number): Promise<void> {
     try {
       const config = await invoke<MidiConfigResponse>('load_midi_config', {
         filename: midi.filename,
       })
+      if (requestId !== detailRequestId) return
       applyConfigToMidi(midi, config)
       detailDisabledTracks.value = new Set(config.disabled_tracks)
     } catch (e) {
+      if (requestId !== detailRequestId) return
       console.error('加载详情音轨配置失败:', e)
       detailDisabledTracks.value = new Set()
     } finally {
-      detailDisabledTracksVersionRef.value = ++detailDisabledTracksVersion
+      if (requestId === detailRequestId)
+        detailDisabledTracksVersionRef.value = ++detailDisabledTracksVersion
     }
   }
 
@@ -1335,14 +1333,12 @@ export const usePlayerStore = defineStore('player', () => {
    * @return {Promise<void>} 无返回值
    */
   async function persistDetailDisabledTracks(): Promise<void> {
-    if (!detailMidi.value) return
+    const midi = detailMidi.value
+    const disabled = new Set(detailDisabledTracks.value)
+    if (!midi) return
     try {
-      await saveMidiConfig(detailMidi.value, Array.from(detailDisabledTracks.value))
-      if (currentMidi.value?.filename === detailMidi.value.filename) {
-        disabledTracks.value = new Set(detailDisabledTracks.value)
-        disabledTracksVersionRef.value = ++disabledTracksVersion
-        setDisabledTracks(disabledTracks.value)
-      }
+      // 写入对象在点击时捕获，异步完成后不能再读取已切换的详情引用。
+      await saveMidiConfig(midi, Array.from(disabled))
     } catch (e) {
       console.error('保存详情音轨配置失败:', e)
     }
@@ -1356,7 +1352,30 @@ export const usePlayerStore = defineStore('player', () => {
   function toggleDetailTrack(displayIndex: number): void {
     const track = detailTracks.value.find((item) => item.index === displayIndex)
     if (!track) return
-    const midiPlayerTrackValue = track.eventTrackValue + 1
+    toggleDetailTrackById(String(track.eventTrackValue))
+  }
+
+  /**
+   * @description: 按原始稳定轨道 ID 切换屏蔽，包含没有音符的空轨
+   * @param {string} trackId - 公共文档原轨索引字符串，兼容 Rust track-N ID
+   * @return {void} 无返回值
+   */
+  function toggleDetailTrackById(trackId: string): void {
+    const rawTrack = detailMidi.value?.tracks?.find((track) => track.id === trackId)
+    const legacyIndex = /^\d+$/.test(trackId)
+      ? Number(trackId)
+      : /^track-\d+$/.test(trackId)
+        ? Number(trackId.slice(6))
+        : undefined
+    const rawIndex = rawTrack?.index ?? legacyIndex
+    if (
+      rawIndex === undefined ||
+      !Number.isInteger(rawIndex) ||
+      rawIndex < 0 ||
+      rawIndex >= (detailMidi.value?.track_count ?? 0)
+    )
+      return
+    const midiPlayerTrackValue = rawIndex + 1
     if (detailDisabledTracks.value.has(midiPlayerTrackValue)) {
       detailDisabledTracks.value.delete(midiPlayerTrackValue)
     } else {
@@ -1376,6 +1395,8 @@ export const usePlayerStore = defineStore('player', () => {
    * @return {void} 无返回值
    */
   function clearMidiDetail(): void {
+    detailRequestId += 1
+    isDetailLoading.value = false
     detailMidi.value = null
     detailMelody.value = []
     detailAllNotes.value = []
@@ -1396,23 +1417,27 @@ export const usePlayerStore = defineStore('player', () => {
       clearMidiDetail()
       return null
     }
+    clearMidiDetail()
+    const requestId = ++detailRequestId
     isDetailLoading.value = true
     try {
       detailMidi.value = midi
       const analysis = await readMidiAnalysis(midi)
+      if (requestId !== detailRequestId) return null
       detailMelody.value = analysis.melody
       detailAllNotes.value = analysis.allNotes
       detailTracks.value = analysis.tracks
       detailDuration.value = analysis.duration
-      await loadDetailDisabledTracks(midi)
-      return midi
+      await loadDetailDisabledTracks(midi, requestId)
+      return requestId === detailRequestId ? midi : null
     } catch (e) {
+      if (requestId !== detailRequestId) return null
       toast.error('解析 MIDI 失败', { description: String(e), richColors: true })
       console.error('解析 MIDI 详情失败:', e)
       clearMidiDetail()
       return null
     } finally {
-      isDetailLoading.value = false
+      if (requestId === detailRequestId) isDetailLoading.value = false
     }
   }
 
@@ -1448,6 +1473,7 @@ export const usePlayerStore = defineStore('player', () => {
 
       // 加载缓存的音轨屏蔽设置
       await loadDisabledTracks(midi)
+      if (requestId !== selectMidiRequestId || currentMidi.value?.filename !== midi.filename) return
 
       const duration = analysis.duration
       previewDuration.value = duration
@@ -1500,14 +1526,6 @@ export const usePlayerStore = defineStore('player', () => {
           const sourcePath = `${folderPath}/${file.filename}`
           try {
             const imported = await invoke<MidiInfo>('import_midi', { sourcePath })
-
-            // 读取库中的文件计算时长
-            const midiData = await invoke<number[]>('read_midi_data', {
-              filename: imported.filename,
-            })
-            const uint8Array = new Uint8Array(midiData)
-            const { duration } = await loadMidiForDuration(uint8Array.buffer)
-            imported.duration_ms = Math.floor(duration)
 
             // 提取旋律
             const melody = await invoke<MelodyEvent[]>('extract_melody', {
@@ -1940,6 +1958,8 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function setSpeed(newSpeed: number) {
     speed.value = newSpeed
+    // 试听音频是独立 WebAudio 时钟；同步它不会改写游戏内模拟按键调度器。
+    midiPreview?.setPreviewSpeed(newSpeed)
     try {
       await invoke('set_speed', { speed: newSpeed })
     } catch (e) {
@@ -2150,6 +2170,7 @@ export const usePlayerStore = defineStore('player', () => {
     selectRelativePreview,
     toggleTrack,
     toggleDetailTrack,
+    toggleDetailTrackById,
     initPianoEngine,
     applyPlayModeFilter,
     clearActiveNotes,

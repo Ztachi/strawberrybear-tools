@@ -2,7 +2,16 @@
 /**
  * @description: 在线曲库 - 本地缓存优先 + 虚拟滚动列表。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
@@ -43,6 +52,7 @@ const shouldRestoreOnUnmount = ref(true)
 const downloadedFiles = new Map<string, Uint8Array>()
 let resizeObserver: ResizeObserver | null = null
 let backToTopRegistration: FloatingActionRegistration | null = null
+let pageActive = false
 
 const songs = computed(() => onlineStore.filteredSongs)
 const filters = onlineStore.filters
@@ -208,7 +218,8 @@ function observeViewport(element: HTMLElement | null) {
 }
 
 function handleScroll(): void {
-  backToTopRegistration?.setVisible((viewportRef.value?.scrollTop ?? 0) > SCROLL_THRESHOLD)
+  const scrollTop = viewportRef.value?.scrollTop ?? 0
+  backToTopRegistration?.setVisible(scrollTop > SCROLL_THRESHOLD)
 }
 
 function scrollToTop(): void {
@@ -305,12 +316,49 @@ watch(
 
 watch(viewportRef, observeViewport, { immediate: true })
 
+/**
+ * @description: 激活缓存曲库页并恢复观察器、悬浮操作和虚拟列表偏移
+ * @return {void}
+ */
+function activatePage(): void {
+  if (pageActive) return
+  pageActive = true
+  shouldRestoreOnUnmount.value = true
+  // TanStack Virtual 持有虚拟网格偏移；KeepAlive 激活后由库恢复滚动容器。
+  const virtualScrollOffset = rowVirtualizer.value.scrollOffset
+  observeViewport(viewportRef.value)
+  backToTopRegistration = mainWindowUiStore.registerBackToTop(scrollToTop)
+  void nextTick(() => {
+    rowVirtualizer.value.measure()
+    if (virtualScrollOffset !== null) rowVirtualizer.value.scrollToOffset(virtualScrollOffset)
+    handleScroll()
+  })
+}
+
+/**
+ * @description: 停用缓存曲库页并释放只应由当前页面持有的副作用
+ * @return {void}
+ */
+function deactivatePage(): void {
+  if (!pageActive) return
+  pageActive = false
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  backToTopRegistration?.()
+  backToTopRegistration = null
+  if (shouldRestoreOnUnmount.value) {
+    shouldRestoreOnUnmount.value = false
+    void playerStore.restoreTemporaryOnlinePreview()
+  }
+}
+
 onMounted(() => {
   clearHiddenFilters()
-  backToTopRegistration = mainWindowUiStore.registerBackToTop(scrollToTop)
-  handleScroll()
+  activatePage()
   void onlineStore.ensureReady()
 })
+onActivated(activatePage)
+onDeactivated(deactivatePage)
 
 onBeforeRouteLeave((to) => {
   shouldRestoreOnUnmount.value =
@@ -318,13 +366,7 @@ onBeforeRouteLeave((to) => {
 })
 
 onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  backToTopRegistration?.()
-  backToTopRegistration = null
-  if (shouldRestoreOnUnmount.value) {
-    void playerStore.restoreTemporaryOnlinePreview()
-  }
+  deactivatePage()
 })
 </script>
 
@@ -363,13 +405,14 @@ onBeforeUnmount(() => {
       class="disclaimer-alert"
     />
 
-    <div v-if="onlineStore.errorMessage && songs.length > 0" class="inline-error">
+    <div v-if="onlineStore.errorMessage && songs.length > 0" class="inline-error" role="alert">
       {{ onlineStore.errorMessage }}
     </div>
 
     <div
       v-if="onlineStore.errorMessage && songs.length === 0 && !isInitialLoading"
       class="state-panel"
+      role="alert"
     >
       <p class="state-title">
         {{ t('onlineLibrary.feedback.loadFailed') }}

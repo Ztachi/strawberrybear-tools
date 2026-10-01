@@ -498,16 +498,15 @@ export class Player {
    */
   async pause(): Promise<void> {
     if (this.state.status !== 'playing' && this.state.status !== 'loading') return
-    if (this.state.status === 'loading') {
-      // loading 阶段暂停相当于取消当前加载结果，防止稍后 load/play 继续把状态改回 playing。
-      this.requestSeq += 1
-    }
+    // 暂停也会取消尚未完成的 load/play/seek，最后发出的传输操作拥有状态回写权。
+    const seq = ++this.requestSeq
     try {
       await this.audio.pause()
+      if (seq !== this.requestSeq) return
       this.state.status = 'paused'
       this.emit('statechange')
     } catch (error) {
-      this.fail('PAUSE_FAILED', error)
+      if (seq === this.requestSeq) this.fail('PAUSE_FAILED', error)
     }
   }
 
@@ -524,14 +523,16 @@ export class Player {
       return
     }
 
+    const seq = ++this.requestSeq
     this.state.status = 'loading'
     this.emit('statechange')
     try {
       await this.audio.play()
+      if (seq !== this.requestSeq) return
       this.state.status = 'playing'
       this.emit('statechange')
     } catch (error) {
-      this.fail('RESUME_FAILED', error)
+      if (seq === this.requestSeq) this.fail('RESUME_FAILED', error)
     }
   }
 
@@ -540,14 +541,15 @@ export class Player {
    * @return {Promise<void>} 停止命令完成后 resolve
    */
   async stop(): Promise<void> {
-    this.requestSeq += 1
+    const seq = ++this.requestSeq
     try {
       await this.audio.stop()
+      if (seq !== this.requestSeq) return
       this.state.status = this.state.current ? 'stopped' : 'idle'
       this.state.positionSeconds = 0
       this.emit('statechange')
     } catch (error) {
-      this.fail('STOP_FAILED', error)
+      if (seq === this.requestSeq) this.fail('STOP_FAILED', error)
     }
   }
 
@@ -558,6 +560,7 @@ export class Player {
    */
   async seek(positionSeconds: number): Promise<void> {
     if (!this.state.current) return
+    const seq = ++this.requestSeq
     const position = clampNumber(
       positionSeconds,
       0,
@@ -565,10 +568,14 @@ export class Player {
     )
     try {
       await this.audio.seek(position)
+      // seek 可能和切歌、停止或下一次 seek 并发；旧平台请求完成后不能覆盖最新状态。
+      if (seq !== this.requestSeq) return
       this.state.positionSeconds = position
+      // seek 取代尚未结束的加载；端口未通过平台回调声明播放时，落到可恢复的暂停态。
+      if (this.state.status === 'loading') this.state.status = 'paused'
       this.emit('statechange')
     } catch (error) {
-      this.fail('SEEK_FAILED', error)
+      if (seq === this.requestSeq) this.fail('SEEK_FAILED', error)
     }
   }
 

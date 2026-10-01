@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Button, Tag } from 'antdv-next'
 import { Save, X } from 'lucide-vue-next'
+import { backOrReplaceWithFreshMainPage } from '@/router/mainNavigation'
 import { useSettingsStore } from '@/stores/settings'
 import TemplateEditorForm from './TemplateEditorForm.vue'
 
@@ -22,14 +23,7 @@ const notFound = ref(false)
  * @return {Promise<void>} 无返回值
  */
 async function leaveEditorWithoutNewHistory(): Promise<void> {
-  // vue-router 在 history.state.back 中记录上一条路由；存在时使用真实后退，
-  // 这样左上角后退不会再次回到刚关闭的模板编辑页。
-  if (window.history.state?.back != null) {
-    router.back()
-    return
-  }
-  // 直接打开编辑 URL 时没有可回退记录，用 replace 兜底回到模板列表，仍不追加历史。
-  await router.replace({ name: 'templates' })
+  await backOrReplaceWithFreshMainPage(router, { name: 'templates' })
 }
 
 const pageTitle = computed(() => {

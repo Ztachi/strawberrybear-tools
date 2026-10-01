@@ -8,13 +8,14 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, Square, X, Copy } from 'lucide-vue-next'
-import { Tooltip } from 'antdv-next'
+import { Button, Tooltip } from 'antdv-next'
 import { useI18n } from 'vue-i18n'
 
+const props = withDefaults(defineProps<{ snapLayouts?: boolean }>(), { snapLayouts: true })
 const appWindow = getCurrentWindow()
 const isMaximized = ref(false)
 let removeResizeListener: UnlistenFn | null = null
-let snapOverlayTimer: ReturnType<typeof window.setTimeout> | null = null
+let snapOverlayTimer: number | null = null
 let snapOverlayVisible = false
 const SNAP_OVERLAY_HOVER_DELAY_MS = 450
 /** 窗口控制按钮文案直接读取 i18n 上下文，避免父级为 tooltip 透传翻译函数。 */
@@ -93,7 +94,7 @@ async function hideSnapOverlay(): Promise<void> {
  * @return {void} 无返回值
  */
 function scheduleSnapOverlay(): void {
-  if (isMaximized.value || snapOverlayTimer !== null) {
+  if (!props.snapLayouts || isMaximized.value || snapOverlayTimer !== null) {
     return
   }
 
@@ -124,50 +125,76 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full shrink-0 items-center">
-    <Tooltip :title="t('windowControls.minimize')" placement="bottom">
-      <button
+    <Tooltip
+      :title="t('windowControls.minimize')"
+      placement="bottom"
+    >
+      <Button
         class="window-control-btn"
-        type="button"
+        type="text"
         :aria-label="t('windowControls.minimize')"
         @click="minimizeWindow"
       >
-        <Minus :size="16" :stroke-width="1.8" />
-      </button>
+        <template #icon>
+          <Minus
+            :size="16"
+            :stroke-width="1.8"
+          />
+        </template>
+      </Button>
     </Tooltip>
 
     <Tooltip
       :title="isMaximized ? t('windowControls.restore') : t('windowControls.maximize')"
       placement="bottom"
     >
-      <button
+      <Button
         class="window-control-btn"
-        type="button"
+        type="text"
         :aria-label="isMaximized ? t('windowControls.restore') : t('windowControls.maximize')"
         @mouseenter="scheduleSnapOverlay"
         @mouseleave="hideSnapOverlay"
         @click="toggleMaximizeWindow"
       >
-        <Copy v-if="isMaximized" :size="14" :stroke-width="1.7" />
-        <Square v-else :size="14" :stroke-width="1.7" />
-      </button>
+        <template #icon>
+          <Copy
+            v-if="isMaximized"
+            :size="14"
+            :stroke-width="1.7"
+          />
+          <Square
+            v-else
+            :size="14"
+            :stroke-width="1.7"
+          />
+        </template>
+      </Button>
     </Tooltip>
 
-    <Tooltip :title="t('windowControls.close')" placement="bottom">
-      <button
+    <Tooltip
+      :title="t('windowControls.close')"
+      placement="bottom"
+    >
+      <Button
         class="window-control-btn close"
-        type="button"
+        type="text"
         :aria-label="t('windowControls.close')"
         @click="closeWindow"
       >
-        <X :size="17" :stroke-width="1.8" />
-      </button>
+        <template #icon>
+          <X
+            :size="17"
+            :stroke-width="1.8"
+          />
+        </template>
+      </Button>
     </Tooltip>
   </div>
 </template>
 
 <style scoped>
 .window-control-btn {
-  @apply flex h-[46px] w-[46px] items-center justify-center text-foreground transition-colors;
+  @apply flex h-[46px] w-[46px] items-center justify-center rounded-none p-0 text-foreground transition-colors;
 }
 
 .window-control-btn:hover {

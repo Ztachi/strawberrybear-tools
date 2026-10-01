@@ -6,11 +6,12 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Button, Tooltip } from 'antdv-next'
-import { Expand, Keyboard, ListMusic, Music2 } from 'lucide-vue-next'
-import MarqueeText from '@/components/MarqueeText.vue'
+import { Expand, Keyboard, Music2 } from 'lucide-vue-next'
+import PlayerSongTitle from '@/components/PlayerSongTitle.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import { getMidiDisplayName } from '@/lib/midiDisplay'
 import { usePlayerStore } from '@/stores/player'
+import PreviewQueueButton from '@/components/PreviewPlayer/PreviewQueueButton.vue'
 import PlayQueueDrawer from './PlayQueueDrawer.vue'
 
 const { t } = useI18n()
@@ -20,8 +21,6 @@ const queueDrawerOpen = ref(false)
 const currentDisplayName = computed(() =>
   playerStore.currentMidi ? getMidiDisplayName(playerStore.currentMidi) : t('player.noMedia')
 )
-/** 当前曲目身份变化时重建跑马灯，让长标题从开头重新播放。 */
-const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'no-media')
 
 function openCurrentSongDetail(): void {
   const midi = playerStore.currentMidi
@@ -59,9 +58,10 @@ function openVirtualKeyboard(): void {
         </button>
       </Tooltip>
       <div class="current-main">
-        <Tooltip :title="currentDisplayName">
-          <MarqueeText :key="currentMarqueeKey" class="current-title" :text="currentDisplayName" />
-        </Tooltip>
+        <PlayerSongTitle
+          :title="currentDisplayName"
+          :media-id="playerStore.currentMidi?.filename ?? null"
+        />
       </div>
     </div>
 
@@ -74,19 +74,20 @@ function openVirtualKeyboard(): void {
 
     <div class="player-actions">
       <Tooltip :title="t('player.openVirtualKeyboard')">
-        <Button type="text" class="queue-btn" @click="openVirtualKeyboard">
+        <Button
+          type="text"
+          class="queue-btn"
+          @click="openVirtualKeyboard"
+        >
           <template #icon>
             <Keyboard class="queue-btn-icon" />
           </template>
         </Button>
       </Tooltip>
-      <Tooltip :title="t('player.openQueue')">
-        <Button type="text" class="queue-btn" @click="queueDrawerOpen = true">
-          <template #icon>
-            <ListMusic class="queue-btn-icon" />
-          </template>
-        </Button>
-      </Tooltip>
+      <PreviewQueueButton
+        :open="queueDrawerOpen"
+        @click="queueDrawerOpen = true"
+      />
     </div>
 
     <PlayQueueDrawer v-model:open="queueDrawerOpen" />
@@ -140,11 +141,6 @@ function openVirtualKeyboard(): void {
 
 .current-main {
   @apply min-w-0 flex-1;
-}
-
-.current-title {
-  @apply block text-sm font-semibold;
-  color: var(--color-foreground);
 }
 
 .player-core {

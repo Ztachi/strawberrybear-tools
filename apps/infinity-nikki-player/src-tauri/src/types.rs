@@ -54,8 +54,72 @@ pub struct MidiInfo {
     pub ticks_per_beat: u16,
     /// 速度（微秒每拍）
     pub tempo: u32,
+    /// MIDI 文件的完整结束 tick（包含只有元事件的尾部时间）
+    #[serde(default)]
+    pub duration_ticks: u32,
+    /// 按 tick 排序的 tempo 变化点；`microseconds_per_quarter` 保留 MIDI 原始精度
+    #[serde(default)]
+    pub tempo_map: Vec<TempoPoint>,
+    /// 按 tick 排序的拍号变化点
+    #[serde(default)]
+    pub time_signature_map: Vec<TimeSignaturePoint>,
+    /// MIDI 原始音轨元数据（音轨没有音符时也会保留）
+    #[serde(default)]
+    pub tracks: Vec<MidiTrackInfo>,
     /// 音符事件列表
     pub events: Vec<NoteEvent>,
+}
+
+/// MIDI tempo 变化点。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TempoPoint {
+    /// 变化发生的绝对 tick
+    pub tick: u32,
+    /// 四分音符对应的微秒数（MIDI Set Tempo 原始值）
+    pub microseconds_per_quarter: u32,
+}
+
+/// MIDI 拍号变化点。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeSignaturePoint {
+    /// 变化发生的绝对 tick
+    pub tick: u32,
+    /// 小节分子
+    pub numerator: u8,
+    /// 小节分母（实际值，例如 4，而不是 MIDI 元事件中的 2 的幂）
+    pub denominator: u8,
+}
+
+/// MIDI 音轨元数据。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MidiTrackInfo {
+    /// 稳定的应用内音轨 ID
+    pub id: String,
+    /// MIDI 原始音轨索引
+    pub index: usize,
+    /// Track Name 元事件；缺失时为空字符串
+    pub name: String,
+    /// 音轨中出现的第一个通道；多通道音轨使用第一个通道展示
+    #[serde(default)]
+    pub channel: Option<u8>,
+    /// 是否包含 MIDI Channel 10（0-based channel 9）
+    pub is_percussion: bool,
+    /// 音符数量
+    pub note_count: usize,
+    /// 该轨道在 MIDI 文件中的完整结束 tick（包含尾部元事件时间）。
+    ///
+    /// 与 `MidiInfo::duration_ticks` 分开保存：轨道可能只占全曲的一小段，
+    /// 也可能只有元事件而没有音符。`None` 仅用于兼容旧缓存中缺失此字段的
+    /// 数据；新解析结果始终提供该值（即使轨道结束于 tick 0）。
+    #[serde(default)]
+    pub end_tick: Option<u32>,
+    /// 是否启用。解析结果默认为启用，禁用状态仍由应用配置管理。
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
 }
 
 /// MIDI 音符事件
@@ -72,6 +136,9 @@ pub struct MidiInfo {
 /// * `track` - 音轨索引
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NoteEvent {
+    /// 稳定的应用内音符 ID；旧缓存缺失该字段时按空字符串反序列化
+    #[serde(default)]
+    pub id: String,
     /// 音高 (0-127)
     pub pitch: u8,
     /// 力度 (0-127)
@@ -82,7 +149,10 @@ pub struct NoteEvent {
     pub end_tick: u32,
     /// MIDI 通道 (0-15)
     pub channel: u8,
-    /// 音轨索引
+    /// 原始轨道索引，不受旧 u8 模拟按键字段的范围限制。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_track: Option<usize>,
+    /// 旧模拟按键协议的音轨索引，保留兼容语义。
     pub track: u8,
 }
 
@@ -209,6 +279,63 @@ pub struct KeyTemplate {
     pub is_builtin: bool,
     /// 音高到按键的映射列表
     pub mappings: Vec<KeyMapping>,
+}
+
+/// MIDI 编辑器项目摘要（列表页只读）
+///
+/// # Fields
+///
+/// * `track_count` / `note_count` / `duration_ms` - 由前端保存时计算
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MidiProjectMeta {
+    #[serde(default)]
+    pub track_count: u32,
+    #[serde(default)]
+    pub note_count: u32,
+    #[serde(default)]
+    pub duration_ms: u64,
+}
+
+/// MIDI 编辑器项目文件
+///
+/// `document` 为钢琴卷帘文档，后端不解析其内容，只做透传持久化。
+/// 字段名与前端 `MidiProject` 保持 camelCase 一致。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MidiProject {
+    #[serde(default = "default_midi_project_schema_version")]
+    pub schema_version: u32,
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub created_at: u64,
+    #[serde(default)]
+    pub updated_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<serde_json::Value>,
+    #[serde(default)]
+    pub meta: MidiProjectMeta,
+    #[serde(default)]
+    pub r#loop: Option<serde_json::Value>,
+    pub document: serde_json::Value,
+}
+
+fn default_midi_project_schema_version() -> u32 {
+    1
+}
+
+/// 列表页使用的项目摘要，不含文档正文
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MidiProjectSummary {
+    pub id: String,
+    pub name: String,
+    pub created_at: u64,
+    pub updated_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<serde_json::Value>,
+    pub meta: MidiProjectMeta,
 }
 
 /// 键位映射

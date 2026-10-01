@@ -39,3 +39,9 @@ Antdv Next `Select` 必须使用 `options` 或合法的 `SelectOption` 结构，
 模板列表等占据剩余空间的页面，应让外层布局负责分配高度，`Table` 通过 `scroll.y` 在表格内部滚动。
 
 需要固定表头或操作列时，使用 Antdv Next `Table` 的 `scroll`、`fixed` 和列配置，不要手写外层 overflow 来模拟固定效果。
+
+## 共用窗口标题栏与预览控件
+
+主窗口与音轨独立窗口使用 `components/WindowTitleBar`，通过 title、center、actions slots 组合内容；平台交通灯留白、Windows 窗口按钮和拖动区域只维护一份。主窗口专属导航与应用操作留在 `views/MainWindow/components/AppHeader`。
+
+歌曲名统一使用 `PlayerSongTitle`（Tooltip + MarqueeText）；播放模式与预览传输按钮统一使用无 store 依赖的 `PreviewPlaybackControls`。主窗口通过 `usePreviewPlaybackControls` 连接既有播放 actions，独立窗口经会话协议转发动作，不能为了复用 UI 再初始化播放器。

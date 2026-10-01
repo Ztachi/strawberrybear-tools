@@ -1,13 +1,13 @@
 {
   "name": "@strawberrybear/infinity-nikki-player",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit",
+    "type-check": "vue-tsc -b --noEmit && vue-tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
     "clean": "rimraf src-tauri/target",
     "tauri": "tauri",
@@ -15,18 +15,19 @@
     "tauri:build:exe": "node scripts/tauri-build-with-mirror.mjs --no-bundle",
     "tauri:build:msi": "node scripts/tauri-build-with-mirror.mjs --bundles msi",
     "tauri:build:nsis": "node scripts/tauri-build-with-mirror.mjs --bundles nsis",
-    "nikki": "bash scripts/build-and-launch.sh"
+    "nikki": "bash scripts/build-and-launch.sh",
+    "test": "vitest run --api false",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@antdv-next/icons": "^1.0.8",
     "@strawberrybear/keystroke-sequencer": "workspace:*",
+    "@strawberrybear/midi-editor": "workspace:*",
     "@strawberrybear/piano-roll": "workspace:*",
     "@strawberrybear/player": "workspace:*",
     "@tanstack/vue-virtual": "^3.13.28",
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.1",
     "@tonejs/piano": "^0.2.1",
     "@vueuse/core": "^14.2.1",
     "antdv-next": "1.3.3",
@@ -43,6 +44,7 @@
     "vue-router": "^4.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^22.19.17",
     "@vitejs/plugin-vue": "^6.0.5",
@@ -53,6 +55,7 @@
     "tailwindcss": "^3.4.0",
     "typescript": "~5.7.2",
     "vite": "^8.0.5",
+    "vitest": "^3.2.4",
     "vue-tsc": "^2.2.0"
   }
 }

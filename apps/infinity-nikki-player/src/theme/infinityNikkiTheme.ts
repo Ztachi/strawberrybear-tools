@@ -6,6 +6,7 @@ import type { CSSProperties, VNodeChild } from 'vue'
 import { h } from 'vue'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import type { ConfigProviderProps, ThemeConfig } from 'antdv-next'
+import type { PianoRollThemeInput } from '@strawberrybear/piano-roll/browser'
 import { getAntdvLocale, i18n } from '@/i18n'
 
 /** 主品牌粉色，源自无限暖暖当前项目视觉基准。 */
@@ -14,6 +15,15 @@ export const NIKKI_PRIMARY_COLOR = '#F7B7BE'
 export const NIKKI_PRIMARY_HOVER_COLOR = '#EE8FA1'
 /** 主品牌粉色按下态，比 hover 再深一级，形成明确按压层级。 */
 export const NIKKI_PRIMARY_ACTIVE_COLOR = '#E36F86'
+/** MIDI 音轨未自定义时的统一颜色；菜单、总览和详情共用。 */
+export const MIDI_EDITOR_DEFAULT_TRACK_COLOR = NIKKI_PRIMARY_ACTIVE_COLOR
+/** 编辑器两种视图共用缺省音符色，不向工程数据写入主题颜色。 */
+export const midiEditorPianoRollTheme: PianoRollThemeInput = {
+  colors: {
+    overviewNote: MIDI_EDITOR_DEFAULT_TRACK_COLOR,
+    editorNote: MIDI_EDITOR_DEFAULT_TRACK_COLOR,
+  },
+}
 /** 主品牌粉色禁用背景，只降低饱和和对比，不回退到灰色系。 */
 export const NIKKI_PRIMARY_DISABLED_BG = '#FFF1F4'
 /** 主品牌粉色禁用描边，用于 disabled 按钮和输入控件边框。 */
@@ -70,6 +80,16 @@ export const infinityNikkiTheme: ThemeConfig = {
       '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
   },
   components: {
+    FloatButton: {
+      controlHeightLG: 30,
+      borderRadiusLG: 8,
+    },
+    Slider: {
+      railBg: '#EEC6CF',
+      railHoverBg: '#E5AAB9',
+      trackBg: NIKKI_PRIMARY_ACTIVE_COLOR,
+      trackHoverBg: NIKKI_PRIMARY_HOVER_COLOR,
+    },
     Button: {
       colorPrimary: NIKKI_PRIMARY_COLOR,
       colorPrimaryHover: NIKKI_PRIMARY_HOVER_COLOR,
@@ -155,6 +175,37 @@ export const infinityNikkiButtonConfig: ConfigProviderProps['button'] = {
 export const infinityNikkiConfigProviderProps: ConfigProviderProps = {
   theme: infinityNikkiTheme,
   button: infinityNikkiButtonConfig,
+}
+
+/** MIDI 编辑器在主窗口与独立窗口中共用的紧凑控件规格。 */
+export const midiEditorConfigProviderProps: ConfigProviderProps = {
+  ...infinityNikkiConfigProviderProps,
+  theme: {
+    ...infinityNikkiTheme,
+    token: {
+      ...infinityNikkiTheme.token,
+      borderRadius: 6,
+      controlHeightSM: 28,
+      fontSize: 13,
+    },
+    components: {
+      ...infinityNikkiTheme.components,
+      Button: {
+        ...infinityNikkiTheme.components?.Button,
+        borderRadius: 6,
+        primaryShadow: 'none',
+      },
+      Select: {
+        ...infinityNikkiTheme.components?.Select,
+        borderRadius: 6,
+        borderRadiusLG: 8,
+      },
+      Popover: {
+        ...infinityNikkiTheme.components?.Popover,
+        borderRadiusLG: 10,
+      },
+    },
+  },
 }
 
 /**

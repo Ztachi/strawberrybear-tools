@@ -53,7 +53,7 @@ function formatTime(timestamp: number) {
     </div>
 
     <!-- 日志列表 -->
-    <div class="log-list">
+    <div data-text-selectable class="log-list">
       <!-- 遍历每个日志条目 -->
       <div
         v-for="entry in playerStore.keyLogs"

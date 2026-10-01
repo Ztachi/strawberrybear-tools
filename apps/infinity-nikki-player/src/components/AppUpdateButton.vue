@@ -8,12 +8,16 @@ import { Tooltip } from 'antdv-next'
 import { Download, Loader2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useAppUpdater } from '@/composables/useAppUpdater'
+import { emit } from '@tauri-apps/api/event'
 
 const { t } = useI18n()
 const updater = useAppUpdater()
 
 /** 按钮文案会跟随下载/安装进度实时变化。 */
 const buttonText = computed(() => {
+  if (updater.state.value.lastInstall?.outcome === 'notApplied') return t('updater.notApplied')
+  if (updater.state.value.phase === 'ready') return t('updater.installNow')
+  if (updater.lastError.value) return t('updater.retryDownload')
   if (updater.isInstalling.value) return t('updater.installing')
   if (updater.isDownloading.value) {
     return updater.progress.value === null
@@ -33,12 +37,20 @@ const buttonIcon = computed(() => {
  * @description: 下载并安装静默检测到的新版本
  */
 async function handleClick() {
+  if (updater.state.value.lastInstall?.outcome === 'notApplied') {
+    await emit('show_about')
+    return
+  }
   await updater.downloadAndInstallUpdate()
 }
 </script>
 
 <template>
-  <Tooltip v-if="updater.hasUpdate.value" :title="buttonText" placement="bottom">
+  <Tooltip
+    v-if="updater.hasUpdate.value || updater.state.value.lastInstall?.outcome === 'notApplied'"
+    :title="buttonText"
+    placement="bottom"
+  >
     <button
       class="app-update-button"
       :class="{ busy: updater.isDownloading.value || updater.isInstalling.value }"

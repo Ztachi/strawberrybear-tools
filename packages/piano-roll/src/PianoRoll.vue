@@ -1,202 +1,221 @@
 <script setup lang="ts">
-/**
- * @description: 钢琴卷帘组件
- * 左侧 DOM 音轨标签，右侧 Canvas 音符卷轴
- */
-import { nextTick, ref, onMounted, onUnmounted, watch } from 'vue'
-import { drawPianoRoll, type NoteEvent, type TrackInfo } from './index'
+/** @description: Vue 薄适配层；文档、时间、事件与持久浏览器控制器的生命周期桥接。 */
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useSlots, watch } from 'vue'
+import { TIME_ZOOM_CONFIG, createPianoRollEditor, createTracksOverview, defaultLabels, sliderToTimeZoom, timeZoomToSlider, type PianoRollEditIntent, type PianoRollEditingOptions, type PianoRollTrackOpenContext, type PianoRollView, type PianoRollViewport } from './browser'
+import { pianoRollThemeVariables, resolvePianoRollTheme } from './browser/theme'
+import type { PianoRollProps } from './vue-props'
 
-const props = defineProps<{
-  notes: NoteEvent[]
-  duration: number
-  ticksPerBeat?: number
-  tempo?: number
-  tracks: TrackInfo[]
-  disabledTracks: Set<number>
-  disabledTracksVersion?: number
-  currentTime: number
-}>()
-
+const props = withDefaults(defineProps<PianoRollProps>(), {
+  variant: 'overview', selectedTrackId: null, timeZoom: undefined, pitchZoom: 16,
+  hideEmptyTracks: false,
+  showToolbarControls: true,
+})
 const emit = defineEmits<{
-  toggle: [eventTrackValue: number]
+  'select-track': [trackId: string]
+  'open-editor': [trackId: string, context: PianoRollTrackOpenContext]
+  'toggle-track': [trackId: string]
+  'seek-preview': [seconds: number | null]
+  seek: [seconds: number]
+  'follow-change': [enabled: boolean]
+  'viewport-change': [viewport: Readonly<PianoRollViewport>]
+  'edit-intent': [intent: PianoRollEditIntent]
 }>()
-
-const rollContainerRef = ref<HTMLDivElement | null>(null)
-const canvasRef = ref<HTMLCanvasElement | null>(null)
-let destroyFn: (() => void) | null = null
-let resizeObserver: ResizeObserver | null = null
-let renderFrame = 0
-let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null
-
-// 88键 x (NOTE_HEIGHT 2px + GAP 1px) = 264px
-const TRACK_HEIGHT = 88 * 3
-/** 容器 resize 高频触发时的防抖间隔，避免拖拽窗口期间反复重绘完整 Canvas。 */
-const RESIZE_RENDER_DEBOUNCE_MS = 120
-
-/** 根据 eventTrackValue 检查音轨是否被禁用 */
-function isTrackDisabledByMidiPlayerValue(eventTrackValue: number): boolean {
-  // midi-player-js 的 track 值比 Rust 解析的大 1
-  const midiPlayerTrackValue = eventTrackValue + 1
-  return props.disabledTracks.has(midiPlayerTrackValue)
+const slots = useSlots()
+/** 补齐 onIntent 后交给控制器；宿主未提供回调时经事件发出。 */
+function resolveEditing(): PianoRollEditingOptions | undefined {
+  const editing = props.editing
+  if (!editing) return undefined
+  return {
+    ...editing,
+    onIntent: (intent) => {
+      editing.onIntent?.(intent)
+      emit('edit-intent', intent)
+    },
+  }
 }
-
-function render() {
-  if (!canvasRef.value || !rollContainerRef.value) return
-  if (rollContainerRef.value.clientWidth <= 0) return
-  destroyFn?.()
-  destroyFn = drawPianoRoll(canvasRef.value, {
-    container: rollContainerRef.value,
-    notes: props.notes,
-    duration: props.duration,
-    ticksPerBeat: props.ticksPerBeat || 480,
-    tempo: props.tempo || 500000,
-    tracks: props.tracks,
-    disabledTracks: props.disabledTracks,
-    currentTime: props.currentTime,
-  })
-}
-
-/** 播放时间这类连续更新只节流到动画帧，保证指针流畅但不会一帧内重复重绘。 */
-function scheduleFrameRender() {
-  if (renderFrame) cancelAnimationFrame(renderFrame)
-  renderFrame = requestAnimationFrame(() => {
-    renderFrame = 0
-    render()
-  })
-}
-
-/** 尺寸变化使用真实防抖，等拖拽窗口或抽屉布局稳定后再重算 canvas 宽度。 */
-function scheduleDebouncedRender() {
-  if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer)
-  resizeDebounceTimer = setTimeout(() => {
-    resizeDebounceTimer = null
-    scheduleFrameRender()
-  }, RESIZE_RENDER_DEBOUNCE_MS)
-}
-
-onMounted(() => {
-  void nextTick(() => {
-    render()
-    if (rollContainerRef.value) {
-      resizeObserver = new ResizeObserver(() => scheduleDebouncedRender())
-      resizeObserver.observe(rollContainerRef.value)
-    }
-  })
-  window.addEventListener('resize', scheduleDebouncedRender)
+const cornerHost = shallowRef<HTMLElement | null>(null)
+const host = ref<HTMLDivElement | null>(null)
+const labels = computed(() => ({ ...defaultLabels, ...props.labels }))
+const themeVariables = computed(() => pianoRollThemeVariables(resolvePianoRollTheme(props.theme)))
+const viewport = shallowRef<Readonly<PianoRollViewport>>({
+  scrollLeft: 0, scrollTop: 0, timeZoom: props.timeZoom ?? (props.variant === 'overview' ? 42 : 110),
+  minTimeZoom: 1, maxTimeZoom: TIME_ZOOM_CONFIG.maxPixelsPerSecond,
+  pitchZoom: props.pitchZoom, follow: true,
 })
+const selectedTrack = computed(() => props.document.tracks.find((track) => track.id === props.selectedTrackId))
+let view: PianoRollView | null = null
 
-onUnmounted(() => {
-  if (renderFrame) cancelAnimationFrame(renderFrame)
-  if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer)
-  resizeObserver?.disconnect()
-  destroyFn?.()
-  window.removeEventListener('resize', scheduleDebouncedRender)
-})
-
-watch(
-  () => [
-    props.notes,
-    props.tracks,
-    props.duration,
-    props.ticksPerBeat,
-    props.tempo,
-    props.disabledTracksVersion,
-  ],
-  () => scheduleDebouncedRender(),
-  { deep: true }
-)
-
-watch(
-  () => props.currentTime,
-  () => scheduleFrameRender()
-)
-
-function handleToggle(trackIndex: number) {
-  emit('toggle', trackIndex)
+function mountView(): void {
+  view?.destroy()
+  if (!host.value) return
+  const create = props.variant === 'overview' ? createTracksOverview : createPianoRollEditor
+  view = create({
+    container: host.value, document: props.document, transport: props.transport,
+    selectedTrackId: props.selectedTrackId, timeZoom: viewport.value.timeZoom,
+    pitchZoom: viewport.value.pitchZoom, follow: viewport.value.follow,
+    hideEmptyTracks: props.hideEmptyTracks,
+    labels: labels.value, theme: props.theme, plugins: props.plugins,
+    onTrackSelect: (id) => emit('select-track', id),
+    onTrackOpen: (id, context) => emit('open-editor', id, context),
+    onTrackToggle: (id) => emit('toggle-track', id),
+    renderTrackToggle: props.renderTrackToggle,
+    renderTrackLabel: props.renderTrackLabel,
+    renderTrackActions: props.renderTrackActions,
+    editing: resolveEditing(),
+    renderCorner: slots.corner ? (container) => {
+      cornerHost.value = container
+      return () => { cornerHost.value = null }
+    } : undefined,
+    onSeek: (seconds) => emit('seek', seconds),
+    onSeekPreview: (seconds) => emit('seek-preview', seconds),
+    onFollowChange: (enabled) => emit('follow-change', enabled),
+    onViewportChange: (next) => { viewport.value = next; emit('viewport-change', next) },
+  })
+  viewport.value = view.getViewport()
 }
+function updateTimeZoom(event: Event): void {
+  view?.setTimeZoom(sliderToTimeZoom(Number((event.target as HTMLInputElement).value), viewport.value.minTimeZoom, viewport.value.maxTimeZoom))
+}
+function updatePitchZoom(event: Event): void {
+  view?.setPitchZoom(Number((event.target as HTMLInputElement).value))
+}
+
+onMounted(mountView)
+onBeforeUnmount(() => { view?.destroy(); view = null })
+watch(() => props.document, (document) => view?.setDocument(document))
+watch(() => props.transport, (transport) => view?.setTransport(transport), { deep: true })
+watch(() => props.selectedTrackId, (id) => view?.setSelectedTrack(id))
+watch(() => props.variant, mountView)
+watch(labels, (next) => view?.setLabels(next))
+watch(() => props.theme, (next) => view?.setTheme(next), { deep: true })
+watch(() => props.timeZoom, (zoom) => { if (zoom !== undefined) view?.setTimeZoom(zoom) })
+watch(() => props.pitchZoom, (zoom) => view?.setPitchZoom(zoom))
+watch(() => props.hideEmptyTracks, (enabled) => view?.setHideEmptyTracks(enabled))
+watch(() => props.editing, () => view?.setEditing(resolveEditing()))
+defineExpose({ getView: () => view })
 </script>
 
 <template>
-  <div class="piano-roll">
-    <!-- 左侧：音轨标签（固定不滚动） -->
-    <div class="track-labels">
-      <div
-        v-for="track in tracks"
-        :key="track.index"
-        class="track-label"
-        :style="{ height: `${TRACK_HEIGHT}px` }"
+  <section
+    class="piano-roll"
+    :style="themeVariables"
+    :aria-label="variant === 'overview' ? labels.overview : labels.editor"
+  >
+    <header class="piano-roll-toolbar">
+      <slot
+        name="title"
+        :label="variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor)"
       >
-        <div
-          class="switch"
-          :class="{ active: !isTrackDisabledByMidiPlayerValue(track.eventTrackValue) }"
-          @click="handleToggle(track.index)"
-        >
-          <span class="switch-knob" />
-        </div>
-        <span class="track-name">{{ track.name }}</span>
-      </div>
-    </div>
-
-    <!-- 右侧：Canvas 卷轴（可横向滚动） -->
-    <div
-      ref="rollContainerRef"
-      class="roll-scroll"
-    >
-      <canvas
-        ref="canvasRef"
-        class="roll-canvas"
+        <strong
+          class="piano-roll-title"
+          :aria-label="variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor)"
+        >{{ variant === 'overview' ? labels.overview : (selectedTrack?.name || labels.editor) }}</strong>
+      </slot>
+      <slot
+        name="toolbar"
+        :view="view"
+        :viewport="viewport"
       />
-    </div>
-  </div>
+      <template v-if="props.showToolbarControls">
+        <button
+          class="piano-roll-native-button"
+          type="button"
+          :aria-pressed="viewport.follow"
+          @click="view?.setFollow(!viewport.follow)"
+        >
+          {{ viewport.follow ? labels.following : labels.follow }}
+        </button>
+        <button
+          class="piano-roll-native-button"
+          type="button"
+          @click="view?.fitToSong()"
+        >
+          {{ labels.fit }}
+        </button>
+        <label class="piano-roll-zoom">
+          <span>{{ labels.timeZoom }}</span>
+          <input
+            type="range"
+            :min="0"
+            :max="100"
+            :value="timeZoomToSlider(viewport.timeZoom, viewport.minTimeZoom, viewport.maxTimeZoom)"
+            :disabled="viewport.minTimeZoom === viewport.maxTimeZoom"
+            step="any"
+            @input="updateTimeZoom"
+          >
+        </label>
+        <label
+          v-if="variant === 'editor'"
+          class="piano-roll-zoom piano-roll-pitch-zoom"
+        >
+          <span>{{ labels.pitchZoom }}</span>
+          <input
+            type="range"
+            :value="viewport.pitchZoom"
+            min="8"
+            max="36"
+            step="1"
+            @input="updatePitchZoom"
+          >
+        </label>
+      </template>
+    </header>
+    <Teleport v-if="cornerHost" :to="cornerHost">
+      <div class="piano-roll-corner-controls">
+        <slot name="corner" :view="view" :viewport="viewport" />
+      </div>
+    </Teleport>
+    <div
+      ref="host"
+      class="piano-roll-host"
+    />
+  </section>
 </template>
 
 <style scoped>
 .piano-roll {
-  @apply flex rounded-xl overflow-hidden;
-  background: var(--bg-primary-05);
-  border: 1px solid var(--border-primary-15);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  /* 标尺手柄可在首尾跨过边界；音轨、琴键及音符由各自视口负责裁剪。 */
+  overflow: visible;
+  /* 视图本身不是卡片；宿主决定浮层/页面边界，避免总览和详情叠加多层框线。 */
+  border: 0;
+  border-radius: 0;
+  background: var(--pr-surface);
+  color: var(--pr-text);
+  color-scheme: light;
+  container: piano-roll / inline-size;
 }
-
-.track-labels {
-  @apply flex-shrink-0 flex flex-col;
-  width: 120px;
-  background: rgba(247, 192, 193, 0.05);
-  border-right: 1px solid var(--border-primary-15);
+.piano-roll-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  min-height: 36px;
+  flex-shrink: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--pr-border), transparent 30%);
+  font: 12px var(--pr-font-family);
 }
-
-.track-label {
-  @apply flex flex-col items-center justify-center gap-1 px-3 py-2;
-  border-bottom: 2px solid rgba(247, 192, 193, 0.3);
-}
-
-.switch {
-  @apply w-8 h-4 rounded-full relative cursor-pointer transition-colors;
-  background: #6B7280;
-}
-
-.switch.active {
-  background: #10B981;
-}
-
-.switch-knob {
-  @apply absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform;
-  left: 2px;
-}
-
-.switch.active .switch-knob {
-  transform: translateX(16px);
-}
-
-.track-name {
-  @apply text-xs break-words leading-tight;
-  color: var(--color-text-secondary);
-}
-
-.roll-scroll {
-  @apply min-w-0 flex-1 overflow-hidden;
-}
-
-.roll-canvas {
-  @apply block;
+.piano-roll-title { margin-right: auto; flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.piano-roll-native-button { flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--pr-border); border-radius: var(--pr-control-radius); background: var(--pr-surface); color: inherit; cursor: pointer; font: inherit; }
+.piano-roll-native-button:hover { background: var(--pr-primary-soft); }
+.piano-roll-native-button[aria-pressed=true] { background: var(--pr-primary-soft); border-color: var(--pr-primary); }
+.piano-roll-toolbar button:focus-visible, .piano-roll-toolbar input:focus-visible { outline: 2px solid var(--pr-focus); outline-offset: 2px; }
+.piano-roll-zoom { display: flex; align-items: center; gap: 6px; }
+.piano-roll-zoom input { width: clamp(60px, 12cqi, 110px); height: 18px; margin: 0; appearance: none; background: transparent; accent-color: var(--pr-primary); cursor: pointer; }
+.piano-roll-zoom input::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--pr-border); }
+.piano-roll-zoom input::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; border: 0; border-radius: 50%; appearance: none; background: var(--pr-primary); }
+.piano-roll-zoom input::-moz-range-track { height: 4px; border-radius: 999px; background: var(--pr-border); }
+.piano-roll-zoom input::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--pr-primary); }
+.piano-roll-zoom input:disabled { opacity: .5; cursor: default; }
+.piano-roll-corner-controls { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; }
+.piano-roll-host { flex: 1; min-width: 0; min-height: 0; position: relative; }
+@container piano-roll (max-width: 540px) {
+  .piano-roll-toolbar { gap: 6px; padding: 6px; }
+  .piano-roll-pitch-zoom { margin-left: auto; }
 }
 </style>

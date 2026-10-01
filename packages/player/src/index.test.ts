@@ -159,6 +159,24 @@ describe('Player', () => {
     expect(audio.seek).toHaveBeenCalledWith(10)
   })
 
+  it('ignores an older seek when a newer seek completes first', async () => {
+    const resolvers: Array<() => void> = []
+    const audio = createAudioMock()
+    audio.seek = vi.fn(() => new Promise<void>((resolve) => resolvers.push(resolve)))
+    const player = new Player({ audio })
+    player.setQueue(tracks)
+    await player.play()
+
+    const first = player.seek(1)
+    const second = player.seek(2)
+    resolvers[1]?.()
+    await second
+    resolvers[0]?.()
+    await first
+
+    expect(player.getState().positionSeconds).toBe(2)
+  })
+
   it('applies muted state and keeps volume available for unmute', async () => {
     const audio = createAudioMock()
     const player = new Player({ audio })
@@ -342,5 +360,82 @@ describe('Player', () => {
 
     expect(player.getState().likedIds).toEqual(['b'])
     expect(player.getState().queue).toHaveLength(3)
+  })
+})
+
+describe('并发传输状态归属', () => {
+  it('忽略已失效 seek 的晚到错误', async () => {
+    const audio = createAudioMock()
+    let rejectOld!: (reason: Error) => void
+    vi.mocked(audio.seek).mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          rejectOld = reject
+        })
+    )
+    const player = new Player({ audio })
+    player.setQueue(tracks)
+    const older = player.seek(1)
+    await player.seek(2)
+    rejectOld(new Error('obsolete'))
+    await older
+    expect(player.getState()).toMatchObject({ positionSeconds: 2, error: null })
+  })
+
+  it('停止后旧 resume 完成不把播放状态恢复为 playing', async () => {
+    const audio = createAudioMock()
+    const player = new Player({ audio })
+    player.setQueue(tracks)
+    await player.play()
+    await player.pause()
+    let complete!: () => void
+    vi.mocked(audio.play).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          complete = resolve
+        })
+    )
+    const resume = player.resume()
+    await player.stop()
+    complete()
+    await resume
+    expect(player.getState().status).toBe('stopped')
+  })
+
+  it('晚到 stop 不覆盖新歌曲的播放状态', async () => {
+    const audio = createAudioMock()
+    const player = new Player({ audio })
+    player.setQueue(tracks)
+    await player.play()
+    let complete!: () => void
+    vi.mocked(audio.stop).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          complete = resolve
+        })
+    )
+    const stop = player.stop()
+    await player.play(tracks[1])
+    complete()
+    await stop
+    expect(player.getState()).toMatchObject({ status: 'playing', current: { id: 'b' } })
+  })
+
+  it('seek 取代加载后落到可恢复状态', async () => {
+    const audio = createAudioMock()
+    let complete!: () => void
+    vi.mocked(audio.load).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          complete = resolve
+        })
+    )
+    const player = new Player({ audio })
+    const playing = player.play(tracks[0])
+    await player.seek(4)
+    complete()
+    await playing
+    expect(player.getState()).toMatchObject({ status: 'paused', positionSeconds: 4 })
+    expect(audio.play).not.toHaveBeenCalled()
   })
 })

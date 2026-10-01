@@ -10,6 +10,10 @@ import type { FormInstance } from 'antdv-next'
 import { Camera, Save, X } from 'lucide-vue-next'
 import { usePlayerStore } from '@/stores/player'
 import { useSongListStore } from '@/stores/songLists'
+import {
+  backOrReplaceWithFreshMainPage,
+  freshMainPageLocation,
+} from '@/router/mainNavigation'
 import type { SongList } from '@/types'
 import CoverCropperModal from '../components/CoverCropperModal.vue'
 import SongListCover from '../components/SongListCover.vue'
@@ -134,7 +138,10 @@ async function confirmLeaveIfNeeded(): Promise<boolean> {
 async function handleCancel(): Promise<void> {
   if (!(await confirmLeaveIfNeeded())) return
   allowNextRouteLeave.value = true
-  await router.push({ name: 'files-song-list-detail', params: { id: songListId.value } })
+  await backOrReplaceWithFreshMainPage(router, {
+    name: 'files-song-list-detail',
+    params: { id: songListId.value },
+  })
 }
 
 async function handleSave(): Promise<void> {
@@ -156,7 +163,11 @@ async function handleSave(): Promise<void> {
 
   await playerStore.syncActivePreviewQueue()
   resetFormFromSongList(saved)
-  await router.push({ name: 'files-song-list-detail', params: { id: saved.id } })
+  allowNextRouteLeave.value = true
+  await backOrReplaceWithFreshMainPage(router, {
+    name: 'files-song-list-detail',
+    params: { id: saved.id },
+  })
 }
 
 function handleCoverConfirm(data: Uint8Array): void {
@@ -180,6 +191,9 @@ watch(
 )
 
 onBeforeRouteLeave(async () => confirmLeaveIfNeeded())
+
+// 原生安装前与路由离开复用同一套保存、丢弃、取消确认。
+defineExpose({ confirmLeaveIfNeeded })
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
@@ -266,7 +280,9 @@ onBeforeUnmount(() => {
 
   <section v-else class="missing-state">
     <span>{{ t('songList.notFound') }}</span>
-    <Button @click="router.push({ name: 'files-all' })">
+    <Button
+      @click="router.replace(freshMainPageLocation({ name: 'files-all' }, { replace: true }))"
+    >
       {{ t('songList.allSongs') }}
     </Button>
   </section>

@@ -201,8 +201,8 @@ function seekOverlayPlayback(time: number) {
   const isActivelyPlaying = playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
   playerStore.setPreviewTime(time)
   if (isActivelyPlaying && countdown.value <= 0) {
-    // 播放中拖动进度：按键序列与音频同步跳转（时间表是原速音乐时间，需乘速度倍率）
-    keystrokeSequencer?.seek(time * playerStore.speed)
+    // 播放中拖动进度：按键序列与音频同步跳转；预览位置已是原曲时间，倍率只由调度器推进
+    keystrokeSequencer?.seek(time)
     void playerStore.seekPreview(time)
     return
   }
@@ -262,8 +262,8 @@ function startKeystrokePlayback() {
     onKeyDown: (key) => void invoke('simulate_key_down', { key }).catch(console.error),
     onKeyUp: (key) => void invoke('simulate_key_up', { key }).catch(console.error),
   })
-  // 进度条时间是真实播放耗时，换算成原速音乐时间后启动
-  keystrokeSequencer.play(playerStore.previewCurrentTime * playerStore.speed)
+  // 预览进度与按键时间表均使用原曲毫秒；播放速度只在执行器内部应用一次。
+  keystrokeSequencer.play(playerStore.previewCurrentTime)
 }
 
 // 监听播放状态与当前歌曲变化 - 合并在一个侦听器里，避免"切歌销毁"与"进入播放态启动"

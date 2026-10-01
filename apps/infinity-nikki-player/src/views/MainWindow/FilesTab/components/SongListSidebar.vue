@@ -17,6 +17,7 @@ import {
   FileArchive,
   LayoutGrid,
   ListMusic,
+  Music4,
   Play,
   Plus,
   Trash2,
@@ -27,12 +28,13 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSongListStore } from '@/stores/songLists'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 import { saveSettings } from '@/lib/settings'
+import { freshMainPageLocation } from '@/router/mainNavigation'
 import type { SongList } from '@/types'
 import type { RouteLocationRaw } from 'vue-router'
 import { buildCollectionContext, getSongListSongs } from '../utils'
 import SongListCover from './SongListCover.vue'
 
-type MainWindowTab = 'files' | 'templates' | 'online'
+type MainWindowTab = 'files' | 'templates' | 'midi-editor' | 'online'
 type FocusableInputRef = {
   focus?: () => void
   input?: HTMLInputElement
@@ -80,12 +82,14 @@ const activeSongListId = computed(() =>
 
 const isAllSongsActive = computed(() => route.name === 'files-all')
 const isTemplatesActive = computed(() => route.name === 'templates')
+const isMidiEditorActive = computed(() => String(route.name ?? '').startsWith('midi-editor'))
 const isOnlineActive = computed(
   () => route.name === 'online-library' || route.name === 'online-library-song-detail'
 )
 
 function getDefaultRoute(tab: MainWindowTab): RouteLocationRaw {
   if (tab === 'templates') return { name: 'templates' }
+  if (tab === 'midi-editor') return { name: 'midi-editor' }
   if (tab === 'online') return { name: 'online-library' }
   return { name: 'files-all' }
 }
@@ -94,7 +98,12 @@ async function navigateMain(tab: MainWindowTab, target?: RouteLocationRaw): Prom
   if (props.requestNavigate) {
     return (await props.requestNavigate(tab, target)) !== false
   }
-  await router.push(target ?? getDefaultRoute(tab))
+  const routeTarget = target ?? getDefaultRoute(tab)
+  await router.push(
+    freshMainPageLocation(routeTarget, {
+      replace: router.resolve(routeTarget).fullPath === route.fullPath,
+    })
+  )
   return true
 }
 
@@ -401,6 +410,19 @@ onBeforeUnmount(() => {
             <LayoutGrid :size="18" />
           </div>
           <span v-if="!collapsed" class="min-w-0 flex-1 truncate">{{ t('tabs.templates') }}</span>
+        </button>
+      </Tooltip>
+
+      <Tooltip :title="collapsed ? t('tabs.midiEditor') : ''" placement="right">
+        <button
+          class="sidebar-nav-item"
+          :class="{ 'sidebar-entry-active': isMidiEditorActive }"
+          @click="navigateMain('midi-editor')"
+        >
+          <div class="sidebar-nav-icon">
+            <Music4 :size="18" />
+          </div>
+          <span v-if="!collapsed" class="min-w-0 flex-1 truncate">{{ t('tabs.midiEditor') }}</span>
         </button>
       </Tooltip>
 

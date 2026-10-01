@@ -15,6 +15,7 @@ export default {
   tabs: {
     files: 'Files',
     templates: 'Templates',
+    midiEditor: 'MIDI Editor',
     onlineLibrary: 'Online Library',
     comingSoon: 'Coming Soon',
     comingSoonTip: 'This feature is under development...',
@@ -32,6 +33,7 @@ export default {
     create: 'Create',
     refresh: 'Refresh',
     backToTop: 'Back to top',
+    confirm: 'OK',
   },
   headerNav: {
     back: 'Back',
@@ -95,6 +97,89 @@ export default {
     clickToDisable: 'Click to disable',
     trackIndex: 'Track {n}',
     percussionTrack: 'Percussion',
+    pianoRoll: {
+      detach: 'Open in separate window',
+      dock: 'Return to main window',
+      focusWindow: 'Show track window',
+      windowFailed: 'Track window failed: {error}',
+      autoSwitch: 'Auto switch',
+      autoSwitchHint:
+        'Automatically show details for the currently playing song. Your playback queue stays unchanged.',
+      overview: 'Tracks Overview',
+      editor: 'Piano Roll',
+      follow: 'Follow Playhead',
+      following: 'Following',
+      timeZoom: 'Time Zoom',
+      pitchZoom: 'Pitch Zoom',
+      notes: 'notes',
+      empty: 'This track has no notes',
+      playhead: 'Playhead: use Left and Right arrows to seek',
+      fit: 'Fit Song',
+      close: 'Close Piano Roll',
+      hideEmptyTracks: 'Hide tracks without notes',
+      noTracksWithNotes: 'No tracks contain notes',
+      help: {
+        title: 'Piano Roll Guide',
+        done: 'Got it',
+        intro:
+          'The piano roll arranges notes by time and pitch to help you inspect melodies, compare tracks, and locate passages. The overview shows all tracks; the detail view shows one track with its keyboard and notes.',
+        groups: {
+          tracks: 'Browse tracks',
+          view: 'Zoom and follow',
+          position: 'Seek and manage details',
+        },
+        items: {
+          selection: {
+            label: 'Select and open',
+            description:
+              'Click to select a track; double-click to open its details. While details are open, click another track to switch, or double-click the current track to close.',
+          },
+          enabled: {
+            label: 'Track switches',
+            description:
+              'The left switch controls whether a track plays. Toggling it does not select the track or seek.',
+          },
+          filter: {
+            label: 'Empty tracks',
+            description:
+              'Use the filter to switch between tracks with notes and all tracks. Song preview hides empty tracks by default; the MIDI editor shows them so you can add notes.',
+          },
+          zoom: {
+            label: 'Independent zoom',
+            description:
+              'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Views zoom independently, save per song, and restore when you return. Minimum time zoom fills one screen.',
+          },
+          scroll: {
+            label: 'Scrolling',
+            description:
+              'Scroll inside the view you want to move. With Follow on, a horizontal gesture of a quarter of the visible width switches to manual browsing; small movements and vertical scrolling keep Follow on. With Follow off, browse freely even if the playhead leaves the view. Each view is independent.',
+          },
+          follow: {
+            label: 'Follow Playhead',
+            description:
+              'A filled button means Follow is on. The playhead moves to the center, stays there as notes scroll, then moves to the end near the song’s tail. Click the button to resume Follow.',
+          },
+          seek: {
+            label: 'Seek',
+            description:
+              'Click the ruler or drag the top playhead handle. Dragging previews the position; releasing commits one seek. Edges scroll automatically. Press Esc to cancel a drag.',
+          },
+          resize: {
+            label: 'Resize and close',
+            description:
+              'Drag the thin top edge of details to resize, or focus it and use Up/Down. Use the close button on the right to return to the full overview.',
+          },
+          workspace: {
+            label: 'Browse and edit',
+            description:
+              'The piano roll in song details helps you browse and seek during playback. Choose Edit This MIDI to draw, move, resize, and change note velocity in the MIDI editor. See its Help menu for editing instructions.',
+          },
+        },
+      },
+      resize: 'Resize piano roll: use Up and Down, Home for minimum, End for maximum',
+      heightPercent: 'Height {value}%',
+      seekFailed: 'Could not seek: {error}',
+    },
   },
   keyboardPage: {
     title: 'Virtual Keyboard',
@@ -407,6 +492,404 @@ export default {
       '14keys': '14 Keys',
     },
   },
+  midiEditor: {
+    title: 'MIDI Editor',
+    description:
+      'Create, edit, import and export MIDI projects; export .mid or add to the library when done',
+    projectList: 'Projects',
+    newProject: 'New Project',
+    untitled: 'Untitled Project',
+    editProject: 'Edit Project',
+    createFromProject: 'New From This',
+    editThisMidi: 'Edit This MIDI',
+    importProject: 'Import',
+    importHint: 'Supports .json / .zip project files and .mid files',
+    exportProject: 'Export Project',
+    exportMidi: 'Export .mid',
+    moreActions: 'More actions',
+    closeEditor: 'Close',
+    addToLibrary: 'Add to Player',
+    batchExport: 'Batch Export',
+    batchDelete: 'Batch Delete',
+    name: 'Name',
+    tracks: 'Tracks',
+    notes: 'Notes',
+    duration: 'Duration',
+    updatedAt: 'Updated',
+    source: 'Source',
+    actions: 'Actions',
+    searchPlaceholder: 'Search project name',
+    noProjects: 'No MIDI projects yet',
+    noProjectsTip: 'Click "New Project", or choose "Edit This MIDI" on a song detail page.',
+    notFound: 'Project not found',
+    confirmDelete: 'Delete project "{name}"?',
+    confirmBatchDelete: 'Delete {count} selected projects?',
+    saved: 'Project saved',
+    saveFailed: 'Failed to save project',
+    templateSelectFailed: 'Failed to switch key mapping',
+    deleted: 'Project deleted',
+    batchDeleted: 'Deleted {count} projects',
+    deleteFailed: 'Failed to delete project',
+    imported: 'Project imported',
+    importedCount: 'Imported {count} projects',
+    importFailed: 'Failed to import project',
+    exported: 'Project exported',
+    exportedCount: 'Exported {count} projects',
+    exportFailed: 'Export failed',
+    midiExported: 'MIDI file exported',
+    addedToLibrary: 'Added to the player library',
+    addToLibraryFailed: 'Failed to add to player',
+    loadFailed: 'Failed to load project',
+    sourceMidiMissing: 'Source MIDI file not found',
+    nameRequired: 'Project name is required',
+    nameInvalid:
+      'Project name must be at most 30 characters and a valid Windows/macOS file name: no <>:"/\\|?* or control characters, no trailing space or dot, and no reserved names',
+    nameDuplicated: 'Project name already exists',
+    unsaved: 'Unsaved',
+    windowOpen: 'This project is open in a separate window',
+    focusWindow: 'Show Window',
+    restoreWindow: 'Return to Main Window',
+    windowFailed: 'Separate editor window failed: {error}',
+    detachedBusy: 'Another project is open in a separate editor window',
+    activeProjectCannotDelete: 'Close the project editor before deleting this project',
+    draftFound: 'Draft Found',
+    loadDraft: 'Load Draft',
+    discardDraft: 'Discard Draft',
+    loadDraftPrompt: 'An unsaved draft was found. Load it? Cancel keeps the draft and goes back.',
+    leaveConfirmTitle: 'Unsaved project changes',
+    leaveConfirmDescription: 'Save or discard your changes before leaving the editor.',
+    saveAndClose: 'Save and Close',
+    discardAndClose: 'Close Without Saving',
+    trackDefaultName: 'Track {index}',
+    trackCopyName: '{name} copy',
+    addTrack: 'Add Track',
+    editTrack: 'Edit Track',
+    presetTrackColors: 'Preset colors',
+    tour: {
+      tracks: {
+        title: 'Start with the track overview',
+        description:
+          'See each track and its position in the song. Use the plus button to add a track and the switches to control which tracks are enabled.',
+      },
+      edit: {
+        title: 'Double-click a track to edit',
+        description:
+          'Double-click a track name or its content to open the piano roll, or choose Edit Track at the top of its menu. Click other tracks to switch while details are open.',
+      },
+      sort: {
+        title: 'Drag the handle to reorder',
+        description:
+          'Drag the handle on the left immediately, including with Mac Three Finger Drag. You can also hold the track name for about 0.3 seconds before dragging. Switches and menus work independently.',
+      },
+      tools: {
+        title: 'Edit, preview, and save',
+        description:
+          'Move and resize notes with Select, or add notes with Draw. Selecting notes in details opens the inspector. Preview and set snapping from the header, save on the right, and find the full guide in the Help menu.',
+      },
+    },
+    dragTrack: 'Drag to reorder: {name}',
+    renameTrack: 'Rename Track',
+    trackColor: 'Track Color',
+    duplicateTrack: 'Duplicate Track',
+    moveTrackUp: 'Move Up',
+    moveTrackDown: 'Move Down',
+    deleteTrack: 'Delete Track',
+    percussionTrack: 'Percussion Track',
+    confirmDeleteTrack: 'Track "{name}" has {count} notes. Delete it?',
+    lastTrack: 'At least one track must remain',
+    toolbar: {
+      songSettings: 'Song settings',
+      songSettingsTip:
+        'Set the song BPM and meter. Songs with multiple changes ask before they are unified.',
+      displaySettings: 'Display',
+      displaySettingsTip: 'Show or hide the velocity lane without changing MIDI data.',
+      bpm: 'BPM',
+      bpmTip:
+        'Set beats per minute; higher values play faster. Songs with tempo changes require confirmation before replacing them with one tempo.',
+      timeSignature: 'Meter',
+      timeSignatureTip:
+        'The left value is beats per bar; the right is the note value of one beat. For example, 3/4 means three quarter notes per bar.',
+      snap: 'Snap',
+      snapTip:
+        'Set the grid for adding, moving, resizing and quantizing notes. Hold Option/Alt while dragging to temporarily bypass snapping.',
+      snapEnabled: 'Enable Snap',
+      snapToBar: 'Snap to Bar',
+      snapResolution: 'Beat Grid',
+      snapOff: 'Off',
+      snapBar: 'Bar',
+      tool: 'Tool',
+      select: 'Select (V)',
+      draw: 'Draw (B)',
+      undo: 'Undo (⌘/Ctrl+Z)',
+      redo: 'Redo (⌘/Ctrl+Shift+Z)',
+      play: 'Play (Space)',
+      pause: 'Pause (Space)',
+      stop: 'Stop',
+      loop: 'Loop Region',
+      clearLoop: 'Clear Loop',
+      loopTip:
+        'Hold Option/Alt while dragging on the time ruler to set a preview loop; double-click the ruler to clear it. Once set, this button also clears the loop.',
+      clearLoopTip:
+        'Click to clear the current loop, or double-click the time ruler. Hold Option/Alt while dragging on the ruler to set a new region.',
+      velocityLane: 'Velocity Lane',
+      velocityLaneTip:
+        'Show or hide the bottom velocity lane. Drag bars vertically to adjust velocity; selected notes change together.',
+      templatePreview: 'Preview by Template',
+      templatePreviewHelp: 'About Preview by Template',
+      templatePreviewTip:
+        'Audition playable notes using the current template and dim notes outside it to check the performance.',
+      help: 'Help',
+      replaceTempoTitle: 'Replace with a single tempo',
+      replaceTempoDescription:
+        'This MIDI has multiple tempo changes. Changing BPM replaces them with one tempo for the whole song.',
+      replaceMeterTitle: 'Replace with a single meter',
+      replaceMeterDescription:
+        'This MIDI has multiple meter changes. Changing the meter replaces them with one meter for the whole song.',
+      replace: 'Replace',
+    },
+    inspector: {
+      title: 'Notes',
+      noteTip:
+        'Edit the pitch, position, length, and velocity of selected notes. Batch actions apply to the whole selection.',
+      selectedCount: '{count} notes selected',
+      pitch: 'Pitch',
+      start: 'Start',
+      length: 'Length',
+      velocity: 'Velocity',
+      quantize: 'Quantize',
+      quantizeTip:
+        'Align starts to the current snap grid or round lengths to grid multiples. Does nothing when snapping is off.',
+      quantizeStart: 'Quantize Start',
+      quantizeStartTip:
+        'Select notes, then align their start times to the current snap grid without changing their lengths. Does nothing when snapping is off.',
+      quantizeLength: 'Quantize Length',
+      quantizeLengthTip:
+        'Round selected note lengths to multiples of the current snap grid without moving their start times. Does nothing when snapping is off.',
+      transpose: 'Transpose',
+      transposeGroupTip:
+        'Move selected notes up or down. ±1 means one semitone; ±Octave means twelve semitones.',
+      transposeTip:
+        'Move selected notes by {semitones} semitones without changing their start times or lengths. Twelve semitones equal one octave.',
+      octaveUp: '+Octave',
+      octaveDown: '-Octave',
+      semitoneUp: '+1',
+      semitoneDown: '-1',
+      unplayableCount: '{count} notes unplayable',
+    },
+    contextMenu: {
+      cut: 'Cut',
+      copy: 'Copy',
+      paste: 'Paste',
+      duplicate: 'Duplicate',
+      delete: 'Delete',
+      selectAll: 'Select All',
+      quantize: 'Quantize to Grid',
+      transposeUp: 'Up an Octave',
+      transposeDown: 'Down an Octave',
+      setVelocity: 'Set Velocity',
+      addNote: 'Add Note Here',
+      setLoopToSelection: 'Loop Selection',
+    },
+    help: {
+      menuLabel: 'Help',
+      title: 'MIDI Editor Help',
+      done: 'Got it',
+      contents: 'Help contents',
+      overviewTitle: 'How to use the editor',
+      intro:
+        'Find a track in the overview, open its details to edit notes, then preview and save your project. Start with these three essential actions and use the contents on the left for settings and shortcuts.',
+      essentials: {
+        edit: {
+          label: 'Double-click a track to open the editor',
+          description:
+            'Double-click its name or overview content, or choose Edit Track from its menu. Click another track to switch while details are open.',
+        },
+        sort: {
+          label: 'Drag the left handle to reorder tracks',
+          description:
+            'Drag the handle immediately, including with Mac Three Finger Drag. You can also hold the track name for about 0.3 seconds before dragging.',
+        },
+        notes: {
+          label: 'Select notes to edit their properties',
+          description:
+            'Select or box-select notes in details to show pitch, length, velocity, and batch actions. Clearing the selection or closing details hides the inspector.',
+        },
+      },
+      selectTool:
+        'Select tool: click to select, Shift to add; drag on empty space for box selection; double-click empty space to add a note; drag a note to move, drag its edges to resize; hold Option/Alt to disable snapping.',
+      drawTool: 'Draw tool: click to add a note, drag horizontally to set its length.',
+      loop: 'Loop: hold Option/Alt while dragging on the ruler to set the loop region; double-click the ruler to clear it.',
+      velocity: 'Velocity: drag bars in the bottom lane; multiple selected notes change together.',
+      shortcuts:
+        'Shortcuts: Delete/Backspace removes, Command/Ctrl+A selects all, Command/Ctrl+C/X/V copy/cut/paste, Command/Ctrl+D duplicates, Command/Ctrl+Z undoes, Command/Ctrl+Shift+Z redoes; arrow keys nudge (Shift for octave/bar), Space plays/pauses, Esc clears selection, V/B switch tools.',
+      playback:
+        'Preview plays only this project and never triggers in-game keys; the global player pauses when preview starts.',
+      sections: {
+        start: {
+          title: 'Getting Started',
+          items: {
+            layout: {
+              label: 'Layout',
+              description:
+                'Use the header for the project name, tools, preview, and settings. The center contains the overview and piano-roll detail; selecting notes with details open shows the inspector at the bottom.',
+            },
+            overview: {
+              label: 'Double-click to open track details',
+              description:
+                'Click a track to select it and double-click to open details, or choose Edit Track from its menu. Click another track to switch while details are open, or double-click the current track to close it.',
+            },
+            template: {
+              label: 'Key Template',
+              description:
+                'Use the keyboard icon to select a key template and enable Preview by Template. Playback and individual audition use the playable notes in the current template, while notes outside it are dimmed to help check the performance and identify passages that need arranging. Turn it off to audition all notes.',
+            },
+          },
+        },
+        notes: {
+          title: 'Note Editing',
+          items: {
+            select: {
+              label: 'Select Tool',
+              description:
+                'Click to select, Shift-click to add, or drag empty space for box selection. Double-click empty space to add a note. Drag notes to move them or drag either edge to resize.',
+            },
+            draw: {
+              label: 'Draw Tool',
+              description:
+                'Click empty space to add a note, or press and drag horizontally to set its length while creating it.',
+            },
+            inspector: {
+              label: 'Note Properties',
+              description:
+                'Selecting notes with details open shows the inspector for pitch, length, velocity, quantization, and transposition. Batch actions apply to every selected note. Clearing the selection or closing details hides the inspector.',
+            },
+            contextMenu: {
+              label: 'Context Menu',
+              description:
+                'Right-click a note or empty space for cut, copy, paste, duplicate, quantize, transpose, velocity presets, loop-to-selection, and delete actions.',
+            },
+          },
+        },
+        tracks: {
+          title: 'Track Management',
+          items: {
+            trackView: {
+              label: 'Add and Inspect',
+              description:
+                'The plus button in the overview adds a track and opens its detail immediately. Each track shows its own notes and can be edited in overview or detail view.',
+            },
+            trackManage: {
+              label: 'Reorder and Track Menu',
+              description:
+                'Hold a track name for about 0.3 seconds, then drag vertically, or drag immediately from the left handle. On a Mac with Three Finger Drag enabled, start from the handle. The menu provides editing, rename, recolor, percussion, duplicate, move up, move down, and delete. The color picker offers presets and custom colors. Tracks share one default color; choosing a color updates the menu swatch, overview notes and region, and detail notes together. Colors are saved with the project. A project always keeps at least one track.',
+            },
+            trackEnabled: {
+              label: 'Enabled State',
+              description:
+                'Use the track switch to control whether a track is enabled. Disabled tracks keep their note data so they can be restored later.',
+            },
+          },
+        },
+        playback: {
+          title: 'Preview and Loop',
+          items: {
+            transport: {
+              label: 'Transport',
+              description:
+                'Use Play to start or pause and Stop to end preview. The Space key also toggles play and pause.',
+            },
+            seek: {
+              label: 'Position and Follow',
+              description:
+                'Use the time ruler to position the playhead. While playing, Follow keeps the current position in view.',
+            },
+            loop: {
+              label: 'Loop Range',
+              description:
+                'Hold Option/Alt and drag on the ruler, or set a loop from the note context menu. Double-click the ruler or click the active loop button to clear it.',
+            },
+            preview: {
+              label: 'Preview Scope',
+              description:
+                'The editor previews only this project and never sends game keys. Starting preview automatically pauses the global player.',
+            },
+          },
+        },
+        settings: {
+          title: 'Snap and Display',
+          items: {
+            snap: {
+              label: 'Grid Snap',
+              description:
+                'Move, resize, and draw against the selected beat grid. Bar snap disables the beat selector. Hold Option/Alt during an editing gesture to bypass snapping temporarily.',
+            },
+            song: {
+              label: 'Song Settings',
+              description:
+                'Change the project BPM and time signature. For MIDI files with multiple tempo or meter changes, confirming replaces them with one setting for the whole song.',
+            },
+            display: {
+              label: 'Display Settings',
+              description:
+                'Show or hide the velocity lane in Song Settings. Preview by Template in the key-template popover dims and mutes notes outside the template to identify passages that need arranging or transposing.',
+            },
+            view: {
+              label: 'Navigate the View',
+              description:
+                'Use time zoom to change horizontal density and Fit Song for an overview. When there are many tracks, tracks without notes can be hidden.',
+            },
+          },
+        },
+        files: {
+          title: 'Save and Export',
+          items: {
+            save: {
+              label: 'Save Project',
+              description:
+                'Use the Save icon or Command/Ctrl+S to store an editable project. The status dot next to the project name means there are unsaved changes.',
+            },
+            export: {
+              label: 'Export MIDI',
+              description:
+                'Export .mid creates a standard MIDI file for other music software. Exporting does not replace saving the editable project.',
+            },
+            leave: {
+              label: 'Leave the Editor',
+              description:
+                'Save and Close saves before leaving. Close asks whether to save, discard, or cancel when the project has unsaved changes.',
+            },
+          },
+        },
+      },
+      shortcutTitle: 'Keyboard Shortcuts',
+      shortcutTip:
+        'Editor shortcuts pause while an input, menu, or dialog has focus. Select text and press Command/Ctrl+C to copy help content.',
+      shortcutItems: {
+        save: { keys: 'Command/Ctrl + S', description: 'Save the project' },
+        undo: { keys: 'Command/Ctrl + Z', description: 'Undo the previous edit' },
+        redo: { keys: 'Command/Ctrl + Shift + Z / Y', description: 'Redo' },
+        selectAll: { keys: 'Command/Ctrl + A', description: 'Select all notes' },
+        clipboard: { keys: 'Command/Ctrl + C / X / V', description: 'Copy, cut, and paste' },
+        duplicate: { keys: 'Command/Ctrl + D', description: 'Duplicate selected notes' },
+        delete: { keys: 'Delete / Backspace', description: 'Delete selected notes' },
+        horizontal: {
+          keys: 'Left / Right',
+          description: 'Nudge by grid; hold Shift to move by bar',
+        },
+        vertical: {
+          keys: 'Up / Down',
+          description: 'Move by semitone; hold Shift to move by octave',
+        },
+        playback: { keys: 'Space', description: 'Play or pause preview' },
+        clearSelection: { keys: 'Esc', description: 'Clear the note selection' },
+        tools: { keys: 'V / B', description: 'Switch to Select / Draw tool' },
+        snapOverride: {
+          keys: 'Option / Alt',
+          description: 'Bypass snap during edits; drag the ruler to set a loop',
+        },
+      },
+    },
+  },
   pagination: {
     perPage: 'Per page',
   },
@@ -475,15 +958,53 @@ export default {
     downloading: 'Downloading',
     downloadingProgress: 'Downloading {progress}%',
     installing: 'Installing',
-    installedTitle: 'Update installed',
-    relaunching: 'Relaunching the app',
-    noUpdateTitle: 'You are up to date',
+    noUpdateTitle: 'No update found',
     noUpdateDescription: 'No update is available for this version',
     checkFailed: 'Update check failed',
     installFailed: 'Update failed',
-    installFailedDescription: 'Please try again later. Details were logged to the console.',
+    installFailedDescription:
+      'Retry or install manually. Export local diagnostics for troubleshooting.',
     openRelease: 'Open releases',
     retry: 'Check again',
+    preparing: 'Confirming unsaved changes',
+    installNow: 'Install and restart',
+    retryDownload: 'Retry update',
+    cancelDownload: 'Cancel download',
+    manualGithub: 'Download (GitHub)',
+    manualDownload: 'Download manually',
+    manualMirror: 'Download (mirror)',
+    exportDiagnostics: 'Export diagnostics',
+    diagnosticsExported: 'Diagnostics exported',
+    lastChecked: 'Last attempt: {time}',
+    notApplied: 'Previous update has not taken effect',
+    notAppliedDescription:
+      'The target was {version}; you are running {current}. Retry or install manually, and check which installation you opened.',
+    applied: 'Confirmed running version {version}',
+    sources: { mirror: 'Mirror', github: 'GitHub direct' },
+    phases: {
+      idle: 'Updates have not been checked',
+      checking: 'Checking for updates',
+      upToDate: 'No newer version found',
+      available: 'An update is available',
+      downloading: 'Downloading and verifying',
+      ready: 'Download verified. Ready to install and restart',
+      installing: 'Installing. Version will be verified after restart',
+      error: 'Update failed',
+    },
+    errors: {
+      timeout: 'The update source timed out. Retry or download manually.',
+      network:
+        'Update sources are unavailable. Check your connection, retry, or download manually.',
+      invalidManifest:
+        'The source returned invalid version information. Retry later or download manually.',
+      signature:
+        'Signature verification failed. Installation was blocked. Download again or install manually.',
+      unsupportedPlatform: 'The source has no package for this platform. Check the release page.',
+      storage:
+        'Could not save the installation record. Check disk space and permissions, then retry.',
+      operationFailed:
+        'The operation could not finish. You can retry, install manually, or export diagnostics.',
+    },
   },
   about: {
     title: 'About',
@@ -496,8 +1017,8 @@ export default {
     contacts: [
       {
         type: 'qq',
-        label: 'QQ',
-        account: '414135950',
+        label: 'QQ Group',
+        account: '967529814',
       },
       {
         type: 'discord',

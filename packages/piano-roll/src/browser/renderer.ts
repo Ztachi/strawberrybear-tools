@@ -1,0 +1,392 @@
+import type { createNoteIndex, PianoRollTimeline, PianoRollTrack } from '../core'
+import { defaultPianoRollTheme, type PianoRollTheme } from './theme'
+import { rulerLabels } from './ruler-layout'
+import { layoutPianoKeys } from './keyboard-layout'
+
+/** 一行轨道的内容坐标。 */
+export interface TrackRow {
+  track: PianoRollTrack
+  top: number
+  height: number
+}
+
+/**
+ * @description 计算总览轨道行的统一内容坐标，供 Canvas、轨道栏与命中测试共用。
+ * @param tracks 当前文档按显示顺序排列的轨道。
+ * @param viewportHeight CSS 布局完成后的内容视口高度，不包含工具栏或标尺。
+ * @param explicitHeights 宿主显式设置的行高；这些行保留原有 56–320px 限制。
+ * @return 按顺序连续排列的轨道行。自动行均分剩余空间，低于 56px 后产生溢出。
+ */
+export function layoutTrackRows(
+  tracks: readonly PianoRollTrack[],
+  viewportHeight: number,
+  explicitHeights?: ReadonlyMap<string, number>
+): TrackRow[] {
+  const minimumHeight = 56
+  let fixedHeight = 0
+  let automaticCount = 0
+  const resolvedHeights: (number | undefined)[] = []
+  for (const track of tracks) {
+    const value = explicitHeights?.get(track.id)
+    if (value === undefined) {
+      resolvedHeights.push(undefined)
+      automaticCount += 1
+    } else {
+      // 显式行高延续既有 API 的边界；非法输入不能污染后续所有轨道的坐标。
+      const height = Math.min(
+        320,
+        Math.max(minimumHeight, Number.isFinite(value) ? value : minimumHeight)
+      )
+      resolvedHeights.push(height)
+      fixedHeight += height
+    }
+  }
+  const availableHeight = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0
+  const automaticHeight =
+    automaticCount > 0
+      ? Math.max(minimumHeight, (availableHeight - fixedHeight) / automaticCount)
+      : minimumHeight
+  let top = 0
+  return tracks.map((track, index) => {
+    const height = resolvedHeights[index] ?? automaticHeight
+    const row = { track, top, height }
+    top += height
+    return row
+  })
+}
+
+/**
+ * 解析轨道在总览中的内容区域。
+ *
+ * MIDI 的 End Of Track 是最可信的区域边界；音符区间只用于补齐缺失或
+ * 错误的元数据，避免坏元数据把音符绘制到粉色区域之外。结果始终限制
+ * 在文档时间轴内，空轨道且没有边界时退化为零宽标记。
+ */
+export function getTrackTimeRange(
+  track: PianoRollTrack,
+  index: ReturnType<typeof createNoteIndex>,
+  durationTicks: number
+): { startTick: number; endTick: number } {
+  const duration = Number.isFinite(durationTicks) ? Math.max(0, durationTicks) : 0
+  const notes = index.getTimeRange(track.id)
+  const metadataStart = Number.isFinite(track.startTick) ? Math.max(0, track.startTick!) : null
+  const metadataEnd = Number.isFinite(track.endTick) ? Math.max(0, track.endTick!) : null
+  // 元数据与音符取并集，保证异常的 EOT 或导入器截断不会隐藏真实音符。
+  let start = metadataStart ?? notes?.startTick ?? 0
+  let end = metadataEnd ?? notes?.endTick ?? start
+  if (notes) {
+    start = Math.min(start, notes.startTick)
+    end = Math.max(end, notes.endTick)
+  }
+  start = Math.min(duration, Math.max(0, start))
+  end = Math.min(duration, Math.max(0, end))
+  if (end < start) end = start
+  return { startTick: start, endTick: end }
+}
+
+/** 将真实区间投射到视口，并为零长度区间保留可识别的视觉标记。 */
+function overviewRegionGeometry(
+  range: { startTick: number; endTick: number },
+  timeline: PianoRollTimeline,
+  timeZoom: number,
+  scrollLeft: number
+): { left: number; width: number } {
+  const startX = timeline.tickToSeconds(range.startTick) * timeZoom - scrollLeft
+  const endX = timeline.tickToSeconds(range.endTick) * timeZoom - scrollLeft
+  const width = Math.max(8, Math.abs(endX - startX))
+  let left = Math.min(startX, endX)
+  // 让结束于全曲末尾的空轨道在滚动到最右侧时仍完整可见。
+  const contentEnd = timeline.durationSeconds * timeZoom - scrollLeft
+  if (timeline.durationSeconds > 0 && left + width > contentEnd) left = contentEnd - width
+  return { left, width }
+}
+
+/** 一次静态层绘制的只读输入，不包含播放头时间。 */
+export interface RenderFrame {
+  variant: 'overview' | 'editor'
+  timeline: PianoRollTimeline
+  index: ReturnType<typeof createNoteIndex>
+  rows: readonly TrackRow[]
+  selectedTrackId: string | null
+  width: number
+  height: number
+  scrollLeft: number
+  scrollTop: number
+  timeZoom: number
+  pitchZoom: number
+  /** Canvas 与 DOM 共用的已解析主题；缺省时使用默认主题。 */
+  theme?: PianoRollTheme
+  /** 编辑层投影：选中音符与可演奏音高；只影响配色，不改变布局。 */
+  editing?: {
+    selectedNoteIds: ReadonlySet<string>
+    highlightPitches: ReadonlySet<number> | null
+  }
+}
+
+/** 仅在视口或 DPR 改变时分配 backing store，绝不按整首歌尺寸分配。 */
+export function canvasContext(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number
+): CanvasRenderingContext2D | null {
+  const dpr = canvas.ownerDocument.defaultView?.devicePixelRatio || 1
+  const backingWidth = Math.max(1, Math.round(width * dpr))
+  const backingHeight = Math.max(1, Math.round(height * dpr))
+  if (canvas.width !== backingWidth) canvas.width = backingWidth
+  if (canvas.height !== backingHeight) canvas.height = backingHeight
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  const context = canvas.getContext('2d')
+  if (!context) return null
+  context.setTransform(dpr, 0, 0, dpr, 0, 0)
+  context.clearRect(0, 0, width, height)
+  return context
+}
+
+/** 获取可见轨道，前缀位置以二分定位，轨道数很多时也不遍历全部。 */
+export function visibleRows(rows: readonly TrackRow[], top: number, height: number): TrackRow[] {
+  let low = 0
+  let high = rows.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    const row = rows[middle]!
+    if (row.top + row.height <= top) low = middle + 1
+    else high = middle
+  }
+  const result: TrackRow[] = []
+  for (let index = low; index < rows.length; index += 1) {
+    const row = rows[index]!
+    if (row.top > top + height) break
+    result.push(row)
+  }
+  return result
+}
+
+/** 绘制视口内网格与独立标尺。小节、拍和细分由同一时间轴提供。 */
+export function drawGrid(
+  grid: HTMLCanvasElement,
+  ruler: HTMLCanvasElement,
+  frame: RenderFrame
+): void {
+  const context = canvasContext(grid, frame.width, frame.height)
+  const rulerContext = canvasContext(ruler, frame.width, 32)
+  if (!context || !rulerContext) return
+  const { width, height, scrollLeft, scrollTop, pitchZoom, timeline, timeZoom } = frame
+  const theme = frame.theme ?? defaultPianoRollTheme
+  context.fillStyle = theme.colors.surface
+  context.fillRect(0, 0, width, height)
+  if (frame.variant === 'editor') {
+    const firstRow = Math.max(0, Math.floor(scrollTop / pitchZoom))
+    const lastRow = Math.min(127, Math.ceil((scrollTop + height) / pitchZoom))
+    const playable = frame.editing?.highlightPitches ?? null
+    for (let row = firstRow; row <= lastRow; row += 1) {
+      const pitch = 127 - row
+      const y = row * pitchZoom - scrollTop
+      context.fillStyle = [1, 3, 6, 8, 10].includes(pitch % 12)
+        ? theme.colors.surface
+        : theme.colors.surfaceSubtle
+      context.fillRect(0, y, width, pitchZoom)
+      // 不可演奏行叠一层淡遮罩，网格线仍保留在其上以维持节拍参照。
+      if (playable && !playable.has(pitch)) {
+        context.fillStyle = theme.colors.pitchUnplayable
+        context.fillRect(0, y, width, pitchZoom)
+      }
+      context.fillStyle = pitch % 12 === 0 ? theme.colors.gridMajor : theme.colors.gridMinor
+      context.fillRect(0, y + pitchZoom - 1, width, 1)
+    }
+  } else {
+    // 网格先绘制，区域稍后覆盖在线条之上，保持音轨内容清晰。
+    for (const row of frame.rows) {
+      const y = row.top - scrollTop
+      context.fillStyle = theme.colors.border
+      context.globalAlpha = 0.55
+      context.fillRect(0, y + row.height - 1, width, 1)
+      context.globalAlpha = 1
+    }
+  }
+  const marks = timeline.getRulerMarks({
+    // 保留跨过裁剪边缘的线宽，避免尚未完全离开的刻度突然消失。
+    startSeconds: Math.max(0, scrollLeft - 1) / timeZoom,
+    endSeconds: (scrollLeft + width + 1) / timeZoom,
+    pixelsPerSecond: timeZoom,
+  })
+  rulerContext.fillStyle = theme.colors.surfaceRaised
+  rulerContext.fillRect(0, 0, width, 32)
+  rulerContext.font = `12px ${theme.metrics.fontFamily}`
+  for (const mark of marks) {
+    // 与音符使用同一亚像素坐标；按视口取整会让慢速滚动产生整像素跳步。
+    const x = mark.x - scrollLeft
+    const major = mark.kind === 'bar'
+    // 总览内容区只保留小节线，拍/细分线在缩放较小时会淹没音符；
+    // 标尺仍保留细分刻度，方便定位和拖拽。详情内容区保留完整细分线。
+    if (!(frame.variant === 'overview' && mark.kind !== 'bar')) {
+      context.strokeStyle = major
+        ? theme.colors.gridMajor
+        : mark.kind === 'beat'
+          ? theme.colors.gridBeat
+          : theme.colors.gridMinor
+      context.globalAlpha = major ? 0.72 : frame.variant === 'editor' ? 0.7 : 0.58
+      context.beginPath()
+      context.moveTo(x, 0)
+      context.lineTo(x, height)
+      context.stroke()
+      context.globalAlpha = 1
+    }
+    rulerContext.strokeStyle = major ? theme.colors.gridMajor : theme.colors.gridBeat
+    rulerContext.beginPath()
+    rulerContext.moveTo(x, major ? 2 : 23)
+    rulerContext.lineTo(x, 32)
+    rulerContext.stroke()
+  }
+  rulerContext.fillStyle = theme.colors.text
+  for (const mark of rulerLabels(
+    timeline,
+    timeZoom,
+    scrollLeft,
+    width,
+    (text) => rulerContext.measureText(text).width
+  )) {
+    rulerContext.fillText(mark.label, mark.x - scrollLeft + 5, 16)
+  }
+  if (frame.variant === 'overview') {
+    for (const row of frame.rows) {
+      const y = row.top - scrollTop
+      const range = getTrackTimeRange(row.track, frame.index, timeline.durationTicks)
+      const region = overviewRegionGeometry(range, timeline, timeZoom, scrollLeft)
+      const regionLeft = region.left
+      const regionWidth = region.width
+      const regionTop = y + 3
+      const regionHeight = Math.max(1, row.height - 6)
+      const selectedTrack = row.track.id === frame.selectedTrackId
+      context.fillStyle =
+        row.track.color ||
+        (selectedTrack
+          ? theme.colors.trackSelected
+          : row.track.enabled
+            ? theme.colors.trackEnabled
+            : theme.colors.trackDisabled)
+      // 自定义色用浅色区域区分音轨，选中只增强透明度，不改回主题粉色。
+      context.globalAlpha = row.track.color
+        ? row.track.enabled
+          ? selectedTrack
+            ? 0.2
+            : 0.12
+          : 0.04
+        : row.track.enabled
+          ? 1
+          : 0.32
+      const radius = Math.min(5, regionHeight / 2, regionWidth / 2)
+      const visibleLeft = Math.max(-radius, regionLeft)
+      const visibleRight = Math.min(width + radius, regionLeft + regionWidth)
+      if (visibleRight > visibleLeft) {
+        context.beginPath()
+        context.roundRect(visibleLeft, regionTop, visibleRight - visibleLeft, regionHeight, radius)
+        context.fill()
+        context.strokeStyle = row.track.color || theme.colors.border
+        context.globalAlpha = row.track.enabled ? 0.65 : 0.25
+        context.stroke()
+      }
+      context.globalAlpha = 1
+    }
+  }
+}
+
+/** 绘制区间索引返回的可见音符，跨可见窗口的长音也保留。 */
+export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
+  const context = canvasContext(canvas, frame.width, frame.height)
+  if (!context) return
+  const theme = frame.theme ?? defaultPianoRollTheme
+  const { timeline, scrollLeft, scrollTop, timeZoom, pitchZoom, width, height } = frame
+  const startTick = timeline.secondsToTick(Math.max(0, (scrollLeft - 5) / timeZoom))
+  const endTick = timeline.secondsToTick((scrollLeft + width) / timeZoom)
+  const rows =
+    frame.variant === 'overview'
+      ? frame.rows
+      : frame.rows.filter((row) => row.track.id === frame.selectedTrackId)
+  const selected = frame.editing?.selectedNoteIds
+  const playable = frame.editing?.highlightPitches ?? null
+  for (const row of rows) {
+    const range = frame.index.getPitchRange(row.track.id)
+    const low = (range?.min ?? 48) - 3
+    const high = (range?.max ?? 84) + 3
+    // 名称由左侧轨道栏展示；音符居中使用完整预览高度，只保留上下安全间距。
+    const scale = (row.height - 15) / Math.max(12, high - low)
+    const middlePitch = (high + low) / 2
+    for (const note of frame.index.query(row.track.id, startTick, endTick)) {
+      const start = timeline.tickToSeconds(note.startTick) * timeZoom - scrollLeft
+      const end = timeline.tickToSeconds(note.endTick) * timeZoom - scrollLeft
+      const noteHeight = frame.variant === 'editor' ? Math.max(3, pitchZoom - 3) : 3
+      const y =
+        frame.variant === 'editor'
+          ? (127 - note.pitch) * pitchZoom - scrollTop + 1
+          : row.top - scrollTop + (row.height - noteHeight) / 2 + (middlePitch - note.pitch) * scale
+      if (y > height || y + noteHeight < 0) continue
+      const x = Math.max(-2, start)
+      const w = Math.min(width + 2, Math.max(start + 2, end)) - x
+      if (w <= 0) continue
+      context.globalAlpha = row.track.enabled ? 1 : 0.28
+      const isSelected = selected?.has(note.id) ?? false
+      const unplayable = playable !== null && !playable.has(note.pitch)
+      // 选中优先于其它状态；不可演奏音符在两种视图中都用灰色提示。
+      context.fillStyle = isSelected
+        ? theme.colors.noteSelected
+        : unplayable
+          ? theme.colors.noteUnplayable
+          : row.track.color ||
+            (frame.variant === 'overview' ? theme.colors.overviewNote : theme.colors.editorNote)
+      context.fillRect(x, y, w, noteHeight)
+      if (frame.variant === 'editor') {
+        context.strokeStyle = isSelected ? theme.colors.text : theme.colors.noteOutline
+        context.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), noteHeight - 1)
+        context.fillStyle = theme.colors.noteVelocity
+        context.fillRect(
+          x + 2,
+          y + 3,
+          Math.max(0, Math.min(w - 4, ((w - 4) * note.velocity) / 127)),
+          1
+        )
+      }
+    }
+    context.globalAlpha = 1
+  }
+}
+
+/** 左侧完整 MIDI 0–127 键盘，只绘制可见音高行。 */
+export function drawKeyboard(
+  canvas: HTMLCanvasElement,
+  height: number,
+  pitchZoom: number,
+  scrollTop: number,
+  theme: PianoRollTheme = defaultPianoRollTheme,
+  playable: ReadonlySet<number> | null = null
+): void {
+  const context = canvasContext(canvas, 64, height)
+  if (!context) return
+  context.font = `11px ${theme.metrics.fontFamily}`
+  for (const key of layoutPianoKeys(pitchZoom)) {
+    const { pitch, black } = key
+    const y = key.top - scrollTop
+    if (y + key.height < 0 || y > height) continue
+    context.fillStyle = black ? theme.colors.keyBlack : theme.colors.keyWhite
+    context.fillRect(0, y, black ? 42 : 64, key.height)
+    if (!black) {
+      context.fillStyle = theme.colors.keyBorder
+      context.fillRect(0, y + key.height - 1, 64, 1)
+    }
+    if (playable && !playable.has(pitch)) {
+      // 不可演奏键位压暗，白键用遮罩色、黑键降低不透明度。
+      context.fillStyle = black ? theme.colors.keyWhite : theme.colors.pitchUnplayable
+      context.globalAlpha = black ? 0.55 : 1
+      context.fillRect(0, y, black ? 42 : 64, key.height)
+      context.globalAlpha = 1
+    }
+    if (pitch % 12 === 0) {
+      context.fillStyle = theme.colors.text
+      context.fillText(
+        `C${Math.floor(pitch / 12) - 1}`,
+        43,
+        (127 - pitch) * pitchZoom - scrollTop + Math.min(pitchZoom - 2, 12)
+      )
+    }
+  }
+}
