@@ -1,5 +1,51 @@
 # @strawberrybear/infinity-nikki-player
 
+## 1.3.0
+
+### Minor Changes
+
+- 350f9c0: 发布无限暖暖自动演奏 1.3.0：内置 MIDI 编辑器、独立音轨窗口、钢琴卷帘升级、自动更新更可靠。
+  - **内置 MIDI 编辑器**：可直接创建和编辑 MIDI 项目，从歌单或 MIDI 详情一键进入新建/编辑流程，支持撤销重做、轨道管理与工程导入导出。
+  - **独立音轨窗口**：详情页可一键把音轨总览与钢琴卷帘拆为独立桌面窗口，多窗口协同查看与演奏；窗口复用主窗口标题栏与播放控件。
+  - **钢琴卷帘升级**：总览新增缩放与空轨筛选，详情新增精确跳转与拖拽预览，跨缩放不再跳动、刻度更稳定。
+  - **自动更新更可靠**：分别检查代理与官方清单取较高版本，下载失败自动重试切换线路，支持取消与恢复；安装前保护未保存编辑，重启后核对真实版本。
+  - **交互细节优化**：默认状态下文字不再被误选中，鼠标光标与可选中行为一致。
+
+### Patch Changes
+
+- 钢琴卷帘体验
+  - de51c8f: 自动播放与手动浏览视口分离，跨缩放与 tempo 切换不再跳动，标尺刻度与标签更稳定。
+  - f5917b4: 增大时间轴放大范围与手势灵敏度，集中到一个可读的设置项。
+  - c5e709b: 滑块与缩放边界统一，提供浅粉主题与可定制语义色。
+  - 5f517fa: 播放头形状与坐标恢复，边缘手柄不再误触自动滚动；播放头跟随改为横滚轮驱动，临时浏览结束后自动恢复。
+  - 5f517fa: 总览新增隐藏空轨选项，工具栏信息层级与图标重新整理，缩放状态按歌曲记忆。
+  - 39e4130: 移除播放器中的"适合全曲"按钮，常驻显示缩放标签，仅在必要时显示 Tooltip。
+  - 05479b9: Follow 改为中线跟随，控件统一使用 antdv-next。
+  - 724a15f: 轨道按实际结束时间绘制独立色块，修复 Shift-JIS 名称乱码。
+- 独立音轨窗口
+  - 61c755c: 标题栏增加播放队列入口，与全局播放器共用列表。
+  - f5917b4: 修复切歌关闭独立窗口的问题，新增自动切换按钮。
+  - 62881ef: 复用主窗口标题栏、跑马灯与播放组件，移除重复元素。
+- 自动更新与样式
+  - 90573cc: 全局禁用文本选择，浮层与必要信息元素仍可选中；光标与可选中行为一致，QQ 群改为 967529814。
+  - ebb039a: 独立更新入口、双清单版本选择、下载重试与切换、取消/恢复、未保存编辑保护、版本校验与本地诊断导出。
+- Updated dependencies [724a15f]
+- Updated dependencies [05479b9]
+- Updated dependencies [350f9c0]
+- Updated dependencies [5f517fa]
+- Updated dependencies [5f517fa]
+- Updated dependencies [5f517fa]
+- Updated dependencies [e19c1a8]
+- Updated dependencies [8728363]
+- Updated dependencies [de51c8f]
+- Updated dependencies [f5917b4]
+- Updated dependencies [5f517fa]
+- Updated dependencies [c5e709b]
+- Updated dependencies [39e4130]
+  - @strawberrybear/piano-roll@0.3.0
+  - @strawberrybear/player@0.1.2
+  - @strawberrybear/midi-editor@0.1.1
+
 ## 1.2.0
 
 ### Minor Changes
