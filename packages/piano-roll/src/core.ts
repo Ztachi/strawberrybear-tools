@@ -5,4 +5,5 @@
 export * from './core/model'
 export { createTimeline } from './core/timeline'
 export { createNoteIndex } from './core/note-index'
+export { clipNoteToTrackRegion } from './core/track-region'
 export type { PianoRollNoteIndex, PianoRollPitchRange, PianoRollTimeRange } from './core/note-index'

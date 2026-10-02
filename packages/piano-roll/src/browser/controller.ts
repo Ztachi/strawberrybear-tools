@@ -879,6 +879,7 @@ export function createView(
       timeline: () => timeline,
       index: () => noteIndex,
       selectedTrackId: () => selected,
+      track: (trackId) => document.tracks.find((track) => track.id === trackId),
       geometry: () => ({
         scrollLeft: painted?.frame.scrollLeft ?? scroll.scrollLeft,
         scrollTop: scroll.scrollTop,
@@ -899,9 +900,16 @@ export function createView(
   if (variant === 'overview') {
     regionEditing = installTrackRegionEditing({
       pane,
+      rulerGrid,
       scroll,
       timeline: () => timeline,
       options: () => editingOptions,
+      noteEnds(trackId) {
+        const range = noteIndex.getTimeRange(trackId)
+        return range
+          ? noteIndex.query(trackId, range.startTick, range.endTick).map((note) => note.endTick)
+          : []
+      },
       label: () => labels.resizeTrack ?? '调整音轨长度',
       geometry: () => ({ timeZoom, width }),
       preview(trackId, endTick = 0, extentTick = 0) {

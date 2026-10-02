@@ -154,7 +154,7 @@ export function reorderTrack(
 }
 
 /**
- * @description: 调整轨道有效区域右边界；允许保留静音尾部，但不截断已有音符。
+ * @description: 调整轨道有效区域右边界；缩短仅限制参与范围，保留完整音符供再次拉长。
  * @param {PianoRollDocument} document 源文档
  * @param {string} trackId 目标轨道
  * @param {number} endTick 请求的右边界（tick）
@@ -168,11 +168,7 @@ export function resizeTrackRegion(
   if (!Number.isFinite(endTick)) return document
   const track = document.tracks.find((item) => item.id === trackId)
   if (!track) return document
-  let minimum = Math.max(0, track.startTick ?? 0) + 1
-  for (const note of document.notes) {
-    if (note.trackId === trackId && Number.isFinite(note.endTick))
-      minimum = Math.max(minimum, note.endTick)
-  }
+  const minimum = Math.max(0, Number.isFinite(track.startTick) ? track.startTick! : 0) + 1
   const next = Math.max(minimum, Math.round(endTick))
   if (next === track.endTick) return document
   return {
@@ -181,4 +177,39 @@ export function resizeTrackRegion(
       item.id === trackId ? { ...item, endTick: next } : item
     ),
   }
+}
+
+/**
+ * @description: 显式编辑音符时间时扩展所属区域；只改力度/音高或删除时不重新启用隐藏尾部。
+ * @param {PianoRollDocument} previous 编辑前文档
+ * @param {PianoRollDocument} next 编辑后文档
+ * @return {PianoRollDocument} 必要时延长区域的文档，无变更复用输入引用
+ */
+export function expandEditedTrackRegions(
+  previous: PianoRollDocument,
+  next: PianoRollDocument
+): PianoRollDocument {
+  if (previous.notes === next.notes) return next
+  const original = new Map(previous.notes.map((note) => [note.id, note]))
+  const changedEnds = new Map<string, number>()
+  for (const note of next.notes) {
+    const before = original.get(note.id)
+    if (
+      before &&
+      before.startTick === note.startTick &&
+      before.endTick === note.endTick &&
+      before.trackId === note.trackId
+    )
+      continue
+    if (Number.isFinite(note.endTick))
+      changedEnds.set(note.trackId, Math.max(changedEnds.get(note.trackId) ?? 0, note.endTick))
+  }
+  let changed = false
+  const tracks = next.tracks.map((track) => {
+    const end = changedEnds.get(track.id)
+    if (end === undefined || !Number.isFinite(track.endTick) || end <= track.endTick!) return track
+    changed = true
+    return { ...track, endTick: end }
+  })
+  return changed ? { ...next, tracks } : next
 }

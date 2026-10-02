@@ -13,9 +13,9 @@ const document: PianoRollDocument = {
   ],
   timeSignatureMap: [{ tick: 0, numerator: 3, denominator: 8 }],
   tracks: [
-    { id: 'lead', name: '主旋律', isPercussion: false, enabled: true, channel: 2 },
-    { id: 'drum', name: 'Drums', isPercussion: true, enabled: true },
-    { id: 'empty', name: 'Empty', isPercussion: false, enabled: true },
+    { id: 'lead', name: '主旋律', isPercussion: false, enabled: true, channel: 2, endTick: 3840 },
+    { id: 'drum', name: 'Drums', isPercussion: true, enabled: true, endTick: 3840 },
+    { id: 'empty', name: 'Empty', isPercussion: false, enabled: true, endTick: 3840 },
   ],
   notes: [
     { id: 'n1', trackId: 'lead', pitch: 60, velocity: 100, startTick: 0, endTick: 480 },
@@ -99,6 +99,46 @@ describe('encodeMidi / decodeMidi', () => {
 })
 
 describe('有效区域导出', () => {
+  it('裁剪跨边界音符，边界上及范围外音符不导出，拉长后恢复', () => {
+    const original: PianoRollDocument = {
+      ...document,
+      durationTicks: 1920,
+      tracks: [
+        {
+          id: 'lead',
+          name: 'Lead',
+          enabled: true,
+          isPercussion: false,
+          startTick: 120,
+          endTick: 720,
+        },
+      ],
+      notes: [
+        { id: 'before', trackId: 'lead', pitch: 60, velocity: 100, startTick: 0, endTick: 240 },
+        { id: 'cross', trackId: 'lead', pitch: 62, velocity: 100, startTick: 480, endTick: 960 },
+        { id: 'edge', trackId: 'lead', pitch: 64, velocity: 100, startTick: 720, endTick: 840 },
+        { id: 'hidden', trackId: 'lead', pitch: 65, velocity: 100, startTick: 960, endTick: 1200 },
+      ],
+    }
+    const before = JSON.stringify(original)
+    const clipped = decodeMidi(encodeMidi(original))
+    expect(clipped.durationTicks).toBe(720)
+    expect(clipped.notes.map((n) => [n.pitch, n.startTick, n.endTick])).toEqual([
+      [60, 120, 240],
+      [62, 480, 720],
+    ])
+    expect(clipped.tempoMap).toHaveLength(1)
+    const expanded = decodeMidi(
+      encodeMidi({ ...original, tracks: [{ ...original.tracks[0]!, endTick: 1200 }] })
+    )
+    expect(expanded.notes.map((n) => [n.pitch, n.endTick])).toEqual([
+      [60, 240],
+      [62, 960],
+      [64, 840],
+      [65, 1200],
+    ])
+    expect(JSON.stringify(original)).toBe(before)
+  })
   it('只导出启用轨道，保留每轨边界且曲尾之后的速度/拍号不延长文件', () => {
     const doc: PianoRollDocument = {
       ...document,

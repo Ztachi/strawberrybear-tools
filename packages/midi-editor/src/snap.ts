@@ -11,6 +11,7 @@ const BEAT_MULTIPLIERS: Record<Exclude<SnapResolution, 'bar' | 'off'>, number> =
   '1/32': 1 / 8,
   '1/64': 1 / 16,
   '1/128': 1 / 32,
+  '1/256': 1 / 64,
   '1/4t': 2 / 3,
   '1/8t': 1 / 3,
   '1/16t': 1 / 6,

@@ -11,6 +11,14 @@ function track(
 }
 
 describe('overview track regions', () => {
+  it('编辑态严格使用裁剪边界，不让隐藏音符撑回区域', () => {
+    const index = createNoteIndex([
+      { id: 'n', trackId: 'music', pitch: 60, velocity: 100, startTick: 240, endTick: 360 },
+    ])
+    expect(
+      getTrackTimeRange(track('music', { startTick: 0, endTick: 300 }), index, 4000, true)
+    ).toEqual({ startTick: 0, endTick: 300 })
+  })
   it('uses MIDI metadata for empty tracks without stretching to document duration', () => {
     const index = createNoteIndex([])
     expect(getTrackTimeRange(track('intro', { startTick: 0, endTick: 80 }), index, 4_000)).toEqual({
@@ -138,19 +146,23 @@ describe('总览音符空间', () => {
   it('宽音域使用上下完整预览空间，音符不越过相邻轨道', () => {
     const notes = canvasFixture()
     const frame = colorFrame('overview')
-    frame.index = createNoteIndex([0, 127].map((pitch) => ({
-      id: `note-${pitch}`,
-      trackId: 'music',
-      pitch,
-      velocity: 100,
-      startTick: 0,
-      endTick: 480,
-    })))
+    frame.index = createNoteIndex(
+      [0, 127].map((pitch) => ({
+        id: `note-${pitch}`,
+        trackId: 'music',
+        pitch,
+        velocity: 100,
+        startTick: 0,
+        endTick: 480,
+      }))
+    )
     frame.rows[0]!.top = 100
     frame.height = 200
     drawNotes(notes.canvas, frame)
     expect(notes.rectangles).toHaveLength(2)
-    expect(notes.rectangles.every((note) => note.y >= 106 && note.y + note.height <= 194)).toBe(true)
+    expect(notes.rectangles.every((note) => note.y >= 106 && note.y + note.height <= 194)).toBe(
+      true
+    )
     expect(Math.min(...notes.rectangles.map((note) => note.y))).toBeLessThan(110)
   })
 })

@@ -76,7 +76,19 @@ test('dragging a note body emits a snapped move for the whole selection', async 
   // 100px/s，480tick = 0.5s = 50px；向右 55px ≈ 528 tick → 吸附到 480 + ... 以按住音符起点为基准
   await page.mouse.move(from.x + 30, from.y - 16, { steps: 5 })
   await page.mouse.move(from.x + 55, from.y - 32, { steps: 5 })
+  const guide = page.locator('#editor .pr-drag-guide')
+  await expect(guide).toBeVisible()
+  await expect(guide).toHaveAttribute('data-tick', '960')
+  await expect(page.locator('#editor .pr-drag-position')).toHaveText('1.3.000')
+  const freeTick = await page.evaluate(() =>
+    Math.round(480 + (55 / window.editing.editor.getViewport().timeZoom) * 960)
+  )
+  await page.keyboard.down('Alt')
+  await expect(guide).toHaveAttribute('data-tick', String(freeTick))
+  await page.keyboard.up('Alt')
+  await expect(guide).toHaveAttribute('data-tick', '960')
   await page.mouse.up()
+  await expect(guide).toBeHidden()
   const list = await intents(page)
   const move = list.find((intent) => intent.type === 'move')
   expect(move).toEqual({ type: 'move', noteIds: ['a', 'b'], deltaTick: 480, deltaPitch: 2 })
@@ -118,6 +130,30 @@ test('dragging the right edge resizes', async ({ page }) => {
     noteIds: ['a'],
     edge: 'end',
     deltaTick: 480,
+  })
+})
+
+test('1/256 的最短音符预览和提交都使用整数 tick', async ({ page }) => {
+  await page.evaluate(() =>
+    window.editing.editor.setEditing({
+      enabled: true,
+      tool: 'select',
+      selectedNoteIds: new Set(),
+      defaultDurationTicks: 7.5,
+      snapTicks: (tick, mode) =>
+        (mode === 'floor' ? Math.floor(tick / 7.5) : Math.round(tick / 7.5)) * 7.5,
+      onIntent: (intent) => window.editing.intents.push(intent),
+    })
+  )
+  const end = await pointFor(page, 960, 60)
+  const start = await pointFor(page, 480, 60)
+  await page.mouse.move(end.x - 2, end.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x - 5, end.y, { steps: 5 })
+  await expect(page.locator('#editor .pr-drag-guide')).toHaveAttribute('data-tick', '488')
+  await page.mouse.up()
+  expect((await intents(page)).find((intent) => intent.type === 'resize')).toMatchObject({
+    deltaTick: -472,
   })
 })
 
@@ -283,6 +319,7 @@ test('音轨区域右侧句柄只在松手提交一次长度，Esc 取消', asyn
   await page.mouse.down()
   await page.mouse.move(next.x + 80, next.y + next.height / 2)
   await page.keyboard.press('Escape')
+  await expect(page.locator('#overview .pr-drag-guide').last()).toBeHidden()
   await page.mouse.up()
   expect((await intents(page)).filter((i) => i.type === 'resize-track-region')).toHaveLength(1)
   expect((await intents(page)).some((i) => i.type === 'add-note')).toBe(false)
@@ -305,4 +342,133 @@ test('拖动音轨区域到视口边缘会持续扩展并滚动，越过原曲�
   const list = (await intents(page)).filter((i) => i.type === 'resize-track-region')
   expect(list).toHaveLength(1)
   expect(list[0]!.type === 'resize-track-region' && list[0].endTick).toBeGreaterThan(7680 + 1920)
+})
+
+test('缩短句柄越过音符尾部，受限音符不可命中，拉长后恢复命中', async ({ page }) => {
+  await page.evaluate(() => {
+    const next = {
+      ...window.editing.document,
+      tracks: window.editing.document.tracks.map((t) =>
+        t.id === 't1' ? { ...t, startTick: 0, endTick: 2880 } : t
+      ),
+    }
+    window.editing.editor.setDocument(next)
+    window.editing.overview.setDocument(next)
+    window.editing.configure({ tool: 'select' })
+  })
+  const handle = page.locator('#overview .pr-region-resize[data-track-id="t1"]')
+  const r = (await handle.boundingBox())!
+  const zoom = await page.evaluate(() => window.editing.overview.getViewport().timeZoom)
+  await page.mouse.move(r.x + 6, r.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(r.x + 6 - (960 / 960) * zoom, r.y + 10, { steps: 5 })
+  await page.mouse.up()
+  const result = (await intents(page)).find((i) => i.type === 'resize-track-region')
+  expect(result).toMatchObject({ trackId: 't1', endTick: 1920 })
+  await page.evaluate(() => {
+    const next = {
+      ...window.editing.document,
+      tracks: window.editing.document.tracks.map((t) =>
+        t.id === 't1' ? { ...t, startTick: 0, endTick: 1920 } : t
+      ),
+    }
+    window.editing.editor.setDocument(next)
+    window.editing.overview.setDocument(next)
+    window.editing.intents.length = 0
+  })
+  await expect(handle).toHaveAttribute('data-end-tick', '1920')
+  const hidden = await pointFor(page, 2600, 67)
+  await page.mouse.click(hidden.x, hidden.y)
+  expect((await intents(page)).some((i) => i.type === 'audition')).toBe(false)
+  await page.evaluate(() => {
+    window.editing.editor.setDocument(window.editing.document)
+    window.editing.intents.length = 0
+  })
+  await page.mouse.click(hidden.x, hidden.y)
+  expect((await intents(page)).some((i) => i.type === 'select' && i.noteIds.includes('c'))).toBe(
+    true
+  )
+})
+
+for (const [smart, alt, expected] of [
+  [true, false, 2777],
+  [true, true, 2810],
+  [false, false, 2760],
+] as const) {
+  test(`区域边缘吸附音符结尾 smart=${smart} Alt=${alt}`, async ({ page }) => {
+    await page.evaluate((smart) => {
+      const doc = {
+        ...window.editing.document,
+        tracks: window.editing.document.tracks.map((t) => ({ ...t, startTick: 0, endTick: 3600 })),
+        notes: window.editing.document.notes.map((n) =>
+          n.id === 'c' ? { ...n, endTick: 2777 } : n
+        ),
+      }
+      window.editing.overview.setDocument(doc)
+      window.editing.overview.setTimeZoom(100)
+      window.editing.configure({ snapToNoteEnds: smart })
+    }, smart)
+    const handle = page.locator('#overview .pr-region-resize[data-track-id="t1"]')
+    const r = (await handle.boundingBox())!
+    if (alt) await page.keyboard.down('Alt')
+    await page.mouse.move(r.x + 6, r.y + 10)
+    await page.mouse.down()
+    await page.mouse.move(r.x + 6 + ((2810 - 3600) / 960) * 100, r.y + 10, { steps: 5 })
+    await page.mouse.up()
+    if (alt) await page.keyboard.up('Alt')
+    expect((await intents(page)).find((i) => i.type === 'resize-track-region')).toMatchObject({
+      endTick: expected,
+    })
+  })
+}
+
+test('小节吸附区域边缘，点击被截短音符仅试听有效时长', async ({ page }) => {
+  await page.evaluate(() => {
+    const source = window.editing.document
+    window.editing.overview.setDocument({
+      ...source,
+      tracks: source.tracks.map((t) => ({ ...t, startTick: 0, endTick: 4800 })),
+    })
+    window.editing.overview.setTimeZoom(100)
+    window.editing.overview.setEditing({
+      enabled: true,
+      tool: 'select',
+      selectedNoteIds: new Set(),
+      defaultDurationTicks: 1920,
+      snapToNoteEnds: true,
+      snapTicks: (tick) => Math.round(tick / 1920) * 1920,
+      onIntent: (intent) => window.editing.intents.push(intent),
+    })
+  })
+  const handle = page.locator('#overview .pr-region-resize[data-track-id="t1"]')
+  const r = (await handle.boundingBox())!
+  await page.mouse.move(r.x + 6, r.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(r.x + 6 + ((3400 - 4800) / 960) * 100, r.y + 10, { steps: 5 })
+  const guide = page.locator('#overview .pr-drag-guide').last()
+  await expect(guide).toBeVisible()
+  await expect(guide).toHaveAttribute('data-tick', '3840')
+  await expect(page.locator('#overview .pr-drag-position').last()).toHaveText('3.1.000')
+  expect((await intents(page)).some((i) => i.type === 'resize-track-region')).toBe(false)
+  await page.keyboard.down('Alt')
+  await expect(guide).toHaveAttribute('data-tick', '3400')
+  await page.keyboard.up('Alt')
+  await expect(guide).toHaveAttribute('data-tick', '3840')
+  await page.mouse.up()
+  await expect(guide).toBeHidden()
+  expect((await intents(page)).find((i) => i.type === 'resize-track-region')).toMatchObject({
+    endTick: 3840,
+  })
+  await page.evaluate(() => {
+    window.editing.editor.setDocument({
+      ...window.editing.document,
+      tracks: window.editing.document.tracks.map((t) => ({ ...t, endTick: 720 })),
+    })
+    window.editing.intents.length = 0
+  })
+  const note = await pointFor(page, 600, 60)
+  await page.mouse.click(note.x, note.y)
+  expect((await intents(page)).find((i) => i.type === 'audition')).toMatchObject({
+    durationSeconds: 0.25,
+  })
 })

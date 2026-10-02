@@ -1,4 +1,4 @@
-import { createTimeline } from '@strawberrybear/piano-roll/core'
+import { clipNoteToTrackRegion, createTimeline } from '@strawberrybear/piano-roll/core'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type { MidiProjectLoop } from './model'
 
@@ -105,11 +105,15 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
   function rebuild(): void {
     const document = options.getDocument()
     const timeline = createTimeline(document)
-    const enabled = new Set(
-      document.tracks.filter((track) => track.enabled).map((track) => track.id)
+    const enabled = new Map(
+      document.tracks.filter((track) => track.enabled).map((track) => [track.id, track])
     )
     notes = document.notes
-      .filter((note) => enabled.has(note.trackId))
+      .flatMap((note) => {
+        const track = enabled.get(note.trackId)
+        const clipped = track && clipNoteToTrackRegion(note, track)
+        return clipped ? [clipped] : []
+      })
       .map((note) => ({
         start: timeline.tickToSeconds(note.startTick),
         end: timeline.tickToSeconds(Math.max(note.startTick + 1, note.endTick)),

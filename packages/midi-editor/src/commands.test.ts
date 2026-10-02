@@ -143,7 +143,13 @@ describe('song commands', () => {
       endTick: 20100,
     })
     const covered = ensureDurationCovers(document)
-    expect(covered.durationTicks).toBe(20100)
+    expect(covered.durationTicks).toBe(doc.tracks[0]!.endTick)
+    expect(
+      ensureDurationCovers({
+        ...document,
+        tracks: document.tracks.map((track) => ({ ...track, endTick: undefined })),
+      }).durationTicks
+    ).toBe(20100)
     expect(ensureDurationCovers(doc)).toBe(doc)
   })
 })
@@ -251,6 +257,9 @@ it('支持 64、128 分音符网格，低 PPQ 时步长不会小于一个 tick',
   const doc = fixture()
   expect(resolutionTicks('1/64', doc)).toBe(30)
   expect(resolutionTicks('1/128', doc)).toBe(15)
+  expect(resolutionTicks('1/256', doc)).toBe(7.5)
+  expect(snapTick(101, '1/256', doc)).toBe(98)
+  expect(resolutionTicks('1/256', { ...doc, ticksPerBeat: 16 })).toBe(1)
   expect(snapTick(101, '1/128', doc)).toBe(105)
   expect(resolutionTicks('1/128', { ...doc, ticksPerBeat: 16 })).toBe(1)
 })

@@ -56,6 +56,7 @@ export type SnapResolution =
   | '1/32'
   | '1/64'
   | '1/128'
+  | '1/256'
   | '1/4t'
   | '1/8t'
   | '1/16t'
@@ -72,6 +73,7 @@ export const SNAP_RESOLUTIONS: readonly SnapResolution[] = [
   '1/32',
   '1/64',
   '1/128',
+  '1/256',
   '1/4t',
   '1/8t',
   '1/16t',

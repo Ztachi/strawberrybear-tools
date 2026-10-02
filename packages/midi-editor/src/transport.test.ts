@@ -31,6 +31,32 @@ function createSynth() {
 }
 
 describe('createEditorTransport', () => {
+  it('每轨限制独立于全曲长度，裁剪尾音并忽略边界上的音符，拉长后重新可播', () => {
+    const { synth, events } = createSynth()
+    let current = {
+      ...document,
+      tracks: [
+        { ...document.tracks[0]!, endTick: 720 },
+        { ...document.tracks[1]!, enabled: true, endTick: 1920 },
+      ],
+    }
+    const transport = createEditorTransport({
+      getDocument: () => current,
+      synth,
+      now: () => clock,
+      lookaheadSeconds: 2,
+    })
+    transport.play()
+    expect(events.filter((e) => e.type === 'on').map((e) => e.pitch)).toEqual([60, 40, 62])
+    expect(events.find((e) => e.type === 'off' && e.pitch === 62)!.when).toBeCloseTo(clock + 0.75)
+    transport.stop()
+    events.length = 0
+    current = { ...current, tracks: [{ ...current.tracks[0]!, endTick: 1440 }, current.tracks[1]!] }
+    transport.invalidate()
+    transport.play()
+    expect(events.filter((e) => e.type === 'on').map((e) => e.pitch)).toEqual([60, 40, 62, 64])
+    transport.dispose()
+  })
   let clock = 0
   beforeEach(() => {
     vi.useFakeTimers()

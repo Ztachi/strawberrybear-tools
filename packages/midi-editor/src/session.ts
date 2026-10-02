@@ -12,6 +12,7 @@ import {
 import {
   addTrack,
   duplicateTrack,
+  expandEditedTrackRegions,
   removeTrack,
   reorderTrack,
   resizeTrackRegion,
@@ -158,7 +159,7 @@ export function createEditorSession(
   /** 提交文档变更；无变化时不产生历史。 */
   function commit(next: PianoRollDocument, label: string, coalesceKey?: string): boolean {
     if (next === document()) return false
-    const covered = ensureDurationCovers(next)
+    const covered = ensureDurationCovers(expandEditedTrackRegions(document(), next))
     history.commit(covered, label, coalesceKey)
     selection = pruneSelection(selection, covered)
     return true
@@ -205,10 +206,13 @@ export function createEditorSession(
         return
       }
       case 'select-all':
-        selection = new Set(
+        selection = pruneSelection(
+          new Set(
+            document()
+              .notes.filter((note) => !action.trackId || note.trackId === action.trackId)
+              .map((note) => note.id)
+          ),
           document()
-            .notes.filter((note) => !action.trackId || note.trackId === action.trackId)
-            .map((note) => note.id)
         )
         return
       case 'clear-selection':

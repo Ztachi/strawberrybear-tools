@@ -1,7 +1,14 @@
-import type { PianoRollNote, PianoRollNoteIndex, PianoRollTimeline } from '../core'
+import {
+  clipNoteToTrackRegion,
+  type PianoRollNote,
+  type PianoRollNoteIndex,
+  type PianoRollTimeline,
+  type PianoRollTrack,
+} from '../core'
 import { canvasContext, type RenderFrame } from './renderer'
 import type { PianoRollTheme } from './theme'
 import type { PianoRollEditIntent, PianoRollEditingOptions } from './types'
+import { createDragGuide } from './drag-guide'
 
 /** 音符左右边缘的拉伸命中宽度（px）。 */
 const RESIZE_EDGE_PX = 6
@@ -21,6 +28,7 @@ export interface EditingHost {
   timeline(): PianoRollTimeline
   index(): PianoRollNoteIndex
   selectedTrackId(): string | null
+  track(trackId: string): PianoRollTrack | undefined
   /** 当前视口几何；scrollLeft 采用已绘制帧的逻辑值。 */
   geometry(): {
     scrollLeft: number
@@ -111,6 +119,7 @@ type Drag =
 function projectFrameState(options?: PianoRollEditingOptions): RenderFrame['editing'] {
   if (!options) return undefined
   return {
+    clipTrackRegions: options.enabled,
     selectedNoteIds: options.selectedNoteIds,
     highlightPitches: options.highlightPitches ?? null,
   }
@@ -144,6 +153,8 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
   const overlay = make('canvas', 'pr-layer pr-overlay')
   host.pane.append(overlay)
   const rulerOverlay = make('canvas', 'pr-layer pr-ruler-overlay')
+  const guide = createDragGuide(host.pane, host.rulerGrid)
+  let lastPointer: Pick<PointerEvent, 'clientX' | 'clientY' | 'pointerId' | 'altKey'> | null = null
   host.rulerGrid.append(rulerOverlay)
   // 力度条占据第三行；高度由 --pr-lane 控制，0 时不占空间。
   const laneGutter = make('div', 'pr-lane-gutter')
@@ -176,7 +187,7 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
    * @param {MouseEvent} event 指针或鼠标事件
    * @return {boolean} 是否位于可编辑的 client 区域
    */
-  function insideContent(event: MouseEvent): boolean {
+  function insideContent(event: Pick<MouseEvent, 'clientX' | 'clientY'>): boolean {
     const rect = host.scroll.getBoundingClientRect()
     const x = event.clientX - rect.left - host.scroll.clientLeft
     const y = event.clientY - rect.top - host.scroll.clientTop
@@ -222,7 +233,18 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
         break
       }
     }
-    return Math.max(1, step)
+    // 1/256 等细网格可能是半 tick；幽灵边界必须与宿主整数化后的 MIDI 音符一致。
+    return Math.max(1, Math.round(step))
+  }
+
+  /**
+   * @description: 命中、框选、力度条与试听共用有效音符范围；操作意图仍引用完整源音符。
+   * @param {PianoRollNote} note 源音符
+   * @return {PianoRollNote | null} 可见交集，无交集时不可命中
+   */
+  function visibleNote(note: PianoRollNote): PianoRollNote | null {
+    const track = host.track(note.trackId)
+    return track ? clipNoteToTrackRegion(note, track) : note
   }
 
   /** 命中测试：先按时间窗查索引，再按音高与像素边界过滤。 */
@@ -239,15 +261,18 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     const to = timeline.secondsToTick(x / geometry.timeZoom + slack)
     let best: NoteHit | null = null
     for (const note of host.index().query(trackId, from, to)) {
+      const visible = visibleNote(note)
+      if (!visible) continue
       if (note.pitch !== pitch) continue
       const startX = tickToX(note.startTick)
       const endX = Math.max(startX + 2, tickToX(note.endTick))
+      if (x < tickToX(visible.startTick) || x >= tickToX(visible.endTick)) continue
       if (x < startX - RESIZE_EDGE_PX / 2 || x > endX + RESIZE_EDGE_PX / 2) continue
       const width = endX - startX
       // 窄音符只允许从右缘拉伸，避免完全无法移动。
       const edge = Math.min(RESIZE_EDGE_PX, width / 3)
       const part: NoteHit['part'] =
-        x >= endX - edge
+        visible.endTick === note.endTick && x >= endX - edge
           ? 'end'
           : width > RESIZE_EDGE_PX * 2 && x <= startX + edge
             ? 'start'
@@ -267,7 +292,7 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     return host
       .index()
       .query(trackId, range.startTick, range.endTick)
-      .filter((note) => selected.has(note.id))
+      .filter((note) => selected.has(note.id) && visibleNote(note) !== null)
   }
 
   function emit(intent: PianoRollEditIntent): void {
@@ -360,12 +385,13 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
       }
       // 试听属于点击行为，不依赖选区是否发生变化；变速音符按分段时间轴计算时长。
       const timeline = host.timeline()
+      const audible = visibleNote(hit.note)!
       emit({
         type: 'audition',
         pitch: hit.note.pitch,
         velocity: hit.note.velocity,
         durationSeconds:
-          timeline.tickToSeconds(hit.note.endTick) - timeline.tickToSeconds(hit.note.startTick),
+          timeline.tickToSeconds(audible.endTick) - timeline.tickToSeconds(audible.startTick),
       })
       host.scroll.setPointerCapture(event.pointerId)
       if (hit.part === 'body') beginMove(event, hit)
@@ -404,7 +430,9 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     }
   }
 
-  function onPointerMove(event: PointerEvent): void {
+  function onPointerMove(
+    event: Pick<PointerEvent, 'clientX' | 'clientY' | 'pointerId' | 'altKey'>
+  ): void {
     if (!drag || drag.kind === 'loop' || drag.kind === 'velocity') {
       if (!drag) {
         const hit =
@@ -417,6 +445,12 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
       return
     }
     if (drag.pointerId !== event.pointerId) return
+    lastPointer = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      pointerId: event.pointerId,
+      altKey: event.altKey,
+    }
     const geometry = host.geometry()
     switch (drag.kind) {
       case 'move': {
@@ -483,6 +517,8 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     if (!drag) return
     const current = drag
     drag = null
+    lastPointer = null
+    guide.hide()
     if (host.scroll.hasPointerCapture(current.pointerId))
       host.scroll.releasePointerCapture(current.pointerId)
     if (host.ruler.hasPointerCapture(current.pointerId))
@@ -522,7 +558,16 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
           const ids = host
             .index()
             .query(trackId, from, to)
-            .filter((note) => note.pitch >= low && note.pitch <= high)
+            .filter((note) => {
+              const visible = visibleNote(note)
+              return (
+                visible &&
+                visible.startTick <= to &&
+                visible.endTick > from &&
+                note.pitch >= low &&
+                note.pitch <= high
+              )
+            })
             .map((note) => note.id)
           emit({ type: 'select', noteIds: ids, mode: current.additive ? 'add' : 'replace' })
           break
@@ -639,7 +684,9 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     let best: PianoRollNote | null = null
     let bestDistance = Number.POSITIVE_INFINITY
     for (const note of host.index().query(trackId, from, to)) {
-      const startX = tickToX(note.startTick)
+      const visible = visibleNote(note)
+      if (!visible) continue
+      const startX = tickToX(visible.startTick)
       if (x < startX - 2 || x > startX + VELOCITY_BAR_PX + 2) continue
       const distance = Math.abs(x - startX)
       const preferred = options?.selectedNoteIds.has(note.id) ? -1 : 0
@@ -682,6 +729,11 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
   }
 
   function onKeyDown(event: KeyboardEvent): void {
+    // 修饰键改变时立即重算幽灵和落点，不要求用户额外移动鼠标。
+    if (event.key === 'Alt' && drag && lastPointer) {
+      onPointerMove({ ...lastPointer, altKey: event.altKey })
+      return
+    }
     if (event.key === 'Escape' && drag) {
       event.preventDefault()
       event.stopPropagation()
@@ -763,10 +815,20 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     if (drag?.kind === 'velocity') finish(false)
   })
   listen(window, 'keydown', onKeyDown, { capture: true })
+  listen(window, 'keyup', onKeyDown, { capture: true })
   listen(window, 'blur', () => finish(false))
 
   /** 覆盖层：幽灵音符、框选矩形、循环区。 */
   function drawOverlay(frame: RenderFrame): void {
+    let guideTick: number | null = null
+    if (drag?.kind === 'move' && drag.moved) guideTick = drag.anchor.startTick + drag.deltaTick
+    else if (drag?.kind === 'resize' && drag.moved)
+      guideTick = Math.max(
+        0,
+        (drag.edge === 'start' ? drag.anchor.startTick : drag.anchor.endTick) + drag.deltaTick
+      )
+    else if (drag?.kind === 'draw' || drag?.kind === 'loop') guideTick = drag.endTick
+    guide.render(guideTick, frame)
     const context = canvasContext(overlay, frame.width, frame.height)
     const rulerContext = canvasContext(rulerOverlay, frame.width, 32)
     if (!context || !rulerContext) return
@@ -864,7 +926,9 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     const preview = drag?.kind === 'velocity' ? drag.preview : null
     const selected = options?.selectedNoteIds
     for (const note of frame.index.query(trackId, from, to)) {
-      const x = timeline.tickToSeconds(note.startTick) * timeZoom - scrollLeft
+      const visible = visibleNote(note)
+      if (!visible) continue
+      const x = timeline.tickToSeconds(visible.startTick) * timeZoom - scrollLeft
       if (x > width || x + VELOCITY_BAR_PX < 0) continue
       const velocity = preview?.get(note.id) ?? note.velocity
       const barHeight = Math.max(2, ((height - 4) * velocity) / 127)
@@ -923,6 +987,7 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
       for (const cleanup of cleanups.reverse()) cleanup()
       overlay.remove()
       rulerOverlay.remove()
+      guide.destroy()
       laneGutter.remove()
       lane.remove()
     },

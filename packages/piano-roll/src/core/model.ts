@@ -48,7 +48,7 @@ export interface PianoRollTrack {
   enabled: boolean
   /** 轨道内容区域的起始 tick（MIDI 轨道通常为 0，用于保留前导静音）。 */
   startTick?: number
-  /** 轨道内容区域的结束 tick（来自 MIDI End Of Track，包含尾部静音）。 */
+  /** 区域结束 tick；导入时来自 End Of Track，编辑态用作可恢复的有效范围限制。 */
   endTick?: number
 }
 

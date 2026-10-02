@@ -20,6 +20,7 @@ import {
   Volume2,
 } from 'lucide-vue-next'
 import type { EditorAction, EditorSessionState } from '@strawberrybear/midi-editor'
+import { clipNoteToTrackRegion } from '@strawberrybear/piano-roll/core'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 
 /** 右键落点信息，来自钢琴卷帘 `context-menu` 意图。 */
@@ -82,14 +83,18 @@ const menuItems = computed(() => [
   { key: 'delete', label: t('midiEditor.contextMenu.delete'), icon: icon(Trash2), danger: true, disabled: !hasSelection.value },
 ])
 
-/** 选区时间范围，用于按选区设置循环。 */
+/** 选区循环使用有效区域内的投影，不能因保留的隐藏尾部超出当前选区。 */
 function selectionRange(): { startTick: number; endTick: number } | null {
   let start = Number.POSITIVE_INFINITY
   let end = 0
+  const tracks = new Map(props.state.document.tracks.map((track) => [track.id, track]))
   for (const note of props.state.document.notes) {
     if (!props.state.selection.has(note.id)) continue
-    start = Math.min(start, note.startTick)
-    end = Math.max(end, note.endTick)
+    const track = tracks.get(note.trackId)
+    const visible = track && clipNoteToTrackRegion(note, track)
+    if (!visible) continue
+    start = Math.min(start, visible.startTick)
+    end = Math.max(end, visible.endTick)
   }
   return Number.isFinite(start) && end > start ? { startTick: start, endTick: end } : null
 }

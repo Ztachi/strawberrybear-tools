@@ -2,12 +2,18 @@ import type { PianoRollTimeline } from '../core'
 import { getTrackTimeRange, type RenderFrame } from './renderer'
 import type { PianoRollEditingOptions } from './types'
 import { dragScrollVelocity } from './viewport'
+import { createDragGuide } from './drag-guide'
+
+/** 音符尾端吸附距离采用屏幕像素，保证各缩放级别有相同容差。 */
+const NOTE_END_SNAP_PX = 8
 
 /** 区域手势所需的控制器端口；试听时长和工程数据仍由宿主拥有。 */
 export interface TrackRegionHost {
   pane: HTMLElement
+  rulerGrid: HTMLElement
   scroll: HTMLElement
   timeline(): PianoRollTimeline
+  noteEnds(trackId: string): readonly number[]
   options(): PianoRollEditingOptions | undefined
   label(): string
   geometry(): { timeZoom: number; width: number }
@@ -34,6 +40,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
   const layer = owner.createElement('div')
   layer.className = 'pr-region-handles'
   host.pane.append(layer)
+  const guide = createDragGuide(host.pane, host.rulerGrid)
   const handles = new Map<string, HTMLButtonElement>()
   let drag: {
     button: HTMLButtonElement
@@ -46,6 +53,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
     originalEnd: number
     endTick: number
     minimum: number
+    noteEnds: number[]
     altKey: boolean
     moved: boolean
     lastFrame: number
@@ -53,7 +61,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
   } | null = null
 
   /**
-   * @description: 根据抓取偏移计算边界；区域不能缩到音符尾端之前。
+   * @description: 根据抓取偏移计算有效边界，网格吸附并在邻近音符尾端时精确贴齐。
    * @return 无返回值。
    */
   function updateBoundary(): void {
@@ -65,10 +73,27 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
       (drag.clientX - drag.startX + host.scroll.scrollLeft - drag.scrollLeft) / drag.timeZoom
     const tick = timeline.secondsToTick(Math.max(0, seconds))
     const snap = host.options()?.snapTicks
-    drag.endTick = Math.max(
-      drag.minimum,
-      Math.round(drag.altKey || !snap ? tick : snap(tick, 'nearest'))
-    )
+    let target = drag.altKey || !snap ? tick : snap(tick, 'nearest')
+    if (!drag.altKey && host.options()?.snapToNoteEnds && drag.noteEnds.length) {
+      // 按 tick 二分，仅比较两侧候选；吸附距离以屏幕像素衡量，变速和缩放后手感一致。
+      let low = 0,
+        high = drag.noteEnds.length
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        if (drag.noteEnds[middle]! < tick) low = middle + 1
+        else high = middle
+      }
+      let distance = NOTE_END_SNAP_PX
+      for (const candidate of [drag.noteEnds[low - 1], drag.noteEnds[low]]) {
+        if (candidate === undefined || candidate < drag.minimum) continue
+        const pixels = Math.abs(timeline.tickToSeconds(candidate) - seconds) * drag.timeZoom
+        if (pixels <= distance) {
+          target = candidate
+          distance = pixels
+        }
+      }
+    }
+    drag.endTick = Math.max(drag.minimum, Math.round(target))
     // 额外留出半屏供下一帧自动滚动；它不属于音轨长度，也不进入保存/导出。
     const extent = timeline.secondsToTick(
       (host.scroll.scrollLeft + geometry.width * 1.5) / drag.timeZoom
@@ -106,6 +131,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
     const current = drag
     if (!current) return
     drag = null
+    guide.hide()
     window.cancelAnimationFrame(current.raf)
     if (current.button.hasPointerCapture(current.pointerId))
       current.button.releasePointerCapture(current.pointerId)
@@ -146,6 +172,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
       originalEnd,
       endTick: originalEnd,
       minimum,
+      noteEnds: [...new Set(host.noteEnds(trackId).filter(Number.isFinite))].sort((a, b) => a - b),
       altKey: event.altKey,
       moved: false,
       lastFrame: window.performance.now(),
@@ -175,6 +202,8 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
     })
     button.addEventListener('pointerup', (event) => {
       if (drag?.pointerId !== event.pointerId) return
+      drag.clientX = event.clientX
+      drag.altKey = event.altKey
       updateBoundary()
       finish(true)
     })
@@ -200,11 +229,19 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
   }
 
   const cancel = (event: KeyboardEvent) => {
+    if (event.key === 'Alt' && drag?.moved) {
+      drag.altKey = event.altKey
+      updateBoundary()
+      return
+    }
     if (event.key !== 'Escape' || !drag) return
     event.preventDefault()
     finish(false)
   }
   window.addEventListener('keydown', cancel)
+  window.addEventListener('keyup', cancel)
+  const blur = () => finish(false)
+  window.addEventListener('blur', blur)
 
   return {
     isDragging: () => drag !== null,
@@ -214,6 +251,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
      * @return 无返回值。
      */
     render(frame: RenderFrame): void {
+      guide.render(drag?.moved ? drag.endTick : null, frame)
       const active = new Set<string>()
       if (host.options()?.enabled) {
         for (const row of frame.rows) {
@@ -223,13 +261,15 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
             button = makeHandle(row.track.id)
             handles.set(row.track.id, button)
           }
-          const range = getTrackTimeRange(row.track, frame.index, frame.timeline.durationTicks)
+          const range = getTrackTimeRange(
+            row.track,
+            frame.index,
+            frame.timeline.durationTicks,
+            true
+          )
           const end = drag?.trackId === row.track.id ? drag.endTick : range.endTick
           const right = frame.timeline.tickToSeconds(end) * frame.timeZoom - frame.scrollLeft
-          const minimum = Math.max(
-            (row.track.startTick ?? 0) + 1,
-            frame.index.getTimeRange(row.track.id)?.endTick ?? 0
-          )
+          const minimum = Math.max(0, row.track.startTick ?? 0) + 1
           button.dataset.endTick = String(end)
           button.dataset.minimum = String(minimum)
           button.setAttribute('aria-label', `${host.label()}: ${row.track.name}`)
@@ -257,6 +297,9 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
     destroy(): void {
       finish(false)
       window.removeEventListener('keydown', cancel)
+      window.removeEventListener('keyup', cancel)
+      window.removeEventListener('blur', blur)
+      guide.destroy()
       layer.remove()
       handles.clear()
     },

@@ -142,6 +142,8 @@ export interface PianoRollEditingOptions {
   selectedNoteIds: ReadonlySet<string>
   /** 由宿主注入的吸附函数；视图不了解网格分辨率。返回值应为非负 tick。 */
   snapTicks: (tick: number, mode: 'nearest' | 'floor') => number
+  /** 区域边缘靠近音符结尾时吸附；宿主在关闭网格时一起关闭。 */
+  snapToNoteEnds?: boolean
   /** 新增音符的默认时长（tick）。 */
   defaultDurationTicks: number
   /** 新增音符的默认力度，默认 100。 */

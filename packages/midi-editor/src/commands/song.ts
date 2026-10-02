@@ -1,4 +1,4 @@
-import { createTimeline } from '@strawberrybear/piano-roll/core'
+import { clipNoteToTrackRegion, createTimeline } from '@strawberrybear/piano-roll/core'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 
 /** BPM 合法范围。 */
@@ -88,16 +88,20 @@ export function setDurationTicks(
  * @return {PianoRollDocument} 时长相同时返回原引用
  */
 export function ensureDurationCovers(document: PianoRollDocument): PianoRollDocument {
-  const enabled = new Set(document.tracks.filter((track) => track.enabled).map((track) => track.id))
+  const enabled = new Map(
+    document.tracks.filter((track) => track.enabled).map((track) => [track.id, track])
+  )
   let lastTick = 0
   for (const track of document.tracks) {
     if (track.enabled && Number.isFinite(track.endTick))
       lastTick = Math.max(lastTick, track.endTick!)
   }
-  // 区域边界与音符尾端取并集，避免过时元数据截断音符；禁用轨道仍保留编辑数据。
+  // 显式区域是有效范围，隐藏尾部不能把它撑回去；无边界的旧轨道仍由音符推导。
   for (const note of document.notes) {
-    if (enabled.has(note.trackId) && Number.isFinite(note.endTick))
-      lastTick = Math.max(lastTick, note.endTick)
+    const track = enabled.get(note.trackId)
+    if (!track || Number.isFinite(track.endTick)) continue
+    const visible = clipNoteToTrackRegion(note, track)
+    if (visible) lastTick = Math.max(lastTick, visible.endTick)
   }
   return setDurationTicks(document, lastTick)
 }

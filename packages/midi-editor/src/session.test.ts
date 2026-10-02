@@ -160,8 +160,66 @@ describe('有效音轨区域与总时长', () => {
     expect(session.getState().canUndo).toBe(false)
     session.dispatch({ type: 'redo' })
     session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 100 })
-    expect(session.getState().document.tracks[0]!.endTick).toBe(9600)
+    expect(session.getState().document.tracks[0]!.endTick).toBe(100)
     expect(session.getState().document.notes[0]!.endTick).toBe(9600)
+  })
+
+  it('缩短是可恢复的区域限制，撤销重做及保存重开都保留完整音符', () => {
+    const session = createEditorSession(project())
+    session.dispatch({ type: 'update-track', trackId: 'long', patch: { enabled: false } })
+    const originalNotes = session.getState().document.notes
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 4800 })
+    expect(session.getState().document.durationTicks).toBe(4800)
+    expect(session.getState().document.notes).toBe(originalNotes)
+    session.dispatch({ type: 'undo' })
+    expect(session.getState().document.durationTicks).toBe(9600)
+    session.dispatch({ type: 'redo' })
+    const restored = createEditorSession(JSON.parse(JSON.stringify(session.toProject())))
+    expect(restored.getState().document.durationTicks).toBe(4800)
+    expect(restored.getState().document.notes).toEqual(originalNotes)
+    restored.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 9600 })
+    expect(restored.getState().document.durationTicks).toBe(9600)
+    expect(restored.getState().document.notes).toEqual(originalNotes)
+  })
+
+  it('在限制外新增或移动音符会扩展区域，改力度不会把隐藏音符重新启用', () => {
+    const session = createEditorSession(project())
+    session.dispatch({ type: 'update-track', trackId: 'long', patch: { enabled: false } })
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 4800 })
+    session.dispatch({ type: 'set-velocity', changes: [{ noteId: 's', velocity: 70 }] })
+    expect(session.getState().document.durationTicks).toBe(4800)
+    session.dispatch({
+      type: 'add-note',
+      trackId: 'short',
+      pitch: 65,
+      startTick: 5000,
+      durationTicks: 100,
+    })
+    expect(session.getState().document.durationTicks).toBe(5100)
+    session.dispatch({ type: 'undo' })
+    expect(session.getState().document.durationTicks).toBe(4800)
+    session.dispatch({ type: 'resize', noteIds: ['s'], edge: 'end', deltaTick: 400 })
+    expect(session.getState().document.durationTicks).toBe(10000)
+  })
+
+  it('缩短后隐藏音符退出选区，全选只操作有效部分', () => {
+    const p = project()
+    p.document.notes.push({
+      id: 'late',
+      trackId: 'short',
+      pitch: 70,
+      velocity: 100,
+      startTick: 9000,
+      endTick: 9600,
+    })
+    const session = createEditorSession(p)
+    session.dispatch({ type: 'select-all', trackId: 'short' })
+    expect([...session.getState().selection]).toEqual(['s', 'late'])
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 4800 })
+    expect([...session.getState().selection]).toEqual(['s'])
+    session.dispatch({ type: 'select-all', trackId: 'short' })
+    expect([...session.getState().selection]).toEqual(['s'])
+    expect(session.getState().document.notes.some((n) => n.id === 'late')).toBe(true)
   })
 
   it('载入旧项目即重算有效时长，不把修正记作用户编辑；音符尾端变化可缩短无显式边界的区域', () => {

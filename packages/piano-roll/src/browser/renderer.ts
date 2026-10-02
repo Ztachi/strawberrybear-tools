@@ -1,4 +1,9 @@
-import type { createNoteIndex, PianoRollTimeline, PianoRollTrack } from '../core'
+import {
+  clipNoteToTrackRegion,
+  type createNoteIndex,
+  type PianoRollTimeline,
+  type PianoRollTrack,
+} from '../core'
 import { defaultPianoRollTheme, type PianoRollTheme } from './theme'
 import { rulerLabels } from './ruler-layout'
 import { layoutPianoKeys } from './keyboard-layout'
@@ -58,23 +63,23 @@ export function layoutTrackRows(
 /**
  * 解析轨道在总览中的内容区域。
  *
- * MIDI 的 End Of Track 是最可信的区域边界；音符区间只用于补齐缺失或
- * 错误的元数据，避免坏元数据把音符绘制到粉色区域之外。结果始终限制
- * 在文档时间轴内，空轨道且没有边界时退化为零宽标记。
+ * 编辑态以显式区域为有效范围；只读 MIDI 预览仍用音符补齐缺失或错误的
+ * End Of Track。结果始终限制在文档时间轴内，空轨无边界时退化为零宽标记。
  */
 export function getTrackTimeRange(
   track: PianoRollTrack,
   index: ReturnType<typeof createNoteIndex>,
-  durationTicks: number
+  durationTicks: number,
+  clipToRegion = false
 ): { startTick: number; endTick: number } {
   const duration = Number.isFinite(durationTicks) ? Math.max(0, durationTicks) : 0
   const notes = index.getTimeRange(track.id)
   const metadataStart = Number.isFinite(track.startTick) ? Math.max(0, track.startTick!) : null
   const metadataEnd = Number.isFinite(track.endTick) ? Math.max(0, track.endTick!) : null
-  // 元数据与音符取并集，保证异常的 EOT 或导入器截断不会隐藏真实音符。
-  let start = metadataStart ?? notes?.startTick ?? 0
+  // 只读预览兼容异常 EOT；编辑态不能用隐藏音符撑开用户已缩短的范围。
+  let start = metadataStart ?? (clipToRegion && metadataEnd !== null ? 0 : (notes?.startTick ?? 0))
   let end = metadataEnd ?? notes?.endTick ?? start
-  if (notes) {
+  if (notes && !clipToRegion) {
     start = Math.min(start, notes.startTick)
     end = Math.max(end, notes.endTick)
   }
@@ -118,6 +123,8 @@ export interface RenderFrame {
   theme?: PianoRollTheme
   /** 编辑层投影：选中音符与可演奏音高；只影响配色，不改变布局。 */
   editing?: {
+    /** 编辑态区域是硬边界；只读 MIDI 预览继续兼容不完整的 EOT 元数据。 */
+    clipTrackRegions?: boolean
     selectedNoteIds: ReadonlySet<string>
     highlightPitches: ReadonlySet<number> | null
   }
@@ -204,6 +211,22 @@ export function drawGrid(
       context.globalAlpha = 1
     }
   }
+  if (frame.variant === 'editor' && frame.editing?.clipTrackRegions) {
+    const row = frame.rows.find((item) => item.track.id === frame.selectedTrackId)
+    if (row) {
+      const range = getTrackTimeRange(row.track, frame.index, timeline.durationTicks, true)
+      const left = timeline.tickToSeconds(range.startTick) * timeZoom - scrollLeft
+      const right = timeline.tickToSeconds(range.endTick) * timeZoom - scrollLeft
+      // 用现有主题遮罩标明区域外留白；隐藏尾部不参与绘制，但源音符仍由工程保留。
+      context.fillStyle = theme.colors.trackDisabled
+      context.globalAlpha = 0.45
+      context.fillRect(0, 0, Math.max(0, Math.min(width, left)), height)
+      context.fillRect(Math.max(0, right), 0, Math.max(0, width - Math.max(0, right)), height)
+      context.globalAlpha = 1
+      context.fillStyle = theme.colors.gridMajor
+      if (right >= 0 && right <= width) context.fillRect(right, 0, 1, height)
+    }
+  }
   const marks = timeline.getRulerMarks({
     // 保留跨过裁剪边缘的线宽，避免尚未完全离开的刻度突然消失。
     startSeconds: Math.max(0, scrollLeft - 1) / timeZoom,
@@ -251,7 +274,12 @@ export function drawGrid(
   if (frame.variant === 'overview') {
     for (const row of frame.rows) {
       const y = row.top - scrollTop
-      const range = getTrackTimeRange(row.track, frame.index, timeline.durationTicks)
+      const range = getTrackTimeRange(
+        row.track,
+        frame.index,
+        timeline.durationTicks,
+        frame.editing?.clipTrackRegions
+      )
       const region = overviewRegionGeometry(range, timeline, timeZoom, scrollLeft)
       const regionLeft = region.left
       const regionWidth = region.width
@@ -312,7 +340,11 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
     // 名称由左侧轨道栏展示；音符居中使用完整预览高度，只保留上下安全间距。
     const scale = (row.height - 15) / Math.max(12, high - low)
     const middlePitch = (high + low) / 2
-    for (const note of frame.index.query(row.track.id, startTick, endTick)) {
+    for (const original of frame.index.query(row.track.id, startTick, endTick)) {
+      const note = frame.editing?.clipTrackRegions
+        ? clipNoteToTrackRegion(original, row.track)
+        : original
+      if (!note) continue
       const start = timeline.tickToSeconds(note.startTick) * timeZoom - scrollLeft
       const end = timeline.tickToSeconds(note.endTick) * timeZoom - scrollLeft
       const noteHeight = frame.variant === 'editor' ? Math.max(3, pitchZoom - 3) : 3

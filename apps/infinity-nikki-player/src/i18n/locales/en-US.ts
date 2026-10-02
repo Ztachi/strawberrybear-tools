@@ -787,7 +787,7 @@ export default {
             trackEnabled: {
               label: 'Enabled State',
               description:
-                'Track switches control preview and export. The song ends at the right edge of the longest enabled region. Disabled tracks keep their notes. Drag a region’s right edge in the overview to extend or shorten it; dragging near the viewport edge scrolls automatically. Shortening stops at the last note.',
+                'Track switches control preview and export. The song ends at the right edge of the longest enabled region. Drag a region’s right edge to extend or shorten it; the viewport scrolls at its edges. Shortening limits the active range and extending restores hidden notes. Preview and export cut notes at the boundary. Dragging follows the selected grid and snaps near note ends; Option/Alt bypasses snapping.',
             },
           },
         },

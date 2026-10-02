@@ -1,7 +1,9 @@
 import { writeMidi, type MidiEvent } from 'midi-file'
+import { clipNoteToTrackRegion } from '@strawberrybear/piano-roll/core'
 import type { PianoRollDocument, PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import { clampInt, MAX_PITCH, MAX_VELOCITY, MIN_PITCH, MIN_VELOCITY } from '../commands/notes'
 import { toMidiText } from './text'
+import { ensureDurationCovers } from '../commands/song'
 
 /** 导出选项。 */
 export interface EncodeMidiOptions {
@@ -82,12 +84,8 @@ export function encodeMidi(
 ): Uint8Array {
   const ppq = Math.max(1, Math.round(document.ticksPerBeat > 0 ? document.ticksPerBeat : 480))
   const enabledTracks = document.tracks.filter((track) => track.enabled)
-  const enabledIds = new Set(enabledTracks.map((track) => track.id))
-  let songEnd = Math.max(0, Math.round(document.durationTicks))
-  for (const track of enabledTracks) songEnd = Math.max(songEnd, Math.round(track.endTick ?? 0))
-  for (const note of document.notes) {
-    if (enabledIds.has(note.trackId)) songEnd = Math.max(songEnd, Math.round(note.endTick))
-  }
+  const enabled = new Map(enabledTracks.map((track) => [track.id, track]))
+  const songEnd = ensureDurationCovers(document).durationTicks
 
   // 轨 0：conductor，只放曲名、速度与拍号。
   const conductor: AbsoluteEvent[] = []
@@ -149,12 +147,15 @@ export function encodeMidi(
   for (const track of enabledTracks) notesByTrack.set(track.id, [])
   for (const note of document.notes) {
     const bucket = notesByTrack.get(note.trackId)
-    if (!bucket) continue
+    const track = enabled.get(note.trackId)
+    const clipped = track && clipNoteToTrackRegion(note, track)
+    if (!bucket || !clipped) continue
     const channel = channels.get(note.trackId) ?? 0
     const pitch = clampInt(note.pitch, MIN_PITCH, MAX_PITCH)
-    const start = Math.max(0, Math.round(note.startTick))
-    // 零长度音符至少保留 1 tick，否则 noteOff 与 noteOn 同刻会被播放器吞掉。
-    const end = Math.max(start + 1, Math.round(note.endTick))
+    const start = Math.max(0, Math.round(clipped.startTick))
+    // 裁剪投影已修复零长度音符；整数化后没有时长的交集不能产生同刻开关事件。
+    const end = Math.round(clipped.endTick)
+    if (end <= start) continue
     bucket.push({
       tick: start,
       order: 2,

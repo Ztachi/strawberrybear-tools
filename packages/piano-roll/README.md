@@ -92,6 +92,7 @@ view.setEditing({
   tool: 'select',                          // 或 'draw'
   selectedNoteIds: selection,              // 宿主状态的只读投影
   snapTicks: (tick, mode) => session.snapTick(tick, mode),
+  snapToNoteEnds: true,                    // 区域边界贴齐附近音符尾端；网格关闭时宿主同步设 false
   defaultDurationTicks: 480,
   highlightPitches: playablePitches,       // 不可演奏音高会被遮罩/灰化
   loop: { startTick: 0, endTick: 1920 },   // 标尺 Alt+拖拽产生，双击清除
@@ -102,7 +103,11 @@ view.setEditing({
 
 交互约定：点选/Shift 加选，空白拖拽框选，双击空白落音符；拖音符体移动（以按住的音符为吸附基准，Alt 关闭吸附）、拖左右缘拉伸；draw 工具点击即落并横拖定长；右键发 `context-menu`；拖动期间只绘制 overlay 幽灵，松手才提交一次意图，Esc 取消。总览视图可通过 `renderTrackActions(container, { track })` 在轨道行右侧挂载宿主菜单，与 `renderTrackToggle` 同模式。相关主题 token：`noteSelected / noteGhost / noteUnplayable / selectionBox / loopRegion / velocityBar / pitchUnplayable`。
 
-总览在 `editing.enabled` 时显示区域右边缘句柄，拖动提交 `resize-track-region`（`trackId`、`endTick`），左右方向键按默认音符长度调整。拖动期间预览区域并临时扩展浏览空间，靠近视口边缘会自动滚动；松手只提交一次，Esc 取消，且边界不会越过已有音符。宿主负责将区域长度转换为工程曲长，公共视图只提供编辑意图；`labels.resizeTrack` 可本地化句柄说明。原生滚动条不接收落笔、选择或右键编辑手势。
+总览在 `editing.enabled` 时显示区域右边缘句柄，拖动提交 `resize-track-region`（`trackId`、`endTick`），左右方向键按默认音符长度调整。拖动可延长或缩短至起点之后 1 tick，期间预览区域并临时扩展浏览空间，靠近视口边缘会自动滚动；松手只提交一次，Esc 或窗口失焦取消。`snapTicks` 控制网格／小节吸附，`snapToNoteEnds` 启用 8px 内的音符尾端吸附，Option/Alt 临时绕过。宿主负责将区域长度转换为工程曲长，公共视图只提供编辑意图；`labels.resizeTrack` 可本地化句柄说明。原生滚动条不接收落笔、选择或右键编辑手势。
+
+区域拖拽、音符移动／拉伸、落笔及循环设置共用落点竖线和标尺内的小节.拍.tick 提示。提示采用实际提交位置，随滚动、变速和变拍同步更新，不接收指针；松手或取消后收起。Option/Alt 切换会立即更新区域与音符预览，不需要再次移动鼠标。
+
+编辑态将轨道 `startTick/endTick` 作为有效范围，渲染、命中及点击试听只使用范围内的部分，范围外音符继续保留在原文档及索引中。`clipNoteToTrackRegion` 从 `/core` 导出，供宿主试听及导出复用同一截取规则，返回投影而不修改原音符。只读 MIDI 预览继续用音符补齐异常或缺失的 End Of Track，保持导入兼容。
 
 普通点击音符每次都发出 `audition`，包括已选中的音符；Shift 移除选区不试听。点击意图携带可选 `durationSeconds`，由音符开始／结束 tick 按完整 tempo map 换算，跨速度变化时也保留真实时长。拖动改音高的短音试听不携带时长，由宿主使用默认值。公共视图只发意图，不创建音频引擎。
 

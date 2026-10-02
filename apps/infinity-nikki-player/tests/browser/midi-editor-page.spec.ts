@@ -84,11 +84,11 @@ test('区域延长只产生一次撤销，历史按钮禁用状态清晰', async
   await expect(handle).toHaveAttribute('data-end-tick', String(extended))
 })
 
-test('节拍网格支持 1/64 和 1/128，选择后保持固定宽度', async ({ page }) => {
+test('节拍网格支持 1/64、1/128 和 1/256，选择后保持固定宽度', async ({ page }) => {
   await openSnapSettings(page)
   const select = page.locator('.toolbar-snap:visible')
   const width = await select.evaluate((element) => getComputedStyle(element).width)
-  for (const resolution of ['1/64', '1/128']) {
+  for (const resolution of ['1/64', '1/128', '1/256']) {
     await select.click()
     const option = page
       .locator('.ant-select-dropdown:visible .ant-select-item-option')
@@ -98,6 +98,74 @@ test('节拍网格支持 1/64 和 1/128，选择后保持固定宽度', async ({
     await expect(select).toContainText(resolution)
     expect(await select.evaluate((element) => getComputedStyle(element).width)).toBe(width)
   }
+})
+
+test('已有曲子可缩短到音符内部，撤销恢复区域且不丢失原音符', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+  const handle = page.locator('.pr-region-resize').first()
+  await expect(handle).toBeVisible()
+  const original = Number(await handle.getAttribute('data-end-tick'))
+  const rect = (await handle.boundingBox())!
+  await page.mouse.move(rect.x + 6, rect.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(rect.x - 90, rect.y + 10, { steps: 8 })
+  const guide = page.locator('.detail-piano-roll .pr-drag-guide:visible')
+  await expect(guide).toBeVisible()
+  await expect(guide).toHaveAttribute('data-tick', (await handle.getAttribute('data-end-tick'))!)
+  await expect(page.locator('.detail-piano-roll .pr-drag-position:visible')).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('track-region-drag-preview.png') })
+  await page.mouse.up()
+  await expect(guide).toHaveCount(0)
+  const shorter = Number(await handle.getAttribute('data-end-tick'))
+  expect(shorter).toBeLessThan(original)
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  await undo.click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(original))
+  await expect(undo).toBeDisabled()
+  await page.getByRole('button', { name: /^重做/ }).click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(shorter))
+})
+
+test('直接拖动未选音符时，选区更新不会中断手势，落点提示与撤销正常', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1&single=1')
+  await page.locator('.pr-track-select').first().dblclick()
+  const notes = page.locator('.detail-piano-editor .pr-pane > canvas').nth(1)
+  const notePoint = () =>
+    notes.evaluate((element) => {
+      const canvas = element as HTMLCanvasElement
+      const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = 0,
+        maxY = 0
+      for (let y = 0; y < canvas.height; y++)
+        for (let x = 0; x < canvas.width; x++) {
+          const i = (y * canvas.width + x) * 4
+          if (data[i] !== 227 || data[i + 1] !== 111 || data[i + 2] !== 134) continue
+          minX = Math.min(minX, x)
+          maxX = Math.max(maxX, x)
+          minY = Math.min(minY, y)
+          maxY = Math.max(maxY, y)
+        }
+      const rect = canvas.getBoundingClientRect()
+      return {
+        x: rect.x + (((minX + maxX) / 2) * rect.width) / canvas.width,
+        y: rect.y + (((minY + maxY) / 2) * rect.height) / canvas.height,
+      }
+    })
+  await expect.poll(async () => Number.isFinite((await notePoint()).x)).toBe(true)
+  const point = await notePoint()
+  await page.mouse.move(point.x, point.y)
+  await page.mouse.down()
+  await expect(page.locator('.note-inspector')).toBeVisible()
+  await page.mouse.move(point.x + 50, point.y, { steps: 6 })
+  await expect(page.locator('.detail-piano-editor .pr-drag-guide:visible')).toBeVisible()
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  await expect(undo).toBeDisabled()
+  await page.mouse.up()
+  await expect(undo).toBeEnabled()
+  await undo.click()
+  await expect(undo).toBeDisabled()
 })
 
 test('更新安装前等待真实 MIDI 页面保存草稿', async ({ page }) => {
