@@ -27,7 +27,7 @@ interface HelpSection {
 const sections: readonly HelpSection[] = [
   { key: 'start', icon: MousePointer2, items: ['layout', 'overview', 'template'] },
   { key: 'notes', icon: Keyboard, items: ['select', 'draw', 'inspector', 'contextMenu'] },
-  { key: 'tracks', icon: Layers3, items: ['trackView', 'trackManage', 'trackEnabled'] },
+  { key: 'tracks', icon: Layers3, items: ['trackView', 'trackManage', 'trackEnabled', 'trackRegion', 'regionSnap'] },
   { key: 'playback', icon: CirclePlay, items: ['transport', 'seek', 'loop', 'preview'] },
   { key: 'settings', icon: Settings2, items: ['snap', 'song', 'display', 'view'] },
   { key: 'files', icon: FileOutput, items: ['save', 'export', 'leave'] },
