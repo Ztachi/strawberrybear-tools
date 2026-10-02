@@ -1,6 +1,7 @@
 import type { PianoRollDocument, PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import { createNoteId, createTrackId } from '../ids'
 import type { TrackPatch } from '../model'
+import { resolutionTicks } from '../snap'
 
 /** 供宿主颜色选择器使用的预设色；未指定颜色的轨道沿用视图主题。 */
 export const TRACK_PALETTE: readonly string[] = [
@@ -41,6 +42,8 @@ export function addTrack(
     ...(input.color ? { color: input.color } : {}),
     isPercussion: input.isPercussion ?? false,
     enabled: true,
+    startTick: 0,
+    endTick: Math.max(1, Math.round(resolutionTicks('bar', document))),
     ...(input.channel !== undefined ? { channel: input.channel } : {}),
   }
   return { document: { ...document, tracks: [...document.tracks, track] }, track }
@@ -148,4 +151,34 @@ export function reorderTrack(
   const [track] = tracks.splice(from, 1)
   tracks.splice(to, 0, track!)
   return { ...document, tracks }
+}
+
+/**
+ * @description: 调整轨道有效区域右边界；允许保留静音尾部，但不截断已有音符。
+ * @param {PianoRollDocument} document 源文档
+ * @param {string} trackId 目标轨道
+ * @param {number} endTick 请求的右边界（tick）
+ * @return {PianoRollDocument} 新文档；非法输入或边界不变时返回原引用
+ */
+export function resizeTrackRegion(
+  document: PianoRollDocument,
+  trackId: string,
+  endTick: number
+): PianoRollDocument {
+  if (!Number.isFinite(endTick)) return document
+  const track = document.tracks.find((item) => item.id === trackId)
+  if (!track) return document
+  let minimum = Math.max(0, track.startTick ?? 0) + 1
+  for (const note of document.notes) {
+    if (note.trackId === trackId && Number.isFinite(note.endTick))
+      minimum = Math.max(minimum, note.endTick)
+  }
+  const next = Math.max(minimum, Math.round(endTick))
+  if (next === track.endTick) return document
+  return {
+    ...document,
+    tracks: document.tracks.map((item) =>
+      item.id === trackId ? { ...item, endTick: next } : item
+    ),
+  }
 }

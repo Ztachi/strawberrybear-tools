@@ -116,6 +116,7 @@ export default {
       playhead: 'Playhead: use Left and Right arrows to seek',
       fit: 'Fit Song',
       close: 'Close Piano Roll',
+      resizeTrack: 'Resize track region: drag the right edge or use Left and Right',
       hideEmptyTracks: 'Hide tracks without notes',
       noTracksWithNotes: 'No tracks contain notes',
       help: {
@@ -786,7 +787,7 @@ export default {
             trackEnabled: {
               label: 'Enabled State',
               description:
-                'Use the track switch to control whether a track is enabled. Disabled tracks keep their note data so they can be restored later.',
+                'Track switches control preview and export. The song ends at the right edge of the longest enabled region. Disabled tracks keep their notes. Drag a region’s right edge in the overview to extend or shorten it; dragging near the viewport edge scrolls automatically. Shortening stops at the last note.',
             },
           },
         },

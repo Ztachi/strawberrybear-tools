@@ -223,3 +223,86 @@ test('overview renders host track actions', async ({ page }) => {
   await buttons.nth(1).click()
   expect(await page.evaluate(() => window.editing.actions)).toEqual(['t2'])
 })
+
+test('画笔操作滚动条或视口外边界时不新增音符、不清空选择', async ({ page }) => {
+  await page.evaluate(() =>
+    window.editing.configure({ tool: 'draw', selectedNoteIds: new Set(['a']) })
+  )
+  await page.mouse.move(4, 4)
+  await page.mouse.down()
+  // 用 clientHeight/clientWidth 标定原生滚动条边界，兼容覆盖式和经典滚动条。
+  await page.locator('#editor .pr-scroll').evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    for (const point of [
+      { x: rect.left + 100, y: rect.top + node.clientHeight + 1 },
+      { x: rect.left + node.clientWidth + 1, y: rect.top + 100 },
+    ]) {
+      node.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          pointerId: 1,
+          clientX: point.x,
+          clientY: point.y,
+        })
+      )
+      node.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          button: 0,
+          pointerId: 1,
+          clientX: point.x,
+          clientY: point.y,
+        })
+      )
+    }
+  })
+  await page.mouse.up()
+  expect(await intents(page)).toEqual([])
+})
+
+test('音轨区域右侧句柄只在松手提交一次长度，Esc 取消', async ({ page }) => {
+  await page.evaluate(() => window.editing.configure({ tool: 'draw' }))
+  const handle = page.locator('#overview .pr-region-resize[data-track-id="t1"]')
+  await expect(handle).toBeVisible()
+  const rect = (await handle.boundingBox())!
+  const x = rect.x + rect.width / 2,
+    y = rect.y + rect.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + 50, y, { steps: 5 })
+  await page.mouse.move(x + 150, y, { steps: 5 })
+  expect((await intents(page)).filter((i) => i.type === 'resize-track-region')).toHaveLength(0)
+  await page.mouse.up()
+  const result = (await intents(page)).filter((i) => i.type === 'resize-track-region')
+  expect(result).toHaveLength(1)
+  expect(result[0]).toMatchObject({ trackId: 't1' })
+  expect(result[0]!.type === 'resize-track-region' && result[0].endTick).toBeGreaterThan(2880)
+  const next = (await handle.boundingBox())!
+  await page.mouse.move(next.x + 6, next.y + next.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(next.x + 80, next.y + next.height / 2)
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  expect((await intents(page)).filter((i) => i.type === 'resize-track-region')).toHaveLength(1)
+  expect((await intents(page)).some((i) => i.type === 'add-note')).toBe(false)
+})
+
+test('拖动音轨区域到视口边缘会持续扩展并滚动，越过原曲尾不限一小节', async ({ page }) => {
+  await page.evaluate(() => {
+    window.editing.configure({ tool: 'select' })
+    window.editing.overview.setTimeZoom(120)
+  })
+  const handle = page.locator('#overview .pr-region-resize[data-track-id="t1"]')
+  await expect(handle).toBeVisible()
+  const h = (await handle.boundingBox())!,
+    pane = (await page.locator('#overview .pr-scroll').boundingBox())!
+  await page.mouse.move(h.x + 6, h.y + h.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(pane.x + pane.width - 5, h.y + h.height / 2, { steps: 8 })
+  await page.waitForTimeout(1800)
+  await page.mouse.up()
+  const list = (await intents(page)).filter((i) => i.type === 'resize-track-region')
+  expect(list).toHaveLength(1)
+  expect(list[0]!.type === 'resize-track-region' && list[0].endTick).toBeGreaterThan(7680 + 1920)
+})

@@ -1,6 +1,5 @@
 import { createTimeline } from '@strawberrybear/piano-roll/core'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
-import { resolutionTicks } from '../snap'
 
 /** BPM 合法范围。 */
 export const MIN_BPM = 20
@@ -84,18 +83,23 @@ export function setDurationTicks(
 }
 
 /**
- * @description: 保证总长覆盖所有音符尾端：越界时扩展到下一个整小节再多留一小节。
+ * @description: 按启用轨道有效区域的最右边界重新计算曲长，不保留工作区留白。
  * @param {PianoRollDocument} document 源文档
- * @return {PianoRollDocument} 已覆盖时返回原引用
+ * @return {PianoRollDocument} 时长相同时返回原引用
  */
 export function ensureDurationCovers(document: PianoRollDocument): PianoRollDocument {
+  const enabled = new Set(document.tracks.filter((track) => track.enabled).map((track) => track.id))
   let lastTick = 0
-  for (const note of document.notes) lastTick = Math.max(lastTick, note.endTick)
-  for (const track of document.tracks) lastTick = Math.max(lastTick, track.endTick ?? 0)
-  if (lastTick <= document.durationTicks) return document
-  const bar = resolutionTicks('bar', document, lastTick)
-  const durationTicks = (Math.floor(lastTick / bar) + 2) * bar
-  return { ...document, durationTicks }
+  for (const track of document.tracks) {
+    if (track.enabled && Number.isFinite(track.endTick))
+      lastTick = Math.max(lastTick, track.endTick!)
+  }
+  // 区域边界与音符尾端取并集，避免过时元数据截断音符；禁用轨道仍保留编辑数据。
+  for (const note of document.notes) {
+    if (enabled.has(note.trackId) && Number.isFinite(note.endTick))
+      lastTick = Math.max(lastTick, note.endTick)
+  }
+  return setDurationTicks(document, lastTick)
 }
 
 /**
@@ -110,7 +114,16 @@ export function createEmptyDocument(trackName = 'Track 1', trackId = 'track-1'):
     ticksPerBeat: DEFAULT_PPQ,
     tempoMap: [{ tick: 0, microsecondsPerQuarter: bpmToTempo(DEFAULT_BPM) }],
     timeSignatureMap: [{ tick: 0, numerator: 4, denominator: 4 }],
-    tracks: [{ id: trackId, name: trackName, isPercussion: false, enabled: true }],
+    tracks: [
+      {
+        id: trackId,
+        name: trackName,
+        isPercussion: false,
+        enabled: true,
+        startTick: 0,
+        endTick: DEFAULT_PPQ * 4 * DEFAULT_BARS,
+      },
+    ],
     notes: [],
   }
 }

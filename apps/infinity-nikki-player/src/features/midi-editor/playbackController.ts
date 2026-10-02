@@ -109,12 +109,13 @@ export function createMidiEditorPlaybackController(
   }
 
   function fallbackState(): EditorTransportState {
+    const duration = createTimeline(options.getDocument()).durationSeconds
     return {
-      positionSeconds: pendingPosition,
+      positionSeconds: Math.min(pendingPosition, duration),
       isPlaying: false,
       playbackRate: 1,
       loop: null,
-      durationSeconds: createTimeline(options.getDocument()).durationSeconds,
+      durationSeconds: duration,
     }
   }
 
@@ -177,7 +178,12 @@ export function createMidiEditorPlaybackController(
     },
     invalidate() {
       stopAuditions()
-      engine?.invalidate()
+      if (engine) engine.invalidate()
+      else {
+        // 音频引擎延迟创建；尚未试听也需要在曲长缩短时裁剪位置并刷新界面。
+        pendingPosition = fallbackState().positionSeconds
+        options.onChange?.(fallbackState())
+      }
     },
     dispose() {
       if (disposed) return

@@ -45,6 +45,10 @@ export function installStyles(document: Document): void {
 .pr-track-toggle:focus-visible{outline:2px solid var(--pr-focus,#c9516b);outline-offset:2px}
 .pr-track-actions-host{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .pr-track-actions-host:empty{display:none}
+.pr-region-handles{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+.pr-region-resize{position:absolute;width:12px;box-sizing:border-box;padding:0;border:0;border-radius:0 4px 4px 0;background:color-mix(in srgb,var(--pr-region-color,var(--pr-primary,#e36f86)),transparent 50%);cursor:ew-resize;touch-action:none;pointer-events:auto}
+.pr-region-resize::after{content:"";position:absolute;top:calc(50% - 8px);left:5px;width:2px;height:16px;border-radius:2px;background:var(--pr-surface,#fff9fa)}
+.pr-region-resize:hover,.pr-region-resize:focus-visible{background:var(--pr-region-color,var(--pr-primary,#e36f86));outline:2px solid var(--pr-focus,#c9516b);outline-offset:-2px}
 .pr-overlay{z-index:1}
 .pr-ruler-overlay{z-index:1}
 .pr-lane-gutter{grid-column:1;grid-row:3;border-top:1px solid var(--pr-border,#f1d9de);border-right:1px solid var(--pr-border,#f1d9de);background:var(--pr-surface-subtle,#fffafb)}

@@ -160,7 +160,9 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     return !!options?.enabled && host.variant === 'editor'
   }
   function laneHeight(): number {
-    return host.variant === 'editor' && options?.enabled ? Math.max(0, options.velocityLaneHeight ?? 0) : 0
+    return host.variant === 'editor' && options?.enabled
+      ? Math.max(0, options.velocityLaneHeight ?? 0)
+      : 0
   }
   function applyLane(): void {
     const height = laneHeight()
@@ -168,6 +170,18 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     laneGutter.hidden = lane.hidden = height <= 0
   }
   applyLane()
+
+  /**
+   * @description: 只允许内容视口接收编辑手势，排除原生滚动条及右下角交叉区。
+   * @param {MouseEvent} event 指针或鼠标事件
+   * @return {boolean} 是否位于可编辑的 client 区域
+   */
+  function insideContent(event: MouseEvent): boolean {
+    const rect = host.scroll.getBoundingClientRect()
+    const x = event.clientX - rect.left - host.scroll.clientLeft
+    const y = event.clientY - rect.top - host.scroll.clientTop
+    return x >= 0 && y >= 0 && x < host.scroll.clientWidth && y < host.scroll.clientHeight
+  }
 
   /** 指针坐标 → 内容坐标（含滚动）。 */
   function toContent(clientX: number, clientY: number): { x: number; y: number } {
@@ -233,7 +247,11 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
       // 窄音符只允许从右缘拉伸，避免完全无法移动。
       const edge = Math.min(RESIZE_EDGE_PX, width / 3)
       const part: NoteHit['part'] =
-        x >= endX - edge ? 'end' : width > RESIZE_EDGE_PX * 2 && x <= startX + edge ? 'start' : 'body'
+        x >= endX - edge
+          ? 'end'
+          : width > RESIZE_EDGE_PX * 2 && x <= startX + edge
+            ? 'start'
+            : 'body'
       // 后开始的音符绘制在上层，优先命中。
       if (!best || note.startTick >= best.note.startTick) best = { note, part }
     }
@@ -246,7 +264,10 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     if (!trackId || !selected || selected.size === 0) return []
     const range = host.index().getTimeRange(trackId)
     if (!range) return []
-    return host.index().query(trackId, range.startTick, range.endTick).filter((note) => selected.has(note.id))
+    return host
+      .index()
+      .query(trackId, range.startTick, range.endTick)
+      .filter((note) => selected.has(note.id))
   }
 
   function emit(intent: PianoRollEditIntent): void {
@@ -323,7 +344,7 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
   }
 
   function onPointerDown(event: PointerEvent): void {
-    if (!editable() || event.button !== 0 || drag) return
+    if (!editable() || event.button !== 0 || drag || !insideContent(event)) return
     const trackId = host.selectedTrackId()
     if (!trackId) return
     const hit = hitTest(event.clientX, event.clientY)
@@ -368,7 +389,8 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
       return
     }
     // 选择工具空白处：清空（非 Shift）并开始框选。
-    if (!shift && options!.selectedNoteIds.size > 0) emit({ type: 'select', noteIds: [], mode: 'replace' })
+    if (!shift && options!.selectedNoteIds.size > 0)
+      emit({ type: 'select', noteIds: [], mode: 'replace' })
     host.scroll.setPointerCapture(event.pointerId)
     drag = {
       kind: 'box',
@@ -385,7 +407,8 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
   function onPointerMove(event: PointerEvent): void {
     if (!drag || drag.kind === 'loop' || drag.kind === 'velocity') {
       if (!drag) {
-        const hit = editable() ? hitTest(event.clientX, event.clientY) : null
+        const hit =
+          editable() && insideContent(event) ? hitTest(event.clientX, event.clientY) : null
         if (hit?.note.id !== hover?.note.id || hit?.part !== hover?.part) {
           hover = hit
           updateCursor(hit)
@@ -409,7 +432,11 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
         const rawPitch = Math.round(-dy / geometry.pitchZoom)
         const deltaPitch = Math.min(127 - drag.maxPitch, Math.max(-drag.minPitch, rawPitch))
         if (deltaPitch !== drag.deltaPitch)
-          emit({ type: 'audition', pitch: drag.anchor.pitch + deltaPitch, velocity: drag.anchor.velocity })
+          emit({
+            type: 'audition',
+            pitch: drag.anchor.pitch + deltaPitch,
+            velocity: drag.anchor.velocity,
+          })
         drag.deltaTick = deltaTick
         drag.deltaPitch = deltaPitch
         bump()
@@ -424,7 +451,8 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
         let delta = target - edgeTick
         // 基准音符至少保留一格（无网格时 1 tick）；其它音符由宿主命令各自兜底。
         const minimum = minStep()
-        if (drag.edge === 'end') delta = Math.max(delta, drag.anchor.startTick + minimum - drag.anchor.endTick)
+        if (drag.edge === 'end')
+          delta = Math.max(delta, drag.anchor.startTick + minimum - drag.anchor.endTick)
         else delta = Math.min(delta, drag.anchor.endTick - minimum - drag.anchor.startTick)
         drag.deltaTick = delta
         bump()
@@ -434,7 +462,8 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
         drag.currentX = event.clientX
         drag.currentY = event.clientY
         drag.moved =
-          drag.moved || Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= DRAG_THRESHOLD_PX
+          drag.moved ||
+          Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= DRAG_THRESHOLD_PX
         bump()
         return
       }
@@ -454,8 +483,10 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     if (!drag) return
     const current = drag
     drag = null
-    if (host.scroll.hasPointerCapture(current.pointerId)) host.scroll.releasePointerCapture(current.pointerId)
-    if (host.ruler.hasPointerCapture(current.pointerId)) host.ruler.releasePointerCapture(current.pointerId)
+    if (host.scroll.hasPointerCapture(current.pointerId))
+      host.scroll.releasePointerCapture(current.pointerId)
+    if (host.ruler.hasPointerCapture(current.pointerId))
+      host.ruler.releasePointerCapture(current.pointerId)
     if (lane.hasPointerCapture(current.pointerId)) lane.releasePointerCapture(current.pointerId)
     updateCursor(hover)
     if (commit) {
@@ -531,13 +562,19 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
 
   /** 选择工具下双击空白直接落音符；PointerEvent.detail 恒为 0，须监听 dblclick。 */
   function onDoubleClick(event: MouseEvent): void {
-    if (!editable() || options!.tool !== 'select' || hitTest(event.clientX, event.clientY)) return
+    if (
+      !editable() ||
+      !insideContent(event) ||
+      options!.tool !== 'select' ||
+      hitTest(event.clientX, event.clientY)
+    )
+      return
     event.preventDefault()
     addNoteAt(event.clientX, event.clientY, event.altKey)
   }
 
   function onContextMenu(event: MouseEvent): void {
-    if (!editable()) return
+    if (!editable() || !insideContent(event)) return
     event.preventDefault()
     finish(false)
     const hit = hitTest(event.clientX, event.clientY)
@@ -563,7 +600,13 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     const x = event.clientX - rect.left + host.geometry().scrollLeft
     const tick = snap(xToTick(x), 'floor', false)
     host.ruler.setPointerCapture(event.pointerId)
-    drag = { kind: 'loop', pointerId: event.pointerId, anchorTick: tick, startTick: tick, endTick: tick }
+    drag = {
+      kind: 'loop',
+      pointerId: event.pointerId,
+      anchorTick: tick,
+      startTick: tick,
+      endTick: tick,
+    }
     bump()
   }
   function onRulerPointerMove(event: PointerEvent): void {
@@ -655,18 +698,38 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     target.addEventListener(type, callback as EventListener, settings)
     cleanups.push(() => target.removeEventListener(type, callback as EventListener, settings))
   }
-  ;(window as any).__prDebug = { hitTest, toContent, yToPitch, xToTick, host, get options() { return options } }
+  ;(window as any).__prDebug = {
+    hitTest,
+    toContent,
+    yToPitch,
+    xToTick,
+    host,
+    get options() {
+      return options
+    },
+  }
   listen(host.scroll, 'pointerdown', onPointerDown)
   listen(host.scroll, 'pointermove', onPointerMove)
   listen(host.scroll, 'pointerup', (event: PointerEvent) => {
-    if (drag && drag.pointerId === event.pointerId && drag.kind !== 'loop' && drag.kind !== 'velocity') {
+    if (
+      drag &&
+      drag.pointerId === event.pointerId &&
+      drag.kind !== 'loop' &&
+      drag.kind !== 'velocity'
+    ) {
       onPointerMove(event)
       finish(true)
     }
   })
   listen(host.scroll, 'pointercancel', () => finish(false))
   listen(host.scroll, 'lostpointercapture', (event: PointerEvent) => {
-    if (drag && drag.pointerId === event.pointerId && drag.kind !== 'loop' && drag.kind !== 'velocity') finish(false)
+    if (
+      drag &&
+      drag.pointerId === event.pointerId &&
+      drag.kind !== 'loop' &&
+      drag.kind !== 'velocity'
+    )
+      finish(false)
   })
   listen(host.scroll, 'pointerleave', () => {
     if (!drag) {
@@ -740,13 +803,23 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
       case 'move':
         if (!drag.moved) return
         for (const note of drag.notes)
-          ghost(note.pitch + drag.deltaPitch, note.startTick + drag.deltaTick, note.endTick + drag.deltaTick)
+          ghost(
+            note.pitch + drag.deltaPitch,
+            note.startTick + drag.deltaTick,
+            note.endTick + drag.deltaTick
+          )
         return
       case 'resize':
         if (!drag.moved) return
         for (const note of drag.notes) {
-          const start = drag.edge === 'start' ? Math.max(0, Math.min(note.endTick - 1, note.startTick + drag.deltaTick)) : note.startTick
-          const end = drag.edge === 'end' ? Math.max(note.startTick + 1, note.endTick + drag.deltaTick) : note.endTick
+          const start =
+            drag.edge === 'start'
+              ? Math.max(0, Math.min(note.endTick - 1, note.startTick + drag.deltaTick))
+              : note.startTick
+          const end =
+            drag.edge === 'end'
+              ? Math.max(note.startTick + 1, note.endTick + drag.deltaTick)
+              : note.endTick
           ghost(note.pitch, start, end)
         }
         return
@@ -807,7 +880,11 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
 
   return {
     update(next) {
-      const laneChanged = laneHeight() !== (next && host.variant === 'editor' && next.enabled ? Math.max(0, next.velocityLaneHeight ?? 0) : 0)
+      const laneChanged =
+        laneHeight() !==
+        (next && host.variant === 'editor' && next.enabled
+          ? Math.max(0, next.velocityLaneHeight ?? 0)
+          : 0)
       options = next
       frameState = projectFrameState(next)
       if (!editable()) finish(false)

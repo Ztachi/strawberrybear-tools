@@ -97,3 +97,39 @@ describe('encodeMidi / decodeMidi', () => {
     ])
   })
 })
+
+describe('有效区域导出', () => {
+  it('只导出启用轨道，保留每轨边界且曲尾之后的速度/拍号不延长文件', () => {
+    const doc: PianoRollDocument = {
+      ...document,
+      durationTicks: 9600,
+      tempoMap: [
+        { tick: 0, microsecondsPerQuarter: 500000 },
+        { tick: 50000, microsecondsPerQuarter: 400000 },
+      ],
+      timeSignatureMap: [
+        { tick: 0, numerator: 4, denominator: 4 },
+        { tick: 50000, numerator: 3, denominator: 4 },
+      ],
+      tracks: [
+        { id: 'short', name: 'Short', isPercussion: false, enabled: true, endTick: 9600 },
+        { id: 'tiny', name: 'Tiny', isPercussion: false, enabled: true, endTick: 1920 },
+        { id: 'long', name: 'Long', isPercussion: false, enabled: false, endTick: 57600 },
+      ],
+      notes: [
+        { id: 's', trackId: 'short', pitch: 60, velocity: 100, startTick: 0, endTick: 9600 },
+        { id: 't', trackId: 'tiny', pitch: 62, velocity: 100, startTick: 0, endTick: 480 },
+        { id: 'l', trackId: 'long', pitch: 64, velocity: 100, startTick: 0, endTick: 57600 },
+      ],
+    }
+    const decoded = decodeMidi(encodeMidi(doc))
+    expect(decoded.durationTicks).toBe(9600)
+    expect(decoded.tracks.map((track) => [track.name, track.endTick])).toEqual([
+      ['Short', 9600],
+      ['Tiny', 1920],
+    ])
+    expect(decoded.notes.map((note) => note.pitch)).toEqual([60, 62])
+    expect(decoded.tempoMap).toHaveLength(1)
+    expect(decoded.timeSignatureMap).toHaveLength(1)
+  })
+})

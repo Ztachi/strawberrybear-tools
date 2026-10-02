@@ -56,6 +56,50 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.editor-toolbar')).toBeVisible()
 })
 
+test('区域延长只产生一次撤销，历史按钮禁用状态清晰', async ({ page }) => {
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  const redo = page.getByRole('button', { name: /^重做/ })
+  await expect(undo).toBeDisabled()
+  await expect(redo).toBeDisabled()
+  await expect(undo).toHaveCSS('opacity', '0.45')
+  const handle = page.locator('.pr-region-resize').first()
+  await expect(handle).toBeVisible()
+  const original = Number(await handle.getAttribute('data-end-tick'))
+  const rect = (await handle.boundingBox())!
+  // 详情自动展开时会裁切总览行，抓取句柄顶部可见部分，不能使用被裁切的包围盒中心。
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(rect.x + 55, rect.y + 10, { steps: 8 })
+  await expect(undo).toBeDisabled()
+  await page.mouse.up()
+  await expect(undo).toBeEnabled()
+  await expect(undo).toHaveCSS('opacity', '1')
+  const extended = Number(await handle.getAttribute('data-end-tick'))
+  expect(extended).toBeGreaterThan(original)
+  await undo.click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(original))
+  await expect(undo).toBeDisabled()
+  await expect(redo).toBeEnabled()
+  await redo.click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(extended))
+})
+
+test('节拍网格支持 1/64 和 1/128，选择后保持固定宽度', async ({ page }) => {
+  await openSnapSettings(page)
+  const select = page.locator('.toolbar-snap:visible')
+  const width = await select.evaluate((element) => getComputedStyle(element).width)
+  for (const resolution of ['1/64', '1/128']) {
+    await select.click()
+    const option = page
+      .locator('.ant-select-dropdown:visible .ant-select-item-option')
+      .filter({ hasText: resolution })
+    await option.scrollIntoViewIfNeeded()
+    await option.click()
+    await expect(select).toContainText(resolution)
+    expect(await select.evaluate((element) => getComputedStyle(element).width)).toBe(width)
+  }
+})
+
 test('更新安装前等待真实 MIDI 页面保存草稿', async ({ page }) => {
   const name = page.locator('.midi-editor-name input, input.midi-editor-name')
   await name.fill('安装前的编辑草稿')
@@ -332,11 +376,20 @@ test('音轨缺省颜色一致，自定义颜色同时呈现在菜单、总览�
     .first()
     .evaluate((element) => {
       const canvas = element as HTMLCanvasElement
+      const rect = canvas.getBoundingClientRect()
+      const handles = [...canvas.parentElement!.querySelectorAll('.pr-region-resize')]
+      // 工作区现在有曲尾留白，按每轨右边界定位区域内部，不能固定取整幅 Canvas 的 90%。
       return [0, 1, 2].map((index) => [
         ...canvas
           .getContext('2d')!
           .getImageData(
-            Math.floor(canvas.width * 0.9),
+            Math.max(
+              0,
+              Math.floor(
+                ((handles[index]!.getBoundingClientRect().left - rect.left - 20) * canvas.width) /
+                  rect.width
+              )
+            ),
             Math.floor((canvas.height * (index + 0.5)) / 3),
             1,
             1

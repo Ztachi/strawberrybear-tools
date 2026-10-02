@@ -1,12 +1,6 @@
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import { copyNotes, pasteNotes } from './clipboard'
-import {
-  addNote,
-  deleteNotes,
-  moveNotes,
-  resizeNotes,
-  setNoteVelocity,
-} from './commands/notes'
+import { addNote, deleteNotes, moveNotes, resizeNotes, setNoteVelocity } from './commands/notes'
 import { quantizeNotes, transposeNotes } from './commands/quantize'
 import {
   createEmptyDocument,
@@ -20,6 +14,7 @@ import {
   duplicateTrack,
   removeTrack,
   reorderTrack,
+  resizeTrackRegion,
   updateTrack,
 } from './commands/tracks'
 import { createHistory } from './history'
@@ -88,7 +83,7 @@ export function computeProjectMeta(document: PianoRollDocument): MidiProjectMeta
 export function createProject(
   input: Partial<Pick<MidiProject, 'name' | 'document' | 'source'>> = {}
 ): MidiProject {
-  const document = input.document ?? createEmptyDocument()
+  const document = ensureDurationCovers(input.document ?? createEmptyDocument())
   const stamp = Date.now()
   return {
     schemaVersion: 1,
@@ -113,8 +108,10 @@ export function createEditorSession(
   project: MidiProject,
   options: EditorSessionOptions = {}
 ): EditorSession {
-  let base: MidiProject = project
-  let history = createHistory(project.document, options.historyLimit ?? 200)
+  // 旧工程可能存有未缩短的总长；载入时归一化，并把修正后的文档作为保存点。
+  const initial = ensureDurationCovers(project.document)
+  let base: MidiProject = { ...project, document: initial, meta: computeProjectMeta(initial) }
+  let history = createHistory(initial, options.historyLimit ?? 200)
   let name = project.name
   let loop: MidiProjectLoop | null = project.loop ?? null
   let selection: ReadonlySet<string> = new Set()
@@ -122,7 +119,7 @@ export function createEditorSession(
   let tool: EditorTool = options.tool ?? 'select'
   let snap: SnapResolution = options.snap ?? '1/16'
   let lastCreated: readonly string[] = []
-  let savedDocument = project.document
+  let savedDocument = initial
   let savedName = project.name
   let savedLoop = loop
   const listeners = new Set<(state: EditorSessionState) => void>()
@@ -243,7 +240,8 @@ export function createEditorSession(
         commit(deleteNotes(document(), action.noteIds), 'delete')
         return
       case 'loop-change':
-        loop = action.loop && action.loop.endTick > action.loop.startTick ? { ...action.loop } : null
+        loop =
+          action.loop && action.loop.endTick > action.loop.startTick ? { ...action.loop } : null
         return
       case 'undo': {
         const previous = history.undo()
@@ -283,7 +281,11 @@ export function createEditorSession(
         return
       }
       case 'nudge':
-        commit(moveNotes(document(), selection, action.deltaTick, action.deltaPitch), 'nudge', action.coalesceKey)
+        commit(
+          moveNotes(document(), selection, action.deltaTick, action.deltaPitch),
+          'nudge',
+          action.coalesceKey
+        )
         return
       case 'quantize':
         commit(
@@ -316,6 +318,9 @@ export function createEditorSession(
           }).document,
           'add-track'
         )
+        return
+      case 'resize-track-region':
+        commit(resizeTrackRegion(document(), action.trackId, action.endTick), 'resize-track-region')
         return
       case 'remove-track':
         commit(removeTrack(document(), action.trackId), 'remove-track')
@@ -385,13 +390,14 @@ export function createEditorSession(
       emit()
     },
     replaceProject(next) {
-      base = next
-      history = createHistory(next.document, options.historyLimit ?? 200)
+      const normalized = ensureDurationCovers(next.document)
+      base = { ...next, document: normalized, meta: computeProjectMeta(normalized) }
+      history = createHistory(normalized, options.historyLimit ?? 200)
       name = next.name
       loop = next.loop ?? null
       selection = new Set()
       lastCreated = []
-      savedDocument = next.document
+      savedDocument = normalized
       savedName = next.name
       savedLoop = loop
       emit()

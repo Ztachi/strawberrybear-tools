@@ -84,7 +84,7 @@ editor.destroy()
 
 ## 编辑手势层
 
-视图始终"不改文档"。传入 `editing` 后，详情视图把指针操作解析为 `PianoRollEditIntent`（select / add-note / move / resize / set-velocity / delete / loop-change / audition / context-menu）交给宿主，宿主应用到文档后再 `setDocument`；Vue 组件同时通过 `edit-intent` 事件发出。
+视图始终"不改文档"。传入 `editing` 后，详情视图把指针操作解析为 `PianoRollEditIntent`（select / add-note / move / resize / set-velocity / delete / loop-change / audition / context-menu / resize-track-region）交给宿主，宿主应用到文档后再 `setDocument`；Vue 组件同时通过 `edit-intent` 事件发出。
 
 ```ts
 view.setEditing({
@@ -101,6 +101,8 @@ view.setEditing({
 ```
 
 交互约定：点选/Shift 加选，空白拖拽框选，双击空白落音符；拖音符体移动（以按住的音符为吸附基准，Alt 关闭吸附）、拖左右缘拉伸；draw 工具点击即落并横拖定长；右键发 `context-menu`；拖动期间只绘制 overlay 幽灵，松手才提交一次意图，Esc 取消。总览视图可通过 `renderTrackActions(container, { track })` 在轨道行右侧挂载宿主菜单，与 `renderTrackToggle` 同模式。相关主题 token：`noteSelected / noteGhost / noteUnplayable / selectionBox / loopRegion / velocityBar / pitchUnplayable`。
+
+总览在 `editing.enabled` 时显示区域右边缘句柄，拖动提交 `resize-track-region`（`trackId`、`endTick`），左右方向键按默认音符长度调整。拖动期间预览区域并临时扩展浏览空间，靠近视口边缘会自动滚动；松手只提交一次，Esc 取消，且边界不会越过已有音符。宿主负责将区域长度转换为工程曲长，公共视图只提供编辑意图；`labels.resizeTrack` 可本地化句柄说明。原生滚动条不接收落笔、选择或右键编辑手势。
 
 普通点击音符每次都发出 `audition`，包括已选中的音符；Shift 移除选区不试听。点击意图携带可选 `durationSeconds`，由音符开始／结束 tick 按完整 tempo map 换算，跨速度变化时也保留真实时长。拖动改音高的短音试听不携带时长，由宿主使用默认值。公共视图只发意图，不创建音频引擎。
 

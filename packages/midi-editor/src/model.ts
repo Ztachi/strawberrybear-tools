@@ -54,12 +54,15 @@ export type SnapResolution =
   | '1/8'
   | '1/16'
   | '1/32'
+  | '1/64'
+  | '1/128'
   | '1/4t'
   | '1/8t'
   | '1/16t'
 
 /** 支持的吸附分辨率，顺序即 UI 下拉顺序。 */
 export const SNAP_RESOLUTIONS: readonly SnapResolution[] = [
+  'off',
   'bar',
   '1/1',
   '1/2',
@@ -67,10 +70,11 @@ export const SNAP_RESOLUTIONS: readonly SnapResolution[] = [
   '1/8',
   '1/16',
   '1/32',
+  '1/64',
+  '1/128',
   '1/4t',
   '1/8t',
   '1/16t',
-  'off',
 ]
 
 /** 编辑器指针工具。 */
@@ -135,6 +139,7 @@ export type EditorAction =
   | { type: 'transpose'; semitones: number }
   | { type: 'set-selected-velocity'; velocity: number }
   | { type: 'add-track'; name?: string; color?: string; isPercussion?: boolean }
+  | { type: 'resize-track-region'; trackId: string; endTick: number }
   | { type: 'remove-track'; trackId: string }
   | { type: 'update-track'; trackId: string; patch: TrackPatch }
   | { type: 'duplicate-track'; trackId: string }

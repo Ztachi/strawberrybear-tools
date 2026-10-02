@@ -64,6 +64,18 @@ const editing = computed<PianoRollProps['editing']>(() => ({
   velocityLaneHeight: props.showVelocity ? VELOCITY_LANE_HEIGHT : 0,
 }))
 
+// 编辑空间保留全部轨道（包括禁用轨道）与一小节留白；试听和导出仍使用真实有效曲长。
+const workspaceDocument = computed(() => {
+  const document = props.state.document
+  let end = document.durationTicks
+  for (const track of document.tracks) end = Math.max(end, track.endTick ?? 0)
+  for (const note of document.notes) end = Math.max(end, note.endTick)
+  return {
+    ...document,
+    durationTicks: end + Math.max(1, Math.round(resolutionTicks('bar', document, end))),
+  }
+})
+
 function handleIntent(intent: PianoRollEditIntent): void {
   if (intent.type === 'audition') {
     emit('audition', intent.pitch, intent.velocity, intent.durationSeconds)
@@ -122,7 +134,7 @@ defineExpose({
     <PianoWorkspace
       ref="workspace"
       :filename="`midi-editor:${state.project.id}`"
-      :document="state.document"
+      :document="workspaceDocument"
       :theme="midiEditorPianoRollTheme"
       :transport="transport"
       :labels="labels"

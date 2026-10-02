@@ -28,6 +28,8 @@ export interface PianoRollLabels {
   playhead: string
   fit: string
   close: string
+  /** 总览音轨右边缘长度句柄的可访问名称。 */
+  resizeTrack?: string
 }
 
 /** 每个视图独立维护的只读快照；缩放单位均为 CSS 像素。 */
@@ -113,6 +115,7 @@ export type PianoRollEditIntent =
     }
   | { type: 'delete'; noteIds: string[] }
   | { type: 'loop-change'; loop: PianoRollLoopRange | null }
+  | { type: 'resize-track-region'; trackId: string; endTick: number }
   | {
       type: 'audition'
       pitch: number

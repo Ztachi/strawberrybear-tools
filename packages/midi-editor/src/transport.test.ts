@@ -96,9 +96,39 @@ describe('createEditorTransport', () => {
     transport.dispose()
   })
 
+  it('缩短歌曲后循环区裁剪到新终点，超出歌曲的循环取消，停止时立即通知', () => {
+    const { synth } = createSynth()
+    let current = document
+    const changed = vi.fn()
+    const transport = createEditorTransport({
+      getDocument: () => current,
+      synth,
+      now: () => clock,
+      onChange: changed,
+    })
+    transport.setLoop({ startTick: 480, endTick: 1920 })
+    current = { ...document, durationTicks: 960 }
+    transport.invalidate()
+    expect(transport.getState().loop).toEqual({ startSeconds: 0.5, endSeconds: 1 })
+    transport.setLoop({ startTick: 1440, endTick: 1920 })
+    expect(transport.getState().loop).toBeNull()
+    transport.seek(0.9)
+    transport.play()
+    current = { ...document, durationTicks: 480 }
+    transport.invalidate()
+    expect(transport.getState().positionSeconds).toBe(0.5)
+    expect(transport.getState().isPlaying).toBe(false)
+    expect(changed.mock.calls.at(-1)![0].durationSeconds).toBe(0.5)
+    transport.dispose()
+  })
+
   it('pauses, seeks and changes rate without double scheduling', () => {
     const { synth, events } = createSynth()
-    const transport = createEditorTransport({ getDocument: () => document, synth, now: () => clock })
+    const transport = createEditorTransport({
+      getDocument: () => document,
+      synth,
+      now: () => clock,
+    })
     transport.play()
     advance(300)
     transport.pause()
