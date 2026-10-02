@@ -14,7 +14,7 @@ import {
 } from '@/lib/midiPlayer'
 
 export interface MidiEditorPlaybackControllerOptions {
-  getDocument: () => PianoRollDocument
+  getDocument: () => PianoRollDocument | null
   getLoop: () => MidiProjectLoop | null | undefined
   /** 仅试听允许的原始音高；null 表示完整试听，空集合表示全部静音。 */
   getPlayablePitches?: () => ReadonlySet<number> | null
@@ -93,9 +93,18 @@ export function createMidiEditorPlaybackController(
   let loop = options.getLoop() ?? null
   let disposed = false
   const auditions = new Map<ScheduledNoteHandle, number>()
+  // 路由载入和卸载期间没有文档；调度器尚未清理的同步回调也应读到零长度时间轴。
+  const emptyDocument: PianoRollDocument = {
+    ticksPerBeat: 480,
+    durationTicks: 0,
+    tempoMap: [],
+    timeSignatureMap: [],
+    tracks: [],
+    notes: [],
+  }
 
   function playbackDocument(): PianoRollDocument {
-    const document = options.getDocument()
+    const document = options.getDocument() ?? emptyDocument
     const pitches = options.getPlayablePitches?.()
     // 保留原曲时长、音轨和节拍，只过滤试听事件，绝不写回编辑文档。
     return pitches == null
@@ -109,17 +118,18 @@ export function createMidiEditorPlaybackController(
   }
 
   function fallbackState(): EditorTransportState {
+    const duration = createTimeline(options.getDocument() ?? emptyDocument).durationSeconds
     return {
-      positionSeconds: pendingPosition,
+      positionSeconds: Math.min(pendingPosition, duration),
       isPlaying: false,
       playbackRate: 1,
       loop: null,
-      durationSeconds: createTimeline(options.getDocument()).durationSeconds,
+      durationSeconds: duration,
     }
   }
 
   function ensureEngine(): EditorTransport | null {
-    if (disposed) return null
+    if (disposed || !options.getDocument()) return null
     if (!engine) {
       engine = createEditorTransport({
         getDocument: playbackDocument,
@@ -139,9 +149,10 @@ export function createMidiEditorPlaybackController(
   return {
     getState: () => engine?.getState() ?? fallbackState(),
     async play(fromSeconds) {
-      if (disposed) return
+      const document = options.getDocument()
+      if (disposed || !document) return
       await ensureAudio()
-      if (disposed) return
+      if (disposed || options.getDocument() !== document) return
       options.pauseExternal?.()
       ensureEngine()?.play(fromSeconds)
     },
@@ -152,11 +163,11 @@ export function createMidiEditorPlaybackController(
       if (engine) engine.stop()
       else
         pendingPosition = loop
-          ? createTimeline(options.getDocument()).tickToSeconds(loop.startTick)
+          ? createTimeline(options.getDocument() ?? emptyDocument).tickToSeconds(loop.startTick)
           : 0
     },
     seek(seconds) {
-      const duration = createTimeline(options.getDocument()).durationSeconds
+      const duration = createTimeline(options.getDocument() ?? emptyDocument).durationSeconds
       pendingPosition = Math.max(0, Math.min(duration, Number.isFinite(seconds) ? seconds : 0))
       engine?.seek(pendingPosition)
       if (!engine) options.onChange?.(fallbackState())
@@ -177,7 +188,17 @@ export function createMidiEditorPlaybackController(
     },
     invalidate() {
       stopAuditions()
-      engine?.invalidate()
+      if (!options.getDocument()) {
+        engine?.dispose()
+        engine = null
+        pendingPosition = 0
+      }
+      if (engine) engine.invalidate()
+      else {
+        // 音频引擎延迟创建；尚未试听也需要在曲长缩短时裁剪位置并刷新界面。
+        pendingPosition = fallbackState().positionSeconds
+        options.onChange?.(fallbackState())
+      }
     },
     dispose() {
       if (disposed) return

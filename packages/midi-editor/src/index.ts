@@ -24,6 +24,7 @@ export {
   duplicateTrack,
   removeTrack,
   reorderTrack,
+  resizeTrackRegion,
   updateTrack,
   TRACK_PALETTE,
   type AddTrackInput,

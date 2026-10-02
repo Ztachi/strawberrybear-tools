@@ -1,4 +1,4 @@
-import { createTimeline } from '@strawberrybear/piano-roll/core'
+import { clipNoteToTrackRegion, createTimeline } from '@strawberrybear/piano-roll/core'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type { MidiProjectLoop } from './model'
 
@@ -105,9 +105,15 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
   function rebuild(): void {
     const document = options.getDocument()
     const timeline = createTimeline(document)
-    const enabled = new Set(document.tracks.filter((track) => track.enabled).map((track) => track.id))
+    const enabled = new Map(
+      document.tracks.filter((track) => track.enabled).map((track) => [track.id, track])
+    )
     notes = document.notes
-      .filter((note) => enabled.has(note.trackId))
+      .flatMap((note) => {
+        const track = enabled.get(note.trackId)
+        const clipped = track && clipNoteToTrackRegion(note, track)
+        return clipped ? [clipped] : []
+      })
       .map((note) => ({
         start: timeline.tickToSeconds(note.startTick),
         end: timeline.tickToSeconds(Math.max(note.startTick + 1, note.endTick)),
@@ -117,8 +123,8 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
       .sort((a, b) => a.start - b.start)
     duration = timeline.durationSeconds
     if (loopTicks && loopTicks.endTick > loopTicks.startTick) {
-      const start = timeline.tickToSeconds(loopTicks.startTick)
-      const end = timeline.tickToSeconds(loopTicks.endTick)
+      const start = Math.max(0, Math.min(duration, timeline.tickToSeconds(loopTicks.startTick)))
+      const end = Math.max(0, Math.min(duration, timeline.tickToSeconds(loopTicks.endTick)))
       loop = end > start ? { start, end } : null
     } else loop = null
   }
@@ -127,7 +133,8 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
     if (!playing) return position
     let value = anchorPos + (now() - anchorClock) * rate
     // 调度器已提前把锚点挪到循环起点；这里只兜底两次轮询之间的瞬时越界。
-    if (loop && value >= loop.end) value = loop.start + ((value - loop.start) % (loop.end - loop.start))
+    if (loop && value >= loop.end)
+      value = loop.start + ((value - loop.start) % (loop.end - loop.start))
     return Math.max(0, value)
   }
 
@@ -264,9 +271,20 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
       const current = livePosition()
       rebuild()
       if (playing) {
+        // 曲长缩短时立即停止越界播放，循环起点不在新曲内时 rebuild 已取消循环。
         options.synth.allNotesOff()
-        anchor(Math.min(current, loop ? loop.end : duration))
+        if (!loop && current >= duration) {
+          playing = false
+          position = duration
+          clearTimer()
+        } else
+          anchor(
+            loop && (current < loop.start || current >= loop.end)
+              ? loop.start
+              : Math.min(current, duration)
+          )
       } else position = Math.min(current, duration)
+      changed()
     },
     getState: snapshot,
     dispose() {

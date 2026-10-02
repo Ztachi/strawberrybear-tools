@@ -72,6 +72,7 @@ type SongPlaybackState = 'idle' | 'playing' | 'paused'
 
 type MidiConfigResponse = {
   filename: string
+  added_at?: number | null
   title?: string | null
   author_name?: string | null
   description?: string | null
@@ -390,6 +391,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function applyConfigToMidi(midi: MidiInfo, config: MidiConfigResponse): void {
+    midi.added_at = config.added_at ?? midi.added_at ?? null
     // 老配置只负责用户偏好；新解析结果的时间参数不能被旧整数 BPM 时长覆盖。
     if (midi.duration_ticks === undefined) {
       if (config.duration_ms > 0) midi.duration_ms = config.duration_ms

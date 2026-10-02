@@ -9,6 +9,9 @@ const BEAT_MULTIPLIERS: Record<Exclude<SnapResolution, 'bar' | 'off'>, number> =
   '1/8': 1 / 2,
   '1/16': 1 / 4,
   '1/32': 1 / 8,
+  '1/64': 1 / 16,
+  '1/128': 1 / 32,
+  '1/256': 1 / 64,
   '1/4t': 2 / 3,
   '1/8t': 1 / 3,
   '1/16t': 1 / 6,
@@ -41,7 +44,8 @@ export function resolutionTicks(
     const meter = meterAt(document.timeSignatureMap, tick)
     return ((ppq * 4) / meter.denominator) * meter.numerator
   }
-  return ppq * BEAT_MULTIPLIERS[resolution]
+  // SMF 时间精度最低为一个整数 tick，低 PPQ 曲目不能产生零长度网格。
+  return Math.max(1, ppq * BEAT_MULTIPLIERS[resolution])
 }
 
 /**

@@ -48,7 +48,7 @@ export interface PianoRollTrack {
   enabled: boolean
   /** 轨道内容区域的起始 tick（MIDI 轨道通常为 0，用于保留前导静音）。 */
   startTick?: number
-  /** 轨道内容区域的结束 tick（来自 MIDI End Of Track，包含尾部静音）。 */
+  /** 区域结束 tick；导入时来自 End Of Track，编辑态用作可恢复的有效范围限制。 */
   endTick?: number
 }
 
@@ -95,12 +95,14 @@ export interface RulerMark {
   bar: number
   /** 所属拍，从 1 开始。 */
   beat: number
-  /** 小节使用“1”，拍使用“1.2”，细分线使用空字符串。 */
+  /** 小节使用“1”，拍使用“1.2”，显式网格的拍内细分使用“1.2.3”；默认细分无标签。 */
   label: string
 }
 
 /** 仅生成当前视口附近的音乐刻度，避免长曲目创建全量网格。 */
 export interface RulerMarkOptions {
+  /** 编辑网格步长（tick），或跟随拍号的小节；省略时使用 subdivisions 的只读细分。 */
+  gridTicks?: number | 'bar'
   /** 可见区间左边界，单位原曲秒。 */
   startSeconds: number
   /** 可见区间右边界，单位原曲秒。 */

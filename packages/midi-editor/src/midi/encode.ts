@@ -1,11 +1,13 @@
 import { writeMidi, type MidiEvent } from 'midi-file'
+import { clipNoteToTrackRegion } from '@strawberrybear/piano-roll/core'
 import type { PianoRollDocument, PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import { clampInt, MAX_PITCH, MAX_VELOCITY, MIN_PITCH, MIN_VELOCITY } from '../commands/notes'
 import { toMidiText } from './text'
+import { ensureDurationCovers } from '../commands/song'
 
 /** 导出选项。 */
 export interface EncodeMidiOptions {
-  /** 写入 conductor 轨的曲名。 */
+  /** 写入全局文本元事件的曲名，不覆盖音轨名称。 */
   name?: string
   /** 非打击乐轨的默认 Program（0 = Acoustic Grand Piano）。 */
   program?: number
@@ -32,7 +34,11 @@ function toDeltaTrack(events: AbsoluteEvent[], endTick: number): MidiEvent[] {
     track.push({ ...item.event, deltaTime: tick - cursor })
     cursor = tick
   }
-  track.push({ type: 'endOfTrack', deltaTime: Math.max(0, Math.round(endTick) - cursor), meta: true })
+  track.push({
+    type: 'endOfTrack',
+    deltaTime: Math.max(0, Math.round(endTick) - cursor),
+    meta: true,
+  })
   return track
 }
 
@@ -49,7 +55,13 @@ export function assignChannels(tracks: readonly PianoRollTrack[]): Map<string, n
       result.set(track.id, PERCUSSION_CHANNEL)
       continue
     }
-    if (track.channel !== undefined && Number.isInteger(track.channel) && track.channel >= 0 && track.channel <= 15 && track.channel !== PERCUSSION_CHANNEL) {
+    if (
+      track.channel !== undefined &&
+      Number.isInteger(track.channel) &&
+      track.channel >= 0 &&
+      track.channel <= 15 &&
+      track.channel !== PERCUSSION_CHANNEL
+    ) {
       result.set(track.id, track.channel)
       continue
     }
@@ -61,36 +73,59 @@ export function assignChannels(tracks: readonly PianoRollTrack[]): Map<string, n
 }
 
 /**
- * @description: 把卷帘文档编码为标准 MIDI 文件（SMF format 1）。
+ * @description: 把启用轨道编码为标准 MIDI 文件，单轨 format 0、多轨 format 1，每轨保留自身区域边界。
  * @param {PianoRollDocument} document 源文档
  * @param {EncodeMidiOptions} options 曲名与默认音色
  * @return {Uint8Array} 完整 .mid 字节
  */
-export function encodeMidi(document: PianoRollDocument, options: EncodeMidiOptions = {}): Uint8Array {
+export function encodeMidi(
+  document: PianoRollDocument,
+  options: EncodeMidiOptions = {}
+): Uint8Array {
   const ppq = Math.max(1, Math.round(document.ticksPerBeat > 0 ? document.ticksPerBeat : 480))
-  let songEnd = Math.max(0, Math.round(document.durationTicks))
-  for (const note of document.notes) songEnd = Math.max(songEnd, Math.round(note.endTick))
+  const enabledTracks = document.tracks.filter((track) => track.enabled)
+  const enabled = new Map(enabledTracks.map((track) => [track.id, track]))
+  const songEnd = ensureDurationCovers(document).durationTicks
 
-  // 轨 0：conductor，只放曲名、速度与拍号。
+  // 全局元事件稍后合入最长有效音轨；不创建用户未添加的空轨，也不延长短轨。
   const conductor: AbsoluteEvent[] = []
   if (options.name?.trim())
-    conductor.push({ tick: 0, order: 0, event: { type: 'trackName', text: toMidiText(options.name.trim()), deltaTime: 0, meta: true } })
+    conductor.push({
+      tick: 0,
+      order: 0,
+      event: { type: 'text', text: toMidiText(options.name.trim()), deltaTime: 0, meta: true },
+    })
   const tempoMap = document.tempoMap.length
     ? document.tempoMap
     : [{ tick: 0, microsecondsPerQuarter: 500_000 }]
   for (const point of tempoMap) {
-    if (!Number.isFinite(point.microsecondsPerQuarter) || point.microsecondsPerQuarter <= 0) continue
+    if (
+      point.tick > songEnd ||
+      !Number.isFinite(point.microsecondsPerQuarter) ||
+      point.microsecondsPerQuarter <= 0
+    )
+      continue
     conductor.push({
       tick: Math.max(0, point.tick),
       order: 1,
-      event: { type: 'setTempo', microsecondsPerBeat: Math.round(point.microsecondsPerQuarter), deltaTime: 0, meta: true },
+      event: {
+        type: 'setTempo',
+        microsecondsPerBeat: Math.round(point.microsecondsPerQuarter),
+        deltaTime: 0,
+        meta: true,
+      },
     })
   }
   const meterMap = document.timeSignatureMap.length
     ? document.timeSignatureMap
     : [{ tick: 0, numerator: 4, denominator: 4 }]
   for (const point of meterMap) {
-    if (!Number.isInteger(Math.log2(point.denominator)) || point.numerator < 1) continue
+    if (
+      point.tick > songEnd ||
+      !Number.isInteger(Math.log2(point.denominator)) ||
+      point.numerator < 1
+    )
+      continue
     conductor.push({
       tick: Math.max(0, point.tick),
       order: 2,
@@ -105,42 +140,77 @@ export function encodeMidi(document: PianoRollDocument, options: EncodeMidiOptio
       },
     })
   }
-  const tracks: MidiEvent[][] = [toDeltaTrack(conductor, songEnd)]
+  // 没有启用音轨时仍输出合法的仅元数据文件；显式空轨属于用户工程，按原样保留。
+  const tracks: MidiEvent[][] = enabledTracks.length ? [] : [toDeltaTrack(conductor, songEnd)]
+  const metadataTrack = enabledTracks.reduce<PianoRollTrack | undefined>(
+    (longest, track) =>
+      !longest || (track.endTick ?? songEnd) > (longest.endTick ?? songEnd) ? track : longest,
+    undefined
+  )
 
-  const channels = assignChannels(document.tracks)
+  const channels = assignChannels(enabledTracks)
   const notesByTrack = new Map<string, AbsoluteEvent[]>()
-  for (const track of document.tracks) notesByTrack.set(track.id, [])
+  for (const track of enabledTracks) notesByTrack.set(track.id, [])
   for (const note of document.notes) {
     const bucket = notesByTrack.get(note.trackId)
-    if (!bucket) continue
+    const track = enabled.get(note.trackId)
+    const clipped = track && clipNoteToTrackRegion(note, track)
+    if (!bucket || !clipped) continue
     const channel = channels.get(note.trackId) ?? 0
     const pitch = clampInt(note.pitch, MIN_PITCH, MAX_PITCH)
-    const start = Math.max(0, Math.round(note.startTick))
-    // 零长度音符至少保留 1 tick，否则 noteOff 与 noteOn 同刻会被播放器吞掉。
-    const end = Math.max(start + 1, Math.round(note.endTick))
+    const start = Math.max(0, Math.round(clipped.startTick))
+    // 裁剪投影已修复零长度音符；整数化后没有时长的交集不能产生同刻开关事件。
+    const end = Math.round(clipped.endTick)
+    if (end <= start) continue
     bucket.push({
       tick: start,
       order: 2,
-      event: { type: 'noteOn', channel, noteNumber: pitch, velocity: clampInt(note.velocity, MIN_VELOCITY, MAX_VELOCITY), deltaTime: 0 },
+      event: {
+        type: 'noteOn',
+        channel,
+        noteNumber: pitch,
+        velocity: clampInt(note.velocity, MIN_VELOCITY, MAX_VELOCITY),
+        deltaTime: 0,
+      },
     })
     // 同 tick 时 noteOff 排在 noteOn 之前，避免相邻同音高音符被提前截断。
-    bucket.push({ tick: end, order: 1, event: { type: 'noteOff', channel, noteNumber: pitch, velocity: 0, deltaTime: 0 } })
+    bucket.push({
+      tick: end,
+      order: 1,
+      event: { type: 'noteOff', channel, noteNumber: pitch, velocity: 0, deltaTime: 0 },
+    })
   }
-  for (const track of document.tracks) {
+  for (const track of enabledTracks) {
     const events = notesByTrack.get(track.id)!
+    if (track === metadataTrack) events.push(...conductor)
     const channel = channels.get(track.id) ?? 0
-    events.push({ tick: 0, order: 0, event: { type: 'trackName', text: toMidiText(track.name), deltaTime: 0, meta: true } })
+    events.push({
+      tick: 0,
+      order: 0,
+      event: { type: 'trackName', text: toMidiText(track.name), deltaTime: 0, meta: true },
+    })
     if (!track.isPercussion) {
       events.push({
         tick: 0,
         order: 0,
-        event: { type: 'programChange', channel, programNumber: clampInt(options.program ?? 0, 0, 127), deltaTime: 0 },
+        event: {
+          type: 'programChange',
+          channel,
+          programNumber: clampInt(options.program ?? 0, 0, 127),
+          deltaTime: 0,
+        },
       })
     }
-    let trackEnd = Math.max(track.endTick ?? 0, songEnd)
+    // 有显式区域时不把短轨补齐到曲尾，避免再次导入后短轨变成长轨。
+    let trackEnd = track.endTick ?? songEnd
     for (const item of events) trackEnd = Math.max(trackEnd, item.tick)
     tracks.push(toDeltaTrack(events, trackEnd))
   }
 
-  return Uint8Array.from(writeMidi({ header: { format: 1, numTracks: tracks.length, ticksPerBeat: ppq }, tracks }))
+  return Uint8Array.from(
+    writeMidi({
+      header: { format: tracks.length > 1 ? 1 : 0, numTracks: tracks.length, ticksPerBeat: ppq },
+      tracks,
+    })
+  )
 }

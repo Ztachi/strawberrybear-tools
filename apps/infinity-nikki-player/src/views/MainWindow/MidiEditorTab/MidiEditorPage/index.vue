@@ -15,7 +15,7 @@ import {
   watch,
 } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { Button, ConfigProvider, Input, Tooltip } from 'antdv-next'
 import { ExternalLink } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
@@ -26,6 +26,13 @@ import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import { usePianoRollLabels } from '@/components/PianoWorkspace/usePianoRollLabels'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import { createMidiDraftWriter } from '@/features/midi-editor/draftWriter'
+import {
+  loadScopedMidiDraft,
+  midiDraftKey,
+  midiEditorEntry,
+  sameMidiEditorEntry,
+  type MidiEditorEntry,
+} from '@/features/midi-editor/draftIdentity'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import {
   MidiProjectEditorWindowSession,
@@ -94,6 +101,7 @@ const hasChanges = computed(() => !!state.value && (state.value.dirty || draftLo
 const showVelocity = ref(false)
 const dimUnplayable = ref(false)
 const currentDraftKey = ref('create')
+const currentEntry = shallowRef<MidiEditorEntry>({ kind: 'create' })
 const workspace = ref<InstanceType<typeof MidiEditorWorkspace> | null>(null)
 const latestViewport = shallowRef<PianoWorkspaceState>()
 const workspaceRestore = shallowRef<PianoWorkspaceState>()
@@ -103,8 +111,8 @@ let draftTimer: number | null = null
 let editorWindow: MidiProjectEditorWindowSession | null = null
 let endingDetachedEditor = false
 let pageActive = true
-
-const isEditRoute = computed(() => route.name === 'midi-editor-edit')
+/** 迟到的解析、草稿读取或弹窗结果不能覆盖后一次路由载入。 */
+let loadGeneration = 0
 /** 按模板试听与置灰共享同一集合；关闭时为 null，缺少模板时全部静音。 */
 const playablePitches = computed(() => {
   if (!dimUnplayable.value) return null
@@ -184,14 +192,13 @@ async function projectFromLibrary(filename: string): Promise<MidiProject> {
 
 /**
  * @description: 依据路由决定初始项目
+ * @param {MidiEditorEntry} entry 载入前捕获的入口
  * @return {Promise<MidiProject>} 项目
  */
-async function resolveInitialProject(): Promise<MidiProject> {
-  if (isEditRoute.value) return projectStore.loadProject(String(route.params.id ?? ''))
-  const from = typeof route.query.from === 'string' ? route.query.from : ''
-  if (from) return projectFromLibrary(from)
-  const fromProject = typeof route.query.fromProject === 'string' ? route.query.fromProject : ''
-  if (fromProject) return duplicateProject(await projectStore.loadProject(fromProject), trackCopyName)
+async function resolveInitialProject(entry: MidiEditorEntry): Promise<MidiProject> {
+  if (entry.kind === 'edit') return projectStore.loadProject(entry.id)
+  if (entry.kind === 'song') return projectFromLibrary(entry.filename)
+  if (entry.kind === 'copy') return duplicateProject(await projectStore.loadProject(entry.id), trackCopyName)
   const existing = new Set(projectStore.projects.map((item) => item.name))
   return createProject({ name: uniqueProjectName(t('midiEditor.untitled'), existing, 'Untitled') })
 }
@@ -233,50 +240,65 @@ watch(updateLocked, (locked) => {
  * @return {Promise<void>}
  */
 async function loadFromRoute(): Promise<void> {
-  const loadingEditRoute = isEditRoute.value
-  const loadingDraftKey = loadingEditRoute ? `edit-${String(route.params.id ?? '')}` : 'create'
-  currentDraftKey.value = loadingDraftKey
+  const generation = ++loadGeneration
+  const entry = midiEditorEntry(route)
+  const loadingEditRoute = entry.kind === 'edit'
+  const detached = route.query.detached === '1'
+  resolveChoice('cancel')
   loading.value = true
   loadError.value = ''
   draftLoaded.value = false
   playback.stop()
   disposeEditor()
+  // 还原快照只属于原会话；载入另一个入口时不能沿用上一首歌的缩放、滚动和选轨。
+  latestViewport.value = undefined
+  workspaceRestore.value = undefined
   try {
+    await draftWriter.flush().catch(() => {})
     await projectStore.ensureLoaded()
-    let project = await resolveInitialProject()
-    const draft = await projectStore.loadDraft(loadingDraftKey).catch(() => null)
+    if (generation !== loadGeneration) return
+    const loadingDraftKey = await midiDraftKey(entry)
+    let project = await resolveInitialProject(entry)
+    if (generation !== loadGeneration) return
+    const draft = await loadScopedMidiDraft(projectStore, entry, project)
+    if (generation !== loadGeneration) return
+    currentEntry.value = entry
+    currentDraftKey.value = loadingDraftKey
     if (draft) {
       const decision = await ask(t('midiEditor.draftFound'), t('midiEditor.loadDraftPrompt'), [
         { key: 'cancel', label: t('actions.cancel') },
         { key: 'discard', label: t('midiEditor.discardDraft'), danger: true },
         { key: 'load', label: t('midiEditor.loadDraft'), primary: true },
       ])
+      if (generation !== loadGeneration) return
       if (decision === 'cancel') {
         await leaveWithoutNewHistory()
         return
       }
       if (decision === 'discard') await projectStore.deleteDraft(loadingDraftKey).catch(() => {})
       else {
-        // 草稿以磁盘项目的 id/createdAt 为准，避免保存时写出第二份文件。
-        project = { ...draft, id: project.id, createdAt: project.createdAt }
+        // 编辑已有项目沿用磁盘身份；新建/改编草稿保留自身身份，保存后只生成这一份项目。
+        project = loadingEditRoute ? { ...draft, id: project.id, createdAt: project.createdAt } : draft
         draftLoaded.value = true
       }
     }
+    if (generation !== loadGeneration) return
     persisted.value = loadingEditRoute
     const handle = useMidiEditorSession(project, { trackDefaultName, trackCopyName })
     editor.value = handle
     installEditorShortcuts()
     await nextTick()
+    if (generation !== loadGeneration) return
     // 全新项目直接打开第一条轨道的详情，用户可立刻落音符。
     if (!loadingEditRoute && project.document.notes.length === 0) {
       const first = project.document.tracks[0]
       if (first) workspace.value?.openTrack(first.id)
     }
-    if (route.query.detached === '1') await openDetachedEditor()
+    if (detached) await openDetachedEditor()
   } catch (error) {
-    loadError.value = String(error)
+    if (generation === loadGeneration) loadError.value = String(error)
   } finally {
-    loading.value = false
+    if (generation === loadGeneration) loading.value = false
   }
 }
 
@@ -377,6 +399,7 @@ async function save(updateRoute = true): Promise<boolean> {
     await projectStore.deleteDraft(previousDraftKey).catch(() => {})
     draftLoaded.value = false
     persisted.value = true
+    currentEntry.value = { kind: 'edit', id: summary.id }
     currentDraftKey.value = `edit-${summary.id}`
     toast.success(t('midiEditor.saved'), { richColors: true })
     editorWindow?.notify('success', t('midiEditor.saved'))
@@ -397,6 +420,22 @@ async function flushDraft(): Promise<void> {
   const handle = editor.value
   if (!handle || !hasChanges.value) return
   await draftWriter.write(currentDraftKey.value, handle.session.toProject())
+}
+/**
+ * 直接关闭只结束编辑会话，最新快照仍属于当前入口的草稿。
+ * 必须等待落盘后才允许离开，避免自动保存尚未触发或写入失败时丢失改动。
+ * @returns 草稿是否已安全保存。
+ */
+async function preserveDraftBeforeClose(): Promise<boolean> {
+  try {
+    await flushDraft()
+    await draftWriter.flush()
+    return true
+  } catch (error) {
+    toast.error(t('midiEditor.draftSaveFailed'), { description: String(error), richColors: true })
+    editorWindow?.notify('error', t('midiEditor.draftSaveFailed'), String(error))
+    return false
+  }
 }
 function writeDraft(): void {
   if (saving.value || updateLocked.value) return
@@ -449,16 +488,14 @@ async function confirmLeaveIfNeeded(): Promise<boolean> {
     t('midiEditor.leaveConfirmDescription'),
     [
       { key: 'cancel', label: t('actions.cancel') },
-      { key: 'discard', label: t('midiEditor.discardAndClose'), danger: true },
+      { key: 'discard', label: t('midiEditor.discardAndClose') },
       { key: 'save', label: t('midiEditor.saveAndClose'), primary: true },
     ]
   )
   // 离开守卫已经持有目标导航，首次保存不能再 replace 而取消它。
   if (decision === 'save') return save(false)
   if (decision === 'discard') {
-    await projectStore.deleteDraft(currentDraftKey.value).catch(() => {})
-    draftLoaded.value = false
-    return true
+    return preserveDraftBeforeClose()
   }
   return false
 }
@@ -508,6 +545,9 @@ function currentEditorRoute() {
   if (persisted.value && current) {
     return { name: 'midi-editor-edit' as const, params: { id: current.project.id } }
   }
+  const entry = currentEntry.value
+  if (entry.kind === 'song') return { name: 'midi-editor-create' as const, query: { from: entry.filename } }
+  if (entry.kind === 'copy') return { name: 'midi-editor-create' as const, query: { fromProject: entry.id } }
   return { name: 'midi-editor-create' as const }
 }
 
@@ -517,21 +557,22 @@ async function restoreEditorPage(): Promise<void> {
   const target = currentEditorRoute()
   const alreadyEditing =
     route.name === target.name &&
-    (target.name !== 'midi-editor-edit' || route.params.id === target.params.id)
+    sameMidiEditorEntry(midiEditorEntry(route), currentEntry.value)
   if (!alreadyEditing) await router.push(target)
   await nextTick()
 }
 
 async function exitDetachedEditor(mode: 'save' | 'discard'): Promise<void> {
   if (mode === 'save' && !(await save())) return
-  if (mode === 'discard') {
-    await projectStore.deleteDraft(currentDraftKey.value).catch(() => {})
-    draftLoaded.value = false
-  }
+  if (mode === 'discard' && !(await preserveDraftBeforeClose())) return
   playback.stop()
   endingDetachedEditor = true
   try {
     await editorWindow?.close()
+    // 草稿/项目已落盘，明确结束本次会话；随后主窗口导航不再重复询问未保存改动。
+    // 同时清理缓存中的旧 handle，下一次进入会从当前入口正常加载草稿。
+    disposeEditor()
+    draftLoaded.value = false
     if (route.name === 'midi-editor-create' || route.name === 'midi-editor-edit') {
       await leaveWithoutNewHistory()
     }
@@ -620,13 +661,20 @@ onBeforeRouteLeave(async (to) => {
   return allowed
 })
 
+// 同一个编辑组件只更新查询参数时不会触发离开守卫；歌曲 A → B 仍须处理未保存改动。
+onBeforeRouteUpdate(async (to) => {
+  if (editorWindowStatus.value !== 'docked' || sameMidiEditorEntry(midiEditorEntry(to), currentEntry.value)) return true
+  if (to.name === 'midi-editor-edit' && state.value?.project.id === to.params.id) return true
+  return confirmLeaveIfNeeded()
+})
+
 watch(
   () => [route.name, route.params.id, route.query.from, route.query.fromProject] as const,
   ([name, id]) => {
     if (name !== 'midi-editor-create' && name !== 'midi-editor-edit') return
     const targetsCurrentProject =
       (name === 'midi-editor-edit' && state.value?.project.id === id) ||
-      (name === 'midi-editor-create' && !persisted.value)
+      sameMidiEditorEntry(midiEditorEntry(route), currentEntry.value)
     if (editorWindowStatus.value !== 'docked') {
       if (!targetsCurrentProject) {
         void editorWindow?.focus()
@@ -691,6 +739,7 @@ onDeactivated(() => {
   uninstallEditorShortcuts()
 })
 onBeforeUnmount(() => {
+  loadGeneration += 1
   removeInstallParticipant()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   if (draftTimer !== null) window.clearInterval(draftTimer)

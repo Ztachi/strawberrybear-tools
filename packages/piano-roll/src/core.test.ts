@@ -16,6 +16,77 @@ function createDocument(): PianoRollDocument {
 }
 
 describe('piano roll timeline', () => {
+  it('细网格保留精确显示位置，只裁剪实际位于视口内的线', () => {
+    const timeline = createTimeline({ ...createDocument(), tempoMap: [] })
+    const marks = timeline.getRulerMarks({
+      startSeconds: 7.4 / 960,
+      endSeconds: 7.6 / 960,
+      pixelsPerSecond: 4800,
+      gridTicks: 7.5,
+    })
+    expect(marks.map((mark) => mark.tick)).toEqual([7.5])
+  })
+  it('小节网格跟随拍号变化，分辨率网格以每个拍号段起点为锚', () => {
+    const timeline = createTimeline({
+      ...createDocument(),
+      tempoMap: [],
+      durationTicks: 4800,
+      timeSignatureMap: [
+        { tick: 0, numerator: 4, denominator: 4 },
+        { tick: 1920, numerator: 3, denominator: 8 },
+      ],
+    })
+    expect(
+      timeline
+        .getRulerMarks({ startSeconds: 0, endSeconds: 5, pixelsPerSecond: 4800, gridTicks: 'bar' })
+        .map((mark) => mark.tick)
+    ).toEqual([0, 1920, 2640, 3360, 4080, 4800])
+    expect(
+      timeline
+        .getRulerMarks({
+          startSeconds: 1.99,
+          endSeconds: 2.2,
+          pixelsPerSecond: 4800,
+          gridTicks: 80,
+        })
+        .map((mark) => mark.tick)
+    ).toEqual([1920, 2000, 2080])
+  })
+  for (const step of [1920, 960, 480, 240, 120, 60, 30, 15, 7.5, 320, 160, 80]) {
+    it(`放大后显示所选 ${step} tick 网格，包含三连音与 1/256`, () => {
+      const timeline = createTimeline({ ...createDocument(), tempoMap: [] })
+      const marks = timeline.getRulerMarks({
+        startSeconds: 0,
+        endSeconds: 2,
+        pixelsPerSecond: 4800,
+        gridTicks: step,
+      })
+      expect(marks.map((mark) => mark.tick)).toEqual(
+        Array.from({ length: Math.floor(1920 / step) + 1 }, (_, i) => i * step)
+      )
+      for (let i = 1; i < marks.length; i++)
+        expect(marks[i]!.x - marks[i - 1]!.x).toBeCloseTo(step * 5, 8)
+    })
+  }
+  it('细网格在低倍率自动降低密度，放大后恢复细分且滚动不改变相位', () => {
+    const timeline = createTimeline({ ...createDocument(), tempoMap: [] })
+    const coarse = timeline.getRulerMarks({
+      startSeconds: 0,
+      endSeconds: 100,
+      pixelsPerSecond: 10,
+      gridTicks: 7.5,
+    })
+    expect(coarse.length).toBeLessThan(90)
+    const fine = timeline.getRulerMarks({
+      startSeconds: 0.02,
+      endSeconds: 0.12,
+      pixelsPerSecond: 4800,
+      gridTicks: 7.5,
+    })
+    expect(fine.map((mark) => mark.tick)).toEqual([
+      22.5, 30, 37.5, 45, 52.5, 60, 67.5, 75, 82.5, 90, 97.5, 105, 112.5,
+    ])
+  })
   it('integrates tempo changes without losing the original microseconds value', () => {
     const timeline = createTimeline(createDocument())
     expect(timeline.tickToSeconds(960)).toBeCloseTo(1, 8)

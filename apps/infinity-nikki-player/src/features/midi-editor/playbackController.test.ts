@@ -1,10 +1,60 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createProject } from '@strawberrybear/midi-editor'
+import { createEditorSession, createProject } from '@strawberrybear/midi-editor'
 import { createMidiEditorPlaybackController } from './playbackController'
+import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 
 afterEach(() => vi.useRealTimers())
 
 describe('MIDI editor playback controller', () => {
+  it('切换项目期间文档为空时停止旧试听，载入新文档后可以重新播放', async () => {
+    vi.useFakeTimers()
+    let document: PianoRollDocument | null = previewProject().document
+    const changed = vi.fn()
+    const stop = vi.fn()
+    const schedule = vi.fn(() => ({ stop }))
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => 10,
+      scheduleNote: schedule,
+      onChange: changed,
+    })
+    await controller.play()
+    document = null
+    expect(() => controller.invalidate()).not.toThrow()
+    expect(stop).toHaveBeenCalled()
+    expect(controller.getState()).toMatchObject({
+      isPlaying: false,
+      durationSeconds: 0,
+      positionSeconds: 0,
+    })
+    controller.stop()
+    controller.seek(1)
+    await controller.play()
+    document = previewProject().document
+    controller.invalidate()
+    await controller.play()
+    expect(controller.getState().isPlaying).toBe(true)
+    controller.dispose()
+  })
+  it('未初始化音频时缩短曲长也会裁剪播放位置并通知界面', () => {
+    const session = createEditorSession(previewProject())
+    const changed = vi.fn()
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => session.getState().document,
+      getLoop: () => null,
+      onChange: changed,
+    })
+    controller.seek(1.5)
+    session.dispatch({ type: 'resize-track-region', trackId: 'track', endTick: 480 })
+    controller.invalidate()
+    expect(controller.getState().positionSeconds).toBe(0.5)
+    expect(changed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ durationSeconds: 0.5, positionSeconds: 0.5 })
+    )
+    controller.dispose()
+  })
   it('同一音符每次点击都按传入时长重新排程', async () => {
     const project = previewProject()
     const schedule = vi.fn(() => ({ stop: vi.fn() }))
@@ -31,7 +81,7 @@ describe('MIDI editor playback controller', () => {
         durationTicks: 1920,
         tempoMap: [{ tick: 0, microsecondsPerQuarter: 500000 }],
         timeSignatureMap: [{ tick: 0, numerator: 4, denominator: 4 }],
-        tracks: [{ id: 'track', name: '音轨', enabled: true, isPercussion: false }],
+        tracks: [{ id: 'track', name: '音轨', enabled: true, isPercussion: false, endTick: 1920 }],
         notes: [60, 61, 67].map((pitch) => ({
           id: String(pitch),
           trackId: 'track',
@@ -174,7 +224,7 @@ describe('MIDI editor playback controller', () => {
         durationTicks: 1920,
         tempoMap: [{ tick: 0, microsecondsPerQuarter: 500000 }],
         timeSignatureMap: [{ tick: 0, numerator: 4, denominator: 4 }],
-        tracks: [{ id: 'track', name: 'Track', enabled: true, isPercussion: false }],
+        tracks: [{ id: 'track', name: 'Track', enabled: true, isPercussion: false, endTick: 1920 }],
         notes: [],
       },
     })

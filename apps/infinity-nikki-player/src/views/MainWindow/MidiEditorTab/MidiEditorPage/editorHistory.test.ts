@@ -7,6 +7,7 @@ import { createEditorSession, createProject } from '@strawberrybear/midi-editor'
 import { useMidiEditorSession } from './useMidiEditorSession'
 import NoteInspector from './components/NoteInspector.vue'
 import EditorToolbar from './components/EditorToolbar.vue'
+import NoteContextMenu from './components/NoteContextMenu.vue'
 
 // 只替换框架控件表面，直接驱动真实页面处理函数、会话与历史栈。
 vi.mock('antdv-next', async () => {
@@ -21,9 +22,17 @@ vi.mock('antdv-next', async () => {
       },
     })
   return Object.fromEntries(
-    ['Button', 'Checkbox', 'InputNumber', 'Slider', 'Tooltip', 'Popover', 'Select', 'Switch'].map(
-      (name) => [name, control(name)]
-    )
+    [
+      'Button',
+      'Checkbox',
+      'Dropdown',
+      'InputNumber',
+      'Slider',
+      'Tooltip',
+      'Popover',
+      'Select',
+      'Switch',
+    ].map((name) => [name, control(name)])
   )
 })
 vi.mock('@/theme/infinityNikkiTheme', () => ({ getMainWindowPopupContainer: () => null }))
@@ -80,23 +89,30 @@ function key(type: string, name: string, repeat = false, ctrlKey = false): void 
   Object.assign(event, { key: name, repeat, ctrlKey })
   windowEvents.dispatchEvent(event)
 }
-function mount(target: 'inspector' | 'toolbar'): void {
+function mount(target: 'inspector' | 'toolbar' | 'context'): void {
   app = renderer.createApp(
     defineComponent({
       setup() {
         return () =>
-          target === 'inspector'
-            ? h(NoteInspector, { state: handle.state.value, onDispatch: handle.dispatch })
-            : h(EditorToolbar, {
+          target === 'context'
+            ? h(NoteContextMenu, {
                 state: handle.state.value,
-                isPlaying: false,
-                showVelocity: false,
-                dimUnplayable: false,
-                currentTemplateId: null,
-                templates: [],
+                target: { noteId: null, tick: 0, pitch: 60, clientX: 0, clientY: 0 },
+                trackId: 'track-1',
                 onDispatch: handle.dispatch,
-                onSetBpm: (bpm: number) => handle.dispatch({ type: 'set-tempo', bpm }),
               })
+            : target === 'inspector'
+              ? h(NoteInspector, { state: handle.state.value, onDispatch: handle.dispatch })
+              : h(EditorToolbar, {
+                  state: handle.state.value,
+                  isPlaying: false,
+                  showVelocity: false,
+                  dimUnplayable: false,
+                  currentTemplateId: null,
+                  templates: [],
+                  onDispatch: handle.dispatch,
+                  onSetBpm: (bpm: number) => handle.dispatch({ type: 'set-tempo', bpm }),
+                })
       },
     })
   )
@@ -137,6 +153,13 @@ afterEach(() => {
 })
 
 describe('continuous editor changes', () => {
+  it('按选区设置循环只覆盖区域内可见的音符部分', async () => {
+    handle.dispatch({ type: 'resize-track-region', trackId: 'track-1', endTick: 720 })
+    mount('context')
+    const menu = controls('Dropdown')[0]!.props.menu as { onClick: (info: { key: string }) => void }
+    menu.onClick({ key: 'loop' })
+    expect(handle.state.value.project.loop).toEqual({ startTick: 480, endTick: 720 })
+  })
   it('关闭吸附时两个量化按钮置灰且指令不改变文档，重新开启后恢复', async () => {
     mount('inspector')
     handle.dispatch({ type: 'set-snap', resolution: 'off' })

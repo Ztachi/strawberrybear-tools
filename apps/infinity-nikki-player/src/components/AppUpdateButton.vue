@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { Tooltip } from 'antdv-next'
 import { Download, Loader2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import IconRotation from '@/components/IconRotation.vue'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import { emit } from '@tauri-apps/api/event'
 
@@ -57,12 +58,12 @@ async function handleClick() {
       :disabled="updater.isBusy.value"
       @click="handleClick"
     >
-      <component
-        :is="buttonIcon"
-        class="update-icon"
-        :class="{ spinning: updater.isDownloading.value || updater.isInstalling.value }"
+      <IconRotation
         :size="18"
-      />
+        :spinning="updater.isDownloading.value || updater.isInstalling.value"
+      >
+        <component :is="buttonIcon" :size="18" />
+      </IconRotation>
       <span class="update-label">{{ buttonText }}</span>
     </button>
   </Tooltip>
@@ -84,10 +85,6 @@ async function handleClick() {
   transform: translateY(-1px);
 }
 
-.update-icon {
-  @apply shrink-0;
-}
-
 .update-label {
   font-size: 12px;
   font-weight: 700;
@@ -95,17 +92,7 @@ async function handleClick() {
   white-space: nowrap;
 }
 
-.spinning {
-  animation: spin 0.8s linear infinite;
-}
-
 .busy {
   cursor: progress;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

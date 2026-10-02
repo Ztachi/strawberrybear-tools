@@ -167,6 +167,7 @@ function handleDimUnplayable(value: boolean): void {
       <span class="toolbar-separator" />
       <Tooltip :title="t('midiEditor.toolbar.undo')">
         <Button
+          class="toolbar-history-button"
           size="small"
           color="primary"
           variant="text"
@@ -181,6 +182,7 @@ function handleDimUnplayable(value: boolean): void {
       </Tooltip>
       <Tooltip :title="t('midiEditor.toolbar.redo')">
         <Button
+          class="toolbar-history-button"
           size="small"
           color="primary"
           variant="text"
@@ -495,6 +497,11 @@ function handleDimUnplayable(value: boolean): void {
 </template>
 
 <style scoped>
+.editor-toolbar :deep(.toolbar-history-button:disabled) {
+  color: var(--color-muted);
+  background: var(--color-primary-disabled-bg);
+  opacity: 0.45;
+}
 .editor-toolbar {
   @apply flex min-w-0 shrink-0 items-center gap-1.5;
   -webkit-app-region: no-drag;

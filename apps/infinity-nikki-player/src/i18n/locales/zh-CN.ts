@@ -115,6 +115,7 @@ export default {
       playhead: '播放头：左右方向键微调播放位置',
       fit: '适合全曲',
       close: '关闭钢琴卷帘',
+      resizeTrack: '调整音轨区域长度：拖动右边缘，或用左右方向键调整',
       hideEmptyTracks: '隐藏没有音符的音轨',
       noTracksWithNotes: '没有包含音符的音轨',
       help: {
@@ -271,6 +272,8 @@ export default {
     totalSongs: '共 {count} 首',
     selectedCount: '已选中 {count} 首',
     searchPlaceholder: '搜索歌曲',
+    sortAddedNewest: '按添加时间排序：最新在前',
+    sortAddedOldest: '按添加时间排序：最早在前',
     noSongs: '暂无歌曲',
     noSearchResults: '没有找到歌曲',
     notFound: '歌单不存在',
@@ -538,9 +541,10 @@ export default {
     discardDraft: '丢弃草稿',
     loadDraftPrompt: '检测到上次未保存的项目草稿，是否加载？按取消会保留草稿并返回。',
     leaveConfirmTitle: '有未保存的项目改动',
-    leaveConfirmDescription: '离开编辑页前请选择保存改动或直接丢弃。',
+    leaveConfirmDescription: '关闭编辑器前请选择是否保存项目。',
     saveAndClose: '保存并关闭',
-    discardAndClose: '不保存并关闭',
+    discardAndClose: '直接关闭',
+    draftSaveFailed: '草稿保存失败',
     trackDefaultName: '音轨 {index}',
     trackCopyName: '{name} 副本',
     addTrack: '新增音轨',
@@ -756,7 +760,17 @@ export default {
             trackEnabled: {
               label: '启用状态',
               description:
-                '音轨开关用于控制该音轨是否启用。关闭前请确认这符合当前编曲意图，音符数据本身会继续保留。',
+                '音轨开关控制是否参与试听和导出。曲长以最长启用音轨有效区域的右边界为准，禁用、删除或缩短最长音轨后会同步缩短曲长；禁用音轨仍保留编辑内容。',
+            },
+            trackRegion: {
+              label: '延长与缩短音轨区域',
+              description:
+                '在总览或下方音符详情中，拖动有效区域右边缘的把手调整长度；拖至视图边缘会自动滚动，可以继续延长。灰色部分位于有效范围之外。缩短不删除音符，保存工程后再拉长仍可恢复；试听和导出只使用有效范围，跨越右边界的音符会截断。松手提交一次修改，Esc 取消本次拖拽；把手获得焦点后也可用左右方向键调整。',
+            },
+            regionSnap: {
+              label: '边界吸附与位置预览',
+              description:
+                '拖拽时，竖线和标尺提示会预览实际落点。默认按所选节拍网格吸附，选择按小节吸附可对齐小节边界；靠近当前音轨的音符结尾时会贴齐结尾。按住 Option/Alt 临时绕过吸附，或选择“关闭”取消吸附。',
             },
           },
         },
@@ -826,7 +840,7 @@ export default {
             leave: {
               label: '离开编辑器',
               description:
-                '“保存并关闭”会先保存工程再离开；“关闭”在存在改动时会要求选择保存、丢弃或取消，防止误丢内容。',
+                '存在改动时，关闭会提示选择“保存并关闭”“直接关闭”或“继续编辑”。直接关闭保留当前入口的草稿，再进入同一入口时可加载；保存并关闭会保存工程并清理对应草稿。',
             },
           },
         },
@@ -912,8 +926,8 @@ export default {
   updater: {
     availableTitle: '发现新版本',
     availableDescription: '新版本 {version} 已可用',
-    checkNow: '检查更新',
-    checking: '检查中',
+    checkNow: '检测更新',
+    checking: '检测中',
     updateNow: '更新',
     downloading: '下载中',
     downloadingProgress: '下载中 {progress}%',

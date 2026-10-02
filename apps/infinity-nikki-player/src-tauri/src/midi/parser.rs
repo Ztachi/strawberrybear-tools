@@ -155,6 +155,7 @@ pub fn parse_midi_file(path: &str) -> Result<(MidiInfo, Vec<NoteEvent>), String>
     let info = MidiInfo {
         filename,
         file_path: path.display().to_string(),
+        added_at: None,
         title: None,
         author_name: None,
         description: None,

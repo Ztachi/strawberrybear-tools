@@ -5,7 +5,13 @@ describe('createEditorSession', () => {
   it('adds, selects, moves, undoes and tracks dirty state', () => {
     const session = createEditorSession(createProject({ name: 'Demo' }))
     expect(session.getState().dirty).toBe(false)
-    session.dispatch({ type: 'add-note', trackId: 'track-1', pitch: 60, startTick: 0, durationTicks: 480 })
+    session.dispatch({
+      type: 'add-note',
+      trackId: 'track-1',
+      pitch: 60,
+      startTick: 0,
+      durationTicks: 480,
+    })
     let state = session.getState()
     expect(state.document.notes).toHaveLength(1)
     expect(state.selection.size).toBe(1)
@@ -29,7 +35,13 @@ describe('createEditorSession', () => {
 
   it('copies, pastes, duplicates and cuts', () => {
     const session = createEditorSession(createProject(), { snap: '1/4' })
-    session.dispatch({ type: 'add-note', trackId: 'track-1', pitch: 60, startTick: 0, durationTicks: 240 })
+    session.dispatch({
+      type: 'add-note',
+      trackId: 'track-1',
+      pitch: 60,
+      startTick: 0,
+      durationTicks: 240,
+    })
     session.dispatch({ type: 'copy' })
     expect(session.getState().clipboardAvailable).toBe(true)
     session.dispatch({ type: 'paste', atTick: 960 })
@@ -37,9 +49,12 @@ describe('createEditorSession', () => {
     session.dispatch({ type: 'select-all' })
     session.dispatch({ type: 'duplicate' })
     // 选区 0–1200，按 1/4 网格向上取整到 1440
-    expect(session.getState().document.notes.map((n) => n.startTick).sort((a, b) => a - b)).toEqual([
-      0, 960, 1440, 2400,
-    ])
+    expect(
+      session
+        .getState()
+        .document.notes.map((n) => n.startTick)
+        .sort((a, b) => a - b)
+    ).toEqual([0, 960, 1440, 2400])
     session.dispatch({ type: 'cut' })
     expect(session.getState().document.notes).toHaveLength(2)
   })
@@ -75,12 +90,158 @@ describe('createEditorSession', () => {
 
   it('coalesces velocity drags and extends duration', () => {
     const session = createEditorSession(createProject())
-    session.dispatch({ type: 'add-note', trackId: 'track-1', pitch: 60, startTick: 20000, durationTicks: 100 })
-    expect(session.getState().document.durationTicks).toBe(12 * 1920)
+    session.dispatch({
+      type: 'add-note',
+      trackId: 'track-1',
+      pitch: 60,
+      startTick: 20000,
+      durationTicks: 100,
+    })
+    expect(session.getState().document.durationTicks).toBe(20100)
     const id = session.getState().lastCreatedNoteIds[0]!
-    session.dispatch({ type: 'set-velocity', changes: [{ noteId: id, velocity: 50 }], coalesceKey: 'drag' })
-    session.dispatch({ type: 'set-velocity', changes: [{ noteId: id, velocity: 70 }], coalesceKey: 'drag' })
+    session.dispatch({
+      type: 'set-velocity',
+      changes: [{ noteId: id, velocity: 50 }],
+      coalesceKey: 'drag',
+    })
+    session.dispatch({
+      type: 'set-velocity',
+      changes: [{ noteId: id, velocity: 70 }],
+      coalesceKey: 'drag',
+    })
     session.dispatch({ type: 'undo' })
     expect(session.getState().document.notes[0]!.velocity).toBe(100)
+  })
+})
+
+describe('有效音轨区域与总时长', () => {
+  function project() {
+    return createProject({
+      document: {
+        durationTicks: 57600,
+        ticksPerBeat: 480,
+        tempoMap: [{ tick: 0, microsecondsPerQuarter: 500000 }],
+        timeSignatureMap: [],
+        tracks: [
+          { id: 'short', name: 'Short', enabled: true, isPercussion: false, endTick: 9600 },
+          { id: 'long', name: 'Long', enabled: true, isPercussion: false, endTick: 57600 },
+        ],
+        notes: [
+          { id: 's', trackId: 'short', pitch: 60, velocity: 100, startTick: 0, endTick: 9600 },
+          { id: 'l', trackId: 'long', pitch: 64, velocity: 100, startTick: 0, endTick: 57600 },
+        ],
+      },
+    })
+  }
+
+  it('禁用、删除最长轨道后立即缩短，撤销重做恢复时长与启用状态', () => {
+    const session = createEditorSession(project())
+    session.dispatch({ type: 'update-track', trackId: 'long', patch: { enabled: false } })
+    expect(session.getState().document.durationTicks).toBe(9600)
+    expect(session.toProject().meta.durationMs).toBe(10000)
+    session.dispatch({ type: 'undo' })
+    expect(session.getState().document.durationTicks).toBe(57600)
+    session.dispatch({ type: 'redo' })
+    expect(session.getState().document.durationTicks).toBe(9600)
+    session.dispatch({ type: 'undo' })
+    session.dispatch({ type: 'remove-track', trackId: 'long' })
+    expect(session.getState().document.durationTicks).toBe(9600)
+    session.dispatch({ type: 'update-track', trackId: 'short', patch: { enabled: false } })
+    expect(session.getState().document.durationTicks).toBe(0)
+  })
+
+  it('手动延长区域保留静音尾部，一次拖拽只有一步历史，不截断区域内音符', () => {
+    const session = createEditorSession(project())
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 76800 })
+    expect(session.getState().document.durationTicks).toBe(76800)
+    expect(session.getState().document.tracks[0]!.endTick).toBe(76800)
+    session.dispatch({ type: 'undo' })
+    expect(session.getState().document.durationTicks).toBe(57600)
+    expect(session.getState().canUndo).toBe(false)
+    session.dispatch({ type: 'redo' })
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 100 })
+    expect(session.getState().document.tracks[0]!.endTick).toBe(100)
+    expect(session.getState().document.notes[0]!.endTick).toBe(9600)
+  })
+
+  it('缩短是可恢复的区域限制，撤销重做及保存重开都保留完整音符', () => {
+    const session = createEditorSession(project())
+    session.dispatch({ type: 'update-track', trackId: 'long', patch: { enabled: false } })
+    const originalNotes = session.getState().document.notes
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 4800 })
+    expect(session.getState().document.durationTicks).toBe(4800)
+    expect(session.getState().document.notes).toBe(originalNotes)
+    session.dispatch({ type: 'undo' })
+    expect(session.getState().document.durationTicks).toBe(9600)
+    session.dispatch({ type: 'redo' })
+    const restored = createEditorSession(JSON.parse(JSON.stringify(session.toProject())))
+    expect(restored.getState().document.durationTicks).toBe(4800)
+    expect(restored.getState().document.notes).toEqual(originalNotes)
+    restored.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 9600 })
+    expect(restored.getState().document.durationTicks).toBe(9600)
+    expect(restored.getState().document.notes).toEqual(originalNotes)
+  })
+
+  it('在限制外新增或移动音符会扩展区域，改力度不会把隐藏音符重新启用', () => {
+    const session = createEditorSession(project())
+    session.dispatch({ type: 'update-track', trackId: 'long', patch: { enabled: false } })
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 4800 })
+    session.dispatch({ type: 'set-velocity', changes: [{ noteId: 's', velocity: 70 }] })
+    expect(session.getState().document.durationTicks).toBe(4800)
+    session.dispatch({
+      type: 'add-note',
+      trackId: 'short',
+      pitch: 65,
+      startTick: 5000,
+      durationTicks: 100,
+    })
+    expect(session.getState().document.durationTicks).toBe(5100)
+    session.dispatch({ type: 'undo' })
+    expect(session.getState().document.durationTicks).toBe(4800)
+    session.dispatch({ type: 'resize', noteIds: ['s'], edge: 'end', deltaTick: 400 })
+    expect(session.getState().document.durationTicks).toBe(10000)
+  })
+
+  it('缩短后隐藏音符退出选区，全选只操作有效部分', () => {
+    const p = project()
+    p.document.notes.push({
+      id: 'late',
+      trackId: 'short',
+      pitch: 70,
+      velocity: 100,
+      startTick: 9000,
+      endTick: 9600,
+    })
+    const session = createEditorSession(p)
+    session.dispatch({ type: 'select-all', trackId: 'short' })
+    expect([...session.getState().selection]).toEqual(['s', 'late'])
+    session.dispatch({ type: 'resize-track-region', trackId: 'short', endTick: 4800 })
+    expect([...session.getState().selection]).toEqual(['s'])
+    session.dispatch({ type: 'select-all', trackId: 'short' })
+    expect([...session.getState().selection]).toEqual(['s'])
+    expect(session.getState().document.notes.some((n) => n.id === 'late')).toBe(true)
+  })
+
+  it('载入旧项目即重算有效时长，不把修正记作用户编辑；音符尾端变化可缩短无显式边界的区域', () => {
+    const p = project()
+    p.document = {
+      ...p.document,
+      tracks: p.document.tracks.map((t) => ({ ...t, enabled: t.id === 'short' })),
+    }
+    const session = createEditorSession(p)
+    expect(session.getState().document.durationTicks).toBe(9600)
+    expect(session.getState().dirty).toBe(false)
+    expect(session.getState().canUndo).toBe(false)
+    const automatic = createEditorSession(
+      createProject({
+        document: {
+          ...p.document,
+          tracks: [{ id: 'short', name: 'Short', enabled: true, isPercussion: false }],
+          notes: p.document.notes.slice(0, 1),
+        },
+      })
+    )
+    automatic.dispatch({ type: 'resize', noteIds: ['s'], edge: 'end', deltaTick: -4800 })
+    expect(automatic.getState().document.durationTicks).toBe(4800)
   })
 })

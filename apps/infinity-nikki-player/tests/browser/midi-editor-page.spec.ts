@@ -56,6 +56,307 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.editor-toolbar')).toBeVisible()
 })
 
+test('歌曲 A 的旧共用草稿只在 A 恢复，不会提示给 B 或空白新建', async ({ page }) => {
+  await page.evaluate(() => {
+    window.midiEditorFixture.setSongs(['A.mid', 'B.mid'])
+    window.midiEditorFixture.seedDraft('create', 'A 的改编草稿', 'A.mid')
+    return window.midiEditorFixture.navigate('/midi-editor/new?from=B.mid')
+  })
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await expect(name).toHaveValue('B')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/new'))
+  await expect(name).toHaveValue('未命名项目')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/new?from=A.mid'))
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('button', { name: '加载草稿', exact: true }).click()
+  await expect(name).toHaveValue('A 的改编草稿')
+})
+
+test('歌曲 A 尚在解析时切到 B，A 的迟到结果和草稿不会覆盖 B', async ({ page }) => {
+  await page.evaluate(() => {
+    const fixture = window.midiEditorFixture
+    fixture.setSongs(['A.mid', 'B.mid'])
+    fixture.seedDraft('create', 'A 旧草稿', 'A.mid')
+    fixture.deferParse('A.mid')
+    void fixture.navigate('/midi-editor/new?from=A.mid')
+  })
+  await expect.poll(() => page.evaluate(() => window.midiEditorFixture.isParsePending())).toBe(true)
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/new?from=B.mid'))
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await expect(name).toHaveValue('B')
+  await page.evaluate(async () => {
+    window.midiEditorFixture.finishParse()
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
+  await expect(name).toHaveValue('B')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('空白创作、歌曲 A/B 和已有项目分别恢复草稿，直接关闭保留各自草稿', async ({ page }) => {
+  const keys = await page.evaluate(async () => {
+    const fixture = window.midiEditorFixture
+    fixture.setSongs(['A.mid', 'B.mid'])
+    return Promise.all([
+      fixture.seedEntryDraft({ kind: 'song', filename: 'A.mid' }, 'A 专属草稿'),
+      fixture.seedEntryDraft({ kind: 'song', filename: 'B.mid' }, 'B 专属草稿'),
+      fixture.seedEntryDraft({ kind: 'create' }, '空白创作草稿'),
+      fixture.seedEntryDraft({ kind: 'edit', id: 'saved-A' }, '已保存项目草稿'),
+    ])
+  })
+  const cases = [
+    ['/midi-editor/new?from=A.mid', 'A 专属草稿'],
+    ['/midi-editor/new?from=B.mid', 'B 专属草稿'],
+    ['/midi-editor/new', '空白创作草稿'],
+    ['/midi-editor/saved-A', '已保存项目草稿'],
+  ]
+  for (let index = 0; index < cases.length; index++) {
+    await page.evaluate((path) => {
+      void window.midiEditorFixture.navigate(path)
+    }, cases[index]![0]!)
+    if (index > 0) await page.getByRole('button', { name: '直接关闭', exact: true }).click()
+    await page.getByRole('button', { name: '加载草稿', exact: true }).click()
+    await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+      cases[index]![1]!
+    )
+    expect((await page.evaluate(() => window.midiEditorFixture.draftKeys())).sort()).toEqual(
+      keys.sort()
+    )
+  }
+})
+
+test('直接关闭立即写入最新改动，再进入同一项目可加载草稿', async ({ page }) => {
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('直接关闭前的最新修改')
+  await page.evaluate(() => {
+    void window.midiEditorFixture.navigate('/navigation-away')
+  })
+  await page.getByRole('button', { name: '直接关闭', exact: true }).click()
+  await expect(page.locator('.navigation-away')).toBeVisible()
+  await page.evaluate(() => {
+    void window.midiEditorFixture.navigate('/midi-editor/new')
+  })
+  await page.getByRole('button', { name: '加载草稿', exact: true }).click()
+  await expect(name).toHaveValue('直接关闭前的最新修改')
+})
+
+test('独立窗口直接关闭后，同一入口仍可加载最新草稿', async ({ page }) => {
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  await popup
+    .locator('.midi-editor-name input, input.midi-editor-name')
+    .fill('独立窗口关闭的最新草稿')
+  await popup.getByRole('button', { name: '更多操作', exact: true }).click()
+  await popup.getByRole('menuitem', { name: '关闭', exact: true }).click()
+  await popup.getByRole('button', { name: '直接关闭', exact: true }).click()
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  await page.evaluate(() => {
+    void window.midiEditorFixture.navigate('/midi-editor/new')
+  })
+  await page.getByRole('button', { name: '加载草稿', exact: true }).click()
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+    '独立窗口关闭的最新草稿'
+  )
+})
+
+test('只有明确丢弃草稿才删除当前入口，其他歌曲草稿保留', async ({ page }) => {
+  const songKey = await page.evaluate(async () => {
+    await window.midiEditorFixture.seedEntryDraft({ kind: 'create' }, '待丢弃的新建草稿')
+    return window.midiEditorFixture.seedEntryDraft({ kind: 'song', filename: 'A.mid' }, 'A 的草稿')
+  })
+  await page.evaluate(() => window.midiEditorFixture.navigate('/navigation-away'))
+  await page.evaluate(() => {
+    void window.midiEditorFixture.navigate('/midi-editor/new')
+  })
+  await page.getByRole('button', { name: '丢弃草稿', exact: true }).click()
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).not.toHaveValue(
+    '待丢弃的新建草稿'
+  )
+  expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([songKey])
+})
+
+test('直接关闭时草稿写入失败则保留编辑器，重试可以恢复最新草稿', async ({ page }) => {
+  const name = page.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('关闭写入失败仍保留')
+  await page.evaluate(() => {
+    window.midiEditorFixture.failDraft(true)
+    void window.midiEditorFixture.navigate('/navigation-away')
+  })
+  await page.getByRole('button', { name: '直接关闭', exact: true }).click()
+  await expect(page.getByText('草稿保存失败', { exact: true })).toBeVisible()
+  await expect(name).toHaveValue('关闭写入失败仍保留')
+  await page.evaluate(() => {
+    window.midiEditorFixture.failDraft(false)
+    void window.midiEditorFixture.navigate('/navigation-away')
+  })
+  await page.getByRole('button', { name: '直接关闭', exact: true }).click()
+  await expect(page.locator('.navigation-away')).toBeVisible()
+})
+
+test('区域延长只产生一次撤销，历史按钮禁用状态清晰', async ({ page }) => {
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  const redo = page.getByRole('button', { name: /^重做/ })
+  await expect(undo).toBeDisabled()
+  await expect(redo).toBeDisabled()
+  await expect(undo).toHaveCSS('opacity', '0.45')
+  const handle = page.locator('.pr-region-resize').first()
+  await expect(handle).toBeVisible()
+  const original = Number(await handle.getAttribute('data-end-tick'))
+  const rect = (await handle.boundingBox())!
+  // 详情自动展开时会裁切总览行，抓取句柄顶部可见部分，不能使用被裁切的包围盒中心。
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(rect.x + 55, rect.y + 10, { steps: 8 })
+  await expect(undo).toBeDisabled()
+  await page.mouse.up()
+  await expect(undo).toBeEnabled()
+  await expect(undo).toHaveCSS('opacity', '1')
+  const extended = Number(await handle.getAttribute('data-end-tick'))
+  expect(extended).toBeGreaterThan(original)
+  await undo.click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(original))
+  await expect(undo).toBeDisabled()
+  await expect(redo).toBeEnabled()
+  await redo.click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(extended))
+})
+
+test('节拍网格支持 1/64、1/128 和 1/256，选择后保持固定宽度', async ({ page }) => {
+  await openSnapSettings(page)
+  const select = page.locator('.toolbar-snap:visible')
+  const width = await select.evaluate((element) => getComputedStyle(element).width)
+  for (const resolution of ['1/64', '1/128', '1/256']) {
+    await select.click()
+    const option = page
+      .locator('.ant-select-dropdown:visible .ant-select-item-option')
+      .filter({ hasText: resolution })
+    await option.scrollIntoViewIfNeeded()
+    await option.click()
+    await expect(select).toContainText(resolution)
+    expect(await select.evaluate((element) => getComputedStyle(element).width)).toBe(width)
+  }
+})
+
+test('详情放大后，1/256 网格实际绘制出比 1/16 更细的刻度', async ({ page }) => {
+  const detail = page.locator('.detail-piano-editor')
+  if (!(await detail.isVisible())) await page.locator('.pr-track-select').first().dblclick()
+  await detail.getByRole('slider', { name: '时间缩放', exact: true }).press('End')
+  await openSnapSettings(page)
+  const select = page.locator('.toolbar-snap:visible')
+  /** 标尺第 28 行没有文字，读取实际竖线的位置，覆盖 Vue 配置到 Canvas 的完整链路。 */
+  const linePositions = () =>
+    detail
+      .locator('.pr-ruler-grid canvas')
+      .first()
+      .evaluate((element) => {
+        const canvas = element as HTMLCanvasElement
+        const dpr = canvas.width / canvas.getBoundingClientRect().width
+        const pixels = canvas
+          .getContext('2d')!
+          .getImageData(0, Math.round(28 * dpr), canvas.width, 1).data
+        const background = [...pixels.slice(8, 11)]
+        const positions: number[] = []
+        let previous = false
+        for (let x = 0; x < canvas.width; x++) {
+          const index = x * 4
+          const line =
+            pixels[index] !== background[0] ||
+            pixels[index + 1] !== background[1] ||
+            pixels[index + 2] !== background[2]
+          if (line && !previous) positions.push(x / dpr)
+          previous = line
+        }
+        return positions
+      })
+  await select.click()
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: /^1\/16$/ })
+    .click()
+  const coarse = (await linePositions()).length
+  await select.click()
+  const fineOption = page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: /^1\/256$/ })
+  await fineOption.scrollIntoViewIfNeeded()
+  await fineOption.click()
+  await expect.poll(async () => (await linePositions()).length).toBeGreaterThan(coarse + 5)
+  const positions = await linePositions()
+  const gaps = positions.slice(2).map((x, i) => x - positions[i + 1]!)
+  // 像素栅格允许一像素舍入差；不能出现原先 7/8 tick 交替形成的明显大小格。
+  expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(1)
+})
+
+test('已有曲子可缩短到音符内部，撤销恢复区域且不丢失原音符', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+  const handle = page.locator('.pr-region-resize').first()
+  await expect(handle).toBeVisible()
+  const original = Number(await handle.getAttribute('data-end-tick'))
+  const rect = (await handle.boundingBox())!
+  await page.mouse.move(rect.x + 6, rect.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(rect.x - 90, rect.y + 10, { steps: 8 })
+  const guide = page.locator('.detail-piano-roll .pr-drag-guide:visible')
+  await expect(guide).toBeVisible()
+  await expect(guide).toHaveAttribute('data-tick', (await handle.getAttribute('data-end-tick'))!)
+  await expect(page.locator('.detail-piano-roll .pr-drag-position:visible')).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('track-region-drag-preview.png') })
+  await page.mouse.up()
+  await expect(guide).toHaveCount(0)
+  const shorter = Number(await handle.getAttribute('data-end-tick'))
+  expect(shorter).toBeLessThan(original)
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  await undo.click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(original))
+  await expect(undo).toBeDisabled()
+  await page.getByRole('button', { name: /^重做/ }).click()
+  await expect(handle).toHaveAttribute('data-end-tick', String(shorter))
+})
+
+test('直接拖动未选音符时，选区更新不会中断手势，落点提示与撤销正常', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1&single=1')
+  await page.locator('.pr-track-select').first().dblclick()
+  const notes = page.locator('.detail-piano-editor .pr-pane > canvas').nth(1)
+  const notePoint = () =>
+    notes.evaluate((element) => {
+      const canvas = element as HTMLCanvasElement
+      const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = 0,
+        maxY = 0
+      for (let y = 0; y < canvas.height; y++)
+        for (let x = 0; x < canvas.width; x++) {
+          const i = (y * canvas.width + x) * 4
+          if (data[i] !== 227 || data[i + 1] !== 111 || data[i + 2] !== 134) continue
+          minX = Math.min(minX, x)
+          maxX = Math.max(maxX, x)
+          minY = Math.min(minY, y)
+          maxY = Math.max(maxY, y)
+        }
+      const rect = canvas.getBoundingClientRect()
+      return {
+        x: rect.x + (((minX + maxX) / 2) * rect.width) / canvas.width,
+        y: rect.y + (((minY + maxY) / 2) * rect.height) / canvas.height,
+      }
+    })
+  await expect.poll(async () => Number.isFinite((await notePoint()).x)).toBe(true)
+  const point = await notePoint()
+  await page.mouse.move(point.x, point.y)
+  await page.mouse.down()
+  await expect(page.locator('.note-inspector')).toBeVisible()
+  await page.mouse.move(point.x + 50, point.y, { steps: 6 })
+  await expect(page.locator('.detail-piano-editor .pr-drag-guide:visible')).toBeVisible()
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  await expect(undo).toBeDisabled()
+  await page.mouse.up()
+  await expect(undo).toBeEnabled()
+  await undo.click()
+  await expect(undo).toBeDisabled()
+})
+
 test('更新安装前等待真实 MIDI 页面保存草稿', async ({ page }) => {
   const name = page.locator('.midi-editor-name input, input.midi-editor-name')
   await name.fill('安装前的编辑草稿')
@@ -141,6 +442,11 @@ test('编辑操作合并到单层标题栏，次要操作通过悬浮菜单收�
   await page.screenshot({ path: test.info().outputPath('midi-editor-help.png') })
   await expect(help.getByRole('heading', { name: '音符编辑', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '音轨管理', exact: true })).toBeVisible()
+  await expect(help).toContainText('延长与缩短音轨区域')
+  await expect(help).toContainText('在总览或下方音符详情中')
+  await expect(help).toContainText('Esc 取消本次拖拽')
+  await expect(help).toContainText('边界吸附与位置预览')
+  await expect(help).toContainText('选择按小节吸附可对齐小节边界')
   await expect(help.getByText(/Mac 开启“三指拖移”后请从把手开始/)).toBeVisible()
   await expect(help.getByRole('heading', { name: '试听与循环', exact: true })).toBeVisible()
   await expect(help.getByRole('heading', { name: '吸附与显示', exact: true })).toBeVisible()
@@ -332,11 +638,20 @@ test('音轨缺省颜色一致，自定义颜色同时呈现在菜单、总览�
     .first()
     .evaluate((element) => {
       const canvas = element as HTMLCanvasElement
+      const rect = canvas.getBoundingClientRect()
+      const handles = [...canvas.parentElement!.querySelectorAll('.pr-region-resize')]
+      // 工作区现在有曲尾留白，按每轨右边界定位区域内部，不能固定取整幅 Canvas 的 90%。
       return [0, 1, 2].map((index) => [
         ...canvas
           .getContext('2d')!
           .getImageData(
-            Math.floor(canvas.width * 0.9),
+            Math.max(
+              0,
+              Math.floor(
+                ((handles[index]!.getBoundingClientRect().left - rect.left - 20) * canvas.width) /
+                  rect.width
+              )
+            ),
             Math.floor((canvas.height * (index + 0.5)) / 3),
             1,
             1
@@ -677,6 +992,58 @@ test('主窗口离开编辑页并切歌后，还原独立窗口仍恢复原编�
   await expect(page.locator('.editor-window-error')).toHaveCount(0)
 })
 
+test('从歌曲进入的独立编辑窗口还原时保留来源，草稿仍保存到该歌曲', async ({ page }) => {
+  await page.evaluate(() => {
+    window.midiEditorFixture.setSongs(['A.mid', 'B.mid'])
+    return window.midiEditorFixture.navigate('/midi-editor/new?from=A.mid')
+  })
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue('A')
+  const overview = page.locator('.detail-piano-roll')
+  await overview.getByRole('slider', { name: '时间缩放', exact: true }).press('End')
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  const name = popup.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('A 独立窗口改编')
+  await name.blur()
+  await page.evaluate(() => window.midiEditorFixture.navigate('/navigation-away'))
+  await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  expect(await page.evaluate(() => window.midiEditorFixture.currentRoute())).toBe(
+    '/midi-editor/new?from=A.mid'
+  )
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+    'A 独立窗口改编'
+  )
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeunload', { cancelable: true })))
+  await expect
+    .poll(() => page.evaluate(() => window.midiEditorFixture.draftKeys()))
+    .toEqual([expect.stringMatching(/^source-/)])
+  await page.evaluate(() => {
+    void window.midiEditorFixture.navigate('/midi-editor/new?from=B.mid')
+  })
+  await page.getByRole('button', { name: '直接关闭', exact: true }).click()
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue('B')
+  await expect(overview.getByRole('slider', { name: '时间缩放', exact: true })).not.toHaveAttribute(
+    'aria-valuenow',
+    '100'
+  )
+})
+
+test('歌曲管理默认按添加时间倒序，图标切换正序并与搜索一致', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await expect(page.locator('.song-title').first()).toHaveText('导航测试歌曲 80')
+  const sort = page.getByRole('button', { name: '按添加时间排序：最新在前', exact: true })
+  await sort.hover()
+  await expect(page.getByRole('tooltip')).toHaveText('按添加时间排序：最新在前')
+  await sort.click()
+  await expect(page.locator('.song-title').first()).toHaveText('导航测试歌曲 01')
+  await page.getByPlaceholder('搜索歌曲', { exact: true }).fill('导航测试歌曲 7')
+  await expect(page.locator('.song-title').first()).toHaveText('导航测试歌曲 70')
+  await page.getByRole('button', { name: '按添加时间排序：最早在前', exact: true }).click()
+  await expect(page.locator('.song-title').first()).toHaveText('导航测试歌曲 79')
+})
+
 test('歌曲列表进入详情再返回时保留原滚动位置', async ({ page }) => {
   await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
   const songList = page.locator('.song-scroll')
@@ -742,7 +1109,7 @@ test('歌单歌曲列表进入详情再返回时保留原滚动位置', async ({
   await page.goto('/tests/browser/midi-editor-page.html?playlist=1')
   const songList = page.locator('.song-scroll')
   const search = page.getByPlaceholder('搜索歌曲', { exact: true })
-  await search.fill('布局')
+  await search.fill('导航测试歌曲')
   await expect(page.locator('.song-row').first()).toBeVisible()
   await songList.evaluate((element) => {
     element.scrollTop = 1800
@@ -759,7 +1126,7 @@ test('歌单歌曲列表进入详情再返回时保留原滚动位置', async ({
   await page.getByRole('button', { name: '返回歌曲列表', exact: true }).click()
 
   await expect(songList).toBeVisible()
-  await expect(search).toHaveValue('布局')
+  await expect(search).toHaveValue('导航测试歌曲')
   expect(
     await page.evaluate(
       () =>
@@ -822,7 +1189,7 @@ test('未保存项目退出时只确认一次', async ({ page }) => {
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toBeVisible()
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toHaveCount(1)
 
-  await page.getByRole('button', { name: '不保存并关闭', exact: true }).click()
+  await page.getByRole('button', { name: '直接关闭', exact: true }).click()
   await expect(page.locator('.editor-toolbar')).toBeHidden()
   await expect(page.getByText('有未保存的项目改动', { exact: true })).toHaveCount(0)
 })

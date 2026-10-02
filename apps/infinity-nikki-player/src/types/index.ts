@@ -77,6 +77,8 @@ export interface MidiInfo {
   filename: string
   /** 文件完整路径 */
   file_path: string
+  /** 添加到本地曲库的 Unix 毫秒时间；旧数据缺失时由后端补齐。 */
+  added_at?: number | null
   /** 展示标题（在线曲库导入时写入） */
   title?: string | null
   /** 作者名（在线曲库导入时写入） */

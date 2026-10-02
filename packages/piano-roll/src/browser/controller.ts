@@ -11,6 +11,7 @@ import {
 } from './renderer'
 import { installStyles } from './styles'
 import { installEditing } from './editing'
+import { installTrackRegionEditing } from './track-region-editing'
 import { installFollowNavigation } from './follow-navigation'
 import { applyPianoRollTheme, resolvePianoRollTheme } from './theme'
 import { installGestureZoom } from './gesture-zoom'
@@ -91,6 +92,9 @@ export function createView(
 
   let document = options.document
   let timeline = createTimeline(document)
+  let editingOptions = options.editing
+  let regionEditing: ReturnType<typeof installTrackRegionEditing> | undefined
+  let regionPreview: { trackId: string; endTick: number } | null = null
   let noteIndex = createNoteIndex(document.notes)
   let rows: TrackRow[] = []
   let selected: string | null = options.selectedTrackId ?? document.tracks[0]?.id ?? null
@@ -213,7 +217,7 @@ export function createView(
     changed()
   }
   function catchPlayhead(): void {
-    if (!follow || drag || navigation?.isBrowsing()) return
+    if (!follow || drag || regionEditing?.isDragging() || navigation?.isBrowsing()) return
     const projection = projectPlaybackViewport(
       position() * timeZoom,
       width,
@@ -293,7 +297,14 @@ export function createView(
   }
   function renderGutter(visible: TrackRow[], top: number): void {
     if (variant === 'editor') {
-      drawKeyboard(keyboard, height, pitchZoom, top, theme, editing.frameState()?.highlightPitches ?? null)
+      drawKeyboard(
+        keyboard,
+        height,
+        pitchZoom,
+        top,
+        theme,
+        editing.frameState()?.highlightPitches ?? null
+      )
       return
     }
     // 只为可见轨道建立可键盘操作的控件，保持现有节点以保留焦点。
@@ -410,7 +421,11 @@ export function createView(
       width,
       timeline.durationSeconds * timeZoom,
       drag?.scrollLeft ?? scroll.scrollLeft,
-      follow && transport.isPlaying && !drag && !navigation?.isBrowsing()
+      follow &&
+        transport.isPlaying &&
+        !drag &&
+        !regionEditing?.isDragging() &&
+        !navigation?.isBrowsing()
     )
     const left = projection.scrollLeft
     const dpr = window!.devicePixelRatio || 1
@@ -422,7 +437,13 @@ export function createView(
       variant,
       timeline,
       index: noteIndex,
-      rows: visible,
+      rows: regionPreview
+        ? visible.map((row) =>
+            row.track.id === regionPreview!.trackId
+              ? { ...row, track: { ...row.track, endTick: regionPreview!.endTick } }
+              : row
+          )
+        : visible,
       selectedTrackId: selected,
       width,
       height,
@@ -469,6 +490,7 @@ export function createView(
     empty.hidden = rows.length > 0
     paintPlayhead(seconds, projection.playheadX)
     editing.render(frame)
+    regionEditing?.render(frame)
     painted = { frame, seconds, rows, labels, dpr }
   }
   function scheduleRender(): void {
@@ -575,7 +597,17 @@ export function createView(
         if (gestureActive) return
         const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1
         view.setTimeZoom(
-          timeZoom * Math.exp(clamp(-event.deltaY * unit * TIME_ZOOM_CONFIG.wheelLogScalePerPixel * TIME_ZOOM_CONFIG.gestureExponent, -100, 100)),
+          timeZoom *
+            Math.exp(
+              clamp(
+                -event.deltaY *
+                  unit *
+                  TIME_ZOOM_CONFIG.wheelLogScalePerPixel *
+                  TIME_ZOOM_CONFIG.gestureExponent,
+                -100,
+                100
+              )
+            ),
           event.clientX - scroll.getBoundingClientRect().left
         )
       }
@@ -688,6 +720,8 @@ export function createView(
       navigation?.cancel()
       finishDrag(false)
       editing.reset()
+      regionEditing?.reset()
+      regionPreview = null
       selectionBeforeGesture = undefined
       layoutDirty = true
       const notesChanged = document.notes !== next.notes
@@ -712,6 +746,7 @@ export function createView(
     },
     setSelectedTrack(trackId) {
       if (destroyed || selected === trackId) return
+      regionEditing?.reset()
       navigation?.cancel()
       selected = trackId
       focusPitch(false)
@@ -774,7 +809,10 @@ export function createView(
     setFollow,
     setEditing(next) {
       if (destroyed) return
+      editingOptions = next
       editing.update(next)
+      if (!next?.enabled) regionEditing?.reset()
+      scheduleRender()
     },
     fitToSong() {
       if (destroyed) return
@@ -821,6 +859,7 @@ export function createView(
       if (destroyed) return
       finishDrag(false)
       editing.destroy()
+      regionEditing?.destroy()
       destroyed = true
       window!.cancelAnimationFrame(renderFrame)
       for (const cleanup of cleanups.reverse()) cleanup()
@@ -841,6 +880,7 @@ export function createView(
       timeline: () => timeline,
       index: () => noteIndex,
       selectedTrackId: () => selected,
+      track: (trackId) => document.tracks.find((track) => track.id === trackId),
       geometry: () => ({
         scrollLeft: painted?.frame.scrollLeft ?? scroll.scrollLeft,
         scrollTop: scroll.scrollTop,
@@ -858,6 +898,33 @@ export function createView(
     },
     options.editing
   )
+  regionEditing = installTrackRegionEditing({
+    pane,
+    rulerGrid,
+    scroll,
+    timeline: () => timeline,
+    options: () => editingOptions,
+    noteEnds(trackId) {
+      const range = noteIndex.getTimeRange(trackId)
+      return range
+        ? noteIndex.query(trackId, range.startTick, range.endTick).map((note) => note.endTick)
+        : []
+    },
+    label: () => labels.resizeTrack ?? '调整音轨长度',
+    geometry: () => ({ timeZoom, width }),
+    preview(trackId, endTick = 0, extentTick = 0) {
+      if (destroyed) return
+      regionPreview = trackId ? { trackId, endTick } : null
+      // 临时扩展仅用于区域拖动；保持当前缩放，不能让 fit 随新增留白不断变化。
+      if (trackId) fitting = false
+      timeline = createTimeline({
+        ...document,
+        durationTicks: Math.max(document.durationTicks, trackId ? extentTick : 0),
+      })
+      resizeContent()
+      scheduleRender()
+    },
+  })
   const gestureZoom = installGestureZoom(root, {
     getZoom: () => view.getViewport().timeZoom,
     viewportElement: scroll,

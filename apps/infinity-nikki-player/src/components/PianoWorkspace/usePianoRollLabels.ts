@@ -22,5 +22,6 @@ export function usePianoRollLabels(): ComputedRef<PianoRollLabels> {
     playhead: t('midi.pianoRoll.playhead'),
     fit: t('midi.pianoRoll.fit'),
     close: t('midi.pianoRoll.close'),
+    resizeTrack: t('midi.pianoRoll.resizeTrack'),
   }))
 }

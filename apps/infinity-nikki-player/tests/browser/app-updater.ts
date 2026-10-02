@@ -1,5 +1,6 @@
 /** 独立页面注入测试适配器，不注入真实 Tauri 更新对象或全局模拟开关。 */
 import { createApp } from 'vue'
+import { createRouter, createWebHistory } from 'vue-router'
 import { createPinia } from 'pinia'
 import { feedback } from '@/lib/feedback'
 import { mockIPC } from '@tauri-apps/api/mocks'
@@ -41,6 +42,7 @@ if (scenario === 'notApplied')
     attemptedAt: Date.now() - 60000,
     outcome: 'notApplied',
   }
+if (scenario === 'checking') state = { ...state, phase: 'checking', targetVersion: null }
 if (scenario === 'unknownLength')
   state = { ...state, phase: 'downloading', source: 'mirror', downloadedBytes: 1048576 }
 let listener = (_state: UpdateSnapshot) => {}
@@ -126,4 +128,10 @@ window.updaterFixture = {
   },
 }
 await controller.start()
-createApp(Fixture).use(i18n).use(createPinia()).provide(appUpdaterKey, controller).mount('#app')
+const router = createRouter({ history: createWebHistory(), routes: [] })
+createApp(Fixture)
+  .use(router)
+  .use(i18n)
+  .use(createPinia())
+  .provide(appUpdaterKey, controller)
+  .mount('#app')

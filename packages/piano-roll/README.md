@@ -84,7 +84,7 @@ editor.destroy()
 
 ## 编辑手势层
 
-视图始终"不改文档"。传入 `editing` 后，详情视图把指针操作解析为 `PianoRollEditIntent`（select / add-note / move / resize / set-velocity / delete / loop-change / audition / context-menu）交给宿主，宿主应用到文档后再 `setDocument`；Vue 组件同时通过 `edit-intent` 事件发出。
+视图始终"不改文档"。传入 `editing` 后，详情视图把指针操作解析为 `PianoRollEditIntent`（select / add-note / move / resize / set-velocity / delete / loop-change / audition / context-menu / resize-track-region）交给宿主，宿主应用到文档后再 `setDocument`；Vue 组件同时通过 `edit-intent` 事件发出。
 
 ```ts
 view.setEditing({
@@ -92,6 +92,8 @@ view.setEditing({
   tool: 'select',                          // 或 'draw'
   selectedNoteIds: selection,              // 宿主状态的只读投影
   snapTicks: (tick, mode) => session.snapTick(tick, mode),
+  snapToNoteEnds: true,                    // 区域边界贴齐附近音符尾端；网格关闭时宿主同步设 false
+  gridTicks: 7.5,                          // 所选网格步长；'bar' 按当前拍号绘制，省略则使用默认细分
   defaultDurationTicks: 480,
   highlightPitches: playablePitches,       // 不可演奏音高会被遮罩/灰化
   loop: { startTick: 0, endTick: 1920 },   // 标尺 Alt+拖拽产生，双击清除
@@ -101,6 +103,14 @@ view.setEditing({
 ```
 
 交互约定：点选/Shift 加选，空白拖拽框选，双击空白落音符；拖音符体移动（以按住的音符为吸附基准，Alt 关闭吸附）、拖左右缘拉伸；draw 工具点击即落并横拖定长；右键发 `context-menu`；拖动期间只绘制 overlay 幽灵，松手才提交一次意图，Esc 取消。总览视图可通过 `renderTrackActions(container, { track })` 在轨道行右侧挂载宿主菜单，与 `renderTrackToggle` 同模式。相关主题 token：`noteSelected / noteGhost / noteUnplayable / selectionBox / loopRegion / velocityBar / pitchUnplayable`。
+
+总览与详情在 `editing.enabled` 时显示区域右边缘句柄；详情只显示当前轨的句柄，并固定在内容顶部，不随音高滚动消失。拖动提交 `resize-track-region`（`trackId`、`endTick`），左右方向键按默认音符长度调整。拖动可延长或缩短至起点之后 1 tick，期间预览区域并临时扩展浏览空间，靠近视口边缘会自动滚动；松手只提交一次，Esc、窗口失焦或切换音轨取消。`snapTicks` 控制网格／小节吸附，`snapToNoteEnds` 启用 8px 内的音符尾端吸附，Option/Alt 临时绕过。宿主负责将区域长度转换为工程曲长，公共视图只提供编辑意图；`labels.resizeTrack` 可本地化句柄说明。原生滚动条不接收落笔、选择或右键编辑手势。
+
+`gridTicks` 让标尺与详情网格跟随宿主所选分辨率，包含三连音及半 tick 步长；绘制保留分数 tick 的数学位置，使等分间距一致，MIDI 事件的整数化仍由编辑命令处理。低倍率只显示所选步长的倍数，放大后恢复完整细分，并保留真实小节及拍线。`'bar'` 随每个拍号段更新小节长度，省略此字段保持只读视图原有的默认细分。`getRulerMarks` 也接受此选项，密度按视口宽度与最大刻度数限制，滚动不改变网格相位。编辑详情有效区域外由中性灰 `regionInactive` 遮罩区分。
+
+区域拖拽、音符移动／拉伸、落笔及循环设置共用落点竖线和标尺内的小节.拍.tick 提示。提示采用实际提交位置，随滚动、变速和变拍同步更新，不接收指针；松手或取消后收起。Option/Alt 切换会立即更新区域与音符预览，不需要再次移动鼠标。
+
+编辑态将轨道 `startTick/endTick` 作为有效范围，渲染、命中及点击试听只使用范围内的部分，范围外音符继续保留在原文档及索引中。`clipNoteToTrackRegion` 从 `/core` 导出，供宿主试听及导出复用同一截取规则，返回投影而不修改原音符。只读 MIDI 预览继续用音符补齐异常或缺失的 End Of Track，保持导入兼容。
 
 普通点击音符每次都发出 `audition`，包括已选中的音符；Shift 移除选区不试听。点击意图携带可选 `durationSeconds`，由音符开始／结束 tick 按完整 tempo map 换算，跨速度变化时也保留真实时长。拖动改音高的短音试听不携带时长，由宿主使用默认值。公共视图只发意图，不创建音频引擎。
 
@@ -163,7 +173,7 @@ Canvas 需要具体颜色值，例如十六进制、`rgb()` 或 `rgba()`，不�
 
 绘制按动画帧统一提交：标尺、网格、音符和播放头使用同一份时间与视口快照。自动模式保留内容坐标的亚像素精度，中段播放头坐标直接等于视口宽度的一半，不从原生滚动条取整后的偏移反推；原生滚动条只同步浏览位置。手动模式使用用户的实际滚动位置。
 
-标尺刻度与音符使用相同的连续坐标，不在每一帧对屏幕位置取整。刻度密度以全曲最快 tempo 为基准，较慢段允许更疏，避免速度点进出视口时整批刻度切换。文字采用独立于细分线的标签密度，由全曲小节位数、拍号、字体和缩放确定；以内容坐标避让并保留视口外邻居，使标签在边缘自然裁剪，滚动时不重新选择可见标签。
+标尺刻度与音符使用相同的连续坐标，不在每一帧对屏幕位置取整。刻度密度以全曲最快 tempo 为基准，较慢段允许更疏，避免速度点进出视口时整批刻度切换。文字与网格共用刻度选择算法，文字按字号增加最小间距，放大后展示“小节.拍.细分”编号；以内容坐标避让并保留视口外邻居，使标签在边缘自然裁剪，滚动时不重新选择可见标签。
 
 图层按各自依赖失效：播放时间变化但内容未平移时只更新播放头；内容横移时绘制时间层，琴键不重画；琴键只在纵向位置、音高缩放、视口高度、主题或 DPR 改变时更新。横向 Follow 不回写纵向坐标，纵向滚轮由同一输入入口同步更新 Y，避免与浏览器异步滚动争用位置。
 

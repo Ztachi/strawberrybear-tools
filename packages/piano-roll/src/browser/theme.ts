@@ -28,6 +28,8 @@ export interface PianoRollThemeColors {
   trackEnabled: string
   /** 禁用轨道的内容区域。 */
   trackDisabled: string
+  /** 详情有效区域外的中性灰背景。 */
+  regionInactive: string
   /** 总览音符颜色。 */
   overviewNote: string
   /** 详情音符颜色。 */
@@ -109,6 +111,7 @@ export const defaultPianoRollTheme: PianoRollTheme = Object.freeze({
     trackSelected: '#ffe8ee',
     trackEnabled: '#fce9ed',
     trackDisabled: '#f4e4e7',
+    regionInactive: '#e4e4e7',
     overviewNote: '#9b3754',
     editorNote: '#e36f86',
     noteOutline: '#c9516b',
@@ -171,6 +174,7 @@ export function pianoRollThemeVariables(theme: PianoRollTheme): Readonly<Record<
     '--pr-surface': theme.colors.surface,
     '--pr-surface-raised': theme.colors.surfaceRaised,
     '--pr-surface-subtle': theme.colors.surfaceSubtle,
+    '--pr-region-inactive': theme.colors.regionInactive,
     '--pr-border': theme.colors.border,
     '--pr-text': theme.colors.text,
     '--pr-text-muted': theme.colors.textMuted,

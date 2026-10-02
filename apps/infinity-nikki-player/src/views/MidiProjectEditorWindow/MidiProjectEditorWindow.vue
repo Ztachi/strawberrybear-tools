@@ -268,7 +268,7 @@ async function exitEditor(): Promise<void> {
     t('midiEditor.leaveConfirmDescription'),
     [
       { key: 'cancel', label: t('actions.cancel') },
-      { key: 'discard', label: t('midiEditor.discardAndClose'), danger: true },
+      { key: 'discard', label: t('midiEditor.discardAndClose') },
       { key: 'save', label: t('midiEditor.saveAndClose'), primary: true },
     ]
   )

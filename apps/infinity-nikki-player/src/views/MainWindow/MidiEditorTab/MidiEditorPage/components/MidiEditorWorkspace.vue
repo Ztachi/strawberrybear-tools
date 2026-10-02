@@ -4,7 +4,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Tooltip } from 'antdv-next'
 import { Plus } from 'lucide-vue-next'
-import { resolutionTicks, snapTick } from '@strawberrybear/midi-editor'
+import { ensureDurationCovers, resolutionTicks, snapTick } from '@strawberrybear/midi-editor'
 import type { EditorAction, EditorSessionState } from '@strawberrybear/midi-editor'
 import type { PianoRollEditIntent, PianoRollLabels, PianoRollTransport } from '@strawberrybear/piano-roll/browser'
 import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
@@ -57,12 +57,29 @@ const editing = computed<PianoRollProps['editing']>(() => ({
   tool: props.state.tool,
   selectedNoteIds: props.state.selection,
   snapTicks: (tick, mode) => snapTick(tick, props.state.snap, props.state.document, mode),
+  snapToNoteEnds: props.state.snap !== 'off',
+  gridTicks: props.state.snap === 'bar' ? 'bar' : resolutionTicks(props.state.snap, props.state.document) || undefined,
   defaultDurationTicks:
     resolutionTicks(props.state.snap, props.state.document) || props.state.document.ticksPerBeat,
   highlightPitches: props.playablePitches,
   loop: props.state.project.loop ?? null,
   velocityLaneHeight: props.showVelocity ? VELOCITY_LANE_HEIGHT : 0,
 }))
+
+// 编辑空间保留全部轨道（包括禁用轨道）与一小节留白；试听和导出仍使用真实有效曲长。
+// 用 computed 稳定文档引用；只更新选区或工具时，不能重建浏览文档并取消正在捕获的手势。
+const sourceDocument = computed(() => props.state.document)
+const workspaceDocument = computed(() => {
+  const document = sourceDocument.value
+  const end = ensureDurationCovers({
+    ...document,
+    tracks: document.tracks.map(track => ({ ...track, enabled: true })),
+  }).durationTicks
+  return {
+    ...document,
+    durationTicks: end + Math.max(1, Math.round(resolutionTicks('bar', document, end))),
+  }
+})
 
 function handleIntent(intent: PianoRollEditIntent): void {
   if (intent.type === 'audition') {
@@ -122,7 +139,7 @@ defineExpose({
     <PianoWorkspace
       ref="workspace"
       :filename="`midi-editor:${state.project.id}`"
-      :document="state.document"
+      :document="workspaceDocument"
       :theme="midiEditorPianoRollTheme"
       :transport="transport"
       :labels="labels"

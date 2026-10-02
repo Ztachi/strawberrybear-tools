@@ -116,6 +116,7 @@ export default {
       playhead: 'Playhead: use Left and Right arrows to seek',
       fit: 'Fit Song',
       close: 'Close Piano Roll',
+      resizeTrack: 'Resize track region: drag the right edge or use Left and Right',
       hideEmptyTracks: 'Hide tracks without notes',
       noTracksWithNotes: 'No tracks contain notes',
       help: {
@@ -277,6 +278,8 @@ export default {
     totalSongs: '{count} songs',
     selectedCount: '{count} selected',
     searchPlaceholder: 'Search songs',
+    sortAddedNewest: 'Sort by date added: newest first',
+    sortAddedOldest: 'Sort by date added: oldest first',
     noSongs: 'No songs',
     noSearchResults: 'No songs found',
     notFound: 'Playlist not found',
@@ -557,9 +560,10 @@ export default {
     discardDraft: 'Discard Draft',
     loadDraftPrompt: 'An unsaved draft was found. Load it? Cancel keeps the draft and goes back.',
     leaveConfirmTitle: 'Unsaved project changes',
-    leaveConfirmDescription: 'Save or discard your changes before leaving the editor.',
+    leaveConfirmDescription: 'Save the project before closing the editor?',
     saveAndClose: 'Save and Close',
-    discardAndClose: 'Close Without Saving',
+    discardAndClose: 'Close',
+    draftSaveFailed: 'Failed to save draft',
     trackDefaultName: 'Track {index}',
     trackCopyName: '{name} copy',
     addTrack: 'Add Track',
@@ -786,7 +790,17 @@ export default {
             trackEnabled: {
               label: 'Enabled State',
               description:
-                'Use the track switch to control whether a track is enabled. Disabled tracks keep their note data so they can be restored later.',
+                'Track switches control preview and export. The song ends at the right edge of the longest enabled track region. Disabling, deleting, or shortening that track updates the song length. Disabled tracks retain their editable content.',
+            },
+            trackRegion: {
+              label: 'Extend or Shorten a Track Region',
+              description:
+                'Drag the handle at the right edge of the active region in the overview or note details. Moving to the viewport edge scrolls automatically so you can keep extending. Gray areas are outside the active range. Shortening keeps notes intact, even after saving the project; extend again to reveal them. Preview and export use only the active range and cut notes crossing the right boundary. Release to commit one edit, or press Esc to cancel the drag. With the handle focused, use Left/Right to adjust the length.',
+            },
+            regionSnap: {
+              label: 'Boundary Snapping and Position Preview',
+              description:
+                'A guide line and ruler hint preview the actual drop position. Boundaries follow the selected beat grid; choose Bar Snap to align with bar boundaries. Dragging near a note end in the current track snaps to it. Hold Option/Alt to bypass snapping temporarily, or choose Off to disable snapping.',
             },
           },
         },
@@ -856,7 +870,7 @@ export default {
             leave: {
               label: 'Leave the Editor',
               description:
-                'Save and Close saves before leaving. Close asks whether to save, discard, or cancel when the project has unsaved changes.',
+                'With unsaved changes, choose Save and Close, Close, or Continue Editing. Close keeps a draft for the current entry; return to the same entry to load it. Save and Close saves the project and clears its draft.',
             },
           },
         },

@@ -134,7 +134,7 @@ describe('song commands', () => {
     expect(setTimeSignature(doc, 4, 5).timeSignatureMap[0]!.denominator).toBe(4)
   })
 
-  it('extends duration to cover notes by whole bars', () => {
+  it('recomputes duration at the exact region edge', () => {
     const doc = fixture()
     const { document } = addNote(doc, {
       trackId: 't1',
@@ -143,8 +143,13 @@ describe('song commands', () => {
       endTick: 20100,
     })
     const covered = ensureDurationCovers(document)
-    // 20100 / 1920 = 10.47 → (10 + 2) 小节
-    expect(covered.durationTicks).toBe(12 * 1920)
+    expect(covered.durationTicks).toBe(doc.tracks[0]!.endTick)
+    expect(
+      ensureDurationCovers({
+        ...document,
+        tracks: document.tracks.map((track) => ({ ...track, endTick: undefined })),
+      }).durationTicks
+    ).toBe(20100)
     expect(ensureDurationCovers(doc)).toBe(doc)
   })
 })
@@ -246,4 +251,15 @@ describe('history', () => {
     expect(history.canUndo).toBe(true)
     expect(history.undo()).toBe('s0')
   })
+})
+
+it('支持 64、128 分音符网格，低 PPQ 时步长不会小于一个 tick', () => {
+  const doc = fixture()
+  expect(resolutionTicks('1/64', doc)).toBe(30)
+  expect(resolutionTicks('1/128', doc)).toBe(15)
+  expect(resolutionTicks('1/256', doc)).toBe(7.5)
+  expect(snapTick(101, '1/256', doc)).toBe(98)
+  expect(resolutionTicks('1/256', { ...doc, ticksPerBeat: 16 })).toBe(1)
+  expect(snapTick(101, '1/128', doc)).toBe(105)
+  expect(resolutionTicks('1/128', { ...doc, ticksPerBeat: 16 })).toBe(1)
 })

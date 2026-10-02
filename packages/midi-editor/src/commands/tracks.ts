@@ -1,6 +1,7 @@
 import type { PianoRollDocument, PianoRollTrack } from '@strawberrybear/piano-roll/core'
 import { createNoteId, createTrackId } from '../ids'
 import type { TrackPatch } from '../model'
+import { resolutionTicks } from '../snap'
 
 /** 供宿主颜色选择器使用的预设色；未指定颜色的轨道沿用视图主题。 */
 export const TRACK_PALETTE: readonly string[] = [
@@ -41,6 +42,8 @@ export function addTrack(
     ...(input.color ? { color: input.color } : {}),
     isPercussion: input.isPercussion ?? false,
     enabled: true,
+    startTick: 0,
+    endTick: Math.max(1, Math.round(resolutionTicks('bar', document))),
     ...(input.channel !== undefined ? { channel: input.channel } : {}),
   }
   return { document: { ...document, tracks: [...document.tracks, track] }, track }
@@ -148,4 +151,65 @@ export function reorderTrack(
   const [track] = tracks.splice(from, 1)
   tracks.splice(to, 0, track!)
   return { ...document, tracks }
+}
+
+/**
+ * @description: 调整轨道有效区域右边界；缩短仅限制参与范围，保留完整音符供再次拉长。
+ * @param {PianoRollDocument} document 源文档
+ * @param {string} trackId 目标轨道
+ * @param {number} endTick 请求的右边界（tick）
+ * @return {PianoRollDocument} 新文档；非法输入或边界不变时返回原引用
+ */
+export function resizeTrackRegion(
+  document: PianoRollDocument,
+  trackId: string,
+  endTick: number
+): PianoRollDocument {
+  if (!Number.isFinite(endTick)) return document
+  const track = document.tracks.find((item) => item.id === trackId)
+  if (!track) return document
+  const minimum = Math.max(0, Number.isFinite(track.startTick) ? track.startTick! : 0) + 1
+  const next = Math.max(minimum, Math.round(endTick))
+  if (next === track.endTick) return document
+  return {
+    ...document,
+    tracks: document.tracks.map((item) =>
+      item.id === trackId ? { ...item, endTick: next } : item
+    ),
+  }
+}
+
+/**
+ * @description: 显式编辑音符时间时扩展所属区域；只改力度/音高或删除时不重新启用隐藏尾部。
+ * @param {PianoRollDocument} previous 编辑前文档
+ * @param {PianoRollDocument} next 编辑后文档
+ * @return {PianoRollDocument} 必要时延长区域的文档，无变更复用输入引用
+ */
+export function expandEditedTrackRegions(
+  previous: PianoRollDocument,
+  next: PianoRollDocument
+): PianoRollDocument {
+  if (previous.notes === next.notes) return next
+  const original = new Map(previous.notes.map((note) => [note.id, note]))
+  const changedEnds = new Map<string, number>()
+  for (const note of next.notes) {
+    const before = original.get(note.id)
+    if (
+      before &&
+      before.startTick === note.startTick &&
+      before.endTick === note.endTick &&
+      before.trackId === note.trackId
+    )
+      continue
+    if (Number.isFinite(note.endTick))
+      changedEnds.set(note.trackId, Math.max(changedEnds.get(note.trackId) ?? 0, note.endTick))
+  }
+  let changed = false
+  const tracks = next.tracks.map((track) => {
+    const end = changedEnds.get(track.id)
+    if (end === undefined || !Number.isFinite(track.endTick) || end <= track.endTick!) return track
+    changed = true
+    return { ...track, endTick: end }
+  })
+  return changed ? { ...next, tracks } : next
 }

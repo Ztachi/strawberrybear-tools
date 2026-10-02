@@ -178,6 +178,11 @@ export function createTimeline(document: PianoRollDocument): PianoRollTimeline {
       2 ** Math.floor(Math.log2(Math.min(64, Math.max(1, positive(options.subdivisions, 4)))))
     const startTick = secondsToTick(startSeconds)
     const endTick = secondsToTick(endSeconds)
+    const explicitGrid =
+      options.gridTicks === 'bar' ||
+      (typeof options.gridTicks === 'number' &&
+        Number.isFinite(options.gridTicks) &&
+        options.gridTicks > 0)
     // 密度以整份时间轴的最快 tempo 为基准；速度点进出视口不能改变已有刻度。
     // 较慢段允许更疏，换取滚动期间稳定的拍/小节序列。
     // 将可见区间宽度纳入密度选择；循环量与视口刻度数有关，不与整曲 tick 数有关。
@@ -208,7 +213,17 @@ export function createTimeline(document: PianoRollDocument): PianoRollTimeline {
         const barStride = 2 ** Math.ceil(Math.log2(Math.max(1, spacing / barPixels)))
         stepBeats = meter.numerator * barStride
       }
-      const stepTicks = meter.beatTicks * stepBeats
+      let stepTicks = meter.beatTicks * stepBeats
+      if (explicitGrid) {
+        const grid = options.gridTicks === 'bar' ? meter.barTicks : (options.gridTicks as number)
+        // 低倍率只抽稀所选网格的倍数，不换成另一种分辨率；放大后自动恢复完整细分。
+        const stride =
+          2 ** Math.ceil(Math.log2(Math.max(1, spacing / (grid * smallestSecondsPerTick * scale))))
+        stepTicks = grid * stride
+        stepBeats = stepTicks / meter.beatTicks
+      }
+      // 显示位置保留分数 tick，避免细分网格取整后交替出现大小格。
+      // MIDI 事件在编辑命令中单独取整，不能反过来改变标尺的数学间距。
       const first = Math.max(0, Math.ceil((leftTick - meter.tick) / stepTicks - EPSILON))
       const last = Math.floor((rightTick - meter.tick) / stepTicks + EPSILON)
       for (let unit = first; unit <= last; unit += 1) {
@@ -221,6 +236,11 @@ export function createTimeline(document: PianoRollDocument): PianoRollTimeline {
         const isBeat = Math.abs(relativeBeats - Math.round(relativeBeats)) < EPSILON
         const position = tickToBarPosition(tick)
         const seconds = tickToSeconds(tick)
+        // 拍内编号按用户所选细分计数；缩小时抽稀刻度不会改变编号含义。
+        const subdivision =
+          typeof options.gridTicks === 'number'
+            ? Math.floor(position.tickInBeat / options.gridTicks + EPSILON) + 1
+            : 1
         result.push({
           tick,
           seconds,
@@ -228,7 +248,13 @@ export function createTimeline(document: PianoRollDocument): PianoRollTimeline {
           kind: isBar ? 'bar' : isBeat ? 'beat' : 'subdivision',
           bar: position.bar,
           beat: position.beat,
-          label: isBar ? String(position.bar) : isBeat ? `${position.bar}.${position.beat}` : '',
+          label: isBar
+            ? String(position.bar)
+            : isBeat
+              ? `${position.bar}.${position.beat}`
+              : explicitGrid
+                ? `${position.bar}.${position.beat}.${subdivision}`
+                : '',
         })
         if (result.length >= maxMarks) return result
       }

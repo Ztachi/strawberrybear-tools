@@ -4,7 +4,7 @@
  * @LastEditors: ztachi(legendryztachi@gmail.com)
  * @LastEditTime: 2026-09-09 00:36:01
  * @FilePath: /strawberrybear-tools/packages/piano-roll/src/browser/styles.ts
- * @Description: 
+ * @Description:
  */
 /** 浏览器控制器默认布局；每个 ownerDocument 只持有一个节点，热更新时同步最新样式。 */
 export function installStyles(document: Document): void {
@@ -45,6 +45,12 @@ export function installStyles(document: Document): void {
 .pr-track-toggle:focus-visible{outline:2px solid var(--pr-focus,#c9516b);outline-offset:2px}
 .pr-track-actions-host{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .pr-track-actions-host:empty{display:none}
+.pr-region-handles{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+.pr-region-resize{position:absolute;width:12px;box-sizing:border-box;padding:0;border:0;border-radius:0 4px 4px 0;background:color-mix(in srgb,var(--pr-region-color,var(--pr-primary,#e36f86)),transparent 50%);cursor:ew-resize;touch-action:none;pointer-events:auto}
+.pr-region-resize::after{content:"";position:absolute;top:calc(50% - 8px);left:5px;width:2px;height:16px;border-radius:2px;background:var(--pr-surface,#fff9fa)}
+.pr-region-resize:hover,.pr-region-resize:focus-visible{background:var(--pr-region-color,var(--pr-primary,#e36f86));outline:2px solid var(--pr-focus,#c9516b);outline-offset:-2px}
+.pr-drag-guide,.pr-drag-marker{position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--pr-primary,#e36f86);pointer-events:none;z-index:3}
+.pr-drag-position{position:absolute;top:2px;transform:translateX(-50%);padding:2px 6px;border:1px solid var(--pr-primary,#e36f86);border-radius:4px;background:var(--pr-primary-soft,#ffe2e8);color:var(--pr-text,#4a3f3f);font:11px var(--pr-font-family,system-ui,sans-serif);font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
 .pr-overlay{z-index:1}
 .pr-ruler-overlay{z-index:1}
 .pr-lane-gutter{grid-column:1;grid-row:3;border-top:1px solid var(--pr-border,#f1d9de);border-right:1px solid var(--pr-border,#f1d9de);background:var(--pr-surface-subtle,#fffafb)}

@@ -10,6 +10,7 @@ use crate::types::{MelodyEvent, MidiInfo, NoteEvent};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use uuid::Uuid;
 
@@ -30,6 +31,9 @@ use uuid::Uuid;
 pub struct MidiConfig {
     /// 文件名
     pub filename: String,
+    /// 首次添加到曲库的 Unix 毫秒时间，重新计算缓存或改名不更新。
+    #[serde(default)]
+    pub added_at: Option<u64>,
     /// 展示标题，在线曲库导入时写入
     #[serde(default)]
     pub title: Option<String>,
@@ -63,6 +67,7 @@ impl Default for MidiConfig {
     fn default() -> Self {
         Self {
             filename: String::new(),
+            added_at: None,
             title: None,
             author_name: None,
             description: None,
@@ -76,6 +81,61 @@ impl Default for MidiConfig {
             disabled_tracks: Vec::new(),
         }
     }
+}
+
+/// 将系统时间转换为前后端共用的 Unix 毫秒时间。
+fn unix_millis(time: SystemTime) -> Option<u64> {
+    time.duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_millis()
+        .try_into()
+        .ok()
+}
+
+/// 旧曲库没有记录添加时间时使用库内文件创建时间，文件系统不支持时回退到修改时间。
+fn library_file_added_time(path: &Path) -> Option<u64> {
+    let metadata = fs::metadata(path).ok()?;
+    unix_millis(metadata.created().or_else(|_| metadata.modified()).ok()?)
+}
+
+/// 给曲库文件补齐添加时间，并沿用现有配置持久化；外部解析和临时预览不调用此方法。
+///
+/// # Arguments
+/// * `info` - 已解析的库内 MIDI 信息，返回时携带添加时间。
+/// * `newly_added` - 本次确实新写入了曲库文件；重复导入不得重置时间。
+///
+/// # Errors
+/// 配置写入失败时返回错误；旧配置的曲名、禁用轨道等字段保持不变。
+fn attach_library_added_time(info: &mut MidiInfo, newly_added: bool) -> Result<(), String> {
+    let path = Path::new(&info.file_path);
+    let config_path = path.with_file_name(format!("{}.midi-config", info.filename));
+    let mut config = fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<MidiConfig>(&content).ok())
+        .unwrap_or_else(|| MidiConfig {
+            filename: info.filename.clone(),
+            duration_ms: info.duration_ms,
+            track_count: info.track_count,
+            melody_note_count: info.melody_note_count,
+            ticks_per_beat: info.ticks_per_beat,
+            tempo: info.tempo,
+            ..Default::default()
+        });
+    let previous = config.added_at.filter(|time| *time > 0);
+    // 新导入明确记录当前时间，不依赖复制文件时可能继承的源文件时间。
+    info.added_at = if newly_added {
+        unix_millis(SystemTime::now())
+    } else {
+        previous.or_else(|| library_file_added_time(path))
+    };
+    if newly_added || previous.is_none() {
+        config.added_at = info.added_at;
+        let content = serde_json::to_string_pretty(&config)
+            .map_err(|error| format!("序列化曲库添加时间失败: {}", error))?;
+        fs::write(&config_path, content)
+            .map_err(|error| format!("保存曲库添加时间失败: {}", error))?;
+    }
+    Ok(())
 }
 
 /// 获取 MIDI 库目录路径
@@ -326,7 +386,8 @@ pub fn import_midi(app: tauri::AppHandle, source_path: String) -> Result<MidiInf
 
     // 如果文件已存在，直接返回信息
     if dest_path.exists() {
-        let (info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
+        let (mut info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
+        attach_library_added_time(&mut info, false)?;
         return Ok(info);
     }
 
@@ -334,7 +395,8 @@ pub fn import_midi(app: tauri::AppHandle, source_path: String) -> Result<MidiInf
     fs::copy(&source_path, &dest_path).map_err(|e| format!("复制文件失败: {}", e))?;
 
     // 解析文件获取信息
-    let (info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
+    let (mut info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
+    attach_library_added_time(&mut info, true)?;
 
     Ok(info)
 }
@@ -379,7 +441,8 @@ pub fn import_midi_buffer(
 
     // 如果已存在，直接返回
     if dest_path.exists() {
-        let (info, _) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
+        let (mut info, _) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
+        attach_library_added_time(&mut info, false)?;
         return Ok(info);
     }
 
@@ -387,7 +450,8 @@ pub fn import_midi_buffer(
     fs::write(&dest_path, data).map_err(|e| format!("写入文件失败: {}", e))?;
 
     // 解析获取信息
-    let (info, _) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
+    let (mut info, _) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
+    attach_library_added_time(&mut info, true)?;
     Ok(info)
 }
 
@@ -465,7 +529,12 @@ pub fn get_midi_library(app: tauri::AppHandle) -> Result<Vec<MidiInfo>, String> 
             if let Some(ext) = file_path.extension() {
                 if ext.eq_ignore_ascii_case("mid") || ext.eq_ignore_ascii_case("midi") {
                     match parse_midi_internal(file_path.to_str().unwrap_or("")) {
-                        Ok((info, _)) => midi_files.push(info),
+                        Ok((mut info, _)) => {
+                            if let Err(error) = attach_library_added_time(&mut info, false) {
+                                log::warn!("保存添加时间失败 {}: {}", file_path.display(), error);
+                            }
+                            midi_files.push(info);
+                        }
                         Err(e) => log::warn!("解析失败 {}: {}", file_path.display(), e),
                     }
                 }
@@ -610,6 +679,9 @@ pub fn save_midi_config(
     // 构建配置对象
     let config = MidiConfig {
         filename: filename.clone(),
+        added_at: existing_config
+            .added_at
+            .or_else(|| library_file_added_time(&library_dir.join(&filename))),
         title: normalize_optional_text(title).or(existing_config.title),
         author_name: normalize_optional_text(author_name).or(existing_config.author_name),
         description: normalize_optional_text(description).or(existing_config.description),
@@ -631,4 +703,69 @@ pub fn save_midi_config(
     fs::write(&config_path, content).map_err(|e| format!("保存配置失败: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod added_time_tests {
+    use super::*;
+
+    #[test]
+    fn addition_time_survives_reimport_and_metadata_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.mid");
+        let bytes = [
+            77, 84, 104, 100, 0, 0, 0, 6, 0, 0, 0, 1, 1, 224, 77, 84, 114, 107, 0, 0, 0, 4, 0, 255,
+            47, 0,
+        ];
+        fs::write(&path, bytes).unwrap();
+        let (mut info, _) = parse_midi_internal(path.to_str().unwrap()).unwrap();
+        attach_library_added_time(&mut info, true).unwrap();
+        let added = info.added_at.unwrap();
+        assert!(added > 0);
+        let config_path = path.with_file_name("song.mid.midi-config");
+        let mut config: MidiConfig =
+            serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        config.title = Some("改名后的歌曲".into());
+        config.disabled_tracks = vec![0];
+        fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+        attach_library_added_time(&mut info, false).unwrap();
+        assert_eq!(info.added_at, Some(added));
+        let persisted: MidiConfig =
+            serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(persisted.title, config.title);
+        assert_eq!(persisted.disabled_tracks, vec![0]);
+    }
+
+    #[test]
+    fn old_library_config_gains_a_stable_time_without_losing_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.mid");
+        fs::write(
+            &path,
+            [
+                77, 84, 104, 100, 0, 0, 0, 6, 0, 0, 0, 1, 1, 224, 77, 84, 114, 107, 0, 0, 0, 4, 0,
+                255, 47, 0,
+            ],
+        )
+        .unwrap();
+        let (mut info, _) = parse_midi_internal(path.to_str().unwrap()).unwrap();
+        let config_path = path.with_file_name("legacy.mid.midi-config");
+        let config = MidiConfig {
+            title: Some("旧标题".into()),
+            disabled_tracks: vec![1],
+            ..Default::default()
+        };
+        let mut json = serde_json::to_value(&config).unwrap();
+        json.as_object_mut().unwrap().remove("added_at");
+        fs::write(&config_path, serde_json::to_string(&json).unwrap()).unwrap();
+        attach_library_added_time(&mut info, false).unwrap();
+        let added = info.added_at;
+        assert!(added.is_some_and(|time| time > 0));
+        attach_library_added_time(&mut info, false).unwrap();
+        assert_eq!(info.added_at, added);
+        let persisted: MidiConfig =
+            serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(persisted.title, config.title);
+        assert_eq!(persisted.disabled_tracks, vec![1]);
+    }
 }

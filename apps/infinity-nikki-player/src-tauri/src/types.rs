@@ -28,6 +28,9 @@ pub struct MidiInfo {
     pub filename: String,
     /// 文件完整路径
     pub file_path: String,
+    /// 添加到本地曲库的 Unix 毫秒时间；外部预览文件不具有曲库添加时间。
+    #[serde(default)]
+    pub added_at: Option<u64>,
     /// 展示标题，在线曲库导入时写入
     #[serde(default)]
     pub title: Option<String>,
