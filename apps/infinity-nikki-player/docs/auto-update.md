@@ -42,6 +42,11 @@ MIDI 编辑会话注册独立的安装前落盘动作：暂停试听，等待当
 3. `publish` 将官方 action v1 清单中的资产 API 地址，按同一 Release 已上传资产映射为 `browser_download_url`；版本、签名和其他字段不变，不猜测文件名。下载所有已上传产物，校验长度、可用的 GitHub 摘要、平台、版本、对应资产、签名文件，并使用 Minisign 官方工具验证更新签名。缺任一平台、签名或包内版本凭据都不公开。
 4. 上传并回读采用公开下载地址的直连、代理双清单后公开正式 Release，设置 `make_latest: true`。每个正式 Release 永久保留双清单，兼容旧客户端。其他应用及固定清单 Release 使用 `make_latest: false`。
 5. 固定入口先替换直连清单，认证 API 回读及公开路径验证成功后，再替换代理清单。任何一步失败立即停止；另一份有效清单保留。两份清单暂时版本不同，由客户端选择较高版本。
+6. `publish` 成功后，独立的 `sync-r2` job 使用官方 Wrangler 4.146.0，将本次正式 Release 的 Apple Silicon DMG、Windows x64 NSIS 安装包同步到 `homepage` 桶的 `tools/downloads/InfinityNikkiPlayer.dmg`、`tools/downloads/InfinityNikkiPlayer.exe`。两个原始包先完整下载并按 GitHub 长度及摘要校验，全部准备成功后才开始上传，随后逐个从远端回读比较完整字节。固定名称设置下载文件名和 `no-cache, max-age=0, must-revalidate`；旧版本、草稿、预发布、错误提交或缺包均不能覆盖官网。
+
+R2 同步复用 GitHub Actions Secrets `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。令牌需包含目标账户的 `Workers R2 Storage Write` 权限（Wrangler 使用 Cloudflare API，此处不是 S3 Access Key）；凭据仅注入同步步骤，不写入代码或日志。无版本增加的普通提交不会同步，修改工作流本身无需升版。
+
+R2 上传与回读遇到短暂网络失败最多各尝试三次。同步失败会使工作流显示失败，已成功公开的 GitHub Release 和更新入口保持有效；从该次运行中重新运行失败的 `sync-r2` job 即可补齐官网安装包，无需重建或发新版本。两个固定对象逐个替换，不保证跨平台同时切换；上传第二个平台失败时，第一个可能已更新，重试会再次覆盖并校验两者。若官网 Worker 或 Cache Rules 强制缓存下载响应，需要同时遵守对象缓存头或清理对应下载 URL 缓存，R2 回读校验不经过 CDN。
 
 如果上次失败后只剩直连清单，先用它恢复同版本备用清单，再推进新版本；同内容重跑只验证，不删除重传，避免替换唯一有效入口。
 

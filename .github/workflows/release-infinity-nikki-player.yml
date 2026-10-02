@@ -155,3 +155,28 @@ jobs:
         env:
           RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
         run: node apps/infinity-nikki-player/scripts/updater-release.mjs publish
+
+  sync-r2:
+    needs: [prepare, publish]
+    # repair 模式可能跳过 build；必须显式检查 publish，且普通无版本变更提交不上传。
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm install -g pnpm@10 wrangler@4.146.0
+      - run: pnpm install --frozen-lockfile
+      - name: 同步官网安装包并回读校验
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: node apps/infinity-nikki-player/scripts/updater-release.mjs sync-r2

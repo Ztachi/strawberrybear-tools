@@ -3,6 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import * as coordinator from './updater-release.mjs'
 import {
   CHANNEL,
   PROXY,
@@ -248,4 +249,130 @@ test('只剩直连入口时先修复备用，同内容重跑不删除有效资�
     '校验 latest.json',
     '校验 latest-cn.json',
   ])
+})
+
+/** 官网同步夹具：下载和存储端口只保存字节，不接触远端发布与 R2。 */
+function r2Fixture() {
+  const calls = []
+  const bytes = Buffer.from('安装包原始字节')
+  const stored = new Map()
+  const release = {
+    tag_name: `infinity-nikki-player@v${version}`,
+    target_commitish: sha,
+    draft: false,
+    prerelease: false,
+    assets: ['aarch64.dmg', 'x64-setup.exe'].map((suffix) => ({
+      name: `InfinityNikkiPlayer_${version}_${suffix}`,
+      size: bytes.length,
+      state: 'uploaded',
+    })),
+  }
+  return {
+    calls,
+    stored,
+    options: {
+      release,
+      version,
+      newestVersion: version,
+      sha,
+      download: (asset) => {
+        calls.push(`下载 ${asset.name}`)
+        return bytes
+      },
+      upload: (name, data) => {
+        calls.push(`上传 ${name}`)
+        stored.set(name, data)
+      },
+      readBack: (name) => stored.get(name),
+    },
+  }
+}
+
+test('正式版本安装包全部下载后才覆盖固定名称，回读内容必须一致', async () => {
+  assert.equal(typeof coordinator.syncR2Downloads, 'function')
+  const { options, calls, stored } = r2Fixture()
+  await coordinator.syncR2Downloads(options)
+  assert.deepEqual(calls, [
+    `下载 InfinityNikkiPlayer_${version}_aarch64.dmg`,
+    `下载 InfinityNikkiPlayer_${version}_x64-setup.exe`,
+    '上传 InfinityNikkiPlayer.dmg',
+    '上传 InfinityNikkiPlayer.exe',
+  ])
+  assert.deepEqual([...stored.keys()], ['InfinityNikkiPlayer.dmg', 'InfinityNikkiPlayer.exe'])
+})
+
+test('草稿、预发布、旧版本、不同提交和缺失安装包不允许覆盖官网', async () => {
+  for (const mutate of [
+    (o) => {
+      o.release.draft = true
+    },
+    (o) => {
+      o.release.prerelease = true
+    },
+    (o) => {
+      o.newestVersion = '1.3.0'
+    },
+    (o) => {
+      o.release.target_commitish = 'b'.repeat(40)
+    },
+    (o) => {
+      o.release.tag_name = '其他应用@v1.2.1'
+    },
+    (o) => {
+      o.release.assets.pop()
+    },
+    (o) => {
+      o.release.assets[0].size = 0
+    },
+    (o) => {
+      o.release.assets[0].state = 'starter'
+    },
+    (o) => {
+      o.release.assets.push(o.release.assets[0])
+    },
+  ]) {
+    const { options, calls } = r2Fixture()
+    mutate(options)
+    await assert.rejects(coordinator.syncR2Downloads(options))
+    assert.deepEqual(calls, [])
+  }
+})
+
+test('任一安装包下载失败时不覆盖 R2；回读不一致时失败并停止下一平台', async () => {
+  const f = r2Fixture()
+  await assert.rejects(
+    coordinator.syncR2Downloads({
+      ...f.options,
+      download: (asset) => {
+        if (asset.name.endsWith('.exe')) throw new Error('下载失败')
+        return f.options.download(asset)
+      },
+    }),
+    /下载失败/
+  )
+  assert.equal(f.stored.size, 0)
+  await assert.rejects(
+    coordinator.syncR2Downloads({
+      ...f.options,
+      readBack: () => Buffer.from('截断或错误内容'),
+    }),
+    /R2 回读校验失败/
+  )
+  assert.deepEqual([...f.stored.keys()], ['InfinityNikkiPlayer.dmg'])
+})
+
+test('同版本重新同步可以修复部分上传失败，无需重新构建安装包', async () => {
+  const { options, stored } = r2Fixture()
+  await assert.rejects(
+    coordinator.syncR2Downloads({
+      ...options,
+      upload: (name, data) => {
+        if (name.endsWith('.exe')) throw new Error('R2 暂不可用')
+        options.upload(name, data)
+      },
+    }),
+    /R2 暂不可用/
+  )
+  await coordinator.syncR2Downloads(options)
+  assert.equal(stored.size, 2)
 })

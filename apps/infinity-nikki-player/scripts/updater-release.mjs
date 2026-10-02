@@ -6,6 +6,7 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { setTimeout } from 'node:timers/promises'
 import semver from 'semver'
 
 export const CHANNEL = 'infinity-nikki-player-updates'
@@ -453,12 +454,117 @@ async function publish() {
   }
 }
 
+/**
+ * @description 校验正式版本并同步官网固定名称，两个包准备齐全后才开始覆盖。
+ * @param {object} options 发布身份与下载、上传、回读端口；回读必须返回原始字节。
+ * @return {Promise<void>} 两个平台上传并校验成功；任一失败立即拒绝。
+ */
+export async function syncR2Downloads({
+  release,
+  version,
+  newestVersion,
+  sha,
+  download,
+  upload,
+  readBack,
+}) {
+  if (!release || release.draft || release.tag_name !== `infinity-nikki-player@v${version}`)
+    throw new Error('仅允许同步当前播放器正式 Release')
+  // 不能依赖全仓库 latest：其他应用可能同时发布；按播放器正式版本拒绝旧任务。
+  releaseMode(version, release, newestVersion, sha)
+  const files = [
+    { source: `InfinityNikkiPlayer_${version}_aarch64.dmg`, name: 'InfinityNikkiPlayer.dmg' },
+    { source: `InfinityNikkiPlayer_${version}_x64-setup.exe`, name: 'InfinityNikkiPlayer.exe' },
+  ].map(({ source, name }) => {
+    const matches = release.assets.filter((asset) => asset.name === source)
+    if (matches.length !== 1 || matches[0].state !== 'uploaded' || matches[0].size <= 0)
+      throw new Error(`官网安装包缺失、重复或上传未完成：${source}`)
+    return { asset: matches[0], name }
+  })
+  // 先完整下载并校验 GitHub 资产，避免第二个平台缺包时已覆盖第一个平台。
+  for (const file of files) file.bytes = await download(file.asset)
+  for (const { name, bytes } of files) {
+    await upload(name, bytes)
+    if (!bytes.equals(await readBack(name))) throw new Error(`R2 回读校验失败：${name}`)
+  }
+}
+
+/**
+ * @description 使用官方 CLI 上传或回读远端对象，短暂网络失败最多尝试三次。
+ * @param {string[]} args Wrangler 参数数组；凭据只通过进程环境传入。
+ * @return {Promise<void>} 操作成功；三次失败后携带 CLI 错误拒绝。
+ */
+async function r2Command(args) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      execFileSync('wrangler', ['r2', 'object', ...args, '--remote'], {
+        timeout: 90_000,
+        maxBuffer: 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      return
+    } catch (error) {
+      if (attempt === 3)
+        throw new Error(`R2 ${args[0]} 失败：${error.stderr?.toString() || error.message}`)
+      console.warn(`R2 ${args[0]} 暂未成功，准备第 ${attempt + 1} 次尝试`)
+      await setTimeout(2000)
+    }
+  }
+}
+
+/**
+ * @description 将本次已公开且校验通过的安装包映射到官网固定路径，不重建产物。
+ * @return {Promise<void>} 官网安装包同步完成；临时下载目录始终清理。
+ */
+async function syncR2() {
+  for (const name of ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'])
+    if (!process.env[name]?.trim()) throw new Error(`缺少 GitHub Secret：${name}`)
+  const { version } = readVersion()
+  const release = findRelease(`infinity-nikki-player@v${version}`)
+  const directory = mkdtempSync(join(tmpdir(), 'nikki-r2-'))
+  try {
+    await syncR2Downloads({
+      release,
+      version,
+      newestVersion: newestVersion(),
+      sha: process.env.RELEASE_SHA,
+      download: downloadAsset,
+      upload: async (name, bytes) => {
+        const file = join(directory, name)
+        writeFileSync(file, bytes)
+        await r2Command([
+          'put',
+          `homepage/tools/downloads/${name}`,
+          '--file',
+          file,
+          '--content-type',
+          name.endsWith('.dmg') ? 'application/x-diskcopy' : 'application/octet-stream',
+          '--content-disposition',
+          `attachment; filename="${name}"`,
+          // 固定名称每次覆盖，需要浏览器和 CDN 重新验证，不能沿用不可变资产的长缓存。
+          '--cache-control',
+          'no-cache, max-age=0, must-revalidate',
+        ])
+      },
+      readBack: async (name) => {
+        const file = join(directory, `verified-${name}`)
+        await r2Command(['get', `homepage/tools/downloads/${name}`, '--file', file])
+        return readFileSync(file)
+      },
+    })
+    console.log(`官网 R2 安装包同步并回读校验通过：${version}`)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const command = process.argv[2]
     if (command === 'prepare') prepare()
     else if (command === 'verify-bundle') verifyBundle()
     else if (command === 'publish') await publish()
+    else if (command === 'sync-r2') await syncR2()
     else if (command === 'verify-version') console.log(`版本校验通过：${readVersion().version}`)
     else throw new Error('未知发布操作')
   } catch (error) {
