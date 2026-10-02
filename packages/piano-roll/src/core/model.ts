@@ -95,12 +95,14 @@ export interface RulerMark {
   bar: number
   /** 所属拍，从 1 开始。 */
   beat: number
-  /** 小节使用“1”，拍使用“1.2”，细分线使用空字符串。 */
+  /** 小节使用“1”，拍使用“1.2”，显式网格的拍内细分使用“1.2.3”；默认细分无标签。 */
   label: string
 }
 
 /** 仅生成当前视口附近的音乐刻度，避免长曲目创建全量网格。 */
 export interface RulerMarkOptions {
+  /** 编辑网格步长（tick），或跟随拍号的小节；省略时使用 subdivisions 的只读细分。 */
+  gridTicks?: number | 'bar'
   /** 可见区间左边界，单位原曲秒。 */
   startSeconds: number
   /** 可见区间右边界，单位原曲秒。 */

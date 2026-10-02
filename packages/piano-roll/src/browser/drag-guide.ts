@@ -11,16 +11,23 @@ export interface DragGuide {
  * @description: 为区域和音符手势创建共用的落点提示，使用同一时间轴处理变速、变拍及滚动。
  * @param {HTMLElement} pane 时间编辑区域
  * @param {HTMLElement} rulerGrid 标尺裁剪层
+ * @param {string} gesture 手势来源，区分同一视图中的区域与音符落点
  * @return {DragGuide} 落点渲染及生命周期接口
  */
-export function createDragGuide(pane: HTMLElement, rulerGrid: HTMLElement): DragGuide {
+export function createDragGuide(
+  pane: HTMLElement,
+  rulerGrid: HTMLElement,
+  gesture = 'notes'
+): DragGuide {
   const owner = pane.ownerDocument
   const line = owner.createElement('div')
   line.className = 'pr-drag-guide'
+  line.dataset.gesture = gesture
   const marker = owner.createElement('div')
   marker.className = 'pr-drag-marker'
   const position = owner.createElement('span')
   position.className = 'pr-drag-position'
+  position.dataset.gesture = gesture
   marker.append(position)
   for (const node of [line, marker]) {
     node.setAttribute('aria-hidden', 'true')

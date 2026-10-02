@@ -59,6 +59,8 @@ function canvasFixture() {
   const fills: { color: string; alpha: number; region: boolean }[] = []
   const texts: string[] = []
   const rectangles: { x: number; y: number; width: number; height: number }[] = []
+  const verticalLines: number[] = []
+  let startX = 0
   const context = {
     fillStyle: '',
     strokeStyle: '',
@@ -68,8 +70,12 @@ function canvasFixture() {
     strokeRect() {},
     beginPath() {},
     roundRect() {},
-    moveTo() {},
-    lineTo() {},
+    moveTo(x: number) {
+      startX = x
+    },
+    lineTo(x: number) {
+      if (x === startX) verticalLines.push(x)
+    },
     save() {},
     restore() {},
     rect() {},
@@ -94,7 +100,7 @@ function canvasFixture() {
     ownerDocument: { defaultView: { devicePixelRatio: 1 } },
     getContext: () => context,
   } as unknown as HTMLCanvasElement
-  return { canvas, fills, texts, rectangles }
+  return { canvas, fills, texts, rectangles, verticalLines }
 }
 
 function colorFrame(variant: RenderFrame['variant'], color?: string): RenderFrame {
@@ -122,6 +128,41 @@ function colorFrame(variant: RenderFrame['variant'], color?: string): RenderFram
 }
 
 describe('总览音符空间', () => {
+  it('详情有效区域两侧覆盖不透明中性灰，不复用粉色音轨背景', () => {
+    const grid = canvasFixture()
+    const frame = colorFrame('editor')
+    frame.rows[0]!.track = { ...frame.rows[0]!.track, startTick: 120, endTick: 720 }
+    frame.editing = { selectedNoteIds: new Set(), highlightPitches: null, clipTrackRegions: true }
+    drawGrid(grid.canvas, canvasFixture().canvas, frame)
+    const fills = grid.fills.flatMap((fill, i) =>
+      fill.color === defaultPianoRollTheme.colors.regionInactive
+        ? [{ alpha: fill.alpha, rect: grid.rectangles[i] }]
+        : []
+    )
+    expect(defaultPianoRollTheme.colors.regionInactive).not.toBe(
+      defaultPianoRollTheme.colors.trackDisabled
+    )
+    expect(fills).toEqual([
+      { alpha: 1, rect: { x: 0, y: 0, width: 15, height: 100 } },
+      { alpha: 1, rect: { x: 90, y: 0, width: 150, height: 100 } },
+    ])
+  })
+  it('详情 Canvas 放大后绘制 1/256 网格，三连音保留真实拍线', () => {
+    const grid = canvasFixture()
+    const ruler = canvasFixture()
+    const frame = colorFrame('editor')
+    frame.timeZoom = 4800
+    frame.editing = { selectedNoteIds: new Set(), highlightPitches: null, gridTicks: 7.5 }
+    drawGrid(grid.canvas, ruler.canvas, frame)
+    // 显示网格保留半 tick 精度，不能被 MIDI 事件的整数存储精度拉成大小格。
+    expect(grid.verticalLines).toEqual([0, 37.5, 75, 112.5, 150, 187.5, 225])
+    expect(ruler.verticalLines).toEqual(grid.verticalLines)
+    frame.width = 2400
+    frame.editing.gridTicks = 320
+    const triplets = canvasFixture()
+    drawGrid(triplets.canvas, canvasFixture().canvas, frame)
+    expect(triplets.verticalLines).toEqual([0, 1600, 2400])
+  })
   it('轨道名称只在左侧展示，内容区域不重复绘制名称', () => {
     const grid = canvasFixture()
     const ruler = canvasFixture()

@@ -1,10 +1,43 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEditorSession, createProject } from '@strawberrybear/midi-editor'
 import { createMidiEditorPlaybackController } from './playbackController'
+import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 
 afterEach(() => vi.useRealTimers())
 
 describe('MIDI editor playback controller', () => {
+  it('切换项目期间文档为空时停止旧试听，载入新文档后可以重新播放', async () => {
+    vi.useFakeTimers()
+    let document: PianoRollDocument | null = previewProject().document
+    const changed = vi.fn()
+    const stop = vi.fn()
+    const schedule = vi.fn(() => ({ stop }))
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => 10,
+      scheduleNote: schedule,
+      onChange: changed,
+    })
+    await controller.play()
+    document = null
+    expect(() => controller.invalidate()).not.toThrow()
+    expect(stop).toHaveBeenCalled()
+    expect(controller.getState()).toMatchObject({
+      isPlaying: false,
+      durationSeconds: 0,
+      positionSeconds: 0,
+    })
+    controller.stop()
+    controller.seek(1)
+    await controller.play()
+    document = previewProject().document
+    controller.invalidate()
+    await controller.play()
+    expect(controller.getState().isPlaying).toBe(true)
+    controller.dispose()
+  })
   it('未初始化音频时缩短曲长也会裁剪播放位置并通知界面', () => {
     const session = createEditorSession(previewProject())
     const changed = vi.fn()

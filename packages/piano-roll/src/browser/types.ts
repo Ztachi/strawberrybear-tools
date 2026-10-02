@@ -28,7 +28,7 @@ export interface PianoRollLabels {
   playhead: string
   fit: string
   close: string
-  /** 总览音轨右边缘长度句柄的可访问名称。 */
+  /** 总览与详情音轨右边缘长度句柄的可访问名称。 */
   resizeTrack?: string
 }
 
@@ -144,6 +144,8 @@ export interface PianoRollEditingOptions {
   snapTicks: (tick: number, mode: 'nearest' | 'floor') => number
   /** 区域边缘靠近音符结尾时吸附；宿主在关闭网格时一起关闭。 */
   snapToNoteEnds?: boolean
+  /** 实际编辑网格的 tick 步长，'bar' 跟随拍号；省略时沿用只读标尺的自动细分。 */
+  gridTicks?: number | 'bar'
   /** 新增音符的默认时长（tick）。 */
   defaultDurationTicks: number
   /** 新增音符的默认力度，默认 100。 */

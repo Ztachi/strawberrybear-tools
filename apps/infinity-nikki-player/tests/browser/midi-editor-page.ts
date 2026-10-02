@@ -1,4 +1,4 @@
-import { createProject } from '@strawberrybear/midi-editor'
+import { createProject, type MidiProject } from '@strawberrybear/midi-editor'
 import { createApp, defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
@@ -7,6 +7,7 @@ import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getAntdvLocale, i18n } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import { appUpdaterKey } from '@/composables/useAppUpdater'
+import { midiDraftKey, type MidiEditorEntry } from '@/features/midi-editor/draftIdentity'
 import {
   createUpdaterController,
   initialUpdateState,
@@ -57,6 +58,7 @@ const navigationMidiLibrary = Array.from(
     filename: `navigation-${String(index + 1).padStart(2, '0')}.mid`,
     file_path: `/fixture/navigation-${String(index + 1).padStart(2, '0')}.mid`,
     title: `导航测试歌曲 ${String(index + 1).padStart(2, '0')}`,
+    added_at: 1700000000000 + index * 1000,
   })
 )
 const switchedMidi: MidiInfo = {
@@ -211,15 +213,24 @@ const updater = createUpdaterController({
   exportDiagnostics: async () => null,
 })
 await updater.start()
+// 模拟后端按 key 保存完整草稿，便于验证不同入口恢复的内容。
+const draftFiles = new Map<string, MidiProject>()
+// 原生解析按文件路径读取，不应受主窗口曲库 store 正在刷新影响。
+const parsedSongs = new Map(
+  [midi, switchedMidi, ...navigationMidiLibrary].map((song) => [song.file_path, song])
+)
+let customSongs: MidiInfo[] | null = null
+let pendingParse: { filename: string; resolve: (() => void) | null } | null = null
 mockIPC((command, payload) => {
   if (command === 'stop_playback') return
   if (command === 'save_midi_project_draft') {
     if (draftFailure) throw new Error('测试草稿保存失败')
-    const draft = payload as { key: string; project: { name: string } }
+    const draft = payload as { key: string; project: MidiProject }
     savedDrafts.push({ key: draft.key, name: draft.project.name })
+    draftFiles.set(draft.key, structuredClone(draft.project))
     return
   }
-  if (command === 'load_midi_project') return project
+  if (command === 'load_midi_project') return { ...project, id: (payload as { id: string }).id }
   if (command === 'save_midi_project')
     return { ...projectSummary, id: 'saved-fixture', updatedAt: Date.now() }
   if (command === 'import_midi_buffer')
@@ -259,13 +270,33 @@ mockIPC((command, payload) => {
     return showTemplateList ? templateFixtures : editorTemplateFixtures
   if (['extract_melody', 'extract_all_notes'].includes(command)) return []
   if (command === 'get_midi_library')
-    return showNavigationFixture || showPlaylistFixture ? navigationMidiLibrary : [midi]
-  if (command === 'load_midi_config') return { ...midi, disabled_tracks: [] }
-  if (command === 'parse_midi_file') return [midi, []]
-  if (command === 'load_midi_project_draft') return null
+    return (
+      customSongs ?? (showNavigationFixture || showPlaylistFixture ? navigationMidiLibrary : [midi])
+    )
+  if (command === 'load_midi_config')
+    return {
+      ...([...parsedSongs.values()].find(
+        (song) => song.filename === (payload as { filename: string }).filename
+      ) ?? midi),
+      disabled_tracks: [],
+    }
+  if (command === 'parse_midi_file') {
+    const song = parsedSongs.get((payload as { path: string }).path) ?? midi
+    if (pendingParse?.filename === song.filename)
+      return new Promise((resolve) => {
+        pendingParse!.resolve = () => resolve([song, []])
+      })
+    return [song, []]
+  }
+  if (command === 'load_midi_project_draft')
+    return draftFiles.get((payload as { key: string }).key) ?? null
+  if (command === 'delete_midi_project_draft') {
+    draftFiles.delete((payload as { key: string }).key)
+    return
+  }
   if (command === 'check_accessibility') return true
   if (command === 'has_saved_overlay_window_state') return false
-  if (['delete_midi_project_draft', 'save_midi_config', 'save_settings'].includes(command)) return
+  if (['save_midi_config', 'save_settings'].includes(command)) return
   if (command === 'load_settings')
     return {
       locale: 'zh-CN',
@@ -402,6 +433,14 @@ if (showOnlineList) {
 declare global {
   interface Window {
     midiEditorFixture: {
+      seedDraft: (key: string, name: string, filename?: string) => void
+      seedEntryDraft: (entry: MidiEditorEntry, name: string) => Promise<string>
+      setSongs: (filenames: string[]) => void
+      draftKeys: () => string[]
+      currentRoute: () => string
+      deferParse: (filename: string) => void
+      isParsePending: () => boolean
+      finishParse: () => void
       navigate: (path: string) => Promise<void>
       back: () => void
       switchMainWindowSong: () => Promise<void>
@@ -416,6 +455,41 @@ declare global {
 }
 
 window.midiEditorFixture = {
+  seedDraft(key, name, filename) {
+    draftFiles.set(key, {
+      ...structuredClone(project),
+      name,
+      source: filename ? { filename } : undefined,
+    })
+  },
+  async seedEntryDraft(entry, name) {
+    const key = await midiDraftKey(entry)
+    const draft = { ...structuredClone(project), name }
+    if (entry.kind === 'song') draft.source = { filename: entry.filename }
+    if (entry.kind === 'edit') draft.id = entry.id
+    draftFiles.set(key, draft)
+    return key
+  },
+  setSongs(filenames) {
+    customSongs = filenames.map((filename) => ({
+      ...midi,
+      filename,
+      file_path: `/fixture/${filename}`,
+      title: filename.replace(/\.mid$/, ''),
+    }))
+    for (const song of customSongs) parsedSongs.set(song.file_path, song)
+    usePlayerStore(pinia).midiLibrary = customSongs
+  },
+  draftKeys: () => [...draftFiles.keys()],
+  currentRoute: () => router.currentRoute.value.fullPath,
+  deferParse(filename) {
+    pendingParse = { filename, resolve: null }
+  },
+  isParsePending: () => !!pendingParse?.resolve,
+  finishParse() {
+    pendingParse?.resolve?.()
+    pendingParse = null
+  },
   async runUpdate() {
     if (updater.state.value.phase !== 'ready')
       emitUpdate({ phase: 'available', targetVersion: '1.2.1' })

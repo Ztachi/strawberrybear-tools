@@ -5,7 +5,7 @@ import {
   type PianoRollTrack,
 } from '../core'
 import { defaultPianoRollTheme, type PianoRollTheme } from './theme'
-import { rulerLabels } from './ruler-layout'
+import { rulerLabels, rulerMarks } from './ruler-layout'
 import { layoutPianoKeys } from './keyboard-layout'
 
 /** 一行轨道的内容坐标。 */
@@ -125,6 +125,8 @@ export interface RenderFrame {
   editing?: {
     /** 编辑态区域是硬边界；只读 MIDI 预览继续兼容不完整的 EOT 元数据。 */
     clipTrackRegions?: boolean
+    /** 宿主选择的网格步长，绘制与标尺使用同一密度和 tick 相位。 */
+    gridTicks?: number | 'bar'
     selectedNoteIds: ReadonlySet<string>
     highlightPitches: ReadonlySet<number> | null
   }
@@ -217,9 +219,8 @@ export function drawGrid(
       const range = getTrackTimeRange(row.track, frame.index, timeline.durationTicks, true)
       const left = timeline.tickToSeconds(range.startTick) * timeZoom - scrollLeft
       const right = timeline.tickToSeconds(range.endTick) * timeZoom - scrollLeft
-      // 用现有主题遮罩标明区域外留白；隐藏尾部不参与绘制，但源音符仍由工程保留。
-      context.fillStyle = theme.colors.trackDisabled
-      context.globalAlpha = 0.45
+      // 有效区域外使用中性灰，避免品牌浅色让未开放区域看起来像选中的音轨。
+      context.fillStyle = theme.colors.regionInactive
       context.fillRect(0, 0, Math.max(0, Math.min(width, left)), height)
       context.fillRect(Math.max(0, right), 0, Math.max(0, width - Math.max(0, right)), height)
       context.globalAlpha = 1
@@ -227,11 +228,16 @@ export function drawGrid(
       if (right >= 0 && right <= width) context.fillRect(right, 0, 1, height)
     }
   }
-  const marks = timeline.getRulerMarks({
+  const markOptions = {
     // 保留跨过裁剪边缘的线宽，避免尚未完全离开的刻度突然消失。
     startSeconds: Math.max(0, scrollLeft - 1) / timeZoom,
     endSeconds: (scrollLeft + width + 1) / timeZoom,
     pixelsPerSecond: timeZoom,
+  }
+  const gridTicks = frame.editing?.gridTicks
+  const marks = rulerMarks(timeline, {
+    ...markOptions,
+    gridTicks,
   })
   rulerContext.fillStyle = theme.colors.surfaceRaised
   rulerContext.fillRect(0, 0, width, 32)
@@ -267,7 +273,8 @@ export function drawGrid(
     timeZoom,
     scrollLeft,
     width,
-    (text) => rulerContext.measureText(text).width
+    (text) => rulerContext.measureText(text).width,
+    gridTicks
   )) {
     rulerContext.fillText(mark.label, mark.x - scrollLeft + 5, 16)
   }

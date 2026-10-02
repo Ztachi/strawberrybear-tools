@@ -58,6 +58,7 @@ const editing = computed<PianoRollProps['editing']>(() => ({
   selectedNoteIds: props.state.selection,
   snapTicks: (tick, mode) => snapTick(tick, props.state.snap, props.state.document, mode),
   snapToNoteEnds: props.state.snap !== 'off',
+  gridTicks: props.state.snap === 'bar' ? 'bar' : resolutionTicks(props.state.snap, props.state.document) || undefined,
   defaultDurationTicks:
     resolutionTicks(props.state.snap, props.state.document) || props.state.document.ticksPerBeat,
   highlightPitches: props.playablePitches,

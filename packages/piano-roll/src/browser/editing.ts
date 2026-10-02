@@ -120,6 +120,7 @@ function projectFrameState(options?: PianoRollEditingOptions): RenderFrame['edit
   if (!options) return undefined
   return {
     clipTrackRegions: options.enabled,
+    gridTicks: options.gridTicks,
     selectedNoteIds: options.selectedNoteIds,
     highlightPitches: options.highlightPitches ?? null,
   }

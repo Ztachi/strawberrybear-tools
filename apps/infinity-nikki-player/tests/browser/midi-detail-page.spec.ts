@@ -321,7 +321,23 @@ for (const copy of [
     expect(box!.x + box!.width).toBeLessThanOrEqual(780)
     expect(box!.y + box!.height).toBeLessThanOrEqual(680)
     await page.mouse.move(0, 0)
-    await expect(page.getByRole('tooltip')).toHaveCount(0)
+    // Tooltip 离场可能保留透明 DOM；验证实际可见浮层，不依赖组件库销毁动画的时机。
+    await expect
+      .poll(() =>
+        page.getByRole('tooltip').evaluateAll(
+          (nodes) =>
+            nodes.filter((node) => {
+              const popup = node.closest('.ant-tooltip') ?? node
+              const style = getComputedStyle(popup)
+              return (
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                Number(style.opacity) > 0
+              )
+            }).length
+        )
+      )
+      .toBe(0)
     await page.screenshot({ path: test.info().outputPath(`midi-detail-help-${copy.locale}.png`) })
     await dialog.getByText(copy.readOnly, { exact: true }).scrollIntoViewIfNeeded()
     await expect(dialog.getByText(copy.readOnly, { exact: true })).toBeVisible()

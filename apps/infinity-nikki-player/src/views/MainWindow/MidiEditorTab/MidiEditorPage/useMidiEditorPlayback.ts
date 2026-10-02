@@ -64,7 +64,7 @@ export function useMidiEditorPlayback(
   }
 
   const controller = createMidiEditorPlaybackController({
-    getDocument: () => document.value!,
+    getDocument: () => document.value,
     getLoop: () => loop.value,
     getPlayablePitches: () => playablePitches.value,
     onChange: handleChange,

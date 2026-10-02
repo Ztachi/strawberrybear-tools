@@ -21,7 +21,7 @@ export interface TrackRegionHost {
   preview(trackId: string | null, endTick?: number, extentTick?: number): void
 }
 
-/** 总览区域手势层；控制器统一驱动渲染和生命周期。 */
+/** 总览与详情共用区域手势层；控制器统一驱动渲染和生命周期。 */
 export interface TrackRegionEditing {
   isDragging(): boolean
   render(frame: RenderFrame): void
@@ -30,7 +30,7 @@ export interface TrackRegionEditing {
 }
 
 /**
- * @description: 为总览安装音轨区域右边缘手势，松手提交一次，边缘拖动持续扩展浏览空间。
+ * @description: 为总览与详情安装音轨区域右边缘手势，松手提交一次，边缘拖动持续扩展浏览空间。
  * @param {TrackRegionHost} host 控制器坐标、只读配置及预览端口
  * @return {TrackRegionEditing} 区域句柄渲染、取消和销毁接口
  */
@@ -40,7 +40,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
   const layer = owner.createElement('div')
   layer.className = 'pr-region-handles'
   host.pane.append(layer)
-  const guide = createDragGuide(host.pane, host.rulerGrid)
+  const guide = createDragGuide(host.pane, host.rulerGrid, 'region')
   const handles = new Map<string, HTMLButtonElement>()
   let drag: {
     button: HTMLButtonElement
@@ -280,8 +280,9 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
             row.track.color ?? 'var(--pr-primary,#e36f86)'
           )
           button.style.left = `${Math.max(0, right - 12)}px`
-          button.style.top = `${row.top - frame.scrollTop + 3}px`
-          button.style.height = `${Math.max(12, row.height - 9)}px`
+          // 详情手柄贴在时间区顶部，不随音高滚动；短抓取区避免挡住音符末端的拉伸操作。
+          button.style.top = `${frame.variant === 'editor' ? 3 : row.top - frame.scrollTop + 3}px`
+          button.style.height = `${frame.variant === 'editor' ? 24 : Math.max(12, row.height - 9)}px`
           button.hidden = right < 0 || right > frame.width + 1
         }
       }

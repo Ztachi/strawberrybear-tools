@@ -7,7 +7,7 @@ import { ensureDurationCovers } from '../commands/song'
 
 /** 导出选项。 */
 export interface EncodeMidiOptions {
-  /** 写入 conductor 轨的曲名。 */
+  /** 写入全局文本元事件的曲名，不覆盖音轨名称。 */
   name?: string
   /** 非打击乐轨的默认 Program（0 = Acoustic Grand Piano）。 */
   program?: number
@@ -73,7 +73,7 @@ export function assignChannels(tracks: readonly PianoRollTrack[]): Map<string, n
 }
 
 /**
- * @description: 把启用轨道编码为标准 MIDI 文件（SMF format 1），每轨保留自身区域边界。
+ * @description: 把启用轨道编码为标准 MIDI 文件，单轨 format 0、多轨 format 1，每轨保留自身区域边界。
  * @param {PianoRollDocument} document 源文档
  * @param {EncodeMidiOptions} options 曲名与默认音色
  * @return {Uint8Array} 完整 .mid 字节
@@ -87,13 +87,13 @@ export function encodeMidi(
   const enabled = new Map(enabledTracks.map((track) => [track.id, track]))
   const songEnd = ensureDurationCovers(document).durationTicks
 
-  // 轨 0：conductor，只放曲名、速度与拍号。
+  // 全局元事件稍后合入最长有效音轨；不创建用户未添加的空轨，也不延长短轨。
   const conductor: AbsoluteEvent[] = []
   if (options.name?.trim())
     conductor.push({
       tick: 0,
       order: 0,
-      event: { type: 'trackName', text: toMidiText(options.name.trim()), deltaTime: 0, meta: true },
+      event: { type: 'text', text: toMidiText(options.name.trim()), deltaTime: 0, meta: true },
     })
   const tempoMap = document.tempoMap.length
     ? document.tempoMap
@@ -140,7 +140,13 @@ export function encodeMidi(
       },
     })
   }
-  const tracks: MidiEvent[][] = [toDeltaTrack(conductor, songEnd)]
+  // 没有启用音轨时仍输出合法的仅元数据文件；显式空轨属于用户工程，按原样保留。
+  const tracks: MidiEvent[][] = enabledTracks.length ? [] : [toDeltaTrack(conductor, songEnd)]
+  const metadataTrack = enabledTracks.reduce<PianoRollTrack | undefined>(
+    (longest, track) =>
+      !longest || (track.endTick ?? songEnd) > (longest.endTick ?? songEnd) ? track : longest,
+    undefined
+  )
 
   const channels = assignChannels(enabledTracks)
   const notesByTrack = new Map<string, AbsoluteEvent[]>()
@@ -176,6 +182,7 @@ export function encodeMidi(
   }
   for (const track of enabledTracks) {
     const events = notesByTrack.get(track.id)!
+    if (track === metadataTrack) events.push(...conductor)
     const channel = channels.get(track.id) ?? 0
     events.push({
       tick: 0,
@@ -201,6 +208,9 @@ export function encodeMidi(
   }
 
   return Uint8Array.from(
-    writeMidi({ header: { format: 1, numTracks: tracks.length, ticksPerBeat: ppq }, tracks })
+    writeMidi({
+      header: { format: tracks.length > 1 ? 1 : 0, numTracks: tracks.length, ticksPerBeat: ppq },
+      tracks,
+    })
   )
 }

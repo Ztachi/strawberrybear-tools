@@ -6,6 +6,7 @@ import { emit } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
 import AppUpdateStatus from '@/components/AppUpdateStatus.vue'
 import AppUpdateButton from '@/components/AppUpdateButton.vue'
+import HeaderNavigation from '@/components/HeaderNavigation/index.vue'
 import AboutDialog from '@/components/AboutDialog/index.vue'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import { getAntdvLocale } from '@/i18n'
@@ -17,11 +18,11 @@ onMounted(() => { if (showAbout) void emit('show_about') })
   <ConfigProvider v-bind="infinityNikkiConfigProviderProps" :locale="getAntdvLocale(locale)">
     <AntApp>
       <main class="fixture">
-        <header>无限暖暖自动演奏 <AppUpdateButton /></header>
+        <header><HeaderNavigation />无限暖暖自动演奏 <AppUpdateButton /></header>
         <AboutDialog v-if="showAbout" />
         <article v-else>
           <h1>关于 · v1.2.0</h1>
-          <AppUpdateStatus />
+          <AppUpdateStatus version="1.2.0" />
         </article>
       </main>
     </AntApp>

@@ -14,7 +14,7 @@
 - 吸附/量化/移调：`SnapResolution` 表、`snapTick`、`quantizeNotes`、`transposeNotes`。
 - 历史：`createHistory` 线性栈，支持 `coalesceKey` 合并连续拖动。
 - 剪贴板：相对时间复制、跨 PPQ 粘贴、`duplicate` 按网格接在选区之后。
-- SMF：`encodeMidi`（format 1，conductor 轨 + 每启用轨一条，保留各轨自身边界）与 `decodeMidi`。
+- SMF：`encodeMidi`（单轨 format 0、多轨 format 1，每启用轨一条；全局元数据合入最长有效音轨，保留各轨自身边界）与 `decodeMidi`。
 - 试听：`createEditorTransport`，位置由注入的音频时钟推导，支持循环区与倍速。
 - 会话：`createEditorSession` 汇总以上能力，所有变更走 `dispatch(EditorAction)`。
 

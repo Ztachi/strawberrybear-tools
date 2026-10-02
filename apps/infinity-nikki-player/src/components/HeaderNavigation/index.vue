@@ -20,6 +20,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Tooltip } from 'antdv-next'
+import IconRotation from '@/components/IconRotation.vue'
 import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-vue-next'
 
 /** i18n 文案在此组件内直接获取，避免逐层透传 t 函数。 */
@@ -174,7 +175,9 @@ watch(currentFullPath, () => syncFromHistoryState())
         :aria-label="refreshTitle"
         @click="refreshPage"
       >
-        <RefreshCw class="header-nav-icon" />
+        <IconRotation :size="18" class="header-refresh-motion">
+          <RefreshCw :size="18" :stroke-width="2.25" />
+        </IconRotation>
       </button>
     </Tooltip>
   </div>
@@ -206,10 +209,11 @@ watch(currentFullPath, () => syncFromHistoryState())
   height: 17px;
   stroke-width: 2.25;
 }
-
-/* 刷新按钮 hover 时图标旋转 180 度，参考 QQ 音乐 / Chrome 的交互反馈 */
-.header-nav-refresh:hover:not(:disabled) .header-nav-icon {
-  transform: rotate(180deg);
+/* 动效放在固定画布上；移入和移出共用 transition，SVG 本身不承担旋转。 */
+.header-refresh-motion {
   transition: transform 0.4s ease;
+}
+.header-nav-refresh:hover:not(:disabled) .header-refresh-motion {
+  transform: rotate(180deg);
 }
 </style>

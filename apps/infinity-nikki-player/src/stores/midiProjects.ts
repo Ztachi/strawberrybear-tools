@@ -124,7 +124,7 @@ export const useMidiProjectStore = defineStore('midiProjects', () => {
     return invoke('export_midi_projects_archive', { ids, targetPath })
   }
 
-  /** 草稿读写；key 形如 `create` / `edit-{id}`。 */
+  /** 草稿按空白新建、已有项目、歌曲改编及项目副本分开持久化，键由 draftIdentity 生成。 */
   function saveDraft(key: string, project: MidiProject): Promise<void> {
     return invoke('save_midi_project_draft', { key, project })
   }

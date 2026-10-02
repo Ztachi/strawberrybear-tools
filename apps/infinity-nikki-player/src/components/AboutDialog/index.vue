@@ -17,14 +17,16 @@ import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { listen } from '@tauri-apps/api/event'
 import { DiscordFilled, QqOutlined } from '@antdv-next/icons'
-import { ExternalLink } from 'lucide-vue-next'
+import { ExternalLink, FileDown } from 'lucide-vue-next'
 import appLogo from '@/assets/images/logo.png'
 import { Button, Modal, TypographyParagraph } from 'antdv-next'
 import AppUpdateStatus from '@/components/AppUpdateStatus.vue'
+import { useAppUpdater } from '@/composables/useAppUpdater'
 import { useMainWindowUiStore, type FloatingActionRegistration } from '@/stores/mainWindowUi'
 
 const { t, tm } = useI18n()
 const ui = useMainWindowUiStore()
+const updater = useAppUpdater()
 const aboutBody = ref<HTMLElement | null>(null)
 let backToTop: FloatingActionRegistration | undefined
 
@@ -126,9 +128,8 @@ onUnmounted(() => {
           {{ t('app.title') }}
         </h2>
         <div class="about-version-row">
-          <span class="about-version-badge">v{{ version }}</span>
+          <AppUpdateStatus :version="version" />
         </div>
-        <AppUpdateStatus />
       </div>
 
       <!-- 分隔线 -->
@@ -167,13 +168,21 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 外部链接按钮 -->
-        <Button type="link" @click="openLink">
-          <template #icon>
-            <ExternalLink class="size-3.5" :stroke-width="2" />
-          </template>
-          {{ t('about.learnMore') }}
-        </Button>
+        <!-- 次要操作并列，版本区只保留更新入口。 -->
+        <div class="about-actions">
+          <Button type="link" @click="openLink">
+            <template #icon>
+              <ExternalLink class="size-3.5" :stroke-width="2" />
+            </template>
+            {{ t('about.learnMore') }}
+          </Button>
+          <Button type="link" @click="updater.exportDiagnostics">
+            <template #icon>
+              <FileDown class="size-3.5" :stroke-width="2" />
+            </template>
+            {{ t('updater.exportDiagnostics') }}
+          </Button>
+        </div>
       </div>
     </div>
   </Modal>
@@ -223,14 +232,12 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.about-version-badge {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-foreground);
-  background: var(--bg-primary-10);
-  border: 1px solid var(--border-primary-20);
-  border-radius: 999px;
-  padding: 2px 10px;
+.about-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .about-version-row {

@@ -746,6 +746,7 @@ export function createView(
     },
     setSelectedTrack(trackId) {
       if (destroyed || selected === trackId) return
+      regionEditing?.reset()
       navigation?.cancel()
       selected = trackId
       focusPitch(false)
@@ -897,35 +898,33 @@ export function createView(
     },
     options.editing
   )
-  if (variant === 'overview') {
-    regionEditing = installTrackRegionEditing({
-      pane,
-      rulerGrid,
-      scroll,
-      timeline: () => timeline,
-      options: () => editingOptions,
-      noteEnds(trackId) {
-        const range = noteIndex.getTimeRange(trackId)
-        return range
-          ? noteIndex.query(trackId, range.startTick, range.endTick).map((note) => note.endTick)
-          : []
-      },
-      label: () => labels.resizeTrack ?? '调整音轨长度',
-      geometry: () => ({ timeZoom, width }),
-      preview(trackId, endTick = 0, extentTick = 0) {
-        if (destroyed) return
-        regionPreview = trackId ? { trackId, endTick } : null
-        // 临时扩展仅用于区域拖动；保持当前缩放，不能让 fit 随新增留白不断变化。
-        if (trackId) fitting = false
-        timeline = createTimeline({
-          ...document,
-          durationTicks: Math.max(document.durationTicks, trackId ? extentTick : 0),
-        })
-        resizeContent()
-        scheduleRender()
-      },
-    })
-  }
+  regionEditing = installTrackRegionEditing({
+    pane,
+    rulerGrid,
+    scroll,
+    timeline: () => timeline,
+    options: () => editingOptions,
+    noteEnds(trackId) {
+      const range = noteIndex.getTimeRange(trackId)
+      return range
+        ? noteIndex.query(trackId, range.startTick, range.endTick).map((note) => note.endTick)
+        : []
+    },
+    label: () => labels.resizeTrack ?? '调整音轨长度',
+    geometry: () => ({ timeZoom, width }),
+    preview(trackId, endTick = 0, extentTick = 0) {
+      if (destroyed) return
+      regionPreview = trackId ? { trackId, endTick } : null
+      // 临时扩展仅用于区域拖动；保持当前缩放，不能让 fit 随新增留白不断变化。
+      if (trackId) fitting = false
+      timeline = createTimeline({
+        ...document,
+        durationTicks: Math.max(document.durationTicks, trackId ? extentTick : 0),
+      })
+      resizeContent()
+      scheduleRender()
+    },
+  })
   const gestureZoom = installGestureZoom(root, {
     getZoom: () => view.getViewport().timeZoom,
     viewportElement: scroll,

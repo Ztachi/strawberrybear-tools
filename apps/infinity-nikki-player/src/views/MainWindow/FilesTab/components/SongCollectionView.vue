@@ -17,7 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Button, Checkbox, Dropdown, Input, Modal, Tooltip } from 'antdv-next'
-import { ListPlus, MoreVertical, Music, Search, Trash2, X } from 'lucide-vue-next'
+import { ArrowDownWideNarrow, ArrowUpWideNarrow, ListPlus, MoreVertical, Music, Search, Trash2, X } from 'lucide-vue-next'
 import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { usePlayerStore } from '@/stores/player'
 import { useSongListStore } from '@/stores/songLists'
@@ -26,7 +26,7 @@ import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
 import type { MidiInfo } from '@/types'
 import { getMidiDisplayName, getMidiDisplayTitle } from '@/lib/midiDisplay'
 import { useListActionMenu } from '@/composables/useListActionMenu'
-import { buildCollectionContext, formatDuration } from '../utils'
+import { buildCollectionContext, formatDuration, sortSongsByAddedTime } from '../utils'
 import SongActionMenu from './SongActionMenu.vue'
 import SongPlaybackCover from './SongPlaybackCover.vue'
 
@@ -44,6 +44,9 @@ const playerStore = usePlayerStore()
 const songListStore = useSongListStore()
 
 const searchKeyword = ref('')
+const addedTimeOrder = ref<'asc' | 'desc'>('desc')
+const sortedSongs = computed(() => sortSongsByAddedTime(props.songs, addedTimeOrder.value))
+const addedTimeSortLabel = computed(() => t(addedTimeOrder.value === 'desc' ? 'songList.sortAddedNewest' : 'songList.sortAddedOldest'))
 const batchMode = ref(false)
 const selectedFilenames = ref<Set<string>>(new Set())
 const scrollElement = ref<HTMLElement | null>(null)
@@ -72,8 +75,8 @@ const ROW_ESTIMATED_SIZE = 74
 
 const filteredSongs = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
-  if (!keyword) return props.songs
-  return props.songs.filter((song) =>
+  if (!keyword) return sortedSongs.value
+  return sortedSongs.value.filter((song) =>
     [
       getMidiDisplayTitle(song),
       song.author_name,
@@ -266,7 +269,7 @@ async function locateCurrentSong(): Promise<void> {
   if (targetIndex === -1 && props.songs.some((song) => song.filename === filename)) {
     searchKeyword.value = ''
     await nextTick()
-    targetIndex = props.songs.findIndex((song) => song.filename === filename)
+    targetIndex = filteredSongs.value.findIndex((song) => song.filename === filename)
   }
   if (targetIndex === -1) return
 
@@ -278,6 +281,12 @@ async function locateCurrentSong(): Promise<void> {
 }
 
 watch(searchKeyword, () => {
+  rowVirtualizer.value.scrollToIndex(0)
+  handleScroll()
+})
+
+// 切换排序回到列表起点；KeepAlive 返回页面时保留这个实例的排序与滚动状态。
+watch(addedTimeOrder, () => {
   rowVirtualizer.value.scrollToIndex(0)
   handleScroll()
 })
@@ -359,6 +368,20 @@ onUnmounted(deactivatePageInteractions)
       </Input>
 
       <div class="toolbar-actions">
+        <Tooltip :title="addedTimeSortLabel" :get-popup-container="getMainWindowPopupContainer">
+          <Button
+            color="primary"
+            variant="outlined"
+            size="small"
+            :aria-label="addedTimeSortLabel"
+            @click="addedTimeOrder = addedTimeOrder === 'desc' ? 'asc' : 'desc'"
+          >
+            <template #icon>
+              <ArrowDownWideNarrow v-if="addedTimeOrder === 'desc'" class="toolbar-icon" />
+              <ArrowUpWideNarrow v-else class="toolbar-icon" />
+            </template>
+          </Button>
+        </Tooltip>
         <template v-if="batchMode && selectedCount > 0">
           <Button
             v-if="type === 'songList'"
@@ -453,7 +476,7 @@ onUnmounted(deactivatePageInteractions)
 
               <SongPlaybackCover
                 :midi="filteredSongs[virtualRow.index]!"
-                :queue-items="songs"
+                :queue-items="sortedSongs"
                 :queue-context="collectionContext"
               />
 
