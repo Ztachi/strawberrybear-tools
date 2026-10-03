@@ -316,8 +316,4 @@ onUnmounted(() => {
   color: var(--color-foreground);
   font-weight: 600;
 }
-
-:deep(.about-contact-account .ant-typography-copy) {
-  color: var(--color-primary);
-}
 </style>

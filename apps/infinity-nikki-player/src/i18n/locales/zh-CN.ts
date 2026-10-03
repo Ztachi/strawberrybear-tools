@@ -290,6 +290,7 @@ export default {
     actions: {
       batch: '批量',
       exitBatch: '退出批量',
+      selectAll: '全选',
       addTo: '添加到',
       removeFromSongList: '从歌单移除',
       deleteFile: '删除文件',

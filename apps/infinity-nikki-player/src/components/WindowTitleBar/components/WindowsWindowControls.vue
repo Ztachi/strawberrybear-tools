@@ -125,10 +125,7 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full shrink-0 items-center">
-    <Tooltip
-      :title="t('windowControls.minimize')"
-      placement="bottom"
-    >
+    <Tooltip :title="t('windowControls.minimize')" placement="bottom">
       <Button
         class="window-control-btn"
         type="text"
@@ -136,10 +133,7 @@ onUnmounted(() => {
         @click="minimizeWindow"
       >
         <template #icon>
-          <Minus
-            :size="16"
-            :stroke-width="1.8"
-          />
+          <Minus :size="16" :stroke-width="1.8" />
         </template>
       </Button>
     </Tooltip>
@@ -157,24 +151,13 @@ onUnmounted(() => {
         @click="toggleMaximizeWindow"
       >
         <template #icon>
-          <Copy
-            v-if="isMaximized"
-            :size="14"
-            :stroke-width="1.7"
-          />
-          <Square
-            v-else
-            :size="14"
-            :stroke-width="1.7"
-          />
+          <Copy v-if="isMaximized" :size="14" :stroke-width="1.7" />
+          <Square v-else :size="14" :stroke-width="1.7" />
         </template>
       </Button>
     </Tooltip>
 
-    <Tooltip
-      :title="t('windowControls.close')"
-      placement="bottom"
-    >
+    <Tooltip :title="t('windowControls.close')" placement="bottom">
       <Button
         class="window-control-btn close"
         type="text"
@@ -182,10 +165,7 @@ onUnmounted(() => {
         @click="closeWindow"
       >
         <template #icon>
-          <X
-            :size="17"
-            :stroke-width="1.8"
-          />
+          <X :size="17" :stroke-width="1.8" />
         </template>
       </Button>
     </Tooltip>
@@ -194,15 +174,16 @@ onUnmounted(() => {
 
 <style scoped>
 .window-control-btn {
-  @apply flex h-[46px] w-[46px] items-center justify-center rounded-none p-0 text-foreground transition-colors;
-}
-
-.window-control-btn:hover {
-  background: rgba(247, 183, 190, 0.16);
+  @apply flex h-[46px] w-[46px] items-center justify-center rounded-none p-0 transition-colors;
 }
 
 .window-control-btn.close:hover {
-  background: #d92d20;
-  color: var(--color-white);
+  background: var(--color-danger-hover);
+  color: var(--icon-selected-color);
+}
+
+.window-control-btn.close:active {
+  background: var(--color-danger-active);
+  color: var(--icon-selected-color);
 }
 </style>

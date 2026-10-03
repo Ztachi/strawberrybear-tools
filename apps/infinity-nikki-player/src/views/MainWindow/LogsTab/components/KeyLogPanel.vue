@@ -112,13 +112,7 @@ function formatTime(timestamp: number) {
 }
 
 .clear-btn {
-  color: var(--color-primary);
   @apply text-xs;
-}
-
-.clear-btn:hover {
-  color: var(--color-primary);
-  background: var(--bg-primary-10);
 }
 
 .log-list {

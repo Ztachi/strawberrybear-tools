@@ -79,10 +79,21 @@ async function handleClick() {
 }
 
 .app-update-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-danger) 88%, black);
+  background: var(--color-danger-hover);
   color: var(--color-white);
   box-shadow: 0 8px 18px color-mix(in srgb, var(--color-danger) 34%, transparent);
   transform: translateY(-1px);
+}
+
+.app-update-button:active:not(:disabled) {
+  background: var(--color-danger-active);
+}
+
+.app-update-button:disabled {
+  background: var(--color-disabled-bg);
+  color: var(--icon-disabled-color);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .update-label {

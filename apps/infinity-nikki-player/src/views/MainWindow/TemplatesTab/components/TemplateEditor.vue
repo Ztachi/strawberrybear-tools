@@ -619,10 +619,10 @@ defineExpose({
             {{ t('template.batchDelete') }}
           </Button>
           <Button
+            v-if="selectedTemplateIds.size > 0"
             size="small"
             color="primary"
             variant="outlined"
-            :disabled="selectedTemplateIds.size === 0"
             @click="exportSelectedTemplates"
           >
             <template #icon>

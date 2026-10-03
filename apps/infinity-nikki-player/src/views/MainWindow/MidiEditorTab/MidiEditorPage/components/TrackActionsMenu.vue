@@ -242,19 +242,9 @@ function submitRename(): void {
   min-width: 22px;
   height: 28px;
   padding: 0;
-  color: var(--color-muted-dark);
   cursor: grab;
-  opacity: 0.7;
   transform: translateY(-50%);
-  transition:
-    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.track-drag-handle:hover,
-.track-drag-handle:focus-visible {
-  color: var(--color-primary);
-  opacity: 1;
+  transition: color 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .track-drag-handle:active {

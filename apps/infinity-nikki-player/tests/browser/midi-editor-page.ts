@@ -258,6 +258,17 @@ const parsedSongs = new Map(
 let customSongs: MidiInfo[] | null = null
 let pendingParse: { filename: string; resolve: (() => void) | null } | null = null
 mockIPC((command, payload) => {
+  // 主题回归使用真实悬浮视图；只替换原生窗口切换和屏幕采集能力，不开启实际采集。
+  if (['enter_overlay_mode', 'exit_overlay_mode', 'stop_frame_rate_capture'].includes(command))
+    return
+  if (command === 'get_frame_rate_capture_capability')
+    return {
+      platform: 'browser',
+      supported: false,
+      provider: 'unsupported',
+      auto_capture_available: false,
+      message: 'Browser fixture',
+    }
   if (command === 'stop_playback') return
   if (command === 'save_midi_project_draft') {
     if (draftFailure) throw new Error('测试草稿保存失败')

@@ -30,7 +30,7 @@ async function handleCoverAction(event: MouseEvent): Promise<void> {
 <template>
   <button
     type="button"
-    class="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/15 bg-primary/10 text-primary transition-colors"
+    class="nikki-icon-button relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/15 bg-primary/10 transition-colors"
     :aria-label="isPlaying ? t('player.pauseSong') : t('player.playSong')"
     @click="handleCoverAction"
   >

@@ -10,9 +10,10 @@ Infinity Nikki Player 使用 `src/theme/infinityNikkiTheme.ts` 管理 antdv-next
 
 | 用途                 | 色值      | 说明                                 |
 | -------------------- | --------- | ------------------------------------ |
-| Primary              | `#F7C0C1` | 主品牌粉色                           |
-| Primary Hover        | `#F5AAB8` | 悬停态、选中项悬停                   |
-| Primary Active       | `#E98CA2` | 按下态、链接重点                     |
+| Primary              | `#F7B7BE` | 普通操作图标、按钮文字和选中背景     |
+| Primary Hover        | `#EE8FA1` | 悬浮态，比默认主题色加深             |
+| Primary Active       | `#E36F86` | 按下态，比悬浮态进一步加深           |
+| Disabled             | `#A89A9A` | 中性灰，禁用后悬浮不改变状态         |
 | Layout Background    | `#FFF7FA` | 应用布局背景                         |
 | Container Background | `#FFFFFF` | 普通容器                             |
 | Elevated Background  | `#FFF9FC` | Modal、Drawer、Popover、Notification |
@@ -21,7 +22,7 @@ Infinity Nikki Player 使用 `src/theme/infinityNikkiTheme.ts` 管理 antdv-next
 | Border               | `#F3CAD0` | 输入框、表格、容器边框               |
 | Success              | `#4ADE80` | 播放状态、成功反馈                   |
 | Warning              | `#F5C542` | 暂停和警告                           |
-| Error                | `#EF5B6B` | 错误反馈                             |
+| Error                | `#EF4444` | 错误反馈和危险操作                   |
 
 ## antdv-next Token
 
@@ -30,9 +31,9 @@ Infinity Nikki Player 使用 `src/theme/infinityNikkiTheme.ts` 管理 antdv-next
 ```ts
 export const infinityNikkiTheme: ThemeConfig = {
   token: {
-    colorPrimary: '#F7C0C1',
-    colorPrimaryHover: '#F5AAB8',
-    colorPrimaryActive: '#E98CA2',
+    colorPrimary: '#F7B7BE',
+    colorPrimaryHover: '#EE8FA1',
+    colorPrimaryActive: '#E36F86',
     colorBgLayout: '#FFF7FA',
     colorBgContainer: '#FFFFFF',
     colorBgElevated: '#FFF9FC',
@@ -52,9 +53,11 @@ export const infinityNikkiTheme: ThemeConfig = {
 
 ```css
 :root {
-  --color-primary: #f7c0c1;
-  --color-primary-light: #fddde6;
-  --color-secondary: #f5b8c0;
+  --color-primary: #f7b7be;
+  --color-primary-hover: #ee8fa1;
+  --color-primary-active: #e36f86;
+  --color-primary-light: #fff1f4;
+  --color-secondary: #f3a1ae;
   --color-foreground: #4a3f3f;
   --color-muted: #a89a9a;
   --color-muted-dark: #6b5a5a;
@@ -69,6 +72,30 @@ export const infinityNikkiTheme: ThemeConfig = {
 ```
 
 Tailwind 配置继续读取这些 HSL 变量，例如 `border-border`、`text-foreground`、`bg-primary/10`。
+
+## 操作控件状态
+
+`src/style.css` 是操作状态颜色的唯一运行时入口。`--icon-color`、`--icon-hover-color`、
+`--icon-active-color`、`--icon-disabled-color` 分别引用品牌默认、悬浮、按下和中性禁用色。
+选中开关使用 `--control-selected-bg` 与 `--icon-selected-color`（主题底色和白色前景）；
+禁用背景、描边分别使用 `--color-disabled-bg` 与 `--color-disabled-border`。
+主题透明背景、描边和按钮阴影从基础变量派生，替换变量组后不会残留旧主题色。
+
+Antdv Next Button 通过 `theme.components.Button` 的最终组件 token 读取这些 CSS 变量，
+覆盖 default、text、link、solid 和 disabled 状态。Button 的 `algorithm` 必须为 `false`，
+避免色彩算法把 `var(...)` 当作具体色值计算；全局框架种子仍使用具体色值。
+Typography 的复制、展开等操作也通过组件 token 读取同一组状态。
+Dropdown 使用官方 `item`、`itemTitle`、`itemIcon` 语义 class 将状态应用到图标，
+正文保持可读文本色；框架未提供单独的图标 hover token，因此仅在该语义入口上定义
+默认、悬浮、按下、危险与禁用变量。禁用状态优先于危险状态。
+
+原生图标按钮使用共享 `.nikki-icon-button`，只提供状态色、键盘焦点环和禁用反馈，
+尺寸与布局留在所属组件。不要再写局部 color、hover 颜色或给 SVG 强制白色，
+否则会覆盖禁用和主题状态。危险操作使用危险状态变量；封面或悬浮条上的反白控件
+使用 `.nikki-inverse-controls` 切换集中定义的反白变量组，弹出菜单仍使用普通主题。
+
+浏览器回归 `tests/browser/theme-controls.spec.ts` 对照歌单导出、标题栏原生导航、
+全局播放器和编辑器开关，并验证替换变量组会同步更新框架与原生按钮。
 
 ## 视觉原则
 

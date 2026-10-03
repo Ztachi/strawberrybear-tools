@@ -89,7 +89,7 @@ async function adjustSpeed(delta: number) {
     <div class="controls-bar">
       <!-- 播放/暂停按钮 -->
       <Button
-        :type="isPlaying ? 'default' : 'primary'"
+        type="primary"
         class="play-btn"
         :disabled="!playerStore.currentMidi"
         @click="togglePlay"
@@ -112,13 +112,13 @@ async function adjustSpeed(delta: number) {
       <!-- 速度控制 -->
       <div class="speed-control">
         <!-- 减速按钮 -->
-        <button class="speed-btn" @click="adjustSpeed(-0.1)">
+        <button class="speed-btn nikki-icon-button" @click="adjustSpeed(-0.1)">
           <Minus :size="14" />
         </button>
         <!-- 当前速度显示 -->
         <span class="speed-value">{{ playerStore.speed.toFixed(1) }}x</span>
         <!-- 加速按钮 -->
-        <button class="speed-btn" @click="adjustSpeed(0.1)">
+        <button class="speed-btn nikki-icon-button" @click="adjustSpeed(0.1)">
           <Plus :size="14" />
         </button>
       </div>
@@ -189,13 +189,7 @@ async function adjustSpeed(delta: number) {
 
 .play-btn {
   @apply flex-1 gap-2 h-12 text-base font-semibold;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
   box-shadow: 0 4px 16px var(--bg-primary-15);
-}
-
-.play-btn :deep(svg) {
-  color: var(--color-white);
 }
 
 .control-icon {
@@ -216,12 +210,6 @@ async function adjustSpeed(delta: number) {
 
 .stop-btn {
   @apply gap-2 h-12 px-6;
-  color: var(--color-primary);
-  border-color: var(--border-primary-20);
-}
-
-.stop-btn:hover:not(:disabled) {
-  background: var(--bg-primary-10);
 }
 
 .speed-control {
@@ -232,12 +220,7 @@ async function adjustSpeed(delta: number) {
 
 .speed-btn {
   @apply w-8 h-8 rounded-lg flex items-center justify-center;
-  color: var(--color-primary);
   transition: all 0.2s;
-}
-
-.speed-btn:hover {
-  background: var(--bg-primary-10);
 }
 
 .speed-value {

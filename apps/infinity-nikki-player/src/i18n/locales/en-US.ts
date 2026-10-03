@@ -296,6 +296,7 @@ export default {
     actions: {
       batch: 'Batch',
       exitBatch: 'Exit Batch',
+      selectAll: 'Select All',
       addTo: 'Add to',
       removeFromSongList: 'Remove from Playlist',
       deleteFile: 'Delete File',

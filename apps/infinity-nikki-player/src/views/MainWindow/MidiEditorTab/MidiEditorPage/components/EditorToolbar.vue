@@ -275,7 +275,8 @@ function handleDimUnplayable(value: boolean): void {
                 >
                   <button
                     type="button"
-                    class="property-help-icon inline-flex shrink-0 items-center justify-center border-0 bg-transparent p-0"
+                    class="nikki-icon-button inline-flex shrink-0 items-center justify-center border-0 bg-transparent p-0"
+                    style="width: 13px; height: 13px"
                     :aria-label="t('midiEditor.toolbar.templatePreviewHelp')"
                   >
                     <HelpCircle class="h-full w-full" />
@@ -501,11 +502,6 @@ function handleDimUnplayable(value: boolean): void {
 </template>
 
 <style scoped>
-.editor-toolbar :deep(.toolbar-history-button:disabled) {
-  color: var(--color-muted);
-  background: var(--color-primary-disabled-bg);
-  opacity: 0.45;
-}
 .editor-toolbar {
   @apply flex min-w-0 shrink-0 items-center gap-1.5;
   -webkit-app-region: no-drag;

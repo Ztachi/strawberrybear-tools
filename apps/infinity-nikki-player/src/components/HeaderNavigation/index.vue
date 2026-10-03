@@ -147,7 +147,7 @@ watch(currentFullPath, () => syncFromHistoryState())
     <Tooltip :title="backTitle">
       <button
         type="button"
-        class="header-nav-btn"
+        class="nikki-icon-button header-nav-btn"
         :disabled="!canGoBack"
         :aria-label="backTitle"
         @click="goBack"
@@ -159,7 +159,7 @@ watch(currentFullPath, () => syncFromHistoryState())
     <Tooltip :title="forwardTitle">
       <button
         type="button"
-        class="header-nav-btn"
+        class="nikki-icon-button header-nav-btn"
         :disabled="!canGoForward"
         :aria-label="forwardTitle"
         @click="goForward"
@@ -171,7 +171,7 @@ watch(currentFullPath, () => syncFromHistoryState())
     <Tooltip :title="refreshTitle">
       <button
         type="button"
-        class="header-nav-btn header-nav-refresh"
+        class="nikki-icon-button header-nav-btn header-nav-refresh"
         :aria-label="refreshTitle"
         @click="refreshPage"
       >
@@ -192,16 +192,6 @@ watch(currentFullPath, () => syncFromHistoryState())
 .header-nav-btn {
   /* 单纯图标入口使用原生 button 承载，配合 Tooltip 提供提示，避免引入 Button 边框 */
   @apply flex h-8 w-8 items-center justify-center rounded-full transition-colors;
-  color: var(--color-primary);
-}
-
-.header-nav-btn:hover:not(:disabled) {
-  background: var(--bg-primary-10);
-}
-
-.header-nav-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
 }
 
 .header-nav-icon {

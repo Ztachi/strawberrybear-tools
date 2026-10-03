@@ -393,7 +393,8 @@ test('区域延长只产生一次撤销，历史按钮禁用状态清晰', async
   const redo = page.getByRole('button', { name: /^重做/ })
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
-  await expect(undo).toHaveCSS('opacity', '0.45')
+  await expect(undo).toHaveCSS('opacity', '1')
+  await expect(undo).toHaveCSS('color', 'rgb(168, 154, 154)')
   // 外侧把手不侵入音符区；新建项目右边界恰在视口外缘时先横向滚到曲尾留白。
   await page.locator('.detail-piano-roll .pr-scroll').evaluate((element) => {
     element.scrollLeft = element.scrollWidth - element.clientWidth

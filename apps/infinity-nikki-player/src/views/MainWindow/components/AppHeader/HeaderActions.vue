@@ -71,10 +71,7 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
 </script>
 
 <template>
-  <div
-    class="flex items-center gap-2"
-    data-tauri-drag-region
-  >
+  <div class="flex items-center gap-2" data-tauri-drag-region>
     <Tooltip
       v-if="!hasAccessibility"
       placement="bottomRight"
@@ -95,12 +92,7 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
       </Button>
     </Tooltip>
 
-    <Button
-      type="primary"
-      size="small"
-      class="overlay-btn"
-      @click="emit('enterOverlayMode')"
-    >
+    <Button type="primary" size="small" class="overlay-btn" @click="emit('enterOverlayMode')">
       <template #icon>
         <Monitor class="header-btn-icon" />
       </template>
@@ -123,24 +115,15 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
         :aria-label="currentLocaleOption.label"
         @click.stop
       >
-        <Languages
-          class="h-[18px] w-[18px] text-muted-foreground"
-          :stroke-width="2.2"
-        />
+        <Languages class="h-[18px] w-[18px]" :stroke-width="2.2" />
         <span class="max-w-20 truncate">
           {{ currentLocaleOption.label }}
         </span>
-        <ChevronDown
-          class="h-3.5 w-3.5 text-muted-foreground"
-          :stroke-width="2.2"
-        />
+        <ChevronDown class="h-3.5 w-3.5" :stroke-width="2.2" />
       </Button>
     </Dropdown>
 
-    <Tooltip
-      placement="bottomRight"
-      :title="t('about.title')"
-    >
+    <Tooltip placement="bottomRight" :title="t('about.title')">
       <Button
         color="primary"
         variant="link"
@@ -191,8 +174,5 @@ function handleLocaleMenuClick(info: { key: string | number }): void {
 
 .overlay-btn {
   @apply h-8 gap-1.5 px-3 text-xs font-medium;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
 }
-
 </style>

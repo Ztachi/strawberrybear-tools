@@ -24,12 +24,12 @@ export const midiEditorPianoRollTheme: PianoRollThemeInput = {
     editorNote: MIDI_EDITOR_DEFAULT_TRACK_COLOR,
   },
 }
-/** 主品牌粉色禁用背景，只降低饱和和对比，不回退到灰色系。 */
-export const NIKKI_PRIMARY_DISABLED_BG = '#FFF1F4'
-/** 主品牌粉色禁用描边，用于 disabled 按钮和输入控件边框。 */
-export const NIKKI_PRIMARY_DISABLED_BORDER = '#F8D4DA'
-/** 主品牌粉色禁用文字，保持主题感但降低可交互暗示。 */
-export const NIKKI_PRIMARY_DISABLED_TEXT = '#F0B8C2'
+/** 框架种子使用具体颜色；按钮运行时状态读取 style.css 中的同义变量。 */
+export const NIKKI_PRIMARY_DISABLED_BG = '#F5F3F3'
+/** 中性禁用描边，用于 disabled 按钮和输入控件边框。 */
+export const NIKKI_PRIMARY_DISABLED_BORDER = '#E2DCDC'
+/** 中性禁用文字，与可用的品牌色操作明确区分。 */
+export const NIKKI_PRIMARY_DISABLED_TEXT = '#A89A9A'
 /** 顶部菜单高度，抽屉挂载到内容区时不能越过这条布局边界。 */
 export const MAIN_WINDOW_HEADER_HEIGHT = 46
 
@@ -52,7 +52,7 @@ export const infinityNikkiTheme: ThemeConfig = {
     colorInfo: NIKKI_PRIMARY_COLOR,
     colorSuccess: '#4ADE80',
     colorWarning: '#F5C542',
-    colorError: '#EF5B6B',
+    colorError: '#EF4444',
     colorTextBase: '#4A3F3F',
     colorText: '#4A3F3F',
     colorTextSecondary: '#6B5A5A',
@@ -84,6 +84,13 @@ export const infinityNikkiTheme: ThemeConfig = {
       controlHeightLG: 30,
       borderRadiusLG: 8,
     },
+    Typography: {
+      colorLink: 'var(--icon-color)',
+      colorLinkHover: 'var(--icon-hover-color)',
+      colorLinkActive: 'var(--icon-active-color)',
+      colorTextDisabled: 'var(--icon-disabled-color)',
+      algorithm: false,
+    },
     Slider: {
       railBg: '#EEC6CF',
       railHoverBg: '#E5AAB9',
@@ -91,34 +98,49 @@ export const infinityNikkiTheme: ThemeConfig = {
       trackHoverBg: NIKKI_PRIMARY_HOVER_COLOR,
     },
     Button: {
-      colorPrimary: NIKKI_PRIMARY_COLOR,
-      colorPrimaryHover: NIKKI_PRIMARY_HOVER_COLOR,
-      colorPrimaryActive: NIKKI_PRIMARY_ACTIVE_COLOR,
-      colorPrimaryBg: '#FFF5F7',
-      colorPrimaryBgHover: '#FFE8EE',
-      colorPrimaryBorder: '#F5AAB8',
-      colorPrimaryBorderHover: NIKKI_PRIMARY_HOVER_COLOR,
-      colorBgContainerDisabled: NIKKI_PRIMARY_DISABLED_BG,
-      colorBorderDisabled: NIKKI_PRIMARY_DISABLED_BORDER,
-      colorTextDisabled: NIKKI_PRIMARY_DISABLED_TEXT,
+      // CSS 变量必须作为最终组件 token，不能再参与品牌色算法；默认/text/link/solid 共用一组状态。
+      colorPrimary: 'var(--control-selected-bg)',
+      colorPrimaryHover: 'var(--icon-hover-color)',
+      colorPrimaryActive: 'var(--icon-active-color)',
+      colorPrimaryBg: 'var(--control-light-bg)',
+      colorPrimaryBgHover: 'var(--control-hover-bg)',
+      colorPrimaryBorder: 'var(--control-active-bg)',
+      colorPrimaryBorderHover: 'var(--icon-hover-color)',
+      colorBgContainerDisabled: 'var(--color-disabled-bg)',
+      borderColorDisabled: 'var(--color-disabled-border)',
+      colorTextDisabled: 'var(--icon-disabled-color)',
+      colorLink: 'var(--icon-color)',
+      colorLinkHover: 'var(--icon-hover-color)',
+      colorLinkActive: 'var(--icon-active-color)',
+      colorError: 'var(--color-danger)',
+      colorErrorHover: 'var(--color-danger-hover)',
+      colorErrorActive: 'var(--color-danger-active)',
+      colorErrorBg: 'var(--bg-danger-hover)',
+      colorErrorBgFilledHover: 'var(--bg-danger-hover)',
+      colorErrorBgActive: 'var(--bg-danger-active)',
       borderRadius: 12,
       fontWeight: 500,
-      defaultBg: 'rgba(255, 255, 255, 0.8)',
-      defaultBorderColor: NIKKI_PRIMARY_COLOR,
-      defaultColor: NIKKI_PRIMARY_ACTIVE_COLOR,
-      defaultHoverBg: '#FFF0F3',
-      defaultHoverBorderColor: NIKKI_PRIMARY_HOVER_COLOR,
-      defaultHoverColor: NIKKI_PRIMARY_HOVER_COLOR,
-      defaultActiveBg: '#FFE4EA',
-      defaultActiveBorderColor: NIKKI_PRIMARY_ACTIVE_COLOR,
-      defaultActiveColor: NIKKI_PRIMARY_ACTIVE_COLOR,
-      defaultBgDisabled: NIKKI_PRIMARY_DISABLED_BG,
-      dashedBgDisabled: NIKKI_PRIMARY_DISABLED_BG,
-      primaryColor: '#FFFFFF',
-      primaryShadow: '0 4px 16px rgba(238, 143, 161, 0.28)',
+      defaultBg: 'var(--bg-white-80)',
+      defaultBorderColor: 'var(--icon-color)',
+      defaultColor: 'var(--icon-color)',
+      defaultHoverBg: 'var(--control-hover-bg)',
+      defaultHoverBorderColor: 'var(--icon-hover-color)',
+      defaultHoverColor: 'var(--icon-hover-color)',
+      defaultActiveBg: 'var(--control-active-bg)',
+      defaultActiveBorderColor: 'var(--icon-active-color)',
+      defaultActiveColor: 'var(--icon-active-color)',
+      textTextColor: 'var(--icon-color)',
+      textTextHoverColor: 'var(--icon-hover-color)',
+      textTextActiveColor: 'var(--icon-active-color)',
+      textHoverBg: 'var(--control-hover-bg)',
+      defaultBgDisabled: 'var(--color-disabled-bg)',
+      dashedBgDisabled: 'var(--color-disabled-bg)',
+      primaryColor: 'var(--icon-selected-color)',
+      dangerColor: 'var(--icon-selected-color)',
+      primaryShadow: 'var(--control-primary-shadow)',
       defaultShadow: 'none',
-      dangerShadow: '0 4px 16px rgba(239, 91, 107, 0.22)',
-      algorithm: true,
+      dangerShadow: 'var(--control-danger-shadow)',
+      algorithm: false,
     },
     Drawer: {
       colorBgElevated: '#FFF9FC',
@@ -166,6 +188,9 @@ export const infinityNikkiButtonConfig: ConfigProviderProps['button'] = {
   classes: {
     root: 'nikki-theme-button',
   },
+  styles: {
+    root: { outlineColor: 'var(--control-focus-ring)' },
+  },
 }
 
 /**
@@ -175,6 +200,14 @@ export const infinityNikkiButtonConfig: ConfigProviderProps['button'] = {
 export const infinityNikkiConfigProviderProps: ConfigProviderProps = {
   theme: infinityNikkiTheme,
   button: infinityNikkiButtonConfig,
+  // 菜单图标独立于正文色，通过框架语义 class 接入统一状态，避免每个菜单工厂自己着色。
+  dropdown: {
+    classes: {
+      item: 'nikki-menu-action',
+      itemTitle: 'nikki-menu-action',
+      itemIcon: 'nikki-menu-action-icon',
+    },
+  },
 }
 
 /** MIDI 编辑器在主窗口与独立窗口中共用的紧凑控件规格。 */

@@ -455,7 +455,10 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
 
         <!-- 关闭按钮 -->
         <Tooltip :title="t('overlay.close')">
-          <button class="ctrl-btn close" @click.stop="exitOverlayMode">
+          <button
+            class="ctrl-btn close nikki-inverse-controls nikki-icon-button"
+            @click.stop="exitOverlayMode"
+          >
             <X :size="16" />
           </button>
         </Tooltip>
@@ -483,7 +486,7 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
         <!-- 展开/收起按钮 -->
         <Tooltip :title="isExpanded ? t('overlay.collapse') : t('overlay.expand')">
           <button
-            class="ctrl-btn justify-self-end"
+            class="ctrl-btn nikki-inverse-controls nikki-icon-button justify-self-end"
             :class="{ active: isExpanded }"
             @click.stop="toggleExpand"
           >
@@ -518,7 +521,14 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
       </div>
 
       <Tooltip :title="t('overlay.locateCurrent')" placement="left">
-        <Crosshair class="locate-current-btn" @click.stop="locateCurrentMidi" />
+        <button
+          type="button"
+          class="locate-current-btn nikki-icon-button"
+          :aria-label="t('overlay.locateCurrent')"
+          @click.stop="locateCurrentMidi"
+        >
+          <Crosshair :size="16" :stroke-width="2.25" />
+        </button>
       </Tooltip>
     </div>
   </div>
@@ -580,25 +590,20 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
 }
 
 .ctrl-btn {
-  @apply w-8 h-8 flex items-center justify-center rounded-lg text-white/90;
+  @apply w-8 h-8 flex items-center justify-center rounded-lg;
   @apply transition-colors;
   background: transparent;
   cursor: pointer;
 }
 
-.ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
 .ctrl-btn.active {
-  background: rgba(255, 255, 255, 0.4);
-  color: white;
+  background: var(--control-inverse-active-bg);
+  color: var(--icon-selected-color);
 }
 
 .ctrl-btn.close:hover {
-  background: rgba(239, 68, 68, 0.6);
-  color: white;
+  background: var(--color-danger-hover);
+  color: var(--icon-selected-color);
 }
 
 .action-buttons {
@@ -648,11 +653,5 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
 
 .locate-current-btn {
   @apply absolute bottom-3 right-3 flex h-4 w-4 items-center justify-center transition-colors cursor-pointer;
-  color: var(--color-primary);
-  stroke-width: 2.25;
-}
-
-.locate-current-btn:hover {
-  color: var(--color-primary-hover);
 }
 </style>

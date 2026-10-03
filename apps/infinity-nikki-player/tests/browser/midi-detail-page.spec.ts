@@ -128,7 +128,7 @@ for (const [locale, width] of [
     expect(layout.rightGap).toBeGreaterThanOrEqual(6)
     expect(layout.rightGap).toBeLessThanOrEqual(16)
     expect(layout.clearOfSlider).toBe(true)
-    expect(layout.color).toBe('rgb(239, 91, 107)')
+    expect(layout.color).toBe('rgb(239, 68, 68)')
     expect(layout.overflow).toBe(false)
     await page.mouse.move(0, 0)
     await expect(page.getByRole('tooltip')).toHaveCount(0)
