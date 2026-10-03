@@ -1182,6 +1182,128 @@ test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑�
   await expect(page.locator('.editor-template-select:visible')).toContainText('高音演奏键')
 })
 
+test('定位后打开独立窗口，首次播放及还原后的续播都从当前位置开始', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+  const mainHead = page.locator('.detail-piano-roll .pr-handle')
+  const ruler = (await page.locator('.detail-piano-roll .pr-ruler').boundingBox())!
+  await page.mouse.click(ruler.x + 180, ruler.y + 16)
+  await expect
+    .poll(async () => Number(await mainHead.getAttribute('aria-valuenow')))
+    .toBeGreaterThan(1)
+  const before = Number(await mainHead.getAttribute('aria-valuenow'))
+  expect(before).toBeGreaterThan(0)
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  const head = popup.locator('.detail-piano-roll .pr-handle')
+  await expect(head).toHaveAttribute('aria-valuenow', String(before))
+  await popup.locator('.editor-toolbar').getByRole('button', { name: /^播放/ }).click()
+  await expect(
+    popup.locator('.editor-toolbar').getByRole('button', { name: /^暂停/ })
+  ).toBeVisible()
+  expect(Number(await head.getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(before)
+  await expect
+    .poll(async () => Number(await head.getAttribute('aria-valuenow')))
+    .toBeGreaterThan(before + 0.1)
+  await popup.locator('.editor-toolbar').getByRole('button', { name: /^暂停/ }).click()
+  await expect(
+    popup.locator('.editor-toolbar').getByRole('button', { name: /^播放/ })
+  ).toBeVisible()
+  await popup.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  )
+  const paused = Number(await head.getAttribute('aria-valuenow'))
+  await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  await expect(mainHead).toHaveAttribute('aria-valuenow', String(paused))
+  await page.locator('.editor-toolbar').getByRole('button', { name: /^播放/ }).click()
+  await expect
+    .poll(async () => Number(await mainHead.getAttribute('aria-valuenow')))
+    .toBeGreaterThan(paused + 0.1)
+})
+
+test('播放中的窗口交接保持播放状态，独立窗口刷新和原生关闭也使用最新快照', async ({
+  page,
+  context,
+}, testInfo) => {
+  const webkit = testInfo.project.use.browserName === 'webkit'
+  if (webkit) {
+    // Tauri/Wry 默认允许自动播放；浏览器 WebKit 要求手势解锁。仅装配等价的设备权限边界，
+    // 保留真实 AudioContext、音色、音频时钟和编辑器调度器，不伪造播放或位置。
+    await context.addInitScript(() => {
+      const NativeAudioContext = window.AudioContext
+      window.AudioContext = class extends NativeAudioContext {
+        constructor(...args: ConstructorParameters<typeof NativeAudioContext>) {
+          super(...args)
+          ;(window as Window & { desktopTestAudio?: AudioContext }).desktopTestAudio = this
+        }
+      }
+    })
+  }
+  const allowDesktopAudio = async (target: Page) => {
+    if (!webkit) return
+    await expect
+      .poll(() =>
+        target.evaluate(
+          () => !!(window as Window & { desktopTestAudio?: AudioContext }).desktopTestAudio
+        )
+      )
+      .toBe(true)
+    await target.evaluate(() =>
+      (window as Window & { desktopTestAudio?: AudioContext }).desktopTestAudio!.resume()
+    )
+  }
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+  await page.locator('.pr-track-select').first().dblclick()
+  const layers = page.getByRole('button', { name: '显示其他音轨', exact: true })
+  await layers.click()
+  const pitchZoom = page
+    .locator('.detail-piano-editor')
+    .getByRole('slider', { name: '音高缩放', exact: true })
+  await pitchZoom.press('End')
+  await page.locator('.editor-toolbar').getByRole('button', { name: /^播放/ }).click()
+  const mainHead = page.locator('.detail-piano-roll .pr-handle')
+  await expect
+    .poll(async () => Number(await mainHead.getAttribute('aria-valuenow')))
+    .toBeGreaterThan(0.3)
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  const head = popup.locator('.detail-piano-roll .pr-handle')
+  await allowDesktopAudio(popup)
+  await expect(
+    popup.locator('.editor-toolbar').getByRole('button', { name: /^暂停/ })
+  ).toBeVisible()
+  await expect(popup.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  await expect(
+    popup.locator('.detail-piano-editor').getByRole('slider', { name: '音高缩放', exact: true })
+  ).toHaveAttribute('aria-valuenow', '36')
+  await expect
+    .poll(async () => Number(await head.getAttribute('aria-valuenow')))
+    .toBeGreaterThan(0.6)
+  const beforeReload = Number(await head.getAttribute('aria-valuenow'))
+  await popup.reload()
+  await allowDesktopAudio(popup)
+  await expect(
+    popup.locator('.editor-toolbar').getByRole('button', { name: /^暂停/ })
+  ).toBeVisible()
+  expect(Number(await head.getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(beforeReload)
+  await expect(popup.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  const beforeDock = Number(await head.getAttribute('aria-valuenow'))
+  await popup.evaluate(() => window.dispatchEvent(new Event('test-native-close')))
+  await expect.poll(() => popup.isClosed()).toBe(true)
+  await expect(page.locator('.editor-toolbar').getByRole('button', { name: /^暂停/ })).toBeVisible()
+  expect(Number(await mainHead.getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(beforeDock)
+  await expect(layers).toHaveAttribute('aria-pressed', 'false')
+  await expect(pitchZoom).toHaveAttribute('aria-valuenow', '36')
+})
+
 test('主窗口离开编辑页并切歌后，还原独立窗口仍恢复原编辑会话', async ({ page }) => {
   const opening = page.waitForEvent('popup')
   await page

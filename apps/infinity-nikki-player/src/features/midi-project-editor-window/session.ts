@@ -23,6 +23,7 @@ export class MidiProjectEditorWindowSession {
   private session = ''
   private sequence = 0
   private received = 0
+  private clientId = ''
   private ready = false
   private sending = false
   private statePending = false
@@ -48,6 +49,7 @@ export class MidiProjectEditorWindowSession {
     this.session = session
     this.ready = false
     this.received = 0
+    this.clientId = ''
     this.sequence = 0
     this.statePending = true
     this.pingPending = false
@@ -101,6 +103,7 @@ export class MidiProjectEditorWindowSession {
       await this.options.port.send({
         kind: 'dock',
         session,
+        clientId: this.clientId,
         sequence: ++this.sequence,
       })
     } catch (error) {
@@ -121,6 +124,7 @@ export class MidiProjectEditorWindowSession {
     const update: MidiProjectEditorUpdate = {
       kind: 'notice',
       session: this.session,
+      clientId: this.clientId,
       sequence: ++this.sequence,
       level,
       title,
@@ -170,8 +174,14 @@ export class MidiProjectEditorWindowSession {
 
   private receive(request: MidiProjectEditorRequest): void {
     if (!request || !this.session || request.session !== this.session) return
-    if (!Number.isSafeInteger(request.sequence)) return
+    if (
+      !Number.isSafeInteger(request.sequence) ||
+      typeof request.clientId !== 'string' ||
+      !request.clientId
+    )
+      return
     if (request.kind === 'ready') {
+      this.clientId = request.clientId
       this.received = request.sequence
       this.ready = true
       this.statePending = true
@@ -180,7 +190,8 @@ export class MidiProjectEditorWindowSession {
       void this.flush()
       return
     }
-    if (request.sequence <= this.received) return
+    // 刷新使用新客户端身份；旧窗口的高序号回包不能覆盖新快照或阻断新请求。
+    if (request.clientId !== this.clientId || request.sequence <= this.received) return
     this.received = request.sequence
     if (request.kind === 'ping') {
       this.pingPending = true
@@ -217,6 +228,7 @@ export class MidiProjectEditorWindowSession {
               await this.options.port.send({
                 kind: 'pong',
                 session,
+                clientId: this.clientId,
                 sequence: ++this.sequence,
               })
             }
@@ -227,6 +239,7 @@ export class MidiProjectEditorWindowSession {
           await this.options.port.send({
             kind: 'state',
             session,
+            clientId: this.clientId,
             sequence: ++this.sequence,
             presentation,
             ...(viewport ? { viewport } : {}),
@@ -236,6 +249,7 @@ export class MidiProjectEditorWindowSession {
           await this.options.port.send({
             kind: 'pong',
             session,
+            clientId: this.clientId,
             sequence: ++this.sequence,
           })
         }

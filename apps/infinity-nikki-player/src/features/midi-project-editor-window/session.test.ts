@@ -14,6 +14,7 @@ function fixture() {
   let receive: (request: MidiProjectEditorRequest) => void = () => {}
   let sessionId = ''
   let requestSequence = 0
+  let clientId = 'initial-client'
   let destroyed: () => void = () => {}
   const updates: MidiProjectEditorUpdate[] = []
   const commands: MidiProjectEditorRequest[] = []
@@ -84,13 +85,15 @@ function fixture() {
     receive({
       ...command,
       session: sessionId,
+      clientId,
       sequence: ++requestSequence,
     } as MidiProjectEditorRequest)
   const requestForSession = (
     targetSession: string,
     sequence: number,
     command: MidiProjectEditorCommand
-  ) => receive({ ...command, session: targetSession, sequence } as MidiProjectEditorRequest)
+  ) =>
+    receive({ ...command, session: targetSession, clientId, sequence } as MidiProjectEditorRequest)
   return {
     host,
     port,
@@ -103,6 +106,19 @@ function fixture() {
     destroy,
     request,
     requestForSession,
+    reload: () => {
+      clientId = 'reloaded-client'
+      requestSequence = 0
+      request({ kind: 'ready' })
+    },
+    staleClientSnapshot: () =>
+      receive({
+        kind: 'playback-state',
+        session: sessionId,
+        clientId: 'initial-client',
+        sequence: 999,
+        snapshot: { positionSeconds: 0, isPlaying: false, playbackRate: 1 },
+      } as MidiProjectEditorRequest),
     onError,
     setPresentationAvailable: (available: boolean) => {
       presentationAvailable = available
@@ -116,6 +132,17 @@ const flush = async () => {
 }
 
 describe('detached MIDI project editor session', () => {
+  it('刷新后旧 WebView 的迟到播放快照不能覆盖新窗口，也不能阻断新命令', async () => {
+    const item = fixture()
+    await item.host.open()
+    item.request({ kind: 'ready' })
+    await flush()
+    item.reload()
+    await flush()
+    item.staleClientSnapshot()
+    item.request({ kind: 'prepare-playback' })
+    expect(item.commands.map((command) => command.kind)).toEqual(['prepare-playback'])
+  })
   it('focuses the existing window instead of opening a duplicate', async () => {
     const item = fixture()
     await item.host.open()
@@ -210,14 +237,20 @@ describe('detached MIDI project editor session', () => {
     expect(item.updates.at(-1)).toMatchObject({ kind: 'dock' })
     expect(item.events).toEqual([])
 
-    item.request({ kind: 'playback-position', seconds: 3.5 })
+    item.request({
+      kind: 'playback-state',
+      snapshot: { positionSeconds: 3.5, isPlaying: true, playbackRate: 1 },
+    })
     item.request({ kind: 'dock' })
     await flush()
 
     expect(item.events).toEqual(['dock', 'destroy'])
     expect(item.statuses.at(-1)).toBe('docked')
     expect(item.commands).toContainEqual(
-      expect.objectContaining({ kind: 'playback-position', seconds: 3.5 })
+      expect.objectContaining({
+        kind: 'playback-state',
+        snapshot: { positionSeconds: 3.5, isPlaying: true, playbackRate: 1 },
+      })
     )
   })
 

@@ -29,6 +29,8 @@ import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 const props = defineProps<{
   state: EditorSessionState
   isPlaying: boolean
+  /** 试听由独立窗口接管期间，主窗口不能同时开启另一份排程。 */
+  playbackDisabled?: boolean
   showVelocity: boolean
   dimUnplayable: boolean
   currentTemplateId: string | null
@@ -207,6 +209,7 @@ function handleDimUnplayable(value: boolean): void {
           size="small"
           type="primary"
           shape="circle"
+          :disabled="playbackDisabled"
           :aria-label="t(isPlaying ? 'midiEditor.toolbar.pause' : 'midiEditor.toolbar.play')"
           @click="isPlaying ? emit('pause') : emit('play')"
         >
@@ -222,6 +225,7 @@ function handleDimUnplayable(value: boolean): void {
           color="primary"
           variant="text"
           :aria-label="t('midiEditor.toolbar.stop')"
+          :disabled="playbackDisabled"
           @click="emit('stop')"
         >
           <template #icon>

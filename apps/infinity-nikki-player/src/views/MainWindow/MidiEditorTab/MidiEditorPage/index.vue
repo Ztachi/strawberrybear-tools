@@ -33,7 +33,11 @@ import {
   sameMidiEditorEntry,
   type MidiEditorEntry,
 } from '@/features/midi-editor/draftIdentity'
-import type { PianoWorkspaceState } from '@/features/piano-editor'
+import { validWorkspace, type PianoWorkspaceState } from '@/features/piano-editor'
+import {
+  validMidiEditorPlaybackSnapshot,
+  type MidiEditorPlaybackSnapshot,
+} from '@/features/midi-editor/playbackController'
 import {
   MidiProjectEditorWindowSession,
   MIDI_PROJECT_EDITOR_WINDOW_PORT,
@@ -111,6 +115,8 @@ let draftTimer: number | null = null
 let editorWindow: MidiProjectEditorWindowSession | null = null
 let endingDetachedEditor = false
 let pageActive = true
+/** 当前播放窗口的最新快照；宿主只保留状态，独立窗口存续时不接管音频排程。 */
+let detachedPlayback: MidiEditorPlaybackSnapshot | undefined
 /** 迟到的解析、草稿读取或弹窗结果不能覆盖后一次路由载入。 */
 let loadGeneration = 0
 /** 按模板试听与置灰共享同一集合；关闭时为 null，缺少模板时全部静音。 */
@@ -217,7 +223,7 @@ function disposeEditor(): void {
 
 function installEditorShortcuts(): void {
   const handle = editor.value
-  if (!handle || uninstallShortcuts || updateLocked.value || editorWindowStatus.value === 'detached' || !pageActive) return
+  if (!handle || uninstallShortcuts || updateLocked.value || editorWindowStatus.value !== 'docked' || !pageActive) return
   uninstallShortcuts = handle.installShortcuts({
     togglePlayback: () => void playback.toggle(),
     save: () => void save(),
@@ -534,7 +540,7 @@ function createWindowPresentation() {
     state: serializeMidiProjectEditorState(current),
     labels: labels.value,
     locale: locale.value,
-    transport: playback.transport.value,
+    transport: detachedPlayback ?? playback.getSnapshot(),
     showVelocity: showVelocity.value,
     dimUnplayable: dimUnplayable.value,
     playablePitches: playablePitches.value ? [...playablePitches.value] : [],
@@ -590,19 +596,23 @@ async function exitDetachedEditor(mode: 'save' | 'discard'): Promise<void> {
 
 function handleEditorWindowCommand(command: MidiProjectEditorRequest): void {
   // 安装准备期间阻止独立窗口的迟到编辑命令改变已落盘的最终快照。
-  if (updateLocked.value && command.kind !== 'viewport' && command.kind !== 'playback-position') return
+  if (updateLocked.value && command.kind !== 'viewport' && command.kind !== 'playback-state') return
   switch (command.kind) {
     case 'dispatch':
       dispatch(command.action)
       break
-    case 'playback-position':
-      if (Number.isFinite(command.seconds)) playback.seek(command.seconds)
+    case 'playback-state':
+      if (validMidiEditorPlaybackSnapshot(command.snapshot)) {
+        detachedPlayback = command.snapshot
+        // 同步休眠宿主的位置与倍速，但只有还原完成后才恢复播放意图。
+        void playback.restore({ ...command.snapshot, isPlaying: false })
+      }
       break
     case 'prepare-playback':
       playerStore.pausePreviewPlayback()
       break
     case 'viewport':
-      latestViewport.value = command.viewport
+      if (validWorkspace(command.viewport)) latestViewport.value = command.viewport
       break
     case 'view-option':
       if (command.option === 'showVelocity') showVelocity.value = command.value
@@ -627,8 +637,17 @@ function setEditorWindowStatus(status: 'docked' | 'opening' | 'detached'): void 
   const previous = editorWindowStatus.value
   editorWindowStatus.value = status
   mainWindowUi.setDetachedMidiEditorStatus(status)
-  if (status === 'detached') uninstallEditorShortcuts()
-  else if (status === 'docked') installEditorShortcuts()
+  if (status !== 'docked') uninstallEditorShortcuts()
+  else {
+    installEditorShortcuts()
+    const snapshot = detachedPlayback
+    detachedPlayback = undefined
+    if (snapshot && !endingDetachedEditor) {
+      // 正常还原、打开失败和窗口异常释放均走同一恢复入口，不再仅恢复一个位置字段。
+      void playback.restore({ ...snapshot, isPlaying: snapshot.isPlaying && !updateLocked.value })
+        .catch(reportEditorWindowError)
+    }
+  }
   // 系统关闭或渲染进程异常时也回到主编辑页，避免会话被缓存页面清理掉。
   if (status === 'docked' && previous !== 'docked' && !endingDetachedEditor) {
     void restoreEditorPage()
@@ -642,10 +661,11 @@ function reportEditorWindowError(error: unknown): void {
 async function openDetachedEditor(): Promise<void> {
   const current = state.value
   if (!current || !editorWindow) return
+  if (editorWindowStatus.value !== 'docked') return editorWindow.focus()
   latestViewport.value = workspace.value?.getState() ?? latestViewport.value
   workspaceRestore.value = latestViewport.value
   // 音频调度迁移到获得焦点的独立 WebView；主窗口只保留当前位置，不再后台排程。
-  playback.pause()
+  detachedPlayback = playback.suspend()
   mainWindowUi.registerDetachedMidiEditor(current.project.id, () => editorWindow?.focus() ?? Promise.resolve())
   await editorWindow.open()
 }
@@ -785,6 +805,7 @@ onBeforeUnmount(() => {
           :templates="settingsStore.templates"
           :state="state"
           :is-playing="playback.isPlaying.value"
+          :playback-disabled="editorWindowStatus !== 'docked'"
           @update:show-velocity="showVelocity = $event"
           @update:dim-unplayable="dimUnplayable = $event"
           @select-template="selectKeyTemplate"

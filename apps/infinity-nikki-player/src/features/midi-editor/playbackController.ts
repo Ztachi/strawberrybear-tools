@@ -32,6 +32,12 @@ export interface MidiEditorPlaybackControllerOptions {
 
 export interface MidiEditorPlaybackController {
   getState(): EditorTransportState
+  /** 用本窗口音频时钟采样可跨窗口的播放状态，不迁移 AudioContext 或发音句柄。 */
+  getSnapshot(): MidiEditorPlaybackSnapshot
+  /** 先采样再暂停排程，交给另一窗口恢复。 */
+  suspend(): MidiEditorPlaybackSnapshot
+  /** 统一恢复定位、倍速和播放意图；暂停快照不初始化音频设备。 */
+  restore(snapshot: MidiEditorPlaybackSnapshot): Promise<void>
   /** 按本窗口音频时钟返回实际已发声、尚未释放的音高，去重后升序排列。 */
   getActivePitches(): readonly number[]
   play(fromSeconds?: number): Promise<void>
@@ -42,6 +48,28 @@ export interface MidiEditorPlaybackController {
   setLoop(loop: MidiProjectLoop | null | undefined): void
   invalidate(): void
   dispose(): void
+}
+
+/** 播放窗口交接的完整状态；循环由同一项目文档提供，声音由接管窗口重新排程。 */
+export type MidiEditorPlaybackSnapshot = Pick<
+  EditorTransportState,
+  'positionSeconds' | 'isPlaying' | 'playbackRate'
+>
+
+/**
+ * @description 验证 IPC 快照，非法数字不能污染音频时钟或下次还原的位置。
+ * @param value 接收到的播放状态。
+ * @return 位置、倍速及播放标记是否合法。
+ */
+export function validMidiEditorPlaybackSnapshot(value: MidiEditorPlaybackSnapshot): boolean {
+  return (
+    !!value &&
+    Number.isFinite(value.positionSeconds) &&
+    value.positionSeconds >= 0 &&
+    Number.isFinite(value.playbackRate) &&
+    value.playbackRate > 0 &&
+    typeof value.isPlaying === 'boolean'
+  )
 }
 
 /** 每个 WebView 创建自己的合成端口，排程与窗口的 AudioContext 保持同源。 */
@@ -128,6 +156,9 @@ export function createMidiEditorPlaybackController(
   const synth = createSynth(schedule, now)
   let engine: EditorTransport | null = null
   let pendingPosition = 0
+  let pendingRate = 1
+  let playOperation = 0
+  let playRequested = false
   let loop = options.getLoop() ?? null
   let disposed = false
   const auditions = new Map<ScheduledNoteHandle, number>()
@@ -160,7 +191,7 @@ export function createMidiEditorPlaybackController(
     return {
       positionSeconds: Math.min(pendingPosition, duration),
       isPlaying: false,
-      playbackRate: 1,
+      playbackRate: pendingRate,
       loop: null,
       durationSeconds: duration,
     }
@@ -169,6 +200,9 @@ export function createMidiEditorPlaybackController(
   function ensureEngine(): EditorTransport | null {
     if (disposed || !options.getDocument()) return null
     if (!engine) {
+      // 初始化 setLoop/setRate 会同步回调零位置；先保留快照，不能让回调覆盖首次播放的起点。
+      const position = pendingPosition
+      const rate = pendingRate
       engine = createEditorTransport({
         getDocument: playbackDocument,
         synth,
@@ -179,13 +213,35 @@ export function createMidiEditorPlaybackController(
         },
       })
       engine.setLoop(loop)
-      if (pendingPosition > 0) engine.seek(pendingPosition)
+      engine.setRate(rate)
+      engine.seek(position)
     }
     return engine
   }
 
-  return {
+  const controller: MidiEditorPlaybackController = {
     getState: () => engine?.getState() ?? fallbackState(),
+    getSnapshot() {
+      const state = controller.getState()
+      return {
+        positionSeconds: state.positionSeconds,
+        isPlaying: state.isPlaying || playRequested,
+        playbackRate: state.playbackRate,
+      }
+    },
+    suspend() {
+      const snapshot = controller.getSnapshot()
+      controller.pause()
+      return snapshot
+    },
+    async restore(snapshot) {
+      if (disposed || !validMidiEditorPlaybackSnapshot(snapshot)) return
+      controller.pause()
+      pendingRate = snapshot.playbackRate
+      engine?.setRate(pendingRate)
+      controller.seek(snapshot.positionSeconds)
+      if (snapshot.isPlaying) await controller.play()
+    },
     getActivePitches() {
       const clock = now()
       const pitches = new Set<number>()
@@ -198,17 +254,29 @@ export function createMidiEditorPlaybackController(
     async play(fromSeconds) {
       const document = options.getDocument()
       if (disposed || !document) return
-      await ensureAudio()
-      if (disposed || options.getDocument() !== document) return
-      options.pauseExternal?.()
-      ensureEngine()?.play(fromSeconds)
+      const operation = ++playOperation
+      playRequested = true
+      try {
+        await ensureAudio()
+        // 同一项目在等待音色期间仍可编辑；换入口先 stop/清空文档，会使 operation 失效。
+        if (disposed || operation !== playOperation || !options.getDocument()) return
+        options.pauseExternal?.()
+        ensureEngine()?.play(fromSeconds)
+      } finally {
+        if (operation === playOperation) playRequested = false
+      }
     },
     pause() {
+      // 取消等待音频准备的旧请求，避免交接后原窗口迟到启动并形成两路播放。
+      playOperation += 1
+      playRequested = false
       stopAuditions()
       engine?.pause()
       if (!engine) options.onChange?.(fallbackState())
     },
     stop() {
+      playOperation += 1
+      playRequested = false
       stopAuditions()
       if (engine) engine.stop()
       else {
@@ -227,10 +295,12 @@ export function createMidiEditorPlaybackController(
     async audition(pitch, velocity, durationSeconds = 0.35) {
       if (disposed || options.getPlayablePitches?.()?.has(pitch) === false) return
       const document = options.getDocument()
+      const operation = playOperation
       await ensureAudio()
       // 等待音频初始化时模板可能切换，发声前必须按最新模板再次检查。
       if (
         disposed ||
+        operation !== playOperation ||
         options.getDocument() !== document ||
         options.getPlayablePitches?.()?.has(pitch) === false
       )
@@ -247,9 +317,12 @@ export function createMidiEditorPlaybackController(
     invalidate() {
       stopAuditions()
       if (!options.getDocument()) {
+        playOperation += 1
+        playRequested = false
         engine?.dispose()
         engine = null
         pendingPosition = 0
+        pendingRate = 1
       }
       if (engine) engine.invalidate()
       else {
@@ -261,6 +334,8 @@ export function createMidiEditorPlaybackController(
     dispose() {
       if (disposed) return
       disposed = true
+      playOperation += 1
+      playRequested = false
       stopAuditions()
       engine?.dispose()
       engine = null
@@ -268,4 +343,5 @@ export function createMidiEditorPlaybackController(
       voices.clear()
     },
   }
+  return controller
 }

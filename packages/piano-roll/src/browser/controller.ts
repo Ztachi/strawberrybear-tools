@@ -84,14 +84,16 @@ export function createView(
   scroll.append(spacer)
   const grid = make('canvas', 'pr-layer')
   const activity = make('canvas', 'pr-layer pr-pitch-activity')
+  const glow = make('canvas', 'pr-layer pr-pitch-glow')
   const notes = make('canvas', 'pr-layer pr-notes')
   const line = make('div', 'pr-line')
   const empty = make('div', 'pr-empty')
   empty.textContent = labels.empty
   pane.append(scroll, grid)
-  pane.append(notes)
-  // 发音高光在音符上方以薄层合成，满行音符也不会遮住反馈；图层本身不接收指针。
   if (variant === 'editor') pane.append(activity)
+  pane.append(notes)
+  // 保留音符下方的整行变色，同时叠加前景光晕；两层均不接收指针。
+  if (variant === 'editor') pane.append(glow)
   pane.append(empty)
   // 播放头独立于内容裁剪层，首尾保持原始坐标；音符和网格仍限制在 pane 内。
   root.append(corner, ruler, gutter, pane, line)
@@ -499,6 +501,7 @@ export function createView(
       (frame.activePitches ?? []).some((pitch) => !previous?.activePitches?.includes(pitch))
     if (variant === 'editor' && (verticalChanged || horizontalChanged || activityChanged)) {
       drawPitchActivity(activity, frame)
+      drawPitchActivity(glow, frame, 'glow')
     }
     // 发音仅重绘独立高光层与琴键；其它音频帧不会清空静态内容层。
     if (

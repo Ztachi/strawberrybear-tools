@@ -424,22 +424,33 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
  * @description 绘制独立发音高光层，音频帧不必重绘节拍、音符或编辑预览。
  * @param canvas 视口大小的高光画布。
  * @param frame 统一视口与宿主发音状态。
+ * @param layer 网格变色层或叠加在音符上方的外扩光晕层。
  * @return 无返回值。
  */
-export function drawPitchActivity(canvas: HTMLCanvasElement, frame: RenderFrame): void {
+export function drawPitchActivity(
+  canvas: HTMLCanvasElement,
+  frame: RenderFrame,
+  layer: 'fill' | 'glow' = 'fill'
+): void {
   const context = canvasContext(canvas, frame.width, frame.height)
   if (!context || frame.variant !== 'editor') return
   const colors = (frame.theme ?? defaultPianoRollTheme).colors
   const blur = Math.min(12, frame.pitchZoom / 2)
   const rows = [...new Set(frame.activePitches)]
-    .filter(pitch => Number.isInteger(pitch) && pitch >= 0 && pitch <= 127)
-    .map(pitch => {
+    .filter((pitch) => Number.isInteger(pitch) && pitch >= 0 && pitch <= 127)
+    .map((pitch) => {
       const { top, height } = pitchRowGeometry(pitch, frame.pitchZoom)
       return { y: top - frame.scrollTop, height }
     })
-    .filter(row => row.y < frame.height + blur && row.y + row.height > -blur)
+    .filter((row) => row.y < frame.height + blur && row.y + row.height > -blur)
   context.save()
   context.fillStyle = colors.pitchActive
+  if (layer === 'fill') {
+    // 原有整行变色保留在音符下面；前景光晕只是附加反馈，不能替代该层。
+    for (const row of rows) context.fillRect(0, row.y, frame.width, row.height - 1)
+    context.restore()
+    return
+  }
   context.shadowColor = colors.pitchActiveGlow
   // Canvas shadowBlur 不随坐标变换缩放，按 DPR 补偿以保持不同屏幕上的 CSS 光晕范围一致。
   context.shadowBlur = blur * (canvas.ownerDocument.defaultView?.devicePixelRatio || 1)

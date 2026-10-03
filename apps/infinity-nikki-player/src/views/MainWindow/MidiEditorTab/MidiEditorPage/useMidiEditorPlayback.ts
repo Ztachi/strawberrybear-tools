@@ -32,6 +32,8 @@ export function useMidiEditorPlayback(
   })
   const isPlaying = shallowRef(false)
   const positionSeconds = shallowRef(0)
+  /** 只记录播放/暂停/定位等语义变化，供跨窗口同步；连续位置仍在交接时从音频时钟采样。 */
+  const stateChanges = shallowRef<EditorTransportState>()
   let frameHandle: number | null = null
   let disposed = false
 
@@ -69,6 +71,7 @@ export function useMidiEditorPlayback(
     transport.value = toFrame(state)
     isPlaying.value = state.isPlaying
     positionSeconds.value = state.positionSeconds
+    stateChanges.value = state
     onFrame(transport.value)
     if ((state.isPlaying || transport.value.activePitches!.length > 0) && frameHandle === null)
       frameHandle = requestAnimationFrame(frame)
@@ -166,6 +169,10 @@ export function useMidiEditorPlayback(
     transport,
     isPlaying,
     positionSeconds,
+    stateChanges,
+    getSnapshot: controller.getSnapshot,
+    suspend: controller.suspend,
+    restore: controller.restore,
     play,
     pause,
     stop,

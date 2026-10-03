@@ -33,6 +33,7 @@ const port =
   createMidiProjectEditorClientPort()
 const params = new URLSearchParams(window.location.search)
 const session = params.get('session') ?? ''
+const clientId = crypto.randomUUID()
 const { t, locale } = useI18n()
 const presentation = shallowRef<MidiProjectEditorPresentation | null>(null)
 const updateLocked = computed(() => presentation.value?.updateLocked === true)
@@ -47,6 +48,8 @@ let lastContact = Date.now()
 let sending = Promise.resolve()
 let viewportTimer: number | undefined
 let pendingViewport: PianoWorkspaceState | undefined
+let playbackReady = false
+let docking = false
 const cleanups: (() => void)[] = []
 
 const state = computed(() =>
@@ -75,7 +78,7 @@ const choice = ref<{
 
 function send(command: MidiProjectEditorCommand): Promise<void> {
   if (!session || !active) return Promise.resolve()
-  const request = { ...command, session, sequence: ++sent } as MidiProjectEditorRequest
+  const request = { ...command, session, clientId, sequence: ++sent } as MidiProjectEditorRequest
   sending = sending.then(() => port.send(request)).catch((cause) => {
     error.value = String(cause)
   })
@@ -92,14 +95,23 @@ function queueViewport(viewport: PianoWorkspaceState): void {
   }, 100)
 }
 
+/** 语义变化和心跳都提交同一种快照，刷新与还原无需分别拼接播放字段。 */
+function publishPlayback(): Promise<void> {
+  if (!playbackReady || docking) return Promise.resolve()
+  return send({ kind: 'playback-state', snapshot: playback.getSnapshot() })
+}
+watch(playback.stateChanges, () => void publishPlayback())
+
 /** 原生关闭和还原按钮都先提交最终视口，再销毁子窗口。 */
 async function dockEditor(): Promise<void> {
+  if (docking) return
+  docking = true
   window.clearTimeout(viewportTimer)
   viewportTimer = undefined
   const viewport = workspace.value?.getState() ?? pendingViewport
   pendingViewport = undefined
-  playback.pause()
-  await send({ kind: 'playback-position', seconds: playback.positionSeconds.value })
+  const snapshot = playback.suspend()
+  await send({ kind: 'playback-state', snapshot })
   if (viewport) await send({ kind: 'viewport', viewport })
   await send({ kind: 'dock' })
 }
@@ -284,6 +296,18 @@ async function saveAndClose(): Promise<void> {
 }
 
 onMounted(async () => {
+  // 刷新会销毁 WebView 的音频引擎；卸载前提交实时状态和视口，重新 ready 后按同一快照接管。
+  const rememberBeforeReload = () => {
+    if (!playbackReady || docking || !active) return
+    // 交接产生的本地暂停不能随后再发出 false，覆盖需要交给新 WebView 的播放意图。
+    playbackReady = false
+    const snapshot = playback.suspend()
+    const viewport = workspace.value?.getState() ?? pendingViewport
+    void port.send({ kind: 'playback-state', snapshot, session, clientId, sequence: ++sent }).catch(() => {})
+    if (viewport) void port.send({ kind: 'viewport', viewport, session, clientId, sequence: ++sent }).catch(() => {})
+  }
+  window.addEventListener('beforeunload', rememberBeforeReload)
+  cleanups.push(() => window.removeEventListener('beforeunload', rememberBeforeReload))
   window.addEventListener('keydown', handleWindowKeydown)
   window.addEventListener('keyup', handleWindowKeyup)
   window.addEventListener('blur', endShortcutGesture)
@@ -296,7 +320,7 @@ onMounted(async () => {
   })
   try {
     const unlisten = await port.listen(async (update) => {
-      if (!active || update.session !== session || update.sequence <= received) return
+      if (!active || update.session !== session || update.clientId !== clientId || update.sequence <= received) return
       received = update.sequence
       lastContact = Date.now()
       if (update.kind === 'notice') {
@@ -317,7 +341,15 @@ onMounted(async () => {
       if (isSupportedLocale(update.presentation.locale)) locale.value = update.presentation.locale
       await nextTick()
       if (!active) return
-      if (initializePlayback) playback.seek(update.presentation.transport.positionSeconds)
+      if (initializePlayback) {
+        // 恢复快照只发生在当前窗口首次接管时；后续编辑快照不能反复 seek 并打断本地音频。
+        const restoring = playback.restore({
+          ...update.presentation.transport,
+          isPlaying: update.presentation.transport.isPlaying && !update.presentation.updateLocked,
+        })
+        playbackReady = true
+        void restoring.catch((cause) => { error.value = String(cause) })
+      }
       await port.setTitle(update.presentation.state.project.name)
       if (!shown.value) {
         await port.show()
@@ -339,7 +371,10 @@ onMounted(async () => {
         void port.destroy().catch((cause) => {
           error.value = String(cause)
         })
-      } else void send({ kind: 'ping' })
+      } else {
+        void publishPlayback()
+        void send({ kind: 'ping' })
+      }
     }, 2000)
     cleanups.push(() => clearInterval(heartbeat))
   } catch (cause) {

@@ -387,10 +387,12 @@ test('拖动音轨区域到视口边缘会持续扩展并滚动，越过原曲�
     window.editing.overview.setDocument({
       ...source,
       durationTicks: endTick + 1920,
-      tracks: source.tracks.map(t => t.id === 't1' ? { ...t, endTick } : t),
+      tracks: source.tracks.map((t) => (t.id === 't1' ? { ...t, endTick } : t)),
     })
   }, endTick)
-  await expect.poll(() => page.evaluate(() => window.editing.overview.getViewport().scrollLeft)).toBe(left)
+  await expect
+    .poll(() => page.evaluate(() => window.editing.overview.getViewport().scrollLeft))
+    .toBe(left)
 })
 
 test('缩短句柄越过音符尾部，受限音符不可命中，拉长后恢复命中', async ({ page }) => {
@@ -633,8 +635,11 @@ test('实际发音状态同时更新琴键和整行高光，单独发音帧不�
         activity.getContext('2d')!.getImageData(100 * devicePixelRatio, y, 1, 1).data
       )
       const blackY = window.editing.point(0, 61).y
-      const keyPixel = (x: number, y: number) => Array.from(keyboard.getContext('2d')!
-        .getImageData(x * devicePixelRatio, y * devicePixelRatio, 1, 1).data)
+      const keyPixel = (x: number, y: number) =>
+        Array.from(
+          keyboard.getContext('2d')!.getImageData(x * devicePixelRatio, y * devicePixelRatio, 1, 1)
+            .data
+        )
       const blackFace = keyPixel(20, blackY)
       const blackTail = keyPixel(54, blackY - 6)
       const whiteShoulder = keyPixel(54, blackY + 6)
@@ -649,7 +654,16 @@ test('实际发音状态同时更新琴键和整行高光，单独发音帧不�
       const cleared = Array.from(
         activity.getContext('2d')!.getImageData(100 * devicePixelRatio, y, 1, 1).data
       )
-      return { counts, activeKey, activeRow, cleared, blackFace, blackTail, whiteShoulder, whiteSeam }
+      return {
+        counts,
+        activeKey,
+        activeRow,
+        cleared,
+        blackFace,
+        blackTail,
+        whiteShoulder,
+        whiteSeam,
+      }
     } finally {
       CanvasRenderingContext2D.prototype.clearRect = clear
     }
@@ -663,7 +677,8 @@ test('实际发音状态同时更新琴键和整行高光，单独发音帧不�
   // 半透明颜色回读会经过浏览器预乘 alpha，允许单个色阶的舍入差异。
   for (const [index, value] of [226, 250, 255].entries())
     expect(Math.abs(counts.activeRow[index]! - value)).toBeLessThanOrEqual(4)
-  expect(counts.activeRow[3]).toBeGreaterThan(0)
+  // 网格整行变色和外扩光晕应叠加，不能用低透明度光晕替换原本的变色。
+  expect(counts.activeRow[3]).toBeGreaterThanOrEqual(220)
   expect(counts.cleared).toEqual([0, 0, 0, 0])
   await page.evaluate(() => {
     window.editing.editor.setPitchZoom(28)
@@ -684,7 +699,9 @@ test('浏览态可显示和点击参考轨，切换轨道不产生编辑意图',
     window.editing.editor.setDocument({
       ...source,
       // 浏览兼容提前结束的 EOT，参考音符仍按实际音符范围展示并可点击。
-      tracks: source.tracks.map(track => track.id === 't2' ? { ...track, endTick: 600 } : track),
+      tracks: source.tracks.map((track) =>
+        track.id === 't2' ? { ...track, endTick: 600 } : track
+      ),
       notes: [
         ...source.notes,
         { id: 'reference', trackId: 't2', pitch: 65, velocity: 90, startTick: 480, endTick: 960 },
@@ -714,7 +731,6 @@ test('区域把手位于有效边界外，不覆盖当前音符区域', async ({
   expect(rect.x).toBeCloseTo(expected.x, 1)
 })
 
-
 test('区域松手后等待异步宿主回传，不闪回旧边界；回传后撤销仍能恢复', async ({ page }) => {
   await page.evaluate(() => window.editing.configure({ tool: 'select' }))
   const handle = page.locator('#overview .pr-region-resize[data-track-id="t1"]')
@@ -732,14 +748,15 @@ test('区域松手后等待异步宿主回传，不闪回旧边界；回传后�
   await page.evaluate((endTick) => {
     window.editing.overview.setDocument({
       ...window.editing.document,
-      tracks: window.editing.document.tracks.map(t => t.id === 't1' ? { ...t, endTick: Number(endTick) } : t),
+      tracks: window.editing.document.tracks.map((t) =>
+        t.id === 't1' ? { ...t, endTick: Number(endTick) } : t
+      ),
     })
   }, preview)
   await expect(handle).toHaveAttribute('data-end-tick', preview!)
   await page.evaluate(() => window.editing.overview.setDocument(window.editing.document))
   await expect(handle).toHaveAttribute('data-end-tick', '2880')
 })
-
 
 test('音符占满可见行时发音高光仍可见，光晕向行外柔和扩散且不遮盖音轨颜色', async ({ page }) => {
   const result = await page.evaluate(async () => {
@@ -748,14 +765,18 @@ test('音符占满可见行时发音高光仍可见，光晕向行外柔和扩�
     roll.setDocument({
       ...source,
       durationTicks: 19200,
-      tracks: source.tracks.map(t => ({ ...t, color: '#4ab97b', startTick: 0, endTick: 19200 })),
-      notes: [{ id: 'long', trackId: 't1', pitch: 60, velocity: 100, startTick: 0, endTick: 19200 }],
+      tracks: source.tracks.map((t) => ({ ...t, color: '#4ab97b', startTick: 0, endTick: 19200 })),
+      notes: [
+        { id: 'long', trackId: 't1', pitch: 60, velocity: 100, startTick: 0, endTick: 19200 },
+      ],
     })
     roll.setPitchZoom(28)
     const pane = document.querySelector<HTMLElement>('#editor .pr-pane')!
     const notes = pane.querySelector<HTMLCanvasElement>('.pr-notes')!
     const activity = pane.querySelector<HTMLCanvasElement>('.pr-pitch-activity')!
-    const settle = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const glow = pane.querySelector<HTMLCanvasElement>('.pr-pitch-glow')!
+    const settle = () =>
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     await settle()
     const viewport = roll.getViewport()
     const y = window.editing.point(0, 60).y
@@ -765,27 +786,47 @@ test('音符占满可见行时发音高光仍可见，光晕向行外柔和扩�
       sample.height = notes.height
       const context = sample.getContext('2d')!
       // 同一个 stacking context 内按真实 DOM 顺序合成，检查屏幕上最终可见的颜色。
-      for (const layer of pane.querySelectorAll<HTMLCanvasElement>(':scope > canvas')) context.drawImage(layer, 0, 0)
-      return Array.from(context.getImageData(200 * devicePixelRatio, y * devicePixelRatio, 1, 1).data)
+      for (const layer of pane.querySelectorAll<HTMLCanvasElement>(':scope > canvas'))
+        context.drawImage(layer, 0, 0)
+      return Array.from(
+        context.getImageData(200 * devicePixelRatio, y * devicePixelRatio, 1, 1).data
+      )
     }
     const before = combinedPixel()
-    roll.setTransport({ positionSeconds: 0, isPlaying: false, playbackRate: 1, activePitches: [60] })
+    roll.setTransport({
+      positionSeconds: 0,
+      isPlaying: false,
+      playbackRate: 1,
+      activePitches: [60],
+    })
     await settle()
     const after = combinedPixel()
     const top = y - viewport.pitchZoom / 2
-    const pixel = (offset: number) => Array.from(activity.getContext('2d')!
-      .getImageData(200 * devicePixelRatio, (top - offset) * devicePixelRatio, 1, 1).data)
+    const pixel = (offset: number) =>
+      Array.from(
+        glow
+          .getContext('2d')!
+          .getImageData(200 * devicePixelRatio, (top - offset) * devicePixelRatio, 1, 1).data
+      )
     return {
-      before, after,
-      near: pixel(3), far: pixel(12),
-      overNotes: !!(notes.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING),
+      before,
+      after,
+      near: pixel(3),
+      far: pixel(12),
+      overNotes: !!(notes.compareDocumentPosition(glow) & Node.DOCUMENT_POSITION_FOLLOWING),
+      fillUnderNotes: !!(
+        activity.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING
+      ),
     }
   })
   expect(result.overNotes).toBe(true)
+  expect(result.fillUnderNotes).toBe(true)
   expect(result.near[3]).toBeGreaterThan(0)
   expect(result.near[3]).toBeGreaterThan(result.far[3]!)
   expect(result.after[0]! - result.before[0]!).toBeGreaterThan(15)
   expect(result.after[1]).toBeGreaterThan(result.after[0]!)
   expect(result.after[1]).toBeGreaterThan(result.after[2]!)
-  await page.locator('#editor').screenshot({ path: test.info().outputPath('connected-keys-note-glow.png') })
+  await page
+    .locator('#editor')
+    .screenshot({ path: test.info().outputPath('connected-keys-note-glow.png') })
 })
