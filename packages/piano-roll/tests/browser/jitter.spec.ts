@@ -175,7 +175,7 @@ test('playhead and note canvas present the same viewport snapshot in each animat
 }) => {
   const maximumMismatch = await page.evaluate(async () => {
     const scroll = document.querySelector<HTMLElement>('#editor .pr-scroll')!
-    const notes = document.querySelectorAll<HTMLCanvasElement>('#editor .pr-pane canvas')[1]!
+    const notes = document.querySelector<HTMLCanvasElement>('#editor .pr-notes')!
     const handle = document.querySelector<HTMLElement>('#editor .pr-handle')!
     const clearRect = CanvasRenderingContext2D.prototype.clearRect
     let paintedLeft = scroll.scrollLeft

@@ -41,6 +41,30 @@ beforeEach(() => {
 })
 
 describe('MIDI 详情请求隔离', () => {
+  it('初始化和来源编辑共享曲库加载，完成后仍能主动刷新', async () => {
+    let finish!: (value: MidiInfo[]) => void
+    const files = new Promise<MidiInfo[]>((resolve) => {
+      finish = resolve
+    })
+    platform.invoke.mockImplementation((command) =>
+      command === 'get_midi_library' ? files : Promise.resolve({ disabled_tracks: [] })
+    )
+    const store = usePlayerStore()
+    const initializing = store.loadMidiLibrary()
+    const editorLoading = store.loadMidiLibrary()
+    expect(
+      platform.invoke.mock.calls.filter(([command]) => command === 'get_midi_library')
+    ).toHaveLength(1)
+    expect(store.midiLibrary).toHaveLength(0)
+    finish([{ ...first }])
+    expect(await Promise.all([initializing, editorLoading])).toEqual([true, true])
+    expect(store.midiLibrary[0]?.filename).toBe(first.filename)
+    await store.loadMidiLibrary()
+    expect(
+      platform.invoke.mock.calls.filter(([command]) => command === 'get_midi_library')
+    ).toHaveLength(2)
+  })
+
   it('does not let an old detail configuration overwrite a newer song or raw timeline', async () => {
     let finishFirst!: (value: unknown) => void
     let markConfigStarted!: () => void

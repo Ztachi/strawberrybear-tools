@@ -32,6 +32,8 @@ export interface MidiEditorPlaybackControllerOptions {
 
 export interface MidiEditorPlaybackController {
   getState(): EditorTransportState
+  /** 按本窗口音频时钟返回实际已发声、尚未释放的音高，去重后升序排列。 */
+  getActivePitches(): readonly number[]
   play(fromSeconds?: number): Promise<void>
   pause(): void
   stop(): void
@@ -86,7 +88,43 @@ export function createMidiEditorPlaybackController(
 ): MidiEditorPlaybackController {
   const ensureAudio = options.ensureAudio ?? ensureAudioRunning
   const now = options.getAudioClock ?? getAudioClock
-  const schedule = options.scheduleNote ?? scheduleNote
+  const scheduleAudio = options.scheduleNote ?? scheduleNote
+  // 每个声部独立记时；同音重叠不能在第一个 noteOff 时就熄灭琴键。
+  const voices = new Map<ScheduledNoteHandle, { pitch: number; start: number; end: number }>()
+  /**
+   * @description 将实际合成器句柄与发音区间绑定，排程成功才产生高亮。
+   * @param pitch MIDI 音高。
+   * @param velocity 力度。
+   * @param whenSeconds 音频时钟起点。
+   * @param durationSeconds 可选试听时长。
+   * @return 可取消的声部句柄；合成器未发声时返回 null。
+   */
+  const schedule: NonNullable<MidiEditorPlaybackControllerOptions['scheduleNote']> = (
+    pitch,
+    velocity,
+    whenSeconds,
+    durationSeconds
+  ) => {
+    const start = Math.max(now(), whenSeconds)
+    const handle = scheduleAudio(pitch, velocity, start, durationSeconds)
+    if (!handle) return null
+    const voice = {
+      pitch,
+      start,
+      end: durationSeconds === undefined ? Infinity : start + Math.max(0.01, durationSeconds),
+    }
+    const wrapped: ScheduledNoteHandle = {
+      stop(when) {
+        if (when === undefined) handle.stop()
+        else handle.stop(when)
+        // noteOff 提前排程时仍保留高亮，立即取消则移除整个声部。
+        if (when === undefined || when <= now()) voices.delete(wrapped)
+        else voice.end = Math.min(voice.end, when)
+      },
+    }
+    voices.set(wrapped, voice)
+    return wrapped
+  }
   const synth = createSynth(schedule, now)
   let engine: EditorTransport | null = null
   let pendingPosition = 0
@@ -148,6 +186,15 @@ export function createMidiEditorPlaybackController(
 
   return {
     getState: () => engine?.getState() ?? fallbackState(),
+    getActivePitches() {
+      const clock = now()
+      const pitches = new Set<number>()
+      for (const [handle, voice] of voices) {
+        if (voice.end <= clock) voices.delete(handle)
+        else if (voice.start <= clock) pitches.add(voice.pitch)
+      }
+      return Array.from(pitches).sort((left, right) => left - right)
+    },
     async play(fromSeconds) {
       const document = options.getDocument()
       if (disposed || !document) return
@@ -157,14 +204,19 @@ export function createMidiEditorPlaybackController(
       ensureEngine()?.play(fromSeconds)
     },
     pause() {
+      stopAuditions()
       engine?.pause()
+      if (!engine) options.onChange?.(fallbackState())
     },
     stop() {
+      stopAuditions()
       if (engine) engine.stop()
-      else
+      else {
         pendingPosition = loop
           ? createTimeline(options.getDocument() ?? emptyDocument).tickToSeconds(loop.startTick)
           : 0
+        options.onChange?.(fallbackState())
+      }
     },
     seek(seconds) {
       const duration = createTimeline(options.getDocument() ?? emptyDocument).durationSeconds
@@ -174,9 +226,15 @@ export function createMidiEditorPlaybackController(
     },
     async audition(pitch, velocity, durationSeconds = 0.35) {
       if (disposed || options.getPlayablePitches?.()?.has(pitch) === false) return
+      const document = options.getDocument()
       await ensureAudio()
       // 等待音频初始化时模板可能切换，发声前必须按最新模板再次检查。
-      if (disposed || options.getPlayablePitches?.()?.has(pitch) === false) return
+      if (
+        disposed ||
+        options.getDocument() !== document ||
+        options.getPlayablePitches?.()?.has(pitch) === false
+      )
+        return
       const clock = now()
       for (const [handle, end] of auditions) if (end <= clock) auditions.delete(handle)
       const handle = schedule(pitch, velocity, clock, durationSeconds)
@@ -207,6 +265,7 @@ export function createMidiEditorPlaybackController(
       engine?.dispose()
       engine = null
       synth.allNotesOff()
+      voices.clear()
     },
   }
 }

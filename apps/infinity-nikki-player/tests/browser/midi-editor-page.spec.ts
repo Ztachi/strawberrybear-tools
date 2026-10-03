@@ -1,25 +1,212 @@
 import { expect, test, type Page } from '@playwright/test'
 
+test('歌曲详情进入编辑后刷新，会等待曲库载入并保留来源名称', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?source&cold')
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+    '布局验收'
+  )
+  await expect(page.locator('.midi-editor-missing')).toHaveCount(0)
+  await page.reload()
+  await expect(page.locator('.detail-piano-roll')).toBeVisible()
+  await expect(page.locator('.midi-editor-missing')).toHaveCount(0)
+})
+
+test('来源确实不存在时，错误信息支持原生选择复制', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?source&cold')
+  await expect(page.locator('.detail-piano-roll')).toBeVisible()
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/new?from=missing.mid'))
+  const error = page.locator('.midi-editor-missing [role="alert"]')
+  await expect(error).toContainText('找不到来源 MIDI 文件')
+  await expect(error).toHaveCSS('user-select', 'text')
+  expect(
+    await error.evaluate((element) => {
+      const selection = getSelection()!
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      return selection.toString()
+    })
+  ).toContain('找不到来源 MIDI 文件')
+})
+
+test('总览曲长随音轨区域缩短、撤销和禁用实时更新', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+  const duration = page.locator('.piano-song-duration')
+  await expect(duration).toHaveText('时长 0:07')
+  const handle = page.locator('.detail-piano-roll .pr-region-resize').first()
+  const rect = (await handle.boundingBox())!
+  await page.mouse.move(rect.x + 6, rect.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(rect.x - 90, rect.y + 10, { steps: 8 })
+  await page.mouse.up()
+  await expect(duration).not.toHaveText('时长 0:07')
+  await page.getByRole('button', { name: /^撤销/ }).click()
+  await expect(duration).toHaveText('时长 0:07')
+  await page.locator('.detail-piano-roll').getByRole('switch').click()
+  await expect(duration).toHaveText('时长 0:00')
+})
+
+for (const populated of [false, true]) {
+  test(`区域连续延长跨多个小节，主窗口及独立窗口松手不闪回：${populated ? '已有歌曲' : '空白项目'}`, async ({
+    page,
+  }) => {
+    if (populated) {
+      await page.goto('/tests/browser/midi-editor-page.html?populated=1')
+      await page.locator('.pr-track-select').first().dblclick()
+    }
+    for (const detached of [false, true]) {
+      let target = page
+      if (detached) {
+        const opening = page.waitForEvent('popup')
+        await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+        target = await opening
+      }
+      await expect(target.locator('.detail-piano-editor')).toBeVisible()
+      for (const selector of ['.detail-piano-roll', '.detail-piano-editor']) {
+        const area = target.locator(selector)
+        const handle = area.locator('.pr-region-resize').first()
+        const scroll = area.locator('.pr-scroll')
+        // 外侧把手可能随曲尾位于视口之外，先滚动到末尾的留白再抓取。
+        await scroll.evaluate(async (element) => {
+          element.scrollLeft = element.scrollWidth - element.clientWidth
+          // Canvas 和外侧句柄在动画帧更新，不能用滚动前的按钮坐标抓取。
+          await new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve))
+          )
+        })
+        await expect(handle).toBeVisible()
+        const box = (await handle.boundingBox())!
+        const pane = (await scroll.boundingBox())!
+        const before = Number(await handle.getAttribute('data-end-tick'))
+        await target.mouse.move(box.x + 6, box.y + 10)
+        await target.mouse.down()
+        await target.mouse.move(pane.x + pane.width - 2, box.y + 10, { steps: 8 })
+        await expect
+          .poll(async () => Number(await handle.getAttribute('data-end-tick')))
+          .toBeGreaterThan(before + 1920 * 3)
+        const leftBeforeUp = await scroll.evaluate((element) => element.scrollLeft)
+        // 每帧记录跨窗口回传期间的显示值，最终值正确不足以证明中间没有闪回。
+        const samples = handle.evaluate(async (element) => {
+          const frames: { end: number; left: number }[] = []
+          const scroll =
+            element.parentElement!.parentElement!.querySelector<HTMLElement>('.pr-scroll')!
+          const stop = performance.now() + 350
+          while (performance.now() < stop) {
+            await new Promise(requestAnimationFrame)
+            frames.push({
+              end: Number((element as HTMLElement).dataset.endTick),
+              left: scroll.scrollLeft,
+            })
+          }
+          return frames
+        })
+        await target.mouse.up()
+        const frames = await samples
+        expect(Math.min(...frames.map((frame) => frame.end))).toBeGreaterThan(before + 1920 * 3)
+        expect(Math.min(...frames.map((frame) => frame.left))).toBeGreaterThanOrEqual(
+          leftBeforeUp - 1
+        )
+        const after = await handle.getAttribute('data-end-tick')
+        await target.getByRole('button', { name: /^撤销/ }).click()
+        await expect(handle).toHaveAttribute('data-end-tick', String(before))
+        await target.getByRole('button', { name: /^重做/ }).click()
+        await expect(handle).toHaveAttribute('data-end-tick', after!)
+      }
+    }
+  })
+}
+
+/** 依据淡色参考填充定位真实 Canvas 音符，不依赖页面私有调试接口。 */
+async function referenceNotePoint(page: Page): Promise<{ x: number; y: number }> {
+  return page.locator('.detail-piano-editor .pr-notes').evaluate((element) => {
+    const canvas = element as HTMLCanvasElement
+    const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+    const rect = canvas.getBoundingClientRect()
+    const pixels: { x: number; y: number }[] = []
+    for (let y = 0; y < canvas.height; y++)
+      for (let x = 0; x < canvas.width; x++) {
+        const i = (y * canvas.width + x) * 4
+        if (data[i + 3]! >= 80 && data[i + 3]! <= 84) pixels.push({ x, y })
+      }
+    if (!pixels.length) throw new Error('参考音符没有绘制')
+    return {
+      x:
+        rect.x +
+        ((pixels.reduce((sum, p) => sum + p.x, 0) / pixels.length) * rect.width) / canvas.width,
+      y:
+        rect.y +
+        ((pixels.reduce((sum, p) => sum + p.y, 0) / pixels.length) * rect.height) / canvas.height,
+    }
+  })
+}
+
+test('参考音轨默认开启，图标开关和跨轨拖动编辑一致，独立窗口还原保留偏好', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1&single=1&reference=1')
+  await page.locator('.pr-track[data-track-id="piano"] .pr-track-select').dblclick()
+  const toggle = page.getByRole('button', { name: '显示其他音轨', exact: true })
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await toggle.hover()
+  await expect(page.getByRole('tooltip')).toContainText('点击参考音符')
+  const point = await referenceNotePoint(page)
+  await page.mouse.move(point.x, point.y)
+  await page.mouse.down()
+  await page.mouse.move(point.x + 20, point.y - 16, { steps: 4 })
+  await page.mouse.up()
+  await expect(page.locator('.detail-piano-editor .piano-roll-slot-title')).toHaveText('参考旋律')
+  await expect(page.locator('.note-inspector')).toContainText('F#4')
+  await page.getByRole('button', { name: /^撤销/ }).click()
+  await expect(page.locator('.note-inspector')).toContainText('F4')
+  await expect(page.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  const popupToggle = popup.getByRole('button', { name: '显示其他音轨', exact: true })
+  await expect(popupToggle).toHaveAttribute('aria-pressed', 'false')
+  await popupToggle.click()
+  await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('点击参考音符后，总览将远处选中的音轨平滑滚动到视口中心', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated&single&reference&referenceFar')
+  await page.locator('.pr-track[data-track-id="piano"] .pr-track-select').dblclick()
+  const overview = page.locator('.detail-piano-roll')
+  const scroll = overview.locator('.pr-scroll')
+  await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBe(0)
+  const point = await referenceNotePoint(page)
+  await page.mouse.click(point.x, point.y)
+  await expect(page.locator('.detail-piano-editor .piano-roll-slot-title')).toHaveText('参考旋律')
+  const track = overview.locator('.pr-track[data-track-id="reference"]')
+  await expect(track).toHaveAttribute('data-selected', 'true')
+  await expect
+    .poll(async () => {
+      const row = await track.boundingBox()
+      const viewport = await scroll.boundingBox()
+      return Math.abs(row!.y + row!.height / 2 - viewport!.y - viewport!.height / 2)
+    })
+    .toBeLessThan(2)
+})
+
 /** 检查实际 Canvas 像素，避免只验证菜单状态而遗漏总览的颜色绘制。 */
 async function noteColorPixels(page: Page, pane: string, rgb: number[]): Promise<number> {
-  return page
-    .locator(`${pane} .pr-pane > canvas`)
-    .nth(1)
-    .evaluate((element, color) => {
-      const canvas = element as HTMLCanvasElement
-      const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
-      let count = 0
-      for (let index = 0; index < data.length; index += 4) {
-        if (
-          data[index] === color[0] &&
-          data[index + 1] === color[1] &&
-          data[index + 2] === color[2] &&
-          data[index + 3] === 255
-        )
-          count += 1
-      }
-      return count
-    }, rgb)
+  return page.locator(`${pane} .pr-notes`).evaluate((element, color) => {
+    const canvas = element as HTMLCanvasElement
+    const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+    let count = 0
+    for (let index = 0; index < data.length; index += 4) {
+      if (
+        data[index] === color[0] &&
+        data[index + 1] === color[1] &&
+        data[index + 2] === color[2] &&
+        data[index + 3] === 255
+      )
+        count += 1
+    }
+    return count
+  }, rgb)
 }
 
 async function openSettings(page: Page): Promise<void> {
@@ -70,8 +257,14 @@ test('歌曲 A 的旧共用草稿只在 A 恢复，不会提示给 B 或空白�
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/new?from=A.mid'))
   await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.locator('.midi-editor-loading .ant-skeleton-active')).toHaveCount(3)
+  await expect(page.locator('.editor-project-actions')).toHaveCount(0)
+  await expect(page.locator('.editor-toolbar')).toHaveCount(0)
+  await page.screenshot({ path: test.info().outputPath('draft-loading-skeleton.png') })
   await page.getByRole('button', { name: '加载草稿', exact: true }).click()
   await expect(name).toHaveValue('A 的改编草稿')
+  await expect(page.locator('.midi-editor-loading')).toHaveCount(0)
+  await expect(page.locator('.editor-save-trigger')).toHaveClass(/ant-btn-variant-text/)
 })
 
 test('歌曲 A 尚在解析时切到 B，A 的迟到结果和草稿不会覆盖 B', async ({ page }) => {
@@ -201,8 +394,20 @@ test('区域延长只产生一次撤销，历史按钮禁用状态清晰', async
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
   await expect(undo).toHaveCSS('opacity', '0.45')
+  // 外侧把手不侵入音符区；新建项目右边界恰在视口外缘时先横向滚到曲尾留白。
+  await page.locator('.detail-piano-roll .pr-scroll').evaluate((element) => {
+    element.scrollLeft = element.scrollWidth - element.clientWidth
+  })
   const handle = page.locator('.pr-region-resize').first()
   await expect(handle).toBeVisible()
+  await expect
+    .poll(() =>
+      handle.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
+        return document.elementFromPoint(rect.x + 6, rect.y + 10) === element
+      })
+    )
+    .toBe(true)
   const original = Number(await handle.getAttribute('data-end-tick'))
   const rect = (await handle.boundingBox())!
   // 详情自动展开时会裁切总览行，抓取句柄顶部可见部分，不能使用被裁切的包围盒中心。
@@ -318,7 +523,7 @@ test('已有曲子可缩短到音符内部，撤销恢复区域且不丢失原�
 test('直接拖动未选音符时，选区更新不会中断手势，落点提示与撤销正常', async ({ page }) => {
   await page.goto('/tests/browser/midi-editor-page.html?populated=1&single=1')
   await page.locator('.pr-track-select').first().dblclick()
-  const notes = page.locator('.detail-piano-editor .pr-pane > canvas').nth(1)
+  const notes = page.locator('.detail-piano-editor .pr-notes')
   const notePoint = () =>
     notes.evaluate((element) => {
       const canvas = element as HTMLCanvasElement
@@ -557,6 +762,15 @@ test('音轨菜单可打开详情、选择预设和自定义颜色，属性栏�
   const menuButton = page.locator('.track-actions-button').first()
   await menuButton.click()
   await expect(page.getByRole('menuitem').first()).toContainText('编辑音轨')
+  const editIcon = await page
+    .getByRole('menuitem', { name: '编辑音轨', exact: true })
+    .locator('svg')
+    .getAttribute('class')
+  const renameIcon = await page
+    .getByRole('menuitem', { name: '重命名音轨', exact: true })
+    .locator('svg')
+    .getAttribute('class')
+  expect(editIcon).not.toBe(renameIcon)
   await page.getByRole('menuitem', { name: '编辑音轨', exact: true }).click()
   await expect(page.locator('.detail-piano-editor')).toBeVisible()
   await expect(page.locator('.note-inspector')).toHaveCount(0)

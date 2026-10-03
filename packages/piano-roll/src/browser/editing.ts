@@ -29,6 +29,12 @@ export interface EditingHost {
   index(): PianoRollNoteIndex
   selectedTrackId(): string | null
   track(trackId: string): PianoRollTrack | undefined
+  /** 参考音符命中使用文档顺序，与绘制叠放顺序一致。 */
+  tracks(): readonly PianoRollTrack[]
+  /** 浏览和编辑共用的参考音轨视图偏好。 */
+  showOtherTracks(): boolean
+  /** 同步切轨且保留当前视口与手势，宿主随后更新选轨状态。 */
+  selectTrack(trackId: string): void
   /** 当前视口几何；scrollLeft 采用已绘制帧的逻辑值。 */
   geometry(): {
     scrollLeft: number
@@ -244,6 +250,8 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
    * @return {PianoRollNote | null} 可见交集，无交集时不可命中
    */
   function visibleNote(note: PianoRollNote): PianoRollNote | null {
+    // 只读预览用音符补齐异常 EOT，命中必须与其实际绘制范围一致。
+    if (!options?.enabled) return note
     const track = host.track(note.trackId)
     return track ? clipNoteToTrackRegion(note, track) : note
   }
@@ -260,28 +268,42 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     const slack = RESIZE_EDGE_PX / geometry.timeZoom
     const from = timeline.secondsToTick(Math.max(0, x / geometry.timeZoom - slack))
     const to = timeline.secondsToTick(x / geometry.timeZoom + slack)
-    let best: NoteHit | null = null
-    for (const note of host.index().query(trackId, from, to)) {
-      const visible = visibleNote(note)
-      if (!visible) continue
-      if (note.pitch !== pitch) continue
-      const startX = tickToX(note.startTick)
-      const endX = Math.max(startX + 2, tickToX(note.endTick))
-      if (x < tickToX(visible.startTick) || x >= tickToX(visible.endTick)) continue
-      if (x < startX - RESIZE_EDGE_PX / 2 || x > endX + RESIZE_EDGE_PX / 2) continue
-      const width = endX - startX
-      // 窄音符只允许从右缘拉伸，避免完全无法移动。
-      const edge = Math.min(RESIZE_EDGE_PX, width / 3)
-      const part: NoteHit['part'] =
-        visible.endTick === note.endTick && x >= endX - edge
-          ? 'end'
-          : width > RESIZE_EDGE_PX * 2 && x <= startX + edge
-            ? 'start'
-            : 'body'
-      // 后开始的音符绘制在上层，优先命中。
-      if (!best || note.startTick >= best.note.startTick) best = { note, part }
+    const trackIds = [
+      trackId,
+      ...(host.showOtherTracks()
+        ? host
+            .tracks()
+            .map((track) => track.id)
+            .filter((id) => id !== trackId)
+            .reverse()
+        : []),
+    ]
+    // 当前轨始终优先；参考轨按绘制顺序反查，不能让后绘制的音符无法点击。
+    for (const id of trackIds) {
+      let best: NoteHit | null = null
+      for (const note of host.index().query(id, from, to)) {
+        const visible = visibleNote(note)
+        if (!visible) continue
+        if (note.pitch !== pitch) continue
+        const startX = tickToX(note.startTick)
+        const endX = Math.max(startX + 2, tickToX(note.endTick))
+        if (x < tickToX(visible.startTick) || x >= tickToX(visible.endTick)) continue
+        if (x < startX - RESIZE_EDGE_PX / 2 || x > endX + RESIZE_EDGE_PX / 2) continue
+        const width = endX - startX
+        // 窄音符只允许从右缘拉伸，避免完全无法移动。
+        const edge = Math.min(RESIZE_EDGE_PX, width / 3)
+        const part: NoteHit['part'] =
+          visible.endTick === note.endTick && x >= endX - edge
+            ? 'end'
+            : width > RESIZE_EDGE_PX * 2 && x <= startX + edge
+              ? 'start'
+              : 'body'
+        // 后开始的音符绘制在上层，优先命中。
+        if (!best || note.startTick >= best.note.startTick) best = { note, part }
+      }
+      if (best) return best
     }
-    return best
+    return null
   }
 
   function selectionNotes(): PianoRollNote[] {
@@ -297,12 +319,11 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
   }
 
   function emit(intent: PianoRollEditIntent): void {
-    ;((window as any).__prIntents ??= []).push(intent)
     options?.onIntent(intent)
   }
   function updateCursor(hit: NoteHit | null): void {
     if (!editable()) {
-      host.scroll.style.cursor = ''
+      host.scroll.style.cursor = hit && hit.note.trackId !== host.selectedTrackId() ? 'pointer' : ''
       return
     }
     host.scroll.style.cursor = hit
@@ -370,15 +391,30 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
   }
 
   function onPointerDown(event: PointerEvent): void {
-    if (!editable() || event.button !== 0 || drag || !insideContent(event)) return
+    if (event.button !== 0 || drag || !insideContent(event)) return
+    if (!editable()) {
+      // 浏览态只切换参考音符所属轨道，不发出编辑意图或捕获拖动。
+      if (host.variant === 'editor' && host.showOtherTracks()) {
+        const hit = hitTest(event.clientX, event.clientY)
+        if (hit && hit.note.trackId !== host.selectedTrackId()) {
+          event.preventDefault()
+          host.selectTrack(hit.note.trackId)
+        }
+      }
+      return
+    }
     const trackId = host.selectedTrackId()
     if (!trackId) return
     const hit = hitTest(event.clientX, event.clientY)
     const shift = event.shiftKey
     if (hit) {
       event.preventDefault()
+      const switched = hit.note.trackId !== trackId
+      if (switched) host.selectTrack(hit.note.trackId)
       const selected = options!.selectedNoteIds
-      if (!selected.has(hit.note.id)) {
+      // 跨轨点击先替换选区，Shift 不把旧轨音符带入本次拖动。
+      if (switched) emit({ type: 'select', noteIds: [hit.note.id], mode: 'replace' })
+      else if (!selected.has(hit.note.id)) {
         emit({ type: 'select', noteIds: [hit.note.id], mode: shift ? 'add' : 'replace' })
       } else if (shift) {
         emit({ type: 'select', noteIds: [hit.note.id], mode: 'toggle' })
@@ -437,7 +473,9 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     if (!drag || drag.kind === 'loop' || drag.kind === 'velocity') {
       if (!drag) {
         const hit =
-          editable() && insideContent(event) ? hitTest(event.clientX, event.clientY) : null
+          (editable() || (host.variant === 'editor' && host.showOtherTracks())) && insideContent(event)
+            ? hitTest(event.clientX, event.clientY)
+            : null
         if (hit?.note.id !== hover?.note.id || hit?.part !== hover?.part) {
           hover = hit
           updateCursor(hit)
@@ -625,7 +663,9 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
     finish(false)
     const hit = hitTest(event.clientX, event.clientY)
     const { x, y } = toContent(event.clientX, event.clientY)
-    if (hit && !options!.selectedNoteIds.has(hit.note.id))
+    const switched = !!hit && hit.note.trackId !== host.selectedTrackId()
+    if (hit && switched) host.selectTrack(hit.note.trackId)
+    if (hit && (switched || !options!.selectedNoteIds.has(hit.note.id)))
       emit({ type: 'select', noteIds: [hit.note.id], mode: 'replace' })
     emit({
       type: 'context-menu',
@@ -750,16 +790,6 @@ export function installEditing(host: EditingHost, initial?: PianoRollEditingOpti
   ): void {
     target.addEventListener(type, callback as EventListener, settings)
     cleanups.push(() => target.removeEventListener(type, callback as EventListener, settings))
-  }
-  ;(window as any).__prDebug = {
-    hitTest,
-    toContent,
-    yToPitch,
-    xToTick,
-    host,
-    get options() {
-      return options
-    },
   }
   listen(host.scroll, 'pointerdown', onPointerDown)
   listen(host.scroll, 'pointermove', onPointerMove)

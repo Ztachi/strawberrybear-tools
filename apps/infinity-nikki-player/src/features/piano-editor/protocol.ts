@@ -26,6 +26,8 @@ export interface PianoWorkspaceState {
   selectedTrackId: string | null
   editorOpen: boolean
   hideEmptyTracks: boolean
+  /** 编辑态是否显示其他轨参考音符；旧快照省略时默认开启。 */
+  showOtherTracks?: boolean
   editorHeight: number
   overview?: PianoRollViewport
   editor?: PianoRollViewport
@@ -105,6 +107,7 @@ export function validWorkspace(value: PianoWorkspaceState): boolean {
     (value.selectedTrackId === null || typeof value.selectedTrackId === 'string') &&
     typeof value.editorOpen === 'boolean' &&
     typeof value.hideEmptyTracks === 'boolean' &&
+    (value.showOtherTracks === undefined || typeof value.showOtherTracks === 'boolean') &&
     Number.isFinite(value.editorHeight) &&
     value.editorHeight >= 25 &&
     value.editorHeight <= 82 &&

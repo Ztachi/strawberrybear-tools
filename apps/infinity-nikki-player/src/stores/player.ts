@@ -435,7 +435,21 @@ export const usePlayerStore = defineStore('player', () => {
    * @description: 加载 MIDI 库列表（从应用数据目录）
    * @return Promise 加载是否成功
    */
-  async function loadMidiLibrary() {
+  function loadMidiLibrary(): Promise<boolean> {
+    // 主窗口初始化与直接进入来源编辑页共享正在进行的加载，不重复扫描或回写旧结果。
+    if (!midiLibraryLoading) {
+      midiLibraryLoading = refreshMidiLibrary().finally(() => {
+        midiLibraryLoading = null
+      })
+    }
+    return midiLibraryLoading
+  }
+
+  /** 当前曲库载入任务；完成后释放，后续主动刷新仍读取最新文件。 */
+  let midiLibraryLoading: Promise<boolean> | null = null
+
+  /** 从后端读取曲库及缓存配置，结果完整后一次替换列表。 */
+  async function refreshMidiLibrary(): Promise<boolean> {
     isLoading.value = true
     try {
       // 从 Rust 后端获取库文件列表

@@ -26,6 +26,7 @@ import { usePianoEditorResize } from './usePianoEditorResize'
 import { usePianoEditorSelection } from './usePianoEditorSelection'
 import { usePianoTrackHosts } from './usePianoTrackHosts'
 import { usePianoRollZoomPersistence } from './usePianoRollZoomPersistence'
+import { formatDuration } from '@/lib/formatDuration'
 
 const props = defineProps<{
   filename: string
@@ -45,6 +46,8 @@ const props = defineProps<{
   hideDetach?: boolean
   /** 在预览态显示“编辑此 MIDI”入口；主窗口与独立详情共用。 */
   showEdit?: boolean
+  /** 真实有效曲长；编辑文档中的拖动留白不计入。 */
+  durationSeconds?: number
 }>()
 const emit = defineEmits<{
   seek: [seconds: number]
@@ -80,6 +83,8 @@ const {
 )
 // 编辑模式默认显示空轨，否则新建的空音轨会立刻从总览消失。
 const hideEmptyPianoTracks = ref(props.restore?.hideEmptyTracks ?? !props.editing)
+// 参考轨属于视图偏好，迁移窗口时保留，不写入 MIDI 文档或撤销历史。
+const showOtherTracks = ref(props.restore?.showOtherTracks ?? true)
 const overviewPianoRollLabels = computed(() => ({
   ...props.labels,
   empty: hideEmptyPianoTracks.value ? t('midi.pianoRoll.noTracksWithNotes') : props.labels.empty,
@@ -110,6 +115,7 @@ function getState(): PianoWorkspaceState {
     selectedTrackId: selectedTrackId.value,
     editorOpen: isPianoEditorOpen.value,
     hideEmptyTracks: hideEmptyPianoTracks.value,
+    showOtherTracks: showOtherTracks.value,
     editorHeight: editorHeightPercent.value,
     overview: overviewPanel.value?.getView()?.getViewport() ?? overviewViewport.value,
     editor: editorPanel.value?.getView()?.getViewport() ?? editorViewport.value,
@@ -139,6 +145,12 @@ function seekPianoRoll(seconds: number): void {
 function togglePianoTrack(trackId: string): void {
   emit('toggle-track', trackId)
 }
+/** 详情内点击参考音符切轨时，仅平滑滚动总览自己的视口。 */
+async function selectFromDetail(trackId: string): Promise<void> {
+  selectPianoTrack(trackId)
+  await nextTick()
+  overviewPanel.value?.getView()?.scrollToTrack(trackId, 'smooth')
+}
 function migrate(): void {
   endEditorResize()
   changed()
@@ -155,6 +167,7 @@ async function restoreWorkspace(): Promise<void> {
   selectPianoTrack(saved.selectedTrackId ?? '')
   isPianoEditorOpen.value = saved.editorOpen && props.document.tracks.length > 0
   hideEmptyPianoTracks.value = saved.hideEmptyTracks
+  showOtherTracks.value = saved.showOtherTracks ?? true
   editorHeightPercent.value = saved.editorHeight
   editorRestoreViewport.value = saved.editor
   await nextTick()
@@ -187,7 +200,7 @@ function forwardEditIntent(intent: PianoRollEditIntent): void {
 }
 onMounted(restoreWorkspace)
 watch(() => props.restore, restoreWorkspace, { flush: 'post' })
-watch([selectedTrackId, isPianoEditorOpen, hideEmptyPianoTracks, editorHeightPercent], changed, {
+watch([selectedTrackId, isPianoEditorOpen, hideEmptyPianoTracks, editorHeightPercent, showOtherTracks], changed, {
   flush: 'post',
 })
 defineExpose({ getState, setTransport, openTrack, revealTrack })
@@ -254,6 +267,13 @@ defineExpose({ getState, setTransport, openTrack, revealTrack })
         <template #toolbar="{ view, viewport }">
           <div class="piano-roll-app-toolbar">
             <PianoRollControls :view="view" :viewport="viewport" :labels="labels" />
+            <span
+              v-if="editing?.enabled && durationSeconds !== undefined"
+              class="piano-song-duration"
+              role="status"
+            >
+              {{ t('midiEditor.duration') }} {{ formatDuration(durationSeconds * 1000) }}
+            </span>
             <div class="piano-roll-trailing-actions">
               <slot name="toolbar-actions" />
               <Tooltip v-if="showEdit" :title="t('midiEditor.editThisMidi')">
@@ -331,6 +351,9 @@ defineExpose({ getState, setTransport, openTrack, revealTrack })
         :pitch-zoom="pianoEditorPitchZoom"
         :restore="editorRestoreViewport"
         :editing="editing"
+        :show-other-tracks="showOtherTracks"
+        @select-track="selectFromDetail"
+        @toggle-other-tracks="showOtherTracks = !showOtherTracks"
         @seek="seekPianoRoll"
         @seek-preview="previewPianoSeek"
         @viewport-change="persistEditorViewport"
@@ -378,6 +401,11 @@ defineExpose({ getState, setTransport, openTrack, revealTrack })
 
 .piano-roll-trailing-actions {
   @apply ml-auto flex shrink-0 items-center;
+}
+
+.piano-song-duration {
+  @apply flex-1 whitespace-nowrap text-center text-xs tabular-nums;
+  color: var(--color-muted-dark);
 }
 
 .detail-piano-roll :deep(.pr-gutter) {

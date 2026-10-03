@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createNoteIndex, createTimeline, type PianoRollTrack } from '../core'
-import { drawGrid, drawNotes, getTrackTimeRange, type RenderFrame } from './renderer'
+import {
+  drawGrid,
+  drawKeyboard,
+  drawPitchActivity,
+  drawNotes,
+  getTrackTimeRange,
+  type RenderFrame,
+} from './renderer'
 import { defaultPianoRollTheme } from './theme'
 
 function track(
@@ -56,10 +63,14 @@ describe('overview track regions', () => {
 
 /** 只替换 Canvas 边界，记录真实渲染逻辑选择的颜色与透明度。 */
 function canvasFixture() {
+  let borders = 0
   const fills: { color: string; alpha: number; region: boolean }[] = []
   const texts: string[] = []
   const rectangles: { x: number; y: number; width: number; height: number }[] = []
   const verticalLines: number[] = []
+  const paths: { color: string; points: number[][] }[] = []
+  const dashes: number[][] = []
+  let points: number[][] = []
   let startX = 0
   const context = {
     fillStyle: '',
@@ -67,18 +78,33 @@ function canvasFixture() {
     globalAlpha: 1,
     setTransform() {},
     clearRect() {},
-    strokeRect() {},
-    beginPath() {},
+    strokeRect() { borders++ },
+    beginPath() {
+      points = []
+    },
+    closePath() {},
+    setLineDash(value: number[]) {
+      dashes.push(value)
+    },
     roundRect() {},
-    moveTo(x: number) {
+    moveTo(x: number, y: number) {
+      points.push([x, y])
       startX = x
     },
-    lineTo(x: number) {
+    lineTo(x: number, y: number) {
+      points.push([x, y])
       if (x === startX) verticalLines.push(x)
     },
     save() {},
     restore() {},
-    rect() {},
+    rect(x: number, y: number, w: number, h: number) {
+      points = [
+        [x, y],
+        [x + w, y],
+        [x + w, y + h],
+        [x, y + h],
+      ]
+    },
     clip() {},
     fillText(value: string) {
       texts.push(value)
@@ -90,6 +116,7 @@ function canvasFixture() {
       rectangles.push({ x, y, width, height })
     },
     fill() {
+      paths.push({ color: this.fillStyle, points: [...points] })
       fills.push({ color: this.fillStyle, alpha: this.globalAlpha, region: true })
     },
   }
@@ -100,7 +127,7 @@ function canvasFixture() {
     ownerDocument: { defaultView: { devicePixelRatio: 1 } },
     getContext: () => context,
   } as unknown as HTMLCanvasElement
-  return { canvas, fills, texts, rectangles, verticalLines }
+  return { canvas, fills, texts, rectangles, verticalLines, paths, dashes, get borders() { return borders } }
 }
 
 function colorFrame(variant: RenderFrame['variant'], color?: string): RenderFrame {
@@ -253,5 +280,70 @@ describe('音轨颜色', () => {
       alpha: 0.04,
       region: true,
     })
+  })
+})
+
+describe('琴键发音和参考音符', () => {
+  it('琴键及网格发音高亮使用相同半音行，音名放大后增加', () => {
+    const keys = canvasFixture()
+    drawKeyboard(keys.canvas, 100, 28, 66 * 28, defaultPianoRollTheme, null, [60, 61])
+    const active = keys.paths.filter(
+      (path) => path.color === defaultPianoRollTheme.colors.keyActive
+    )
+    expect(active).toHaveLength(2)
+    expect(active[0]!.points).toEqual([[0, 28], [42, 28], [42, 14], [64, 14], [64, 56], [42, 56], [42, 56], [0, 56]])
+    expect(active[0]!.points).toContainEqual([0, 28])
+    expect(active[1]!.points).toEqual([
+      [0, 0],
+      [42, 0],
+      [42, 28],
+      [0, 28],
+    ])
+    expect(keys.texts).toContain('C4')
+    expect(keys.texts).toContain('A♯3')
+    const frame = colorFrame('editor', '#001122')
+    frame.pitchZoom = 28
+    frame.scrollTop = 67 * 28
+    frame.activePitches = [60, 59]
+    const activity = canvasFixture()
+    drawPitchActivity(activity.canvas, frame)
+    expect(activity.rectangles.filter((_, index) => index >= activity.rectangles.length - 2)).toEqual([
+      { x: 0, y: 0, width: 240, height: 27 },
+      { x: 0, y: 28, width: 240, height: 27 },
+    ])
+    expect(activity.borders).toBe(0)
+    expect(
+      activity.fills.every((fill) => [defaultPianoRollTheme.colors.pitchActive, '#000000'].includes(fill.color))
+    ).toBe(true)
+  })
+
+  it('参考音符保留原音轨颜色并用虚线轮廓区分模板灰色，在当前轨后面，遵守各自有效区域，关闭后隐藏', () => {
+    const frame = colorFrame('editor', '#123456')
+    frame.rows = [
+      ...frame.rows,
+      { track: { ...track('other', { endTick: 240 }), color: '#336699' }, top: 100, height: 100 },
+    ]
+    frame.index = createNoteIndex([
+      { id: 'note', trackId: 'music', pitch: 60, velocity: 100, startTick: 0, endTick: 480 },
+      { id: 'reference', trackId: 'other', pitch: 60, velocity: 100, startTick: 0, endTick: 480 },
+      { id: 'hidden', trackId: 'other', pitch: 64, velocity: 100, startTick: 480, endTick: 960 },
+    ])
+    frame.editing = {
+      clipTrackRegions: true,
+      selectedNoteIds: new Set(['reference']),
+      highlightPitches: new Set([60]),
+    }
+    frame.showOtherTracks = true
+    const notes = canvasFixture()
+    drawNotes(notes.canvas, frame)
+    expect(notes.fills.filter((fill) => fill.color === '#336699')).toHaveLength(1)
+    expect(notes.fills[0]).toMatchObject({ color: '#336699', alpha: 0.32 })
+    expect(notes.dashes).toEqual([[3, 2], []])
+    expect(notes.rectangles[0]!.width).toBe(30)
+    expect(notes.fills.some((fill) => fill.color === '#123456')).toBe(true)
+    frame.showOtherTracks = false
+    const hidden = canvasFixture()
+    drawNotes(hidden.canvas, frame)
+    expect(hidden.fills.some((fill) => fill.color === '#336699')).toBe(false)
   })
 })

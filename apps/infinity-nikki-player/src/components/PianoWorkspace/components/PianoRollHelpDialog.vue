@@ -8,7 +8,7 @@ import { QuestionCircleFilled } from '@antdv-next/icons'
 const { t } = useI18n()
 const open = ref(false)
 const groups = [
-  { key: 'tracks', items: ['selection', 'enabled', 'filter'] },
+  { key: 'tracks', items: ['selection', 'enabled', 'filter', 'references'] },
   { key: 'view', items: ['zoom', 'scroll', 'follow'] },
   { key: 'position', items: ['seek', 'resize', 'workspace'] },
 ] as const

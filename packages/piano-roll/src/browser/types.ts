@@ -11,6 +11,8 @@ export interface PianoRollTransport {
   isPlaying: boolean
   /** 时钟推进倍率。视图不自行累加时间。 */
   playbackRate: number
+  /** 宿主音频时钟确认正在发声的音高；省略时不绘制发音高亮。 */
+  activePitches?: readonly number[]
 }
 
 /** 宿主可以覆盖全部默认文案，无需依赖任何 i18n 框架。 */
@@ -175,6 +177,8 @@ export interface PianoRollViewOptions {
   document: PianoRollDocument
   /** 外部播放时钟。 */
   transport?: PianoRollTransport
+  /** 详情显示其他轨参考音符；浏览和编辑共用，默认 false。 */
+  showOtherTracks?: boolean
   /** 单轨详情当前轨道。 */
   selectedTrackId?: string | null
   /** 初始时间缩放，默认总览 42、详情 110 px/s。 */
@@ -225,10 +229,14 @@ export interface PianoRollViewOptions {
 export interface PianoRollView {
   /** 替换不可变文档；不主动重置用户的缩放与横向滚动。 */
   setDocument(document: PianoRollDocument): void
-  /** 更新外部时间。此调用只移动播放头，不重绘音符。 */
+  /** 更新外部时间与实际发音高亮，不重绘静态音符层。 */
   setTransport(transport: PianoRollTransport): void
   /** 切换轨道；只有音域完全离开当前视口时才调整详情的纵向位置。 */
   setSelectedTrack(trackId: string | null): void
+  /** 切换详情参考音轨显示，不改变文档或撤销历史。 */
+  setShowOtherTracks(enabled: boolean): void
+  /** 将总览中指定轨道居中到自己的滚动区域，不滚动宿主页面。 */
+  scrollToTrack(trackId: string, behavior?: ScrollBehavior): void
   /** 更新本地化文案，不重建实例或重置视口。 */
   setLabels(labels: Partial<PianoRollLabels>): void
   /** 动态替换颜色与字体令牌，不重建视图，也不重置滚动和缩放。 */

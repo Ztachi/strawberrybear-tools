@@ -109,6 +109,42 @@ if (fixtureQuery.has('colors')) {
     ),
   }
 }
+if (fixtureQuery.has('reference')) {
+  project.document = {
+    ...project.document,
+    tracks: [
+      ...project.document.tracks,
+      ...(fixtureQuery.has('referenceFar')
+        ? Array.from({ length: 8 }, (_, i) => ({
+            id: `before-${i}`,
+            name: `前置音轨 ${i}`,
+            enabled: true,
+            isPercussion: false,
+          }))
+        : []),
+      { id: 'reference', name: '参考旋律', enabled: true, isPercussion: false },
+      ...(fixtureQuery.has('referenceFar')
+        ? Array.from({ length: 8 }, (_, i) => ({
+            id: `after-${i}`,
+            name: `后置音轨 ${i}`,
+            enabled: true,
+            isPercussion: false,
+          }))
+        : []),
+    ],
+    notes: [
+      ...project.document.notes,
+      {
+        id: 'reference-note',
+        trackId: 'reference',
+        pitch: 65,
+        velocity: 90,
+        startTick: 480,
+        endTick: 960,
+      },
+    ],
+  }
+}
 const showProjectList = new URLSearchParams(location.search).has('list')
 const projectSummary = {
   id: project.id,
@@ -425,7 +461,8 @@ await router.push(
 )
 const pinia = createPinia()
 // 详情进入编辑器时曲库已载入；夹具按真实前置状态装配，不等待主窗口的异步初始化。
-if (fixtureQuery.has('source')) usePlayerStore(pinia).midiLibrary = [midi]
+if (fixtureQuery.has('source') && !fixtureQuery.has('cold'))
+  usePlayerStore(pinia).midiLibrary = [midi]
 if (showOnlineList) {
   useOnlineMidiLibraryStore(pinia).setSongs(onlineSongFixtures, Date.now())
 }

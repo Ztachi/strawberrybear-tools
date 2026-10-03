@@ -53,7 +53,7 @@ function mountView(): void {
     container: host.value, document: props.document, transport: props.transport,
     selectedTrackId: props.selectedTrackId, timeZoom: viewport.value.timeZoom,
     pitchZoom: viewport.value.pitchZoom, follow: viewport.value.follow,
-    hideEmptyTracks: props.hideEmptyTracks,
+    hideEmptyTracks: props.hideEmptyTracks, showOtherTracks: props.showOtherTracks,
     labels: labels.value, theme: props.theme, plugins: props.plugins,
     onTrackSelect: (id) => emit('select-track', id),
     onTrackOpen: (id, context) => emit('open-editor', id, context),
@@ -92,6 +92,7 @@ watch(() => props.timeZoom, (zoom) => { if (zoom !== undefined) view?.setTimeZoo
 watch(() => props.pitchZoom, (zoom) => view?.setPitchZoom(zoom))
 watch(() => props.hideEmptyTracks, (enabled) => view?.setHideEmptyTracks(enabled))
 watch(() => props.editing, () => view?.setEditing(resolveEditing()))
+watch(() => props.showOtherTracks, (enabled) => view?.setShowOtherTracks(!!enabled))
 defineExpose({ getView: () => view })
 </script>
 

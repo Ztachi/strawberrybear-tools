@@ -16,7 +16,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
-import { Button, ConfigProvider, Input, Tooltip } from 'antdv-next'
+import { Button, ConfigProvider, Input, Skeleton, Tooltip } from 'antdv-next'
 import { ExternalLink } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import { createProject } from '@strawberrybear/midi-editor'
@@ -182,6 +182,11 @@ function trackCopyName(name: string): string {
  */
 async function projectFromLibrary(filename: string): Promise<MidiProject> {
   let midi = playerStore.midiLibrary.find((item) => item.filename === filename) ?? null
+  // 从详情页刷新时曲库尚未完成初始化，必须等待加载后再判断文件是否存在。
+  if (!midi) {
+    if (!await playerStore.loadMidiLibrary()) throw new Error(t('midiEditor.loadFailed'))
+    midi = playerStore.midiLibrary.find((item) => item.filename === filename) ?? null
+  }
   if (!midi) throw new Error(t('midiEditor.sourceMidiMissing'))
   if (!midi.events?.length) {
     const [parsed] = await invoke<[MidiInfo, unknown[]]>('parse_midi_file', { path: midi.file_path })
@@ -286,6 +291,8 @@ async function loadFromRoute(): Promise<void> {
     persisted.value = loadingEditRoute
     const handle = useMidiEditorSession(project, { trackDefaultName, trackCopyName })
     editor.value = handle
+    // 草稿选择结束、会话就绪后再显示编辑器，让后续打开空轨详情能取得已挂载的工作区。
+    loading.value = false
     installEditorShortcuts()
     await nextTick()
     if (generation !== loadGeneration) return
@@ -753,7 +760,7 @@ onBeforeUnmount(() => {
 <template>
   <ConfigProvider v-bind="midiEditorConfigProviderProps">
     <section class="midi-editor-page" :inert="updateLocked">
-      <header class="midi-editor-header">
+      <header v-if="!loading && state" class="midi-editor-header">
         <div class="editor-project-identity">
           <Input
             v-if="state"
@@ -798,8 +805,29 @@ onBeforeUnmount(() => {
         />
       </header>
 
-      <section v-if="loadError" class="midi-editor-missing">
-        <span>{{ loadError }}</span>
+      <section
+        v-if="loading"
+        class="midi-editor-loading"
+        role="status"
+        :aria-label="t('onlineLibrary.loading')"
+      >
+        <Skeleton active :paragraph="false" :title="{ width: '40%' }" />
+        <Skeleton
+          active
+          class="editor-loading-overview"
+          :title="{ width: '18%' }"
+          :paragraph="{ rows: 3, width: ['100%', '100%', '100%'] }"
+        />
+        <Skeleton
+          active
+          class="editor-loading-detail"
+          :title="{ width: '18%' }"
+          :paragraph="{ rows: 9, width: '100%' }"
+        />
+      </section>
+
+      <section v-else-if="loadError" class="midi-editor-missing">
+        <span role="alert">{{ loadError }}</span>
         <Button @click="leaveWithoutNewHistory">
           {{ t('midiEditor.projectList') }}
         </Button>
@@ -861,6 +889,18 @@ onBeforeUnmount(() => {
 
 .midi-editor-header {
   @apply flex shrink-0 items-center gap-2 border-b border-primary/10 px-3 py-2;
+}
+
+.midi-editor-loading {
+  @apply flex min-h-0 flex-1 flex-col gap-5 overflow-hidden p-3;
+}
+
+.editor-loading-overview :deep(.ant-skeleton-paragraph > li) {
+  height: 28px;
+}
+
+.editor-loading-detail {
+  @apply min-h-0 flex-1;
 }
 
 /* 输入与按钮来自多根组件，尺寸样式通过容器的 deep 选择器稳定作用于最终 DOM。 */

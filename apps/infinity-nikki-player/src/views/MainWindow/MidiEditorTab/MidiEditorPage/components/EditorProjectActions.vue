@@ -49,7 +49,8 @@ function showHelp(): void {
       :get-popup-container="getMainWindowPopupContainer"
     >
       <Button
-        type="primary"
+        color="primary"
+        variant="text"
         shape="circle"
         size="small"
         class="editor-save-trigger"

@@ -380,6 +380,17 @@ test('拖动音轨区域到视口边缘会持续扩展并滚动，越过原曲�
   const list = (await intents(page)).filter((i) => i.type === 'resize-track-region')
   expect(list).toHaveLength(1)
   expect(list[0]!.type === 'resize-track-region' && list[0].endTick).toBeGreaterThan(7680 + 1920)
+  const left = await page.evaluate(() => window.editing.overview.getViewport().scrollLeft)
+  const endTick = list[0]!.type === 'resize-track-region' ? list[0].endTick : 0
+  await page.evaluate((endTick) => {
+    const source = window.editing.document
+    window.editing.overview.setDocument({
+      ...source,
+      durationTicks: endTick + 1920,
+      tracks: source.tracks.map(t => t.id === 't1' ? { ...t, endTick } : t),
+    })
+  }, endTick)
+  await expect.poll(() => page.evaluate(() => window.editing.overview.getViewport().scrollLeft)).toBe(left)
 })
 
 test('缩短句柄越过音符尾部，受限音符不可命中，拉长后恢复命中', async ({ page }) => {
@@ -509,4 +520,272 @@ test('小节吸附区域边缘，点击被截短音符仅试听有效时长', as
   expect((await intents(page)).find((i) => i.type === 'audition')).toMatchObject({
     durationSeconds: 0.25,
   })
+})
+
+test('点击琴键只试听，黑键和相邻白键肩部按真实形状命中', async ({ page }) => {
+  await page.evaluate(() => window.editing.editor.setPitchZoom(24.5))
+  const point = await pointFor(page, 0, 61)
+  const gutter = (await page.locator('#editor .pr-gutter').boundingBox())!
+  await page.mouse.click(gutter.x + 20, point.y)
+  await page.mouse.click(gutter.x + 54, point.y - 6)
+  await page.mouse.click(gutter.x + 54, point.y + 6)
+  expect(await intents(page)).toEqual([
+    { type: 'audition', pitch: 61, velocity: 100 },
+    { type: 'audition', pitch: 62, velocity: 100 },
+    { type: 'audition', pitch: 60, velocity: 100 },
+  ])
+})
+
+test('参考音符点击自动换轨，同一次拖动可编辑，重叠时当前轨优先', async ({ page }) => {
+  await page.evaluate(() => {
+    const source = window.editing.document
+    window.editing.editor.setDocument({
+      ...source,
+      notes: [
+        ...source.notes,
+        { id: 'ghost', trackId: 't2', pitch: 65, velocity: 90, startTick: 480, endTick: 960 },
+        { id: 'overlap', trackId: 't2', pitch: 60, velocity: 90, startTick: 480, endTick: 960 },
+      ],
+    })
+    window.editing.editor.setShowOtherTracks(true)
+  })
+  const current = await pointFor(page, 700, 60)
+  await page.mouse.click(current.x, current.y)
+  expect(await page.evaluate(() => window.editing.actions)).toEqual([])
+  const ghost = await pointFor(page, 700, 65)
+  const before = await page.evaluate(() => window.editing.editor.getViewport())
+  await page.mouse.move(ghost.x, ghost.y)
+  await page.mouse.down()
+  await page.mouse.move(ghost.x + 50, ghost.y - 16, { steps: 5 })
+  await page.mouse.up()
+  expect(await page.evaluate(() => window.editing.actions)).toEqual(['select:t2'])
+  expect((await intents(page)).find((i) => i.type === 'move')).toEqual({
+    type: 'move',
+    noteIds: ['ghost'],
+    deltaTick: 480,
+    deltaPitch: 1,
+  })
+  expect(await page.evaluate(() => window.editing.editor.getViewport().scrollTop)).toBe(
+    before.scrollTop
+  )
+  await expect(page.locator('#editor .pr-region-resize')).toHaveAttribute('data-track-id', 't2')
+})
+
+test('关闭参考音符后不可选中，缩短区域外的参考音符也不可命中，右键可换轨', async ({ page }) => {
+  await page.evaluate(() => {
+    const source = window.editing.document
+    window.editing.editor.setDocument({
+      ...source,
+      tracks: source.tracks.map((t) => (t.id === 't2' ? { ...t, endTick: 720 } : t)),
+      notes: [
+        ...source.notes,
+        { id: 'ghost', trackId: 't2', pitch: 65, velocity: 90, startTick: 480, endTick: 960 },
+      ],
+    })
+  })
+  const ghost = await pointFor(page, 600, 65)
+  await page.mouse.click(ghost.x, ghost.y)
+  expect(await page.evaluate(() => window.editing.actions)).toEqual([])
+  await page.evaluate(() => window.editing.editor.setShowOtherTracks(true))
+  const clipped = await pointFor(page, 850, 65)
+  await page.mouse.click(clipped.x, clipped.y)
+  expect(await page.evaluate(() => window.editing.actions)).toEqual([])
+  await page.evaluate(() => window.editing.select(['a', 'ghost']))
+  await page.mouse.click(ghost.x, ghost.y, { button: 'right' })
+  expect(await page.evaluate(() => window.editing.actions)).toEqual(['select:t2'])
+  expect((await intents(page)).at(-2)).toEqual({
+    type: 'select',
+    noteIds: ['ghost'],
+    mode: 'replace',
+  })
+  expect((await intents(page)).at(-1)).toMatchObject({ type: 'context-menu', noteId: 'ghost' })
+})
+
+test('实际发音状态同时更新琴键和整行高光，单独发音帧不重绘网格或音符', async ({ page }) => {
+  const counts = await page.evaluate(async () => {
+    const roll = window.editing.editor
+    const keyboard = document.querySelector<HTMLCanvasElement>('#editor .pr-gutter canvas')!
+    const grid = document.querySelector<HTMLCanvasElement>('#editor .pr-pane > canvas')!
+    const notes = document.querySelector<HTMLCanvasElement>('#editor .pr-notes')!
+    const activity = document.querySelector<HTMLCanvasElement>('#editor .pr-pitch-activity')!
+    const counts = { grid: 0, notes: 0, keyboard: 0, activity: 0 }
+    const clear = CanvasRenderingContext2D.prototype.clearRect
+    CanvasRenderingContext2D.prototype.clearRect = function (...args) {
+      if (this.canvas === grid) counts.grid++
+      if (this.canvas === notes) counts.notes++
+      if (this.canvas === keyboard) counts.keyboard++
+      if (this.canvas === activity) counts.activity++
+      return clear.apply(this, args)
+    }
+    try {
+      roll.setTransport({
+        positionSeconds: 0,
+        isPlaying: false,
+        playbackRate: 1,
+        activePitches: [60, 61],
+      })
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const y = window.editing.point(0, 60).y * devicePixelRatio
+      const activeKey = Array.from(
+        keyboard.getContext('2d')!.getImageData(10 * devicePixelRatio, y, 1, 1).data
+      )
+      const activeRow = Array.from(
+        activity.getContext('2d')!.getImageData(100 * devicePixelRatio, y, 1, 1).data
+      )
+      const blackY = window.editing.point(0, 61).y
+      const keyPixel = (x: number, y: number) => Array.from(keyboard.getContext('2d')!
+        .getImageData(x * devicePixelRatio, y * devicePixelRatio, 1, 1).data)
+      const blackFace = keyPixel(20, blackY)
+      const blackTail = keyPixel(54, blackY - 6)
+      const whiteShoulder = keyPixel(54, blackY + 6)
+      const whiteSeam = keyPixel(54, blackY + roll.getViewport().pitchZoom / 2)
+      roll.setTransport({
+        positionSeconds: 0,
+        isPlaying: false,
+        playbackRate: 1,
+        activePitches: [],
+      })
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const cleared = Array.from(
+        activity.getContext('2d')!.getImageData(100 * devicePixelRatio, y, 1, 1).data
+      )
+      return { counts, activeKey, activeRow, cleared, blackFace, blackTail, whiteShoulder, whiteSeam }
+    } finally {
+      CanvasRenderingContext2D.prototype.clearRect = clear
+    }
+  })
+  expect(counts.counts).toEqual({ grid: 0, notes: 0, keyboard: 2, activity: 2 })
+  expect(counts.activeKey).toEqual([227, 111, 134, 255])
+  expect(counts.blackFace).toEqual([227, 111, 134, 255])
+  expect(counts.blackTail).toEqual([255, 255, 255, 255])
+  expect(counts.whiteShoulder).toEqual([227, 111, 134, 255])
+  expect(counts.whiteSeam).toEqual([227, 111, 134, 255])
+  // 半透明颜色回读会经过浏览器预乘 alpha，允许单个色阶的舍入差异。
+  for (const [index, value] of [226, 250, 255].entries())
+    expect(Math.abs(counts.activeRow[index]! - value)).toBeLessThanOrEqual(4)
+  expect(counts.activeRow[3]).toBeGreaterThan(0)
+  expect(counts.cleared).toEqual([0, 0, 0, 0])
+  await page.evaluate(() => {
+    window.editing.editor.setPitchZoom(28)
+    window.editing.editor.setTransport({
+      positionSeconds: 0,
+      isPlaying: false,
+      playbackRate: 1,
+      activePitches: [60, 64, 67],
+    })
+  })
+  await page.waitForTimeout(50)
+  await page.locator('#editor').screenshot({ path: test.info().outputPath('sounding-pitches.png') })
+})
+
+test('浏览态可显示和点击参考轨，切换轨道不产生编辑意图', async ({ page }) => {
+  await page.evaluate(() => {
+    const source = window.editing.document
+    window.editing.editor.setDocument({
+      ...source,
+      // 浏览兼容提前结束的 EOT，参考音符仍按实际音符范围展示并可点击。
+      tracks: source.tracks.map(track => track.id === 't2' ? { ...track, endTick: 600 } : track),
+      notes: [
+        ...source.notes,
+        { id: 'reference', trackId: 't2', pitch: 65, velocity: 90, startTick: 480, endTick: 960 },
+      ],
+    })
+    window.editing.editor.setEditing(undefined)
+    window.editing.editor.setShowOtherTracks(true)
+  })
+  const point = await pointFor(page, 700, 65)
+  await page.mouse.move(point.x, point.y)
+  await expect(page.locator('#editor .pr-scroll')).toHaveCSS('cursor', 'pointer')
+  await page.mouse.click(point.x, point.y)
+  expect(await page.evaluate(() => window.editing.actions)).toEqual(['select:t2'])
+  expect(await intents(page)).toEqual([])
+  await page.evaluate(() => window.editing.editor.setSelectedTrack('t1'))
+  await page.evaluate(() => window.editing.editor.setShowOtherTracks(false))
+  await page.mouse.click(point.x, point.y)
+  expect(await page.evaluate(() => window.editing.actions)).toEqual(['select:t2'])
+})
+
+test('区域把手位于有效边界外，不覆盖当前音符区域', async ({ page }) => {
+  await page.evaluate(() => window.editing.configure({ enabled: true }))
+  const handle = page.locator('#editor .pr-region-resize')
+  await expect(handle).toBeVisible()
+  const expected = await pointFor(page, Number(await handle.getAttribute('data-end-tick')), 60)
+  const rect = (await handle.boundingBox())!
+  expect(rect.x).toBeCloseTo(expected.x, 1)
+})
+
+
+test('区域松手后等待异步宿主回传，不闪回旧边界；回传后撤销仍能恢复', async ({ page }) => {
+  await page.evaluate(() => window.editing.configure({ tool: 'select' }))
+  const handle = page.locator('#overview .pr-region-resize[data-track-id="t1"]')
+  const box = (await handle.boundingBox())!
+  await page.mouse.move(box.x + 6, box.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 126, box.y + 10, { steps: 6 })
+  // WebKit 的指针移动与 Canvas 绘制分帧，等待预览真正绘制后再记录松手位置。
+  await expect(handle).not.toHaveAttribute('data-end-tick', '2880')
+  const preview = await handle.getAttribute('data-end-tick')
+  await page.mouse.up()
+  // 独立窗口经 IPC 回传文档前也要保持松手位置，不允许用微任务或固定延时清掉预览。
+  await page.waitForTimeout(350)
+  await expect(handle).toHaveAttribute('data-end-tick', preview!)
+  await page.evaluate((endTick) => {
+    window.editing.overview.setDocument({
+      ...window.editing.document,
+      tracks: window.editing.document.tracks.map(t => t.id === 't1' ? { ...t, endTick: Number(endTick) } : t),
+    })
+  }, preview)
+  await expect(handle).toHaveAttribute('data-end-tick', preview!)
+  await page.evaluate(() => window.editing.overview.setDocument(window.editing.document))
+  await expect(handle).toHaveAttribute('data-end-tick', '2880')
+})
+
+
+test('音符占满可见行时发音高光仍可见，光晕向行外柔和扩散且不遮盖音轨颜色', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const roll = window.editing.editor
+    const source = window.editing.document
+    roll.setDocument({
+      ...source,
+      durationTicks: 19200,
+      tracks: source.tracks.map(t => ({ ...t, color: '#4ab97b', startTick: 0, endTick: 19200 })),
+      notes: [{ id: 'long', trackId: 't1', pitch: 60, velocity: 100, startTick: 0, endTick: 19200 }],
+    })
+    roll.setPitchZoom(28)
+    const pane = document.querySelector<HTMLElement>('#editor .pr-pane')!
+    const notes = pane.querySelector<HTMLCanvasElement>('.pr-notes')!
+    const activity = pane.querySelector<HTMLCanvasElement>('.pr-pitch-activity')!
+    const settle = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    await settle()
+    const viewport = roll.getViewport()
+    const y = window.editing.point(0, 60).y
+    const combinedPixel = () => {
+      const sample = document.createElement('canvas')
+      sample.width = notes.width
+      sample.height = notes.height
+      const context = sample.getContext('2d')!
+      // 同一个 stacking context 内按真实 DOM 顺序合成，检查屏幕上最终可见的颜色。
+      for (const layer of pane.querySelectorAll<HTMLCanvasElement>(':scope > canvas')) context.drawImage(layer, 0, 0)
+      return Array.from(context.getImageData(200 * devicePixelRatio, y * devicePixelRatio, 1, 1).data)
+    }
+    const before = combinedPixel()
+    roll.setTransport({ positionSeconds: 0, isPlaying: false, playbackRate: 1, activePitches: [60] })
+    await settle()
+    const after = combinedPixel()
+    const top = y - viewport.pitchZoom / 2
+    const pixel = (offset: number) => Array.from(activity.getContext('2d')!
+      .getImageData(200 * devicePixelRatio, (top - offset) * devicePixelRatio, 1, 1).data)
+    return {
+      before, after,
+      near: pixel(3), far: pixel(12),
+      overNotes: !!(notes.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING),
+    }
+  })
+  expect(result.overNotes).toBe(true)
+  expect(result.near[3]).toBeGreaterThan(0)
+  expect(result.near[3]).toBeGreaterThan(result.far[3]!)
+  expect(result.after[0]! - result.before[0]!).toBeGreaterThan(15)
+  expect(result.after[1]).toBeGreaterThan(result.after[0]!)
+  expect(result.after[1]).toBeGreaterThan(result.after[2]!)
+  await page.locator('#editor').screenshot({ path: test.info().outputPath('connected-keys-note-glow.png') })
 })

@@ -54,6 +54,12 @@ export interface PianoRollThemeColors {
   keyBlack: string
   /** 琴键边界。 */
   keyBorder: string
+  /** 实际发音琴键，不跟随音轨配色。 */
+  keyActive: string
+  /** 实际发音半音行的通用高光。 */
+  pitchActive: string
+  /** 发音行向外扩散的柔和光晕，不随音轨配色改变。 */
+  pitchActiveGlow: string
   /** 滚动条滑块。 */
   scrollbarThumb: string
   /** 滚动条滑块悬停色。 */
@@ -124,6 +130,9 @@ export const defaultPianoRollTheme: PianoRollTheme = Object.freeze({
     keyWhite: '#ffffff',
     keyBlack: '#5f5053',
     keyBorder: '#e2d3d6',
+    keyActive: '#e36f86',
+    pitchActive: 'rgba(226, 250, 255, 0.95)',
+    pitchActiveGlow: 'rgba(168, 232, 255, 0.75)',
     scrollbarThumb: '#e6a3af',
     scrollbarThumbHover: '#d97f91',
     focus: '#c9516b',

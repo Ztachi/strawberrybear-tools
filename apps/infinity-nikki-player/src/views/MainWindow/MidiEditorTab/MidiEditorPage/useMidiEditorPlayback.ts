@@ -33,12 +33,14 @@ export function useMidiEditorPlayback(
   const isPlaying = shallowRef(false)
   const positionSeconds = shallowRef(0)
   let frameHandle: number | null = null
+  let disposed = false
 
   function toFrame(state: EditorTransportState): PianoRollTransport {
     return {
       positionSeconds: state.positionSeconds,
       isPlaying: state.isPlaying,
       playbackRate: state.playbackRate,
+      activePitches: controller.getActivePitches(),
     }
   }
 
@@ -48,19 +50,29 @@ export function useMidiEditorPlayback(
   }
   function frame(): void {
     frameHandle = null
+    if (disposed) return
     const state = controller.getState()
     positionSeconds.value = state.positionSeconds
-    onFrame(toFrame(state))
-    if (state.isPlaying) frameHandle = requestAnimationFrame(frame)
+    const next = toFrame(state)
+    // 只在发音集合变化时同步 Vue prop，让关闭再打开的详情也得到当前高亮。
+    // 连续播放位置继续走控制器，不让整棵编辑界面逐帧重建。
+    if ((transport.value.activePitches ?? []).join(',') !== next.activePitches!.join(',')) {
+      transport.value = next
+    }
+    onFrame(next)
+    if (state.isPlaying || next.activePitches!.length > 0)
+      frameHandle = requestAnimationFrame(frame)
   }
 
   function handleChange(state: EditorTransportState): void {
+    if (disposed) return
     transport.value = toFrame(state)
     isPlaying.value = state.isPlaying
     positionSeconds.value = state.positionSeconds
     onFrame(transport.value)
-    if (state.isPlaying && frameHandle === null) frameHandle = requestAnimationFrame(frame)
-    if (!state.isPlaying) stopFrames()
+    if ((state.isPlaying || transport.value.activePitches!.length > 0) && frameHandle === null)
+      frameHandle = requestAnimationFrame(frame)
+    if (!state.isPlaying && transport.value.activePitches!.length === 0) stopFrames()
   }
 
   const controller = createMidiEditorPlaybackController({
@@ -117,6 +129,8 @@ export function useMidiEditorPlayback(
     durationSeconds?: number
   ): Promise<void> {
     await controller.audition(pitch, velocity, durationSeconds)
+    // 暂停状态下的琴键/音符试听同样需要音频帧，最后一个声部结束后自动停止。
+    handleChange(controller.getState())
   }
 
   watch(document, () => controller.invalidate())
@@ -140,6 +154,9 @@ export function useMidiEditorPlayback(
   )
 
   function dispose(): void {
+    // 异步初始化返回后不能重新给已卸载的主窗口/独立窗口启动发音帧。
+    if (disposed) return
+    disposed = true
     stopFrames()
     controller.dispose()
   }

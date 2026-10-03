@@ -139,6 +139,11 @@ export default {
             description:
               '点击筛选按钮可切换“只显示有音符的音轨”和“显示全部音轨”。歌曲预览默认隐藏空轨，MIDI 编辑器默认显示全部音轨，方便添加内容。',
           },
+          references: {
+            label: '参考音轨',
+            description:
+              '详情跟随按钮旁的音轨参考图标默认开启。其他轨音符保留原轨颜色，以淡色填充和虚线轮廓区分；点击可切换音轨，总览会平滑居中显示该轨。浏览与编辑均可使用。',
+          },
           zoom: {
             label: '独立缩放',
             description:
@@ -478,6 +483,8 @@ export default {
     },
   },
   midiEditor: {
+    otherTracks: '显示其他音轨',
+    otherTracksTip: '以原音轨配色和虚线轮廓显示参考音符；点击参考音符切换音轨，编辑时可直接拖动。',
     title: 'MIDI 编辑',
     description: '创建、编辑、导入和导出 MIDI 项目，编辑完成后可导出 .mid 或直接加入曲库',
     projectList: '项目列表',
@@ -723,6 +730,16 @@ export default {
         notes: {
           title: '音符编辑',
           items: {
+            keyboard: {
+              label: '琴键与发音',
+              description:
+                '琴键与右侧网格逐行对应。放大音高后会显示更多音名；点击琴键可试听，琴键、音符试听和播放中的发音都会高亮对应琴键及网格行。',
+            },
+            otherTracks: {
+              label: '参考其他音轨',
+              description:
+                '跟随播放头旁的音轨参考图标默认开启，浏览与编辑都能使用。参考音符保留原轨配色，并用淡色填充和虚线轮廓区分；点击切换音轨，编辑时可直接拖动。切换后总览会平滑居中显示该轨，重叠时优先操作当前轨音符。',
+            },
             select: {
               label: '选择工具',
               description:

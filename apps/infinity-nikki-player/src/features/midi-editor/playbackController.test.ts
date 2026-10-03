@@ -6,6 +6,71 @@ import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 afterEach(() => vi.useRealTimers())
 
 describe('MIDI editor playback controller', () => {
+  it('发音状态按音频时钟更新，同音重叠在最后一个声部结束前保持高亮', async () => {
+    let clock = 10
+    const document = previewProject().document
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => clock,
+      scheduleNote: () => ({ stop() {} }),
+    })
+    await controller.audition(60, 100, 0.5)
+    clock = 10.2
+    await controller.audition(60, 100, 1)
+    await controller.audition(64, 100, 0.1)
+    expect(controller.getActivePitches()).toEqual([60, 64])
+    clock = 10.5
+    expect(controller.getActivePitches()).toEqual([60])
+    clock = 11.2
+    expect(controller.getActivePitches()).toEqual([])
+    controller.dispose()
+  })
+
+  it('提前排程的音符到发音时才高亮，暂停、换文档、销毁清空发音状态', async () => {
+    vi.useFakeTimers()
+    let clock = 10
+    const document = previewProject().document
+    document.notes = [
+      { id: 'later', trackId: 'track', pitch: 60, velocity: 100, startTick: 48, endTick: 480 },
+    ]
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => clock,
+      scheduleNote: () => ({ stop() {} }),
+    })
+    await controller.play()
+    expect(controller.getActivePitches()).toEqual([])
+    clock = 10.05
+    expect(controller.getActivePitches()).toEqual([60])
+    controller.pause()
+    expect(controller.getActivePitches()).toEqual([])
+    await controller.audition(64, 100)
+    controller.invalidate()
+    expect(controller.getActivePitches()).toEqual([])
+    await controller.audition(67, 100)
+    controller.dispose()
+    expect(controller.getActivePitches()).toEqual([])
+  })
+
+  it('被模板过滤或合成器没有发声时不产生高亮', async () => {
+    const document = previewProject().document
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      getPlayablePitches: () => new Set([60]),
+      ensureAudio: async () => {},
+      getAudioClock: () => 10,
+      scheduleNote: () => null,
+    })
+    await controller.audition(60, 100)
+    await controller.audition(64, 100)
+    expect(controller.getActivePitches()).toEqual([])
+    controller.dispose()
+  })
   it('切换项目期间文档为空时停止旧试听，载入新文档后可以重新播放', async () => {
     vi.useFakeTimers()
     let document: PianoRollDocument | null = previewProject().document
