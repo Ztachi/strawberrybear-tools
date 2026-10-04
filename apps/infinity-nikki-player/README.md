@@ -377,4 +377,6 @@ infinity-nikki-player/
 
 ## 更新日志
 
+应用内可从 **关于 → 更新日志** 查看完整版本历史；升级后的首次启动会展示本次更新内容。
+
 详见 [CHANGELOG.md](CHANGELOG.md)

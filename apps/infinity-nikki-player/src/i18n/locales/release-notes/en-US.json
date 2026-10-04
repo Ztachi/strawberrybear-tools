@@ -1,4 +1,15 @@
 {
+  "v1_3_2": {
+    "title": "Clearer editing, smoother playback",
+    "highlights": [
+      "Piano keys now align with the pitch grid, with more note names appearing as you zoom in. Click a key to preview it; sounding keys and note rows light up together.",
+      "View reference notes from other tracks while browsing or editing. They retain their track colors with dashed outlines; click a reference note to switch tracks and bring it into view in the overview.",
+      "Opening, restoring, or refreshing a detached editor preserves playback position, speed, and playing or paused state. Fixes playback restarting from the beginning and improves sustained notes and loop transitions.",
+      "Track regions can be extended continuously without the boundary jumping back on release. The overview shows the effective song length, and draft loading has a clear waiting state.",
+      "Buttons and icons use consistent theme colors for normal, hover, selected, and disabled states. Song and playlist batch actions support Select All; batch export stays hidden until something is selected.",
+      "Release notes are now available in the app. After upgrading, see the changes since your previous version; open the full history from About and browse by version."
+    ]
+  },
   "v1_3_1": {
     "title": "More flexible arrangements, safer drafts",
     "highlights": [

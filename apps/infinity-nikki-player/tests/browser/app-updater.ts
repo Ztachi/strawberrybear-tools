@@ -61,7 +61,10 @@ mockIPC(
     if (command === 'get_release_notes_launch') {
       return {
         currentVersion: '1.3.1',
-        historyVersions: RELEASE_NOTES.map((entry) => entry.version),
+        // 固定旧版本的升级场景，新增发布记录不能让测试中的旧安装包看到未来版本。
+        historyVersions: RELEASE_NOTES.slice(
+          RELEASE_NOTES.findIndex((entry) => entry.version === '1.3.1')
+        ).map((entry) => entry.version),
         updateVersions:
           notesScenario === 'update' && !localStorage.getItem('fixture:release-notes-seen')
             ? ['1.3.1', '1.3.0', '1.2.0']
