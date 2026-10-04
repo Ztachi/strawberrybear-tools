@@ -582,10 +582,10 @@ onBeforeUnmount(dismissTransientUi)
             {{ t('midiEditor.batchDelete') }}
           </Button>
           <Button
+            v-if="selectedIds.size > 0"
             size="small"
             color="primary"
             variant="outlined"
-            :disabled="selectedIds.size === 0"
             @click="exportSelected"
           >
             <template #icon>

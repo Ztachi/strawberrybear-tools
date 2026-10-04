@@ -142,8 +142,9 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
         endTick: current.endTick,
       })
     }
-    // Vue 宿主先应用意图并回传文档，再收回临时浏览空间，避免松手时横向视口跳回旧曲尾。
-    window.queueMicrotask(() => host.preview(null))
+    // 独立窗口的意图回传经 IPC，不能假定微任务内已更新文档。
+    // 提交后保留预览，由 setDocument 接管；取消或未发生修改时立即还原。
+    if (!commit || !current.moved || current.endTick === current.originalEnd) host.preview(null)
   }
 
   /**
@@ -255,6 +256,8 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
       const active = new Set<string>()
       if (host.options()?.enabled) {
         for (const row of frame.rows) {
+          // 参考轨只提供音符参照，区域句柄始终属于当前编辑轨。
+          if (frame.variant === 'editor' && row.track.id !== frame.selectedTrackId) continue
           active.add(row.track.id)
           let button = handles.get(row.track.id)
           if (!button) {
@@ -279,7 +282,7 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
             '--pr-region-color',
             row.track.color ?? 'var(--pr-primary,#e36f86)'
           )
-          button.style.left = `${Math.max(0, right - 12)}px`
+          button.style.left = `${Math.max(0, right)}px`
           // 详情手柄贴在时间区顶部，不随音高滚动；短抓取区避免挡住音符末端的拉伸操作。
           button.style.top = `${frame.variant === 'editor' ? 3 : row.top - frame.scrollTop + 3}px`
           button.style.height = `${frame.variant === 'editor' ? 24 : Math.max(12, row.height - 9)}px`
@@ -294,7 +297,11 @@ export function installTrackRegionEditing(host: TrackRegionHost): TrackRegionEdi
         }
       }
     },
-    reset: () => finish(false),
+    reset(): void {
+      finish(false)
+      // 已松手但宿主尚未回传的预览也属于本视图；换文档、切轨或关闭编辑时要清理。
+      host.preview(null)
+    },
     destroy(): void {
       finish(false)
       window.removeEventListener('keydown', cancel)

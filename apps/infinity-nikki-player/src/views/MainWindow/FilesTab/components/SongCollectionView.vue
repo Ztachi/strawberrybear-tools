@@ -169,6 +169,11 @@ function toggleSong(song: MidiInfo): void {
   setSelectedFilenames(nextSet)
 }
 
+/** 全选当前筛选结果，包含虚拟列表尚未渲染的歌曲。 */
+function selectAllSongs(): void {
+  setSelectedFilenames(new Set(filteredSongs.value.map((song) => song.filename)))
+}
+
 function handleRowClick(song: MidiInfo): void {
   if (batchMode.value) {
     toggleSong(song)
@@ -426,9 +431,19 @@ onUnmounted(deactivatePageInteractions)
           {{ batchMode ? t('songList.actions.exitBatch') : t('songList.actions.batch') }}
         </Button>
 
-        <span v-if="batchMode" class="selected-count">
-          {{ t('songList.selectedCount', { count: selectedCount }) }}
-        </span>
+        <template v-if="batchMode">
+          <span class="selected-count">
+            {{ t('songList.selectedCount', { count: selectedCount }) }}
+          </span>
+          <Button
+            type="link"
+            size="small"
+            :disabled="filteredSongs.length === 0"
+            @click="selectAllSongs"
+          >
+            {{ t('songList.actions.selectAll') }}
+          </Button>
+        </template>
       </div>
     </div>
 
@@ -507,7 +522,7 @@ onUnmounted(deactivatePageInteractions)
                 @update:open="(value) => setMenuOpen('click', filteredSongs[virtualRow.index]!.filename, value)"
               >
                 <button
-                  class="song-menu-trigger"
+                  class="song-menu-trigger nikki-icon-button"
                   :aria-label="t('songList.actions.more')"
                   @click.stop
                 >
@@ -643,12 +658,6 @@ onUnmounted(deactivatePageInteractions)
 
 .song-menu-trigger {
   @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg;
-  color: var(--color-primary-active);
-  transition: background 0.18s ease;
-}
-
-.song-menu-trigger:hover {
-  background: var(--bg-primary-10);
 }
 
 .empty-state {

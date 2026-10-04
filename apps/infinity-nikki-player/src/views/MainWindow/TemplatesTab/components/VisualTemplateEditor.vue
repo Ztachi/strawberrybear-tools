@@ -293,6 +293,8 @@ onUnmounted(() => {
       <div class="editor-status-meta">
         <Button
           type="primary"
+          :danger="editorState.isMappingMode"
+          :aria-pressed="editorState.isMappingMode"
           class="mapping-mode-button"
           :class="{ active: editorState.isMappingMode }"
           @click="toggleMappingMode"
@@ -303,7 +305,7 @@ onUnmounted(() => {
     </div>
 
     <button
-      class="key-help-btn"
+      class="key-help-btn nikki-icon-button"
       :aria-label="t('template.editorHelp')"
       @click="isHelpDialogOpen = true"
     >
@@ -387,13 +389,8 @@ onUnmounted(() => {
   @apply absolute flex h-7 w-7 items-center justify-center rounded-full transition-colors;
   top: -40px;
   right: 0;
-  color: var(--color-primary);
   background: var(--bg-white-95);
   box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 16%, transparent);
-}
-
-.key-help-btn:hover {
-  background: var(--bg-primary-10);
 }
 
 .key-help-icon {
@@ -409,36 +406,15 @@ onUnmounted(() => {
   height: 34px;
   padding-inline: 18px;
   border-radius: 999px;
-  border-color: color-mix(in srgb, var(--color-primary) 76%, transparent);
-  background: var(--color-primary);
-  color: var(--color-white);
   font-size: 13px;
   font-weight: 800;
   box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 
-.mapping-mode-button:hover,
-.mapping-mode-button:focus-visible {
-  border-color: color-mix(in srgb, var(--color-primary) 86%, black);
-  background: color-mix(in srgb, var(--color-primary) 88%, black);
-  color: var(--color-white);
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--color-primary) 34%, transparent);
-}
-
 .mapping-mode-button.active {
-  border-color: var(--color-danger);
-  background: var(--color-danger);
-  color: var(--color-white);
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--color-danger) 16%, transparent),
     0 10px 24px color-mix(in srgb, var(--color-danger) 34%, transparent);
-}
-
-.mapping-mode-button.active:hover,
-.mapping-mode-button.active:focus-visible {
-  border-color: color-mix(in srgb, var(--color-danger) 86%, black);
-  background: color-mix(in srgb, var(--color-danger) 88%, black);
-  color: var(--color-white);
 }
 
 .piano-canvas-container {

@@ -78,7 +78,7 @@ watch(
           <!-- 清空按钮 -->
           <button
             v-if="keyLog.length > 0"
-            class="keylog-clear text-xs px-1.5 py-0.5 rounded transition-colors"
+            class="nikki-icon-button keylog-clear text-xs px-1.5 py-0.5 rounded transition-colors"
             @click="clearKeyLog"
           >
             {{ t('actions.clear') }}
@@ -137,7 +137,7 @@ watch(
     </template>
 
     <!-- 触发器按钮 -->
-    <button class="log-btn">
+    <button class="log-btn nikki-icon-button">
       <FileText :size="14" />
       {{ t('player.keyLog') }}
     </button>
@@ -149,11 +149,6 @@ watch(
   @apply flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all;
   background: var(--bg-primary-10);
   border: 1px solid var(--border-primary-20);
-  color: var(--color-primary);
-}
-
-.log-btn:hover {
-  background: var(--bg-primary-20);
 }
 
 .keylog-content {
@@ -168,15 +163,6 @@ watch(
 .chapter-title,
 .entry-key {
   color: var(--color-primary-active, #e98ca2);
-}
-
-.keylog-clear {
-  color: var(--color-muted-dark);
-}
-
-.keylog-clear:hover {
-  color: var(--color-primary-active, #e98ca2);
-  background: var(--bg-primary-08);
 }
 
 .keylog-empty,

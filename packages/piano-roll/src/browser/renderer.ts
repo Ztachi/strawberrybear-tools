@@ -6,7 +6,7 @@ import {
 } from '../core'
 import { defaultPianoRollTheme, type PianoRollTheme } from './theme'
 import { rulerLabels, rulerMarks } from './ruler-layout'
-import { layoutPianoKeys } from './keyboard-layout'
+import { isBlackKey, layoutPianoKeys, pianoKeyLabel, pitchRowGeometry } from './keyboard-layout'
 
 /** 一行轨道的内容坐标。 */
 export interface TrackRow {
@@ -119,6 +119,10 @@ export interface RenderFrame {
   scrollTop: number
   timeZoom: number
   pitchZoom: number
+  /** 宿主音频时钟确认正在发声的音高，只使独立高光层失效。 */
+  activePitches?: readonly number[]
+  /** 浏览和编辑共用的参考音轨显示设置。 */
+  showOtherTracks?: boolean
   /** Canvas 与 DOM 共用的已解析主题；缺省时使用默认主题。 */
   theme?: PianoRollTheme
   /** 编辑层投影：选中音符与可演奏音高；只影响配色，不改变布局。 */
@@ -190,10 +194,8 @@ export function drawGrid(
     const playable = frame.editing?.highlightPitches ?? null
     for (let row = firstRow; row <= lastRow; row += 1) {
       const pitch = 127 - row
-      const y = row * pitchZoom - scrollTop
-      context.fillStyle = [1, 3, 6, 8, 10].includes(pitch % 12)
-        ? theme.colors.surface
-        : theme.colors.surfaceSubtle
+      const y = pitchRowGeometry(pitch, pitchZoom).top - scrollTop
+      context.fillStyle = isBlackKey(pitch) ? theme.colors.surface : theme.colors.surfaceSubtle
       context.fillRect(0, y, width, pitchZoom)
       // 不可演奏行叠一层淡遮罩，网格线仍保留在其上以维持节拍参照。
       if (playable && !playable.has(pitch)) {
@@ -337,10 +339,16 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
   const rows =
     frame.variant === 'overview'
       ? frame.rows
-      : frame.rows.filter((row) => row.track.id === frame.selectedTrackId)
+      : frame.showOtherTracks
+        ? [
+            ...frame.rows.filter((row) => row.track.id !== frame.selectedTrackId),
+            ...frame.rows.filter((row) => row.track.id === frame.selectedTrackId),
+          ]
+        : frame.rows.filter((row) => row.track.id === frame.selectedTrackId)
   const selected = frame.editing?.selectedNoteIds
   const playable = frame.editing?.highlightPitches ?? null
   for (const row of rows) {
+    const reference = frame.variant === 'editor' && row.track.id !== frame.selectedTrackId
     const range = frame.index.getPitchRange(row.track.id)
     const low = (range?.min ?? 48) - 3
     const high = (range?.max ?? 84) + 3
@@ -357,26 +365,48 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
       const noteHeight = frame.variant === 'editor' ? Math.max(3, pitchZoom - 3) : 3
       const y =
         frame.variant === 'editor'
-          ? (127 - note.pitch) * pitchZoom - scrollTop + 1
+          ? pitchRowGeometry(note.pitch, pitchZoom).top - scrollTop + 1
           : row.top - scrollTop + (row.height - noteHeight) / 2 + (middlePitch - note.pitch) * scale
       if (y > height || y + noteHeight < 0) continue
       const x = Math.max(-2, start)
       const w = Math.min(width + 2, Math.max(start + 2, end)) - x
       if (w <= 0) continue
-      context.globalAlpha = row.track.enabled ? 1 : 0.28
-      const isSelected = selected?.has(note.id) ?? false
+      context.globalAlpha = reference
+        ? row.track.enabled
+          ? 0.32
+          : 0.18
+        : row.track.enabled
+          ? 1
+          : 0.28
+      const isSelected = !reference && (selected?.has(note.id) ?? false)
       const unplayable = playable !== null && !playable.has(note.pitch)
       // 选中优先于其它状态；不可演奏音符在两种视图中都用灰色提示。
-      context.fillStyle = isSelected
-        ? theme.colors.noteSelected
-        : unplayable
-          ? theme.colors.noteUnplayable
-          : row.track.color ||
-            (frame.variant === 'overview' ? theme.colors.overviewNote : theme.colors.editorNote)
+      const trackColor = row.track.color || theme.colors.editorNote
+      context.fillStyle = reference
+        ? trackColor
+        : isSelected
+          ? theme.colors.noteSelected
+          : unplayable
+            ? theme.colors.noteUnplayable
+            : row.track.color ||
+              (frame.variant === 'overview' ? theme.colors.overviewNote : theme.colors.editorNote)
       context.fillRect(x, y, w, noteHeight)
       if (frame.variant === 'editor') {
-        context.strokeStyle = isSelected ? theme.colors.text : theme.colors.noteOutline
+        // 参考轨保留原配色，用空心虚线轮廓区分模板外的实心灰色音符。
+        if (reference) {
+          context.globalAlpha = row.track.enabled ? 0.8 : 0.4
+          context.setLineDash([3, 2])
+        }
+        context.strokeStyle = reference
+          ? trackColor
+          : isSelected
+            ? theme.colors.text
+            : theme.colors.noteOutline
         context.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), noteHeight - 1)
+        if (reference) {
+          context.setLineDash([])
+          continue
+        }
         context.fillStyle = theme.colors.noteVelocity
         context.fillRect(
           x + 2,
@@ -390,42 +420,121 @@ export function drawNotes(canvas: HTMLCanvasElement, frame: RenderFrame): void {
   }
 }
 
-/** 左侧完整 MIDI 0–127 键盘，只绘制可见音高行。 */
+/**
+ * @description 绘制独立发音高光层，音频帧不必重绘节拍、音符或编辑预览。
+ * @param canvas 视口大小的高光画布。
+ * @param frame 统一视口与宿主发音状态。
+ * @param layer 网格变色层或叠加在音符上方的外扩光晕层。
+ * @return 无返回值。
+ */
+export function drawPitchActivity(
+  canvas: HTMLCanvasElement,
+  frame: RenderFrame,
+  layer: 'fill' | 'glow' = 'fill'
+): void {
+  const context = canvasContext(canvas, frame.width, frame.height)
+  if (!context || frame.variant !== 'editor') return
+  const colors = (frame.theme ?? defaultPianoRollTheme).colors
+  const blur = Math.min(12, frame.pitchZoom / 2)
+  const rows = [...new Set(frame.activePitches)]
+    .filter((pitch) => Number.isInteger(pitch) && pitch >= 0 && pitch <= 127)
+    .map((pitch) => {
+      const { top, height } = pitchRowGeometry(pitch, frame.pitchZoom)
+      return { y: top - frame.scrollTop, height }
+    })
+    .filter((row) => row.y < frame.height + blur && row.y + row.height > -blur)
+  context.save()
+  context.fillStyle = colors.pitchActive
+  if (layer === 'fill') {
+    // 原有整行变色保留在音符下面；前景光晕只是附加反馈，不能替代该层。
+    for (const row of rows) context.fillRect(0, row.y, frame.width, row.height - 1)
+    context.restore()
+    return
+  }
+  context.shadowColor = colors.pitchActiveGlow
+  // Canvas shadowBlur 不随坐标变换缩放，按 DPR 补偿以保持不同屏幕上的 CSS 光晕范围一致。
+  context.shadowBlur = blur * (canvas.ownerDocument.defaultView?.devicePixelRatio || 1)
+  for (const row of rows) context.fillRect(0, row.y, frame.width, row.height)
+  context.shadowBlur = 0
+  context.shadowColor = 'transparent'
+  // 先保留外扩阴影，再清空行内实体；避免不透明的高光把宿主音轨颜色洗成白色。
+  context.globalCompositeOperation = 'destination-out'
+  context.fillStyle = '#000000'
+  for (const row of rows) context.fillRect(0, row.y, frame.width, row.height)
+  context.globalCompositeOperation = 'source-over'
+  context.fillStyle = colors.pitchActive
+  context.globalAlpha = 0.2
+  for (const row of rows) context.fillRect(0, row.y, frame.width, row.height - 1)
+  context.restore()
+}
+
+/**
+ * @description 左侧半音键盘与网格逐行对齐，黑键较短，音名随音高缩放增加。
+ * @param canvas 琴键画布。
+ * @param height 可见高度。
+ * @param pitchZoom 每半音行高。
+ * @param scrollTop 纵向内容偏移。
+ * @param theme 解析后的主题。
+ * @param playable 可演奏集合；null 不过滤。
+ * @param activePitches 宿主确认正在发声的音高。
+ * @return 无返回值。
+ */
 export function drawKeyboard(
   canvas: HTMLCanvasElement,
   height: number,
   pitchZoom: number,
   scrollTop: number,
   theme: PianoRollTheme = defaultPianoRollTheme,
-  playable: ReadonlySet<number> | null = null
+  playable: ReadonlySet<number> | null = null,
+  activePitches: readonly number[] = []
 ): void {
   const context = canvasContext(canvas, 64, height)
   if (!context) return
+  const active = new Set(activePitches)
   context.font = `11px ${theme.metrics.fontFamily}`
-  for (const key of layoutPianoKeys(pitchZoom)) {
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  // 主体严格保持半音行高，前端凸出部分与白键使用同一轮廓、填充和发音状态。
+  context.fillStyle = theme.colors.keyWhite
+  context.fillRect(0, 0, 64, height)
+  const keys = layoutPianoKeys(pitchZoom)
+  for (const key of [...keys.filter((key) => !key.black), ...keys.filter((key) => key.black)]) {
     const { pitch, black } = key
     const y = key.top - scrollTop
-    if (y + key.height < 0 || y > height) continue
+    if (key.frontBottom - scrollTop <= 0 || key.frontTop - scrollTop >= height) continue
+    const face = () => {
+      context.beginPath()
+      if (black) context.rect(0, y, 42, key.height)
+      else {
+        context.moveTo(0, y)
+        context.lineTo(42, y)
+        context.lineTo(42, key.frontTop - scrollTop)
+        context.lineTo(64, key.frontTop - scrollTop)
+        context.lineTo(64, key.frontBottom - scrollTop)
+        context.lineTo(42, key.frontBottom - scrollTop)
+        context.lineTo(42, y + key.height)
+        context.lineTo(0, y + key.height)
+        context.closePath()
+      }
+    }
+    face()
     context.fillStyle = black ? theme.colors.keyBlack : theme.colors.keyWhite
-    context.fillRect(0, y, black ? 42 : 64, key.height)
-    if (!black) {
-      context.fillStyle = theme.colors.keyBorder
-      context.fillRect(0, y + key.height - 1, 64, 1)
-    }
+    context.fill()
     if (playable && !playable.has(pitch)) {
-      // 不可演奏键位压暗，白键用遮罩色、黑键降低不透明度。
-      context.fillStyle = black ? theme.colors.keyWhite : theme.colors.pitchUnplayable
-      context.globalAlpha = black ? 0.55 : 1
-      context.fillRect(0, y, black ? 42 : 64, key.height)
-      context.globalAlpha = 1
+      context.fillStyle = theme.colors.pitchUnplayable
+      context.fill()
     }
-    if (pitch % 12 === 0) {
-      context.fillStyle = theme.colors.text
-      context.fillText(
-        `C${Math.floor(pitch / 12) - 1}`,
-        43,
-        (127 - pitch) * pitchZoom - scrollTop + Math.min(pitchZoom - 2, 12)
-      )
+    if (active.has(pitch)) {
+      context.fillStyle = theme.colors.keyActive
+      context.fill()
+    }
+    context.strokeStyle = theme.colors.keyBorder
+    context.lineWidth = 1
+    context.stroke()
+    const label = pianoKeyLabel(pitch, pitchZoom)
+    if (label) {
+      context.fillStyle = black || active.has(pitch) ? '#ffffff' : theme.colors.text
+      context.fillText(label, black ? 21 : 51, y + key.height / 2)
     }
   }
 }

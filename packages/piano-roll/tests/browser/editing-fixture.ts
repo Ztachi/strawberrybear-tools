@@ -1,4 +1,10 @@
-import { createPianoRollEditor, createTracksOverview, type PianoRollEditIntent, type PianoRollEditingOptions, type PianoRollView } from '../../src/browser'
+import {
+  createPianoRollEditor,
+  createTracksOverview,
+  type PianoRollEditIntent,
+  type PianoRollEditingOptions,
+  type PianoRollView,
+} from '../../src/browser'
 import type { PianoRollDocument } from '../../src/core'
 
 declare global {
@@ -41,13 +47,17 @@ let editing: PianoRollEditingOptions = {
   enabled: true,
   tool: 'select',
   selectedNoteIds: selected,
-  snapTicks: (tick, mode) => (mode === 'floor' ? Math.floor(tick / 120) * 120 : Math.round(tick / 120) * 120),
+  snapTicks: (tick, mode) =>
+    mode === 'floor' ? Math.floor(tick / 120) * 120 : Math.round(tick / 120) * 120,
   defaultDurationTicks: 240,
   velocityLaneHeight: 60,
   onIntent: (intent) => {
     intents.push(intent)
     if (intent.type === 'select') {
-      selected = intent.mode === 'replace' ? new Set(intent.noteIds) : new Set([...selected, ...intent.noteIds])
+      selected =
+        intent.mode === 'replace'
+          ? new Set(intent.noteIds)
+          : new Set([...selected, ...intent.noteIds])
       window.editing.configure({ selectedNoteIds: selected })
     }
   },
@@ -56,6 +66,7 @@ const editor = createPianoRollEditor({
   container: document.querySelector<HTMLElement>('#editor')!,
   document: documentModel,
   selectedTrackId: 't1',
+  onTrackSelect: (trackId) => actions.push(`select:${trackId}`),
   timeZoom: 100,
   pitchZoom: 16,
   editing,

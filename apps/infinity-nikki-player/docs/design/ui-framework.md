@@ -18,7 +18,9 @@ Antdv Next 的 `Modal`、`Popover`、`Drawer` 已经提供背景、边框、圆�
 
 所有 Antdv Next `Button` 的图标必须使用 `#icon` 插槽，并给图标设置明确的宽高和 `stroke-width`，避免框架默认图标尺寸导致视觉过小。
 
-普通描边操作按钮统一使用 `.nikki-outline-btn`。hover 和 focus 状态必须填充品牌渐变背景，并将文字和图标切换为白色。
+普通操作按钮通过 Button 组件 token 使用统一主题状态：默认主题色、悬浮加深、按下再加深、
+禁用灰色。选中开关使用主题底色与白色图标。颜色只读取全局 CSS 变量，原生图标入口使用
+`.nikki-icon-button`；不要用局部 hover 或 SVG 颜色覆盖主题。具体变量和反白场景见 [主题规范](theme.md#操作控件状态)。
 
 ## 首页视图切换
 

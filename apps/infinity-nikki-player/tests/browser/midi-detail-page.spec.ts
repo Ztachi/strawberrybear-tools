@@ -37,6 +37,48 @@ async function expectLeftActions(header: Locator): Promise<void> {
   expect(positions.offset).toBeLessThan(320)
 }
 
+test('浏览详情也显示参考轨开关，点击参考音符会切换音轨', async ({ page }) => {
+  await openDetail(page)
+  await page.getByRole('button', { name: '隐藏没有音符的音轨', exact: true }).click()
+  await page.locator('.pr-track[data-track-id="0"] .pr-track-select').dblclick()
+  const editor = page.locator('.detail-piano-editor')
+  const toggle = page.getByRole('button', { name: '显示其他音轨', exact: true })
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  const notes = editor.locator('.pr-notes')
+  const filledPixels = () =>
+    notes.evaluate((element) => {
+      const canvas = element as HTMLCanvasElement
+      return canvas
+        .getContext('2d')!
+        .getImageData(0, 0, canvas.width, canvas.height)
+        .data.filter((value, index) => index % 4 === 3 && value > 0).length
+    })
+  await expect.poll(filledPixels).toBeGreaterThan(0)
+  await toggle.click()
+  await expect.poll(filledPixels).toBe(0)
+  await toggle.click()
+  await expect.poll(filledPixels).toBeGreaterThan(0)
+  const point = await notes.evaluate((element) => {
+    const canvas = element as HTMLCanvasElement
+    const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+    const rect = canvas.getBoundingClientRect()
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const alpha = pixels[(y * canvas.width + x) * 4 + 3]!
+        if (alpha >= 80 && alpha <= 84)
+          return {
+            x: rect.x + ((x + 6) * rect.width) / canvas.width,
+            y: rect.y + ((y + 3) * rect.height) / canvas.height,
+          }
+      }
+    }
+    throw new Error('没有可点击的参考音符')
+  })
+  await page.mouse.click(point.x, point.y)
+  await expect(editor.locator('.piano-roll-slot-title')).not.toHaveText('指挥轨')
+  await expect(page.locator('.note-inspector')).toHaveCount(0)
+})
+
 for (const [locale, width] of [
   ['zh-CN', 1100],
   ['en-US', 780],
@@ -55,8 +97,8 @@ for (const [locale, width] of [
     const editor = page.locator('.detail-piano-editor')
     await expect(editor).toBeVisible()
     await expectLeftActions(editor.locator('.piano-roll-toolbar'))
-    const follow = editor.locator('.pr-corner button')
-    await expect(follow).toHaveCount(1)
+    await expect(editor.locator('.pr-corner button')).toHaveCount(2)
+    const follow = editor.locator('.pr-corner button').first()
     await expect(follow).toHaveAttribute('aria-pressed', 'true')
     await follow.click()
     await expect(follow).toHaveAttribute('aria-pressed', 'false')
@@ -86,7 +128,7 @@ for (const [locale, width] of [
     expect(layout.rightGap).toBeGreaterThanOrEqual(6)
     expect(layout.rightGap).toBeLessThanOrEqual(16)
     expect(layout.clearOfSlider).toBe(true)
-    expect(layout.color).toBe('rgb(239, 91, 107)')
+    expect(layout.color).toBe('rgb(239, 68, 68)')
     expect(layout.overflow).toBe(false)
     await page.mouse.move(0, 0)
     await expect(page.getByRole('tooltip')).toHaveCount(0)
@@ -304,7 +346,7 @@ for (const copy of [
     const dialog = page.getByRole('dialog', { name: copy.title, exact: true })
     await expect(dialog).toBeVisible()
     await expect(dialog.locator('h3')).toHaveCount(3)
-    await expect(dialog.locator('dt')).toHaveCount(9)
+    await expect(dialog.locator('dt')).toHaveCount(10)
     await expect(dialog.getByText(copy.readOnly, { exact: true })).toBeAttached()
     const body = dialog.locator('.ant-modal-body')
     const helpText = dialog.getByText(copy.readOnly, { exact: true })

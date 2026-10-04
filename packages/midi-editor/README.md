@@ -54,7 +54,7 @@ transport.play()
 const bytes = encodeMidi(session.getState().document, { name: session.getState().project.name })
 ```
 
-文档变化后需调用 `transport.invalidate()` 重建事件表；`SynthPort.allNotesOff` 必须同时取消尚未触发的排程，倍速与 seek 依赖这一点避免重复发声。
+暂停续播、跳转或接管另一窗口的位置落在长音中间时，会恢复剩余尾音；循环起点使用同一机制，尾音在循环终点截断。lookahead 提前排程下一轮不会提前移动显示位置。文档变化后需调用 `transport.invalidate()` 重建事件表；`SynthPort.allNotesOff` 必须同时取消尚未触发的排程，倍速与 seek 依赖这一点避免重复发声。
 
 ## 音轨区域与曲长
 

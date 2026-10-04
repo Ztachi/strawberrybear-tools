@@ -9,10 +9,41 @@
     --color-primary-light: #fff1f4;
     --color-primary-hover: #ee8fa1;
     --color-primary-active: #e36f86;
-    --color-primary-disabled-bg: #fff1f4;
-    --color-primary-disabled-border: #f8d4da;
-    --color-primary-disabled-text: #f0b8c2;
+    /* 禁用与可用状态明确区分；旧变量保留为别名，避免页面维护两套禁用色。 */
+    --color-disabled: #a89a9a;
+    --color-disabled-bg: #f5f3f3;
+    --color-disabled-border: #e2dcdc;
+    --color-primary-disabled-bg: var(--color-disabled-bg);
+    --color-primary-disabled-border: var(--color-disabled-border);
+    --color-primary-disabled-text: var(--color-disabled);
     --color-secondary: #f3a1ae;
+
+    /* 框架按钮与原生图标操作共用状态语义，换主题只替换变量组。 */
+    --icon-color: var(--color-primary);
+    --icon-hover-color: var(--color-primary-hover);
+    --icon-active-color: var(--color-primary-active);
+    --icon-disabled-color: var(--color-disabled);
+    --icon-selected-color: var(--color-white);
+    --control-hover-bg: var(--bg-primary-10);
+    --control-active-bg: var(--bg-primary-15);
+    --control-light-bg: var(--color-primary-light);
+    --control-selected-bg: var(--color-primary);
+    --control-focus-ring: var(--color-primary-hover);
+    --control-primary-shadow: 0 4px 16px
+      color-mix(in srgb, var(--color-primary-hover) 28%, transparent);
+    --control-danger-shadow: 0 4px 16px color-mix(in srgb, var(--color-danger) 22%, transparent);
+    --color-danger-hover: color-mix(in srgb, var(--color-danger) 88%, black);
+    --color-danger-active: color-mix(in srgb, var(--color-danger) 76%, black);
+    --bg-danger-hover: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    --bg-danger-active: color-mix(in srgb, var(--color-danger) 15%, transparent);
+
+    /* 封面上的控件采用反白变量组，状态仍使用同一机制。 */
+    --icon-inverse-color: var(--bg-white-90);
+    --icon-inverse-hover-color: var(--color-white);
+    --icon-inverse-disabled-color: var(--bg-white-40);
+    --control-inverse-hover-bg: var(--bg-white-20);
+    --control-inverse-active-bg: var(--bg-white-40);
+    --control-inverse-selected-bg: var(--bg-white-30);
 
     /* 文本颜色 */
     --color-foreground: #4a3f3f;
@@ -30,17 +61,17 @@
     --bg-white-20: rgba(255, 255, 255, 0.2);
 
     /* 粉色透明背景 */
-    --bg-primary-15: rgba(247, 183, 190, 0.15);
-    --bg-primary-10: rgba(247, 183, 190, 0.1);
-    --bg-primary-08: rgba(247, 183, 190, 0.08);
-    --bg-primary-04: rgba(247, 183, 190, 0.04);
+    --bg-primary-15: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    --bg-primary-10: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    --bg-primary-08: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    --bg-primary-04: color-mix(in srgb, var(--color-primary) 4%, transparent);
 
     /* 粉色边框 */
-    --border-primary: rgba(247, 183, 190, 1);
-    --border-primary-30: rgba(247, 183, 190, 0.3);
-    --border-primary-20: rgba(247, 183, 190, 0.2);
-    --border-primary-15: rgba(247, 183, 190, 0.15);
-    --border-primary-10: rgba(247, 183, 190, 0.1);
+    --border-primary: var(--color-primary);
+    --border-primary-30: color-mix(in srgb, var(--color-primary) 30%, transparent);
+    --border-primary-20: color-mix(in srgb, var(--color-primary) 20%, transparent);
+    --border-primary-15: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    --border-primary-10: color-mix(in srgb, var(--color-primary) 10%, transparent);
 
     /* 状态颜色 */
     --color-success: #4ade80;
@@ -151,6 +182,98 @@
 }
 
 @layer components {
+  /* Dropdown 没有独立的图标状态 token；使用其官方 item/itemIcon 语义入口，只影响图标。 */
+  .nikki-menu-action {
+    --menu-icon-color: var(--icon-color);
+  }
+
+  .nikki-menu-action:hover:where(
+      :not([aria-disabled='true']):not(.ant-dropdown-menu-item-disabled):not(
+          .ant-dropdown-menu-submenu-disabled
+        )
+    ) {
+    --menu-icon-color: var(--icon-hover-color);
+  }
+
+  .nikki-menu-action:active:where(
+      :not([aria-disabled='true']):not(.ant-dropdown-menu-item-disabled):not(
+          .ant-dropdown-menu-submenu-disabled
+        )
+    ) {
+    --menu-icon-color: var(--icon-active-color);
+  }
+
+  .nikki-menu-action.ant-dropdown-menu-item-danger {
+    --menu-icon-color: var(--color-danger);
+  }
+
+  .nikki-menu-action.ant-dropdown-menu-item-danger:hover:where(
+      :not([aria-disabled='true']):not(.ant-dropdown-menu-item-disabled)
+    ) {
+    --menu-icon-color: var(--color-danger-hover);
+  }
+
+  .nikki-menu-action.ant-dropdown-menu-item-danger:active:where(
+      :not([aria-disabled='true']):not(.ant-dropdown-menu-item-disabled)
+    ) {
+    --menu-icon-color: var(--color-danger-active);
+  }
+
+  .nikki-menu-action:is(
+    [aria-disabled='true'],
+    .ant-dropdown-menu-item-disabled,
+    .ant-dropdown-menu-submenu-disabled
+  ) {
+    --menu-icon-color: var(--icon-disabled-color);
+  }
+
+  .nikki-menu-action-icon {
+    color: var(--menu-icon-color, var(--icon-color));
+    transition: color 0.15s ease;
+  }
+
+  .nikki-inverse-controls {
+    --icon-color: var(--icon-inverse-color);
+    --icon-hover-color: var(--icon-inverse-hover-color);
+    --icon-active-color: var(--icon-inverse-hover-color);
+    --icon-disabled-color: var(--icon-inverse-disabled-color);
+    --control-light-bg: var(--control-inverse-hover-bg);
+    --control-hover-bg: var(--control-inverse-hover-bg);
+    --control-active-bg: var(--control-inverse-active-bg);
+    --control-selected-bg: var(--control-inverse-selected-bg);
+  }
+
+  /* 原生按钮只复用状态，不接管业务组件的尺寸、排列或动画。Ant Button 使用组件 token。 */
+  .nikki-icon-button {
+    color: var(--icon-color);
+    transition:
+      color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .nikki-icon-button:hover:not(:disabled):not([aria-disabled='true']),
+  .nikki-icon-button:focus-visible:not(:disabled):not([aria-disabled='true']) {
+    color: var(--icon-hover-color);
+    background-color: var(--control-hover-bg);
+  }
+
+  .nikki-icon-button:active:not(:disabled):not([aria-disabled='true']) {
+    color: var(--icon-active-color);
+    background-color: var(--control-active-bg);
+  }
+
+  .nikki-icon-button:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .nikki-icon-button:disabled,
+  .nikki-icon-button[aria-disabled='true'] {
+    color: var(--icon-disabled-color);
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
   .glass {
     @apply bg-white/80 backdrop-blur-xl border border-black/5;
   }

@@ -3,12 +3,14 @@ import { createNoteIndex, createTimeline } from '../core'
 import {
   drawGrid,
   drawKeyboard,
+  drawPitchActivity,
   drawNotes,
   layoutTrackRows,
   visibleRows,
   type RenderFrame,
   type TrackRow,
 } from './renderer'
+import { keyboardPitchAt } from './keyboard-layout'
 import { installStyles } from './styles'
 import { installEditing } from './editing'
 import { installTrackRegionEditing } from './track-region-editing'
@@ -81,11 +83,18 @@ export function createView(
   const spacer = make('div', 'pr-spacer')
   scroll.append(spacer)
   const grid = make('canvas', 'pr-layer')
-  const notes = make('canvas', 'pr-layer')
+  const activity = make('canvas', 'pr-layer pr-pitch-activity')
+  const glow = make('canvas', 'pr-layer pr-pitch-glow')
+  const notes = make('canvas', 'pr-layer pr-notes')
   const line = make('div', 'pr-line')
   const empty = make('div', 'pr-empty')
   empty.textContent = labels.empty
-  pane.append(scroll, grid, notes, empty)
+  pane.append(scroll, grid)
+  if (variant === 'editor') pane.append(activity)
+  pane.append(notes)
+  // 保留音符下方的整行变色，同时叠加前景光晕；两层均不接收指针。
+  if (variant === 'editor') pane.append(glow)
+  pane.append(empty)
   // 播放头独立于内容裁剪层，首尾保持原始坐标；音符和网格仍限制在 pane 内。
   root.append(corner, ruler, gutter, pane, line)
   options.container.append(root)
@@ -109,6 +118,7 @@ export function createView(
   let pitchZoom = clamp(options.pitchZoom ?? 16, 8, 36)
   let follow = options.follow ?? true
   let hideEmptyTracks = options.hideEmptyTracks ?? false
+  let showOtherTracks = options.showOtherTracks ?? false
   let width = 0
   let height = 0
   let layoutDirty = true
@@ -303,7 +313,8 @@ export function createView(
         pitchZoom,
         top,
         theme,
-        editing.frameState()?.highlightPitches ?? null
+        editing.frameState()?.highlightPitches ?? null,
+        transport.activePitches
       )
       return
     }
@@ -432,7 +443,9 @@ export function createView(
     const visible =
       variant === 'overview'
         ? visibleRows(rows, top, height)
-        : rows.filter((row) => row.track.id === selected)
+        : showOtherTracks
+          ? rows
+          : rows.filter((row) => row.track.id === selected)
     const frame: RenderFrame = {
       variant,
       timeline,
@@ -452,6 +465,8 @@ export function createView(
       timeZoom,
       pitchZoom,
       theme,
+      activePitches: transport.activePitches,
+      showOtherTracks,
       editing: editing.frameState(),
     }
     const previous = painted?.frame
@@ -470,7 +485,8 @@ export function createView(
       painted?.rows !== rows ||
       previous?.timeline !== timeline ||
       previous?.index !== noteIndex ||
-      previous?.selectedTrackId !== selected
+      previous?.selectedTrackId !== selected ||
+      previous?.showOtherTracks !== showOtherTracks
     const horizontalChanged =
       commonChanged ||
       previous?.width !== width ||
@@ -480,9 +496,17 @@ export function createView(
       drawGrid(grid, rulerCanvas, frame)
       drawNotes(notes, frame)
     }
-    // 琴键不依赖横向缩放、播放时间或选中轨道；总览控件也不依赖横向平移。
+    const activityChanged =
+      (previous?.activePitches?.length ?? 0) !== (frame.activePitches?.length ?? 0) ||
+      (frame.activePitches ?? []).some((pitch) => !previous?.activePitches?.includes(pitch))
+    if (variant === 'editor' && (verticalChanged || horizontalChanged || activityChanged)) {
+      drawPitchActivity(activity, frame)
+      drawPitchActivity(glow, frame, 'glow')
+    }
+    // 发音仅重绘独立高光层与琴键；其它音频帧不会清空静态内容层。
     if (
       verticalChanged ||
+      (variant === 'editor' && activityChanged) ||
       (variant === 'overview' && (contentChanged || painted?.labels !== labels))
     ) {
       renderGutter(visible, top)
@@ -720,13 +744,14 @@ export function createView(
       navigation?.cancel()
       finishDrag(false)
       editing.reset()
+      const notesChanged = document.notes !== next.notes
+      // 先接管新文档，再收回预览；反过来会让原生滚动条先缩回旧曲尾，永久裁掉当前横向位置。
+      document = next
+      timeline = createTimeline(next)
       regionEditing?.reset()
       regionPreview = null
       selectionBeforeGesture = undefined
       layoutDirty = true
-      const notesChanged = document.notes !== next.notes
-      document = next
-      timeline = createTimeline(next)
       if (notesChanged) noteIndex = createNoteIndex(next.notes)
       if (!document.tracks.some((track) => track.id === selected))
         selected = document.tracks[0]?.id ?? null
@@ -751,6 +776,26 @@ export function createView(
       selected = trackId
       focusPitch(false)
       scheduleRender()
+    },
+    setShowOtherTracks(enabled) {
+      if (destroyed || showOtherTracks === enabled) return
+      showOtherTracks = enabled
+      scheduleRender()
+    },
+    scrollToTrack(trackId, behavior = 'smooth') {
+      if (destroyed || variant !== 'overview') return
+      const row = rows.find((item) => item.track.id === trackId)
+      if (!row) return
+      scroll.scrollTo({
+        top: Math.max(
+          0,
+          Math.min(
+            scroll.scrollHeight - scroll.clientHeight,
+            row.top + row.height / 2 - scroll.clientHeight / 2
+          )
+        ),
+        behavior,
+      })
     },
     setLabels(next) {
       labels = { ...defaultLabels, ...next }
@@ -881,6 +926,15 @@ export function createView(
       index: () => noteIndex,
       selectedTrackId: () => selected,
       track: (trackId) => document.tracks.find((track) => track.id === trackId),
+      tracks: () => document.tracks,
+      showOtherTracks: () => showOtherTracks,
+      selectTrack(trackId) {
+        // 先同步命中轨，Vue 回传 selectedTrackId 时不会取消同一次拖动或跳转音域。
+        selected = trackId
+        regionEditing?.reset()
+        options.onTrackSelect?.(trackId)
+        scheduleRender()
+      },
       geometry: () => ({
         scrollLeft: painted?.frame.scrollLeft ?? scroll.scrollLeft,
         scrollTop: scroll.scrollTop,
@@ -945,6 +999,30 @@ export function createView(
     onCatch: catchPlayhead,
   })
   cleanups.push(navigation.destroy)
+  if (variant === 'editor') {
+    /**
+     * @description 琴键沿真实键面试听，黑键尾部与相邻白键肩部共用交界。
+     * @param event 琴键区域的主指针按下事件。
+     * @return 无返回值。
+     */
+    const auditionKey = (event: PointerEvent) => {
+      if (!editingOptions?.enabled || event.button !== 0) return
+      const rect = gutter.getBoundingClientRect()
+      const localY = event.clientY - rect.top
+      // 琴键底部与原生滚动条对应的留白不属于可点击音高。
+      if (localY < 0 || localY >= height) return
+      const pitch = keyboardPitchAt(event.clientX - rect.left, localY + scroll.scrollTop, pitchZoom)
+      if (pitch === null) return
+      event.preventDefault()
+      editingOptions.onIntent({
+        type: 'audition',
+        pitch,
+        velocity: editingOptions.defaultVelocity ?? 100,
+      })
+    }
+    gutter.addEventListener('pointerdown', auditionKey)
+    cleanups.push(() => gutter.removeEventListener('pointerdown', auditionKey))
+  }
   rebuildRows()
   resize()
   focusPitch(true)

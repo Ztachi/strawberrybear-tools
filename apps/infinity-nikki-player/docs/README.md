@@ -6,6 +6,7 @@
 
 - [用户指南](USER_GUIDE.md)
 - [自动更新机制](auto-update.md)
+- [用户更新日志与每次发版要求](release-notes.md)
 - [更新故障排查](update-troubleshooting.md)
 - [升级验收记录](update-validation.md)
 - [设计文档](design/README.md)

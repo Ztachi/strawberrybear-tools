@@ -10,7 +10,7 @@ const { t } = useI18n()
 <template>
   <Tooltip :title="t('player.openQueue')">
     <Button
-      type="text"
+      :type="open ? 'primary' : 'text'"
       class="preview-queue-button"
       :aria-label="t('player.openQueue')"
       aria-haspopup="dialog"
@@ -18,15 +18,11 @@ const { t } = useI18n()
       @click="emit('click')"
     >
       <template #icon>
-        <ListMusic
-          class="size-5"
-          :stroke-width="2.25"
-        />
+        <ListMusic class="size-5" :stroke-width="2.25" />
       </template>
     </Button>
   </Tooltip>
 </template>
 <style scoped>
-.preview-queue-button { @apply size-9 shrink-0 rounded-xl; color: var(--color-primary-active); }
-.preview-queue-button:hover { background: var(--bg-primary-10); }
+.preview-queue-button { @apply size-9 shrink-0 rounded-xl; }
 </style>

@@ -6,6 +6,222 @@ import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 afterEach(() => vi.useRealTimers())
 
 describe('MIDI editor playback controller', () => {
+  it('首次创建音频引擎不能覆盖此前定位的位置', async () => {
+    vi.useFakeTimers()
+    const document = previewProject().document
+    const playback = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => 10,
+      scheduleNote: () => null,
+    })
+    playback.seek(1.25)
+    await playback.play()
+    expect(playback.getState()).toMatchObject({ positionSeconds: 1.25, isPlaying: true })
+    playback.dispose()
+  })
+
+  it('暂停会取消尚在准备音频的播放，窗口迁移后原窗口不会迟到发声', async () => {
+    vi.useFakeTimers()
+    const document = previewProject().document
+    let ready!: () => void
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: () =>
+        new Promise<void>((resolve) => {
+          ready = resolve
+        }),
+      getAudioClock: () => 10,
+      scheduleNote: () => null,
+    })
+    const pending = controller.play()
+    controller.pause()
+    ready()
+    await pending
+    expect(controller.getState().isPlaying).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+    controller.dispose()
+  })
+
+  it('同一播放快照双向迁移位置、播放状态与倍速，循环仍使用项目区间', async () => {
+    vi.useFakeTimers()
+    const document = previewProject().document
+    const loop = { startTick: 480, endTick: 1920 }
+    let firstClock = 10
+    let secondClock = 100
+    const create = (now: () => number) =>
+      createMidiEditorPlaybackController({
+        getDocument: () => document,
+        getLoop: () => loop,
+        ensureAudio: async () => {},
+        getAudioClock: now,
+        scheduleNote: () => null,
+      })
+    const first = create(() => firstClock)
+    const second = create(() => secondClock)
+    await first.restore({ positionSeconds: 0.75, isPlaying: true, playbackRate: 1.5 })
+    firstClock += 0.2
+    const toSecond = first.suspend()
+    expect(toSecond).toMatchObject({ isPlaying: true, playbackRate: 1.5 })
+    expect(toSecond.positionSeconds).toBeCloseTo(1.05)
+    expect(first.getState().isPlaying).toBe(false)
+    await second.restore(toSecond)
+    expect(second.getState()).toMatchObject({
+      isPlaying: true,
+      playbackRate: 1.5,
+      loop: { startSeconds: 0.5, endSeconds: 2 },
+    })
+    expect(second.getState().positionSeconds).toBeCloseTo(1.05)
+    secondClock += 0.2
+    second.pause()
+    const toFirst = second.suspend()
+    await first.restore(toFirst)
+    expect(first.getState().isPlaying).toBe(false)
+    expect(first.getState().positionSeconds).toBeCloseTo(1.35)
+    first.dispose()
+    second.dispose()
+  })
+
+  it('恢复暂停快照不会初始化音频，超出曲尾的位置按有效曲长裁剪，非法快照不覆盖当前状态', async () => {
+    const document = previewProject().document
+    const ensureAudio = vi.fn(async () => {})
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio,
+    })
+    await controller.restore({ positionSeconds: 99, isPlaying: false, playbackRate: 2 })
+    expect(controller.getSnapshot()).toEqual({
+      positionSeconds: 2,
+      isPlaying: false,
+      playbackRate: 2,
+    })
+    expect(ensureAudio).not.toHaveBeenCalled()
+    await controller.restore({ positionSeconds: NaN, isPlaying: true, playbackRate: 1 })
+    expect(controller.getSnapshot()).toEqual({
+      positionSeconds: 2,
+      isPlaying: false,
+      playbackRate: 2,
+    })
+    controller.dispose()
+  })
+
+  it('音频准备期间编辑同一文档，保留播放意图并使用更新后的事件表', async () => {
+    vi.useFakeTimers()
+    let document = previewProject().document
+    let ready!: () => void
+    const schedule = vi.fn(() => ({ stop() {} }))
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: () =>
+        new Promise<void>((resolve) => {
+          ready = resolve
+        }),
+      getAudioClock: () => 10,
+      scheduleNote: schedule,
+    })
+    const pending = controller.play()
+    document = {
+      ...document,
+      notes: document.notes.map((note) => ({ ...note, pitch: note.pitch + 1 })),
+    }
+    controller.invalidate()
+    ready()
+    await pending
+    expect(controller.getState().isPlaying).toBe(true)
+    expect(schedule.mock.calls[0]).toEqual([61, 100, 10, undefined])
+    controller.dispose()
+  })
+
+  it('交接到长音符中间时重建剩余发音，不能等到下一音符才恢复声音', async () => {
+    vi.useFakeTimers()
+    const document = previewProject().document
+    document.notes = [
+      { id: 'held', trackId: 'track', pitch: 60, velocity: 90, startTick: 0, endTick: 1920 },
+    ]
+    const stop = vi.fn()
+    const schedule = vi.fn(() => ({ stop }))
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => 10,
+      scheduleNote: schedule,
+    })
+    await controller.restore({ positionSeconds: 0.75, isPlaying: true, playbackRate: 1 })
+    expect(schedule).toHaveBeenCalledWith(60, 90, 10, undefined)
+    expect(stop).toHaveBeenLastCalledWith(11.25)
+    expect(controller.getActivePitches()).toEqual([60])
+    controller.dispose()
+  })
+  it('发音状态按音频时钟更新，同音重叠在最后一个声部结束前保持高亮', async () => {
+    let clock = 10
+    const document = previewProject().document
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => clock,
+      scheduleNote: () => ({ stop() {} }),
+    })
+    await controller.audition(60, 100, 0.5)
+    clock = 10.2
+    await controller.audition(60, 100, 1)
+    await controller.audition(64, 100, 0.1)
+    expect(controller.getActivePitches()).toEqual([60, 64])
+    clock = 10.5
+    expect(controller.getActivePitches()).toEqual([60])
+    clock = 11.2
+    expect(controller.getActivePitches()).toEqual([])
+    controller.dispose()
+  })
+
+  it('提前排程的音符到发音时才高亮，暂停、换文档、销毁清空发音状态', async () => {
+    vi.useFakeTimers()
+    let clock = 10
+    const document = previewProject().document
+    document.notes = [
+      { id: 'later', trackId: 'track', pitch: 60, velocity: 100, startTick: 48, endTick: 480 },
+    ]
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      ensureAudio: async () => {},
+      getAudioClock: () => clock,
+      scheduleNote: () => ({ stop() {} }),
+    })
+    await controller.play()
+    expect(controller.getActivePitches()).toEqual([])
+    clock = 10.05
+    expect(controller.getActivePitches()).toEqual([60])
+    controller.pause()
+    expect(controller.getActivePitches()).toEqual([])
+    await controller.audition(64, 100)
+    controller.invalidate()
+    expect(controller.getActivePitches()).toEqual([])
+    await controller.audition(67, 100)
+    controller.dispose()
+    expect(controller.getActivePitches()).toEqual([])
+  })
+
+  it('被模板过滤或合成器没有发声时不产生高亮', async () => {
+    const document = previewProject().document
+    const controller = createMidiEditorPlaybackController({
+      getDocument: () => document,
+      getLoop: () => null,
+      getPlayablePitches: () => new Set([60]),
+      ensureAudio: async () => {},
+      getAudioClock: () => 10,
+      scheduleNote: () => null,
+    })
+    await controller.audition(60, 100)
+    await controller.audition(64, 100)
+    expect(controller.getActivePitches()).toEqual([])
+    controller.dispose()
+  })
   it('切换项目期间文档为空时停止旧试听，载入新文档后可以重新播放', async () => {
     vi.useFakeTimers()
     let document: PianoRollDocument | null = previewProject().document

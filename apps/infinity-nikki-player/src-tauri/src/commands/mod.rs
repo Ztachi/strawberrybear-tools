@@ -8,6 +8,7 @@ pub mod midi;
 pub mod midi_projects;
 pub mod online_midi_library;
 pub mod player;
+pub mod release_notes;
 pub mod settings;
 pub mod song_lists;
 pub mod templates;

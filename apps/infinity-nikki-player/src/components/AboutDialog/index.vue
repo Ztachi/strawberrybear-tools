@@ -22,11 +22,14 @@ import appLogo from '@/assets/images/logo.png'
 import { Button, Modal, TypographyParagraph } from 'antdv-next'
 import AppUpdateStatus from '@/components/AppUpdateStatus.vue'
 import { useAppUpdater } from '@/composables/useAppUpdater'
+import { useReleaseNotes } from '@/composables/useReleaseNotes'
+import { feedback } from '@/lib/feedback'
 import { useMainWindowUiStore, type FloatingActionRegistration } from '@/stores/mainWindowUi'
 
 const { t, tm } = useI18n()
 const ui = useMainWindowUiStore()
 const updater = useAppUpdater()
+const releaseNotes = useReleaseNotes()
 const aboutBody = ref<HTMLElement | null>(null)
 let backToTop: FloatingActionRegistration | undefined
 
@@ -96,6 +99,15 @@ async function openLink() {
   await invoke('open_url', { url: 'https://ztachi.com/tools/infinity-nikki-player' })
 }
 
+/** @return 打开完整日志；读取故障通过全局通知反馈，关于弹窗保持可操作。 */
+async function showReleaseNotes(): Promise<void> {
+  try {
+    await releaseNotes.showHistory()
+  } catch (error: unknown) {
+    feedback.error(t('releaseNotes.loadFailed'), { description: String(error) })
+  }
+}
+
 /** 组件挂载时监听 show_about 事件 */
 onMounted(async () => {
   unlisten = await listen('show_about', () => show())
@@ -129,6 +141,9 @@ onUnmounted(() => {
         </h2>
         <div class="about-version-row">
           <AppUpdateStatus :version="version" />
+          <Button type="link" size="small" class="about-release-notes" @click="showReleaseNotes">
+            {{ t('releaseNotes.title') }}
+          </Button>
         </div>
       </div>
 
@@ -241,11 +256,22 @@ onUnmounted(() => {
 }
 
 .about-version-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  width: 100%;
+}
+
+.about-version-row :deep(.version-update-trigger) {
+  grid-column: 2;
+}
+
+.about-release-notes {
+  grid-column: 3;
+  justify-self: start;
+  margin-left: 4px;
+  padding-inline: 4px;
+  font-size: 12px;
 }
 
 .about-divider {
@@ -315,9 +341,5 @@ onUnmounted(() => {
   min-width: 0;
   color: var(--color-foreground);
   font-weight: 600;
-}
-
-:deep(.about-contact-account .ant-typography-copy) {
-  color: var(--color-primary);
 }
 </style>

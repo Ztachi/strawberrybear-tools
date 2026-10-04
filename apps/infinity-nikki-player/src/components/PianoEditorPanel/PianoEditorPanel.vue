@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Button, Tooltip } from 'antdv-next'
-import { X } from 'lucide-vue-next'
+import { ListMusic, X } from 'lucide-vue-next'
 import PianoRoll from '@strawberrybear/piano-roll/vue'
 import type { PianoRollDocument } from '@strawberrybear/piano-roll/core'
 import type {
@@ -28,14 +29,19 @@ const props = defineProps<{
   restore?: PianoRollViewport
   /** 编辑层配置；省略即只读浏览。 */
   editing?: PianoRollProps['editing']
+  /** 浏览与编辑共用的参考轨显示偏好。 */
+  showOtherTracks: boolean
 }>()
 const emit = defineEmits<{
+  'select-track': [trackId: string]
+  'toggle-other-tracks': []
   seek: [seconds: number]
   'seek-preview': [seconds: number | null]
   'viewport-change': [viewport: Readonly<PianoRollViewport>]
   'edit-intent': [intent: PianoRollEditIntent]
   close: []
 }>()
+const { t } = useI18n()
 const roll = ref<{ getView: () => PianoRollView | null } | null>(null)
 /** 首次挂载和显式迁移时恢复视口，普通播放帧或轨道切换不会触发恢复。 */
 function restoreSavedViewport(): void {
@@ -60,16 +66,34 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
     :pitch-zoom="pitchZoom"
     :show-toolbar-controls="false"
     :editing="editing"
+    :show-other-tracks="showOtherTracks"
     @seek="emit('seek', $event)"
     @seek-preview="emit('seek-preview', $event)"
     @viewport-change="emit('viewport-change', $event)"
     @edit-intent="emit('edit-intent', $event)"
+    @select-track="emit('select-track', $event)"
   >
     <template #title="{ label }">
       <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
     </template>
     <template #corner="{ view, viewport }">
       <PianoRollFollowButton :view="view" :viewport="viewport" :labels="labels" />
+      <Tooltip :title="t('midiEditor.otherTracksTip')">
+        <Button
+          class="piano-reference-button"
+          size="small"
+          shape="circle"
+          color="primary"
+          :variant="showOtherTracks ? 'solid' : 'link'"
+          :aria-pressed="showOtherTracks"
+          :aria-label="t('midiEditor.otherTracks')"
+          @click="emit('toggle-other-tracks')"
+        >
+          <template #icon>
+            <ListMusic class="size-3.5" />
+          </template>
+        </Button>
+      </Tooltip>
     </template>
     <template #toolbar="{ view, viewport }">
       <div class="piano-roll-app-toolbar">
@@ -98,5 +122,7 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
 .piano-roll-slot-title { @apply mr-4 min-w-0 shrink overflow-hidden text-ellipsis whitespace-nowrap; max-width: 30%; }
 .piano-roll-app-toolbar { @apply flex min-w-0 flex-1 items-center gap-2; }
 .piano-roll-trailing-action { @apply ml-auto shrink-0; }
+.piano-reference-button.ant-btn { width: 20px; min-width: 20px; height: 20px; padding: 0; }
+.detail-piano-editor :deep(.pr-corner) { padding: 0 8px; gap: 4px; }
 .detail-piano-editor :deep(.pr-gutter), .detail-piano-editor :deep(.pr-track) { border-color: var(--border-primary-10); }
 </style>

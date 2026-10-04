@@ -122,6 +122,29 @@ describe('createEditorTransport', () => {
     transport.dispose()
   })
 
+  it('长音中间续播恢复尾音，循环接管下一轮时保持声部和实时位置', () => {
+    const { synth, events } = createSynth()
+    const current = {
+      ...document,
+      notes: [{ id: 'held', trackId: 't', pitch: 60, velocity: 100, startTick: 0, endTick: 1440 }],
+    }
+    const transport = createEditorTransport({ getDocument: () => current, synth, now: () => clock })
+    transport.setLoop({ startTick: 480, endTick: 960 })
+    transport.seek(0.75)
+    transport.play()
+    expect(events.filter((event) => event.type === 'on')).toEqual([
+      { type: 'on', pitch: 60, when: 100 },
+    ])
+    expect(events.find((event) => event.type === 'off')!.when).toBeCloseTo(100.25)
+    advance(200)
+    // lookahead 已预排下一轮，但真实播放头此刻仍在本轮 0.95 秒，不能提前跳回起点。
+    expect(transport.getState().positionSeconds).toBeCloseTo(0.95)
+    expect(events.filter((event) => event.type === 'on').map((event) => event.when)).toEqual([
+      100, 100.25,
+    ])
+    transport.dispose()
+  })
+
   it('缩短歌曲后循环区裁剪到新终点，超出歌曲的循环取消，停止时立即通知', () => {
     const { synth } = createSynth()
     let current = document

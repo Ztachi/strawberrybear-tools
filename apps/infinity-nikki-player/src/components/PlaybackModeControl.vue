@@ -91,10 +91,7 @@ function selectPlaybackMode(mode: PlaybackMode) {
 </script>
 
 <template>
-  <Tooltip
-    :title="popoverOpen ? '' : currentModeLabel"
-    :placement="tooltipPlacement"
-  >
+  <Tooltip :title="popoverOpen ? '' : currentModeLabel" :placement="tooltipPlacement">
     <Popover
       v-model:open="popoverOpen"
       trigger="click"
@@ -102,45 +99,35 @@ function selectPlaybackMode(mode: PlaybackMode) {
       :overlay-class-name="popoverClassName"
     >
       <template #content>
-        <div
-          class="mode-menu"
-          :class="{ compact: isCompact }"
-        >
+        <div class="mode-menu" :class="{ compact: isCompact }">
           <Button
             v-for="option in playbackModeOptions"
             :key="option.value"
             class="mode-option"
             :class="{ active: option.value === mode }"
-            type="text"
+            color="primary"
+            :variant="option.value === mode ? 'solid' : 'text'"
+            :aria-pressed="option.value === mode"
             @click="selectPlaybackMode(option.value)"
           >
             <template #icon>
-              <component
-                :is="option.icon"
-                class="mode-option-icon"
-              />
+              <component :is="option.icon" class="mode-option-icon" />
             </template>
             <span class="mode-option-label">{{ t(`overlay.playbackModes.${option.value}`) }}</span>
-            <Check
-              v-if="option.value === mode"
-              class="mode-option-check"
-            />
+            <Check v-if="option.value === mode" class="mode-option-check" />
           </Button>
         </div>
       </template>
 
       <Button
         class="mode-trigger"
-        :class="variant"
+        :class="[variant, { 'nikki-inverse-controls': variant === 'overlay' }]"
         type="text"
         :aria-label="currentModeLabel"
         @click.stop
       >
         <template #icon>
-          <component
-            :is="currentOption.icon"
-            class="mode-trigger-icon"
-          />
+          <component :is="currentOption.icon" class="mode-trigger-icon" />
         </template>
       </Button>
     </Popover>
@@ -150,16 +137,10 @@ function selectPlaybackMode(mode: PlaybackMode) {
 <style scoped>
 .mode-trigger {
   @apply inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors;
-  color: var(--color-primary);
-}
-
-.mode-trigger:hover {
-  background: var(--bg-primary-10);
 }
 
 .mode-trigger.overlay {
-  @apply h-8 w-8 rounded-lg text-white/90 hover:bg-white/20 hover:text-white;
-  background: transparent;
+  @apply h-8 w-8 rounded-lg;
 }
 
 .mode-trigger.compact {
@@ -190,17 +171,10 @@ function selectPlaybackMode(mode: PlaybackMode) {
 
 .mode-option {
   @apply flex h-8 w-full justify-start items-center gap-2 rounded-md px-2 text-left text-sm transition-colors;
-  color: var(--color-foreground);
 }
 
 .mode-menu.compact .mode-option {
   @apply h-[26px] gap-1 rounded px-1.5 text-xs;
-}
-
-.mode-option:hover,
-.mode-option.active {
-  background: var(--bg-primary-10);
-  color: var(--color-primary);
 }
 
 .mode-option-icon,

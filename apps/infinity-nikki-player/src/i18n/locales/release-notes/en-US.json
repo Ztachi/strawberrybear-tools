@@ -1,0 +1,134 @@
+{
+  "v1_3_2": {
+    "title": "Clearer editing, smoother playback",
+    "highlights": [
+      "Piano keys now align with the pitch grid, with more note names appearing as you zoom in. Click a key to preview it; sounding keys and note rows light up together.",
+      "View reference notes from other tracks while browsing or editing. They retain their track colors with dashed outlines; click a reference note to switch tracks and bring it into view in the overview.",
+      "Opening, restoring, or refreshing a detached editor preserves playback position, speed, and playing or paused state. Fixes playback restarting from the beginning and improves sustained notes and loop transitions.",
+      "Track regions can be extended continuously without the boundary jumping back on release. The overview shows the effective song length, and draft loading has a clear waiting state.",
+      "Buttons and icons use consistent theme colors for normal, hover, selected, and disabled states. Song and playlist batch actions support Select All; batch export stays hidden until something is selected.",
+      "Release notes are now available in the app. After upgrading, see the changes since your previous version; open the full history from About and browse by version."
+    ]
+  },
+  "v1_3_1": {
+    "title": "More flexible arrangements, safer drafts",
+    "highlights": [
+      "Drag the right edge of a track to extend or shorten it, with a snap preview for bars and note endings. Extending a shortened region brings its hidden notes back.",
+      "Song duration follows the active track regions. Preview and MIDI export use the same range; importing an exported file no longer adds an empty track.",
+      "New 1/64, 1/128 and 1/256 grids allow finer rhythm edits when zoomed in. Fixed uneven grid spacing and accidental notes while dragging scrollbars.",
+      "Each project and song arrangement keeps its own draft. Return to the same entry to restore it after closing; restoring a detached window preserves its source.",
+      "Songs and playlists show recently added songs first. Track resizing help is more complete, and the update entry is simpler."
+    ]
+  },
+  "v1_3_0": {
+    "title": "Arrange MIDI directly in the app",
+    "highlights": [
+      "The new MIDI editor lets you create projects, edit notes and manage tracks, with undo, redo, project saving and MIDI export. Start an arrangement directly from song details.",
+      "Open the track overview and piano roll in a separate window for more room to browse and edit.",
+      "More flexible piano roll zoom, seeking and drag previews make long songs easier to navigate. Empty tracks can be hidden.",
+      "Failed update downloads try another route, with cancellation and recovery. Unsaved edits are protected before installation."
+    ]
+  },
+  "v1_2_0": {
+    "title": "Smoother performance, steadier previews",
+    "highlights": [
+      "Improved long notes, short notes and repeated pitches to reduce interruptions and missed notes. Keys are released promptly when pausing, stopping or changing songs.",
+      "MIDI preview stays smoother while navigating pages. Quick song changes and pause recovery no longer keep playing the previous song.",
+      "The new Stop after playback mode suits single-song recording. Progress tips show minutes and seconds.",
+      "MIDI files dropped onto a playlist join that playlist directly. The online library adapts its columns to the window width."
+    ]
+  },
+  "v1_1_4": {
+    "title": "Playback queues follow library changes",
+    "highlights": [
+      "Fixed previous, next and automatic queue navigation for consistent looping.",
+      "Preview queues update when songs or playlists change. Press Esc to exit batch selection."
+    ]
+  },
+  "v1_1_3": {
+    "title": "Smoother update downloads in China",
+    "highlights": [
+      "Added an accelerated update route for China and a fallback when an update source times out."
+    ]
+  },
+  "v1_1_2": {
+    "title": "More accurate song information",
+    "highlights": [
+      "Fixed inflated durations for multi-track songs and melody note counts displaying zero.",
+      "Added a notice explaining that online scores are for learning and sharing."
+    ]
+  },
+  "v1_1_1": {
+    "title": "Easier template and playlist actions",
+    "highlights": [
+      "Saving a template keeps the current performance template instead of switching unexpectedly.",
+      "Delete actions consistently appear last. Fixed lingering nested menus and refined menu icons and tooltips."
+    ]
+  },
+  "v1_1_0": {
+    "title": "Organize your music with playlists",
+    "highlights": [
+      "Create playlists with covers, organize songs, duplicate playlists, and import or export them.",
+      "Browse the new online MIDI library and import more scores.",
+      "Choose sequential, shuffle, repeat-one or repeat-all playback consistently across the main and overlay views.",
+      "Seek and locate the current song in overlay mode. Optional game frame-rate detection helps adapt performance timing."
+    ]
+  },
+  "v1_0_0": {
+    "title": "First stable release: build your own templates",
+    "highlights": [
+      "Manage templates in a visual 88-key editor: click a piano key, then press a physical key to bind it. Includes undo, redo, drafts, import and export.",
+      "Shared preview controls keep progress, volume and queue actions consistent between the main and overlay views.",
+      "Refined desktop title bars and menus, with better window restoration after macOS fullscreen and overlay changes."
+    ]
+  },
+  "v0_3_2": {
+    "title": "Guidance for restoring accessibility access",
+    "highlights": [
+      "Added instructions for reauthorizing macOS accessibility access after an update, with permission hints and contact details in Help."
+    ]
+  },
+  "v0_3_1": {
+    "title": "More accurate macOS permission checks",
+    "highlights": [
+      "Fixed accessibility permission detection after updates to reduce cases where an authorized app cannot perform."
+    ]
+  },
+  "v0_3_0": {
+    "title": "Better in-game performance and updates",
+    "highlights": [
+      "Fixed macOS in-game key simulation for letters, the number row and F1–F12.",
+      "Improved in-app update detection, downloading and installation, and increased MIDI preview volume.",
+      "Overlay song changes retain the performance countdown. Improved missed short notes."
+    ]
+  },
+  "v0_2_3": {
+    "title": "Music to try on your first launch",
+    "highlights": [
+      "Added four bundled MIDI examples: Interstellar (piano), Summer from Kikujiro, sky03 and Xiaguang."
+    ]
+  },
+  "v0_2_2": {
+    "title": "Fixed update button interactions",
+    "highlights": [
+      "Fixed errors when starting an update and refined the update entry and notifications."
+    ]
+  },
+  "v0_2_1": {
+    "title": "Completed macOS update support",
+    "highlights": ["Fixed in-app update availability on Apple Silicon Macs."]
+  },
+  "v0_2_0": {
+    "title": "In-app updates and clearer previews",
+    "highlights": [
+      "Added automatic update detection on launch, with downloading, installation and restart inside the app.",
+      "Improved macOS key simulation and preview volume while preserving note dynamics."
+    ]
+  },
+  "v0_1_0": {
+    "title": "From MIDI to in-game performance",
+    "highlights": [
+      "First release: import MIDI scores and perform automatically in Infinity Nikki with key mapping templates and pitch adaptation. Includes overlay mode and Chinese and English interfaces."
+    ]
+  }
+}

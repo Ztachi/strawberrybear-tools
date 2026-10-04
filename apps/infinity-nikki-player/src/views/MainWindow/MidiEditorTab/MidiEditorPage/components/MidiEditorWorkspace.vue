@@ -8,6 +8,7 @@ import { ensureDurationCovers, resolutionTicks, snapTick } from '@strawberrybear
 import type { EditorAction, EditorSessionState } from '@strawberrybear/midi-editor'
 import type { PianoRollEditIntent, PianoRollLabels, PianoRollTransport } from '@strawberrybear/piano-roll/browser'
 import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
+import { createTimeline } from '@strawberrybear/piano-roll/core'
 import type { PianoRollProps } from '@strawberrybear/piano-roll/vue'
 import PianoWorkspace from '@/components/PianoWorkspace/PianoWorkspace.vue'
 import {
@@ -69,6 +70,7 @@ const editing = computed<PianoRollProps['editing']>(() => ({
 // 编辑空间保留全部轨道（包括禁用轨道）与一小节留白；试听和导出仍使用真实有效曲长。
 // 用 computed 稳定文档引用；只更新选区或工具时，不能重建浏览文档并取消正在捕获的手势。
 const sourceDocument = computed(() => props.state.document)
+const durationSeconds = computed(() => createTimeline(sourceDocument.value).durationSeconds)
 const workspaceDocument = computed(() => {
   const document = sourceDocument.value
   const end = ensureDurationCovers({
@@ -140,6 +142,7 @@ defineExpose({
       ref="workspace"
       :filename="`midi-editor:${state.project.id}`"
       :document="workspaceDocument"
+      :duration-seconds="durationSeconds"
       :theme="midiEditorPianoRollTheme"
       :transport="transport"
       :labels="labels"

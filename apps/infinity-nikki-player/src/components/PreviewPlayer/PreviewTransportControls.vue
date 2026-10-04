@@ -38,10 +38,7 @@ const isCompact = computed(() => props.variant === 'compact')
 </script>
 
 <template>
-  <div
-    class="transport-controls"
-    :class="variant"
-  >
+  <div class="transport-controls" :class="[variant, { 'nikki-inverse-controls': isOverlay }]">
     <Tooltip :title="t('overlay.playPrev')">
       <Button
         :aria-label="t('overlay.playPrev')"
@@ -66,10 +63,7 @@ const isCompact = computed(() => props.variant === 'compact')
         @click="emit('togglePlay')"
       >
         <template #icon>
-          <span
-            v-if="countdown > 0"
-            class="countdown-text"
-          >{{ countdown }}</span>
+          <span v-if="countdown > 0" class="countdown-text">{{ countdown }}</span>
           <Pause
             v-else-if="isPlaying"
             :class="['transport-icon', 'play-icon', { overlay: isOverlay, compact: isCompact }]"
@@ -122,20 +116,10 @@ const isCompact = computed(() => props.variant === 'compact')
       >
         <template #content>
           <div class="volume-popover">
-            <Button
-              type="text"
-              class="mute-btn"
-              @click="emit('toggleMute')"
-            >
+            <Button :type="muted ? 'primary' : 'text'" class="mute-btn" @click="emit('toggleMute')">
               <template #icon>
-                <VolumeX
-                  v-if="muted"
-                  class="volume-popover-icon"
-                />
-                <Volume2
-                  v-else
-                  class="volume-popover-icon"
-                />
+                <VolumeX v-if="muted" class="volume-popover-icon" />
+                <Volume2 v-else class="volume-popover-icon" />
               </template>
             </Button>
             <Slider
@@ -148,7 +132,7 @@ const isCompact = computed(() => props.variant === 'compact')
           </div>
         </template>
         <Button
-          type="text"
+          :type="muted && !isOverlay ? 'primary' : 'text'"
           :class="['transport-btn', 'volume', { overlay: isOverlay, compact: isCompact, active: muted }]"
         >
           <template #icon>
@@ -182,7 +166,6 @@ const isCompact = computed(() => props.variant === 'compact')
 
 .transport-btn {
   @apply inline-flex items-center justify-center;
-  color: var(--color-primary);
 }
 
 .transport-btn :deep(.ant-btn-icon) {
@@ -238,22 +221,12 @@ const isCompact = computed(() => props.variant === 'compact')
   height: 17px;
 }
 
-.transport-btn:hover {
-  background: var(--bg-primary-10);
-}
-
 .transport-btn.play {
   @apply w-12 h-12 rounded-full;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-  color: var(--color-white);
 }
 
 .transport-btn.compact.play {
   @apply h-10 w-10;
-}
-
-.transport-btn.play :deep(svg) {
-  color: var(--color-white);
 }
 
 .transport-btn.prev,
@@ -271,39 +244,37 @@ const isCompact = computed(() => props.variant === 'compact')
 }
 
 .transport-btn.overlay {
-  @apply h-8 w-8 rounded-lg text-white/90 transition-colors;
+  @apply h-8 w-8 rounded-lg transition-colors;
   background: transparent;
   border-color: transparent;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.92);
 }
 
 .transport-btn.overlay:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
+  background: var(--control-hover-bg);
 }
 
 .transport-btn.overlay:disabled {
-  opacity: 0.45;
+  opacity: 1;
 }
 
-.transport-btn.overlay.play {
-  @apply w-10 h-10 rounded-full text-white;
-  background: rgba(255, 255, 255, 0.3);
+.transport-btn.overlay.play:not(:disabled) {
+  @apply w-10 h-10 rounded-full;
+  background: var(--control-selected-bg);
 }
 
 .transport-btn.overlay.play:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.4);
+  background: var(--control-active-bg);
 }
 
-.transport-btn.overlay.active {
-  background: rgba(255, 255, 255, 0.4);
-  color: white;
+.transport-btn.overlay:active:not(:disabled),
+.transport-btn.overlay.active:not(:disabled) {
+  background: var(--control-active-bg);
 }
 
 .countdown-text {
   @apply text-sm font-bold;
-  color: white;
+  color: inherit;
 }
 
 .right-controls {
@@ -318,17 +289,12 @@ const isCompact = computed(() => props.variant === 'compact')
 
 .mute-btn {
   @apply h-7 w-7 shrink-0 rounded-lg;
-  color: var(--color-primary);
 }
 
 .volume-popover-icon {
   width: 18px;
   height: 18px;
   stroke-width: 2.25;
-}
-
-.mute-btn:hover {
-  background: var(--bg-primary-10);
 }
 
 .volume-slider {

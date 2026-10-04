@@ -131,10 +131,13 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
 
   function livePosition(): number {
     if (!playing) return position
-    let value = anchorPos + (now() - anchorClock) * rate
-    // 调度器已提前把锚点挪到循环起点；这里只兜底两次轮询之间的瞬时越界。
-    if (loop && value >= loop.end)
-      value = loop.start + ((value - loop.start) % (loop.end - loop.start))
+    const clock = now()
+    let value = anchorPos + (clock - anchorClock) * rate
+    // lookahead 会提前移动调度锚点；真实时钟尚未到终点时仍显示本轮位置，不能提前跳回。
+    if (loop && (value >= loop.end || (anchorClock > clock && value < loop.start))) {
+      const length = loop.end - loop.start
+      value = loop.start + ((((value - loop.start) % length) + length) % length)
+    }
     return Math.max(0, value)
   }
 
@@ -159,6 +162,22 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
     anchorClock = now()
     anchorPos = at
     resetCursor(at)
+    resumeHeldNotes(at)
+  }
+  /**
+   * @description 续播与循环起点共用尾音恢复；起点处新音符仍由 cursor 排程，不能重复触发。
+   * @param at 当前调度锚点对应的原曲秒。
+   * @return 无返回值。
+   */
+  function resumeHeldNotes(at: number): void {
+    if (!playing || at <= 0) return
+    for (let index = 0; index < cursor; index += 1) {
+      const note = notes[index]!
+      const end = loop ? Math.min(note.end, loop.end) : note.end
+      if (end <= at) continue
+      options.synth.noteOn(note.pitch, note.velocity, anchorClock)
+      options.synth.noteOff(note.pitch, anchorClock + Math.max(0.01, end - at) / rate)
+    }
   }
 
   function clearTimer(): void {
@@ -206,6 +225,7 @@ export function createEditorTransport(options: EditorTransportOptions): EditorTr
         anchorClock += (loop.end - anchorPos) / rate
         anchorPos = loop.start
         resetCursor(loop.start)
+        resumeHeldNotes(loop.start)
         continue
       }
       break

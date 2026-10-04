@@ -1,6 +1,8 @@
 /**
  * @description: 中文翻译
  */
+import releaseNoteReleases from './release-notes/zh-CN.json'
+
 export default {
   app: {
     title: '无限暖暖自动演奏',
@@ -26,6 +28,7 @@ export default {
     clear: '清空',
     save: '保存',
     cancel: '取消',
+    close: '关闭',
     delete: '删除',
     edit: '编辑',
     detail: '详情',
@@ -138,6 +141,11 @@ export default {
             label: '隐藏空轨',
             description:
               '点击筛选按钮可切换“只显示有音符的音轨”和“显示全部音轨”。歌曲预览默认隐藏空轨，MIDI 编辑器默认显示全部音轨，方便添加内容。',
+          },
+          references: {
+            label: '参考音轨',
+            description:
+              '详情跟随按钮旁的音轨参考图标默认开启。其他轨音符保留原轨颜色，以淡色填充和虚线轮廓区分；点击可切换音轨，总览会平滑居中显示该轨。浏览与编辑均可使用。',
           },
           zoom: {
             label: '独立缩放',
@@ -285,6 +293,7 @@ export default {
     actions: {
       batch: '批量',
       exitBatch: '退出批量',
+      selectAll: '全选',
       addTo: '添加到',
       removeFromSongList: '从歌单移除',
       deleteFile: '删除文件',
@@ -478,6 +487,8 @@ export default {
     },
   },
   midiEditor: {
+    otherTracks: '显示其他音轨',
+    otherTracksTip: '以原音轨配色和虚线轮廓显示参考音符；点击参考音符切换音轨，编辑时可直接拖动。',
     title: 'MIDI 编辑',
     description: '创建、编辑、导入和导出 MIDI 项目，编辑完成后可导出 .mid 或直接加入曲库',
     projectList: '项目列表',
@@ -723,6 +734,16 @@ export default {
         notes: {
           title: '音符编辑',
           items: {
+            keyboard: {
+              label: '琴键与发音',
+              description:
+                '琴键与右侧网格逐行对应。放大音高后会显示更多音名；点击琴键可试听，琴键、音符试听和播放中的发音都会高亮对应琴键及网格行。',
+            },
+            otherTracks: {
+              label: '参考其他音轨',
+              description:
+                '跟随播放头旁的音轨参考图标默认开启，浏览与编辑都能使用。参考音符保留原轨配色，并用淡色填充和虚线轮廓区分；点击切换音轨，编辑时可直接拖动。切换后总览会平滑居中显示该轨，重叠时优先操作当前轨音符。',
+            },
             select: {
               label: '选择工具',
               description:
@@ -973,6 +994,14 @@ export default {
       storage: '无法保存安装记录，请检查磁盘空间和目录权限后重试。',
       operationFailed: '操作未完成，已保留可恢复的更新状态。可重试、手动安装或导出诊断。',
     },
+  },
+  releaseNotes: {
+    title: '更新日志',
+    updatedTitle: '本次更新',
+    versions: '版本记录',
+    current: '当前版本',
+    loadFailed: '无法打开更新日志',
+    releases: releaseNoteReleases,
   },
   about: {
     title: '关于',

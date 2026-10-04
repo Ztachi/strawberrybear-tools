@@ -1,6 +1,8 @@
 /**
  * @description: English translations
  */
+import releaseNoteReleases from './release-notes/en-US.json'
+
 export default {
   app: {
     title: 'Infinity Nikki Auto Player',
@@ -26,6 +28,7 @@ export default {
     clear: 'Clear',
     save: 'Save',
     cancel: 'Cancel',
+    close: 'Close',
     delete: 'Delete',
     edit: 'Edit',
     detail: 'Details',
@@ -144,6 +147,11 @@ export default {
             label: 'Empty tracks',
             description:
               'Use the filter to switch between tracks with notes and all tracks. Song preview hides empty tracks by default; the MIDI editor shows them so you can add notes.',
+          },
+          references: {
+            label: 'Reference tracks',
+            description:
+              'The track reference icon beside Follow is enabled by default. Other tracks keep their colors with light fills and dashed outlines. Click a reference note to switch tracks and smoothly center its overview row. Available in browsing and editing.',
           },
           zoom: {
             label: 'Independent zoom',
@@ -291,6 +299,7 @@ export default {
     actions: {
       batch: 'Batch',
       exitBatch: 'Exit Batch',
+      selectAll: 'Select All',
       addTo: 'Add to',
       removeFromSongList: 'Remove from Playlist',
       deleteFile: 'Delete File',
@@ -496,6 +505,9 @@ export default {
     },
   },
   midiEditor: {
+    otherTracks: 'Show Other Tracks',
+    otherTracksTip:
+      'Show reference notes in their track colors with dashed outlines. Click to switch tracks; drag to edit in editing mode.',
     title: 'MIDI Editor',
     description:
       'Create, edit, import and export MIDI projects; export .mid or add to the library when done',
@@ -752,6 +764,16 @@ export default {
         notes: {
           title: 'Note Editing',
           items: {
+            keyboard: {
+              label: 'Keyboard and Sounding Notes',
+              description:
+                'Each key aligns with its pitch row. Zoom in vertically to reveal more note names. Click a key to audition it; key clicks, note auditions, and playback highlight the sounding keys and grid rows.',
+            },
+            otherTracks: {
+              label: 'Reference Other Tracks',
+              description:
+                'The track reference icon beside Follow is enabled by default in browsing and editing. Reference notes keep their track colors with light fills and dashed outlines. Click to switch tracks, or drag to edit in editing mode. The overview smoothly centers the selected track. Current-track notes take priority when overlapping.',
+            },
             select: {
               label: 'Select Tool',
               description:
@@ -1019,6 +1041,14 @@ export default {
       operationFailed:
         'The operation could not finish. You can retry, install manually, or export diagnostics.',
     },
+  },
+  releaseNotes: {
+    title: 'Release Notes',
+    updatedTitle: 'What’s New',
+    versions: 'Version History',
+    current: 'Current Version',
+    loadFailed: 'Could not open release notes',
+    releases: releaseNoteReleases,
   },
   about: {
     title: 'About',

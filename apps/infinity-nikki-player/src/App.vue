@@ -8,6 +8,7 @@ import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import MainWindow from './views/MainWindow/index.vue'
 import AboutDialog from '@/components/AboutDialog/index.vue'
+import ReleaseNotesHost from '@/components/ReleaseNotesHost.vue'
 import { feedback as toast } from '@/lib/feedback'
 import { usePlayerStore } from './stores/player'
 import { useAppUpdater } from '@/composables/useAppUpdater'
@@ -123,6 +124,7 @@ onUnmounted(() => appUpdater.dispose())
 
       <!-- 关于对话框 -->
       <AboutDialog />
+      <ReleaseNotesHost :ready="!isLoading" />
       <div v-if="appUpdater.isInstalling.value" class="installing-screen" role="status">
         {{ $t('updater.phases.installing') }}
       </div>

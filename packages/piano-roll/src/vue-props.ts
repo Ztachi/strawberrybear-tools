@@ -20,6 +20,8 @@ export interface PianoRollProps {
   variant?: 'overview' | 'editor'
   /** 选中的标准轨道 ID。 */
   selectedTrackId?: string | null
+  /** 详情显示其他音轨的参考音符，浏览和编辑共用，默认 false。 */
+  showOtherTracks?: boolean
   /** 每原曲秒像素数，可选受控初值。 */
   timeZoom?: number
   /** 每 MIDI 半音像素高度。 */
@@ -53,5 +55,6 @@ export interface PianoRollProps {
    * 编辑层配置；省略即只读。`onIntent` 可省略，此时意图通过 `edit-intent` 事件发出。
    * 传入新对象即触发 `setEditing`，宿主应在选择/工具变化时替换整个对象。
    */
-  editing?: Omit<PianoRollEditingOptions, 'onIntent'> & Partial<Pick<PianoRollEditingOptions, 'onIntent'>>
+  editing?: Omit<PianoRollEditingOptions, 'onIntent'> &
+    Partial<Pick<PianoRollEditingOptions, 'onIntent'>>
 }

@@ -1,37 +1,48 @@
 import { expect, it } from 'vitest'
-import { layoutPianoKeys } from './keyboard-layout'
+import { keyboardPitchAt, layoutPianoKeys, pianoKeyLabel } from './keyboard-layout'
 
-it('每个完整八度的七个白键等宽，连续覆盖 MIDI 范围', () => {
+it('所有琴键与半音网格共用边界，分数缩放和 MIDI 首尾均不产生错位', () => {
   for (const zoom of [8, 16.5, 36]) {
     const keys = layoutPianoKeys(zoom)
     expect(keys).toHaveLength(128)
-    const whites = keys.filter((key) => !key.black)
-    expect(whites[0]!.top).toBe(0)
-    expect(whites.at(-1)!.top + whites.at(-1)!.height).toBeCloseTo(128 * zoom)
-    for (let i = 1; i < whites.length; i++) {
-      expect(whites[i - 1]!.top + whites[i - 1]!.height).toBeCloseTo(whites[i]!.top)
+    for (const key of keys) {
+      expect(key.top).toBe((127 - key.pitch) * zoom)
+      expect(key.height).toBe(zoom)
     }
-    for (const key of whites) {
-      // 最高的 G9 在 MIDI 127 边界裁剪，其余白键保持统一尺寸。
-      if (key.pitch !== 127) expect(key.height).toBeCloseTo(12 * zoom / 7)
-      const rowCenter = (127 - key.pitch + 0.5) * zoom
-      expect(rowCenter).toBeGreaterThan(key.top)
-      expect(rowCenter).toBeLessThan(key.top + key.height)
-    }
+    expect(keys[0]!.top).toBe(0)
+    expect(keys.at(-1)!.top + keys.at(-1)!.height).toBe(128 * zoom)
   }
 })
 
-it('黑键保持半音网格对齐，并覆盖相邻白键接缝', () => {
+it('音名随音高缩放逐级展示，先 C 音、再白键、再全部半音', () => {
+  expect(pianoKeyLabel(60, 8)).toBe('C4')
+  expect(pianoKeyLabel(62, 16)).toBeNull()
+  expect(pianoKeyLabel(62, 20)).toBe('D4')
+  expect(pianoKeyLabel(61, 20)).toBeNull()
+  expect(pianoKeyLabel(61, 28)).toBe('C♯4')
+  expect(pianoKeyLabel(0, 36)).toBe('C-1')
+  expect(pianoKeyLabel(127, 36)).toBe('G9')
+})
+
+it('等高白键之间的连接区分别命中相邻白键，不改变主体半音行边界', () => {
   for (const zoom of [8, 16.5, 36]) {
     const keys = layoutPianoKeys(zoom)
-    for (const key of keys.filter((item) => item.black)) {
-      expect(key.top).toBe((127 - key.pitch) * zoom)
-      expect(key.height).toBe(zoom)
-      const lower = keys.find((item) => item.pitch === key.pitch - 1)!
-      const higher = keys.find((item) => item.pitch === key.pitch + 1)!
-      expect(higher.top + higher.height).toBeCloseTo(lower.top)
-      expect(lower.top).toBeGreaterThan(key.top)
-      expect(lower.top).toBeLessThan(key.top + key.height)
-    }
+    const c = keys.find((key) => key.pitch === 60)!
+    const d = keys.find((key) => key.pitch === 62)!
+    expect(c.height).toBe(d.height)
+    expect(c.frontTop).toBe(c.top - zoom / 2)
+    expect(c.frontBottom).toBe(c.top + zoom)
+    expect(d.frontBottom).toBe(c.frontTop)
+    expect(keys[0]!.frontTop).toBe(0)
+    expect(keys.at(-1)!.frontBottom).toBe(128 * zoom)
+    expect(c.top - d.top).toBe(2 * zoom)
+    expect(keys[0]!.top).toBe(0)
+    expect(keys.at(-1)!.top + zoom).toBe(128 * zoom)
+    const blackTop = (127 - 61) * zoom
+    expect(keyboardPitchAt(20, blackTop + zoom / 4, zoom)).toBe(61)
+    expect(keyboardPitchAt(54, blackTop + zoom / 4, zoom)).toBe(62)
+    expect(keyboardPitchAt(54, blackTop + (zoom * 3) / 4, zoom)).toBe(60)
+    expect(keyboardPitchAt(54, -1, zoom)).toBeNull()
+    expect(keyboardPitchAt(54, 128 * zoom, zoom)).toBeNull()
   }
 })

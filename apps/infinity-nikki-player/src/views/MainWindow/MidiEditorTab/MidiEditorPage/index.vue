@@ -16,7 +16,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
-import { Button, ConfigProvider, Input, Tooltip } from 'antdv-next'
+import { Button, ConfigProvider, Input, Skeleton, Tooltip } from 'antdv-next'
 import { ExternalLink } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import { createProject } from '@strawberrybear/midi-editor'
@@ -33,7 +33,11 @@ import {
   sameMidiEditorEntry,
   type MidiEditorEntry,
 } from '@/features/midi-editor/draftIdentity'
-import type { PianoWorkspaceState } from '@/features/piano-editor'
+import { validWorkspace, type PianoWorkspaceState } from '@/features/piano-editor'
+import {
+  validMidiEditorPlaybackSnapshot,
+  type MidiEditorPlaybackSnapshot,
+} from '@/features/midi-editor/playbackController'
 import {
   MidiProjectEditorWindowSession,
   MIDI_PROJECT_EDITOR_WINDOW_PORT,
@@ -111,6 +115,8 @@ let draftTimer: number | null = null
 let editorWindow: MidiProjectEditorWindowSession | null = null
 let endingDetachedEditor = false
 let pageActive = true
+/** 当前播放窗口的最新快照；宿主只保留状态，独立窗口存续时不接管音频排程。 */
+let detachedPlayback: MidiEditorPlaybackSnapshot | undefined
 /** 迟到的解析、草稿读取或弹窗结果不能覆盖后一次路由载入。 */
 let loadGeneration = 0
 /** 按模板试听与置灰共享同一集合；关闭时为 null，缺少模板时全部静音。 */
@@ -182,6 +188,11 @@ function trackCopyName(name: string): string {
  */
 async function projectFromLibrary(filename: string): Promise<MidiProject> {
   let midi = playerStore.midiLibrary.find((item) => item.filename === filename) ?? null
+  // 从详情页刷新时曲库尚未完成初始化，必须等待加载后再判断文件是否存在。
+  if (!midi) {
+    if (!await playerStore.loadMidiLibrary()) throw new Error(t('midiEditor.loadFailed'))
+    midi = playerStore.midiLibrary.find((item) => item.filename === filename) ?? null
+  }
   if (!midi) throw new Error(t('midiEditor.sourceMidiMissing'))
   if (!midi.events?.length) {
     const [parsed] = await invoke<[MidiInfo, unknown[]]>('parse_midi_file', { path: midi.file_path })
@@ -212,7 +223,7 @@ function disposeEditor(): void {
 
 function installEditorShortcuts(): void {
   const handle = editor.value
-  if (!handle || uninstallShortcuts || updateLocked.value || editorWindowStatus.value === 'detached' || !pageActive) return
+  if (!handle || uninstallShortcuts || updateLocked.value || editorWindowStatus.value !== 'docked' || !pageActive) return
   uninstallShortcuts = handle.installShortcuts({
     togglePlayback: () => void playback.toggle(),
     save: () => void save(),
@@ -286,6 +297,8 @@ async function loadFromRoute(): Promise<void> {
     persisted.value = loadingEditRoute
     const handle = useMidiEditorSession(project, { trackDefaultName, trackCopyName })
     editor.value = handle
+    // 草稿选择结束、会话就绪后再显示编辑器，让后续打开空轨详情能取得已挂载的工作区。
+    loading.value = false
     installEditorShortcuts()
     await nextTick()
     if (generation !== loadGeneration) return
@@ -527,7 +540,7 @@ function createWindowPresentation() {
     state: serializeMidiProjectEditorState(current),
     labels: labels.value,
     locale: locale.value,
-    transport: playback.transport.value,
+    transport: detachedPlayback ?? playback.getSnapshot(),
     showVelocity: showVelocity.value,
     dimUnplayable: dimUnplayable.value,
     playablePitches: playablePitches.value ? [...playablePitches.value] : [],
@@ -583,19 +596,23 @@ async function exitDetachedEditor(mode: 'save' | 'discard'): Promise<void> {
 
 function handleEditorWindowCommand(command: MidiProjectEditorRequest): void {
   // 安装准备期间阻止独立窗口的迟到编辑命令改变已落盘的最终快照。
-  if (updateLocked.value && command.kind !== 'viewport' && command.kind !== 'playback-position') return
+  if (updateLocked.value && command.kind !== 'viewport' && command.kind !== 'playback-state') return
   switch (command.kind) {
     case 'dispatch':
       dispatch(command.action)
       break
-    case 'playback-position':
-      if (Number.isFinite(command.seconds)) playback.seek(command.seconds)
+    case 'playback-state':
+      if (validMidiEditorPlaybackSnapshot(command.snapshot)) {
+        detachedPlayback = command.snapshot
+        // 同步休眠宿主的位置与倍速，但只有还原完成后才恢复播放意图。
+        void playback.restore({ ...command.snapshot, isPlaying: false })
+      }
       break
     case 'prepare-playback':
       playerStore.pausePreviewPlayback()
       break
     case 'viewport':
-      latestViewport.value = command.viewport
+      if (validWorkspace(command.viewport)) latestViewport.value = command.viewport
       break
     case 'view-option':
       if (command.option === 'showVelocity') showVelocity.value = command.value
@@ -620,8 +637,17 @@ function setEditorWindowStatus(status: 'docked' | 'opening' | 'detached'): void 
   const previous = editorWindowStatus.value
   editorWindowStatus.value = status
   mainWindowUi.setDetachedMidiEditorStatus(status)
-  if (status === 'detached') uninstallEditorShortcuts()
-  else if (status === 'docked') installEditorShortcuts()
+  if (status !== 'docked') uninstallEditorShortcuts()
+  else {
+    installEditorShortcuts()
+    const snapshot = detachedPlayback
+    detachedPlayback = undefined
+    if (snapshot && !endingDetachedEditor) {
+      // 正常还原、打开失败和窗口异常释放均走同一恢复入口，不再仅恢复一个位置字段。
+      void playback.restore({ ...snapshot, isPlaying: snapshot.isPlaying && !updateLocked.value })
+        .catch(reportEditorWindowError)
+    }
+  }
   // 系统关闭或渲染进程异常时也回到主编辑页，避免会话被缓存页面清理掉。
   if (status === 'docked' && previous !== 'docked' && !endingDetachedEditor) {
     void restoreEditorPage()
@@ -635,10 +661,11 @@ function reportEditorWindowError(error: unknown): void {
 async function openDetachedEditor(): Promise<void> {
   const current = state.value
   if (!current || !editorWindow) return
+  if (editorWindowStatus.value !== 'docked') return editorWindow.focus()
   latestViewport.value = workspace.value?.getState() ?? latestViewport.value
   workspaceRestore.value = latestViewport.value
   // 音频调度迁移到获得焦点的独立 WebView；主窗口只保留当前位置，不再后台排程。
-  playback.pause()
+  detachedPlayback = playback.suspend()
   mainWindowUi.registerDetachedMidiEditor(current.project.id, () => editorWindow?.focus() ?? Promise.resolve())
   await editorWindow.open()
 }
@@ -753,7 +780,7 @@ onBeforeUnmount(() => {
 <template>
   <ConfigProvider v-bind="midiEditorConfigProviderProps">
     <section class="midi-editor-page" :inert="updateLocked">
-      <header class="midi-editor-header">
+      <header v-if="!loading && state" class="midi-editor-header">
         <div class="editor-project-identity">
           <Input
             v-if="state"
@@ -778,6 +805,7 @@ onBeforeUnmount(() => {
           :templates="settingsStore.templates"
           :state="state"
           :is-playing="playback.isPlaying.value"
+          :playback-disabled="editorWindowStatus !== 'docked'"
           @update:show-velocity="showVelocity = $event"
           @update:dim-unplayable="dimUnplayable = $event"
           @select-template="selectKeyTemplate"
@@ -798,8 +826,29 @@ onBeforeUnmount(() => {
         />
       </header>
 
-      <section v-if="loadError" class="midi-editor-missing">
-        <span>{{ loadError }}</span>
+      <section
+        v-if="loading"
+        class="midi-editor-loading"
+        role="status"
+        :aria-label="t('onlineLibrary.loading')"
+      >
+        <Skeleton active :paragraph="false" :title="{ width: '40%' }" />
+        <Skeleton
+          active
+          class="editor-loading-overview"
+          :title="{ width: '18%' }"
+          :paragraph="{ rows: 3, width: ['100%', '100%', '100%'] }"
+        />
+        <Skeleton
+          active
+          class="editor-loading-detail"
+          :title="{ width: '18%' }"
+          :paragraph="{ rows: 9, width: '100%' }"
+        />
+      </section>
+
+      <section v-else-if="loadError" class="midi-editor-missing">
+        <span role="alert">{{ loadError }}</span>
         <Button @click="leaveWithoutNewHistory">
           {{ t('midiEditor.projectList') }}
         </Button>
@@ -861,6 +910,18 @@ onBeforeUnmount(() => {
 
 .midi-editor-header {
   @apply flex shrink-0 items-center gap-2 border-b border-primary/10 px-3 py-2;
+}
+
+.midi-editor-loading {
+  @apply flex min-h-0 flex-1 flex-col gap-5 overflow-hidden p-3;
+}
+
+.editor-loading-overview :deep(.ant-skeleton-paragraph > li) {
+  height: 28px;
+}
+
+.editor-loading-detail {
+  @apply min-h-0 flex-1;
 }
 
 /* 输入与按钮来自多根组件，尺寸样式通过容器的 deep 选择器稳定作用于最终 DOM。 */

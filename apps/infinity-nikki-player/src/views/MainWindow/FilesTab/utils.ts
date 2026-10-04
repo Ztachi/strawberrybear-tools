@@ -26,12 +26,7 @@ export function sortSongsByAddedTime(
   })
 }
 
-export function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${minutes}:${secs.toString().padStart(2, '0')}`
-}
+export { formatDuration } from '@/lib/formatDuration'
 
 export function getSongListSongs(songList: SongList | null, midiLibrary: MidiInfo[]): MidiInfo[] {
   if (!songList) return []

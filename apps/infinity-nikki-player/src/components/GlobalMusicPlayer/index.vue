@@ -47,7 +47,7 @@ function openVirtualKeyboard(): void {
       <Tooltip :title="playerStore.currentMidi ? t('player.openSongDetail') : t('player.noMedia')">
         <button
           type="button"
-          class="current-cover"
+          class="current-cover nikki-icon-button"
           :disabled="!playerStore.currentMidi"
           @click="openCurrentSongDetail"
         >
@@ -74,20 +74,13 @@ function openVirtualKeyboard(): void {
 
     <div class="player-actions">
       <Tooltip :title="t('player.openVirtualKeyboard')">
-        <Button
-          type="text"
-          class="queue-btn"
-          @click="openVirtualKeyboard"
-        >
+        <Button type="text" class="queue-btn" @click="openVirtualKeyboard">
           <template #icon>
             <Keyboard class="queue-btn-icon" />
           </template>
         </Button>
       </Tooltip>
-      <PreviewQueueButton
-        :open="queueDrawerOpen"
-        @click="queueDrawerOpen = true"
-      />
+      <PreviewQueueButton :open="queueDrawerOpen" @click="queueDrawerOpen = true" />
     </div>
 
     <PlayQueueDrawer v-model:open="queueDrawerOpen" />
@@ -110,11 +103,10 @@ function openVirtualKeyboard(): void {
   @apply relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl;
   background: linear-gradient(135deg, var(--bg-primary-15), var(--bg-white-95));
   border: 1px solid var(--border-primary-15);
-  color: var(--color-primary-active);
 }
 
 .current-cover:disabled {
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .current-cover-icon {
@@ -126,7 +118,7 @@ function openVirtualKeyboard(): void {
 .cover-detail-mask {
   @apply absolute inset-0 flex items-center justify-center opacity-0 transition-opacity;
   background: rgba(26, 18, 48, 0.52);
-  color: white;
+  color: var(--icon-selected-color);
 }
 
 .current-cover:not(:disabled):hover .cover-detail-mask {
@@ -153,11 +145,6 @@ function openVirtualKeyboard(): void {
 
 .queue-btn {
   @apply h-9 w-9 rounded-xl;
-  color: var(--color-primary-active);
-}
-
-.queue-btn:hover {
-  background: var(--bg-primary-10);
 }
 
 .queue-btn-icon {

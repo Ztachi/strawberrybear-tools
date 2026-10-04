@@ -109,6 +109,42 @@ if (fixtureQuery.has('colors')) {
     ),
   }
 }
+if (fixtureQuery.has('reference')) {
+  project.document = {
+    ...project.document,
+    tracks: [
+      ...project.document.tracks,
+      ...(fixtureQuery.has('referenceFar')
+        ? Array.from({ length: 8 }, (_, i) => ({
+            id: `before-${i}`,
+            name: `前置音轨 ${i}`,
+            enabled: true,
+            isPercussion: false,
+          }))
+        : []),
+      { id: 'reference', name: '参考旋律', enabled: true, isPercussion: false },
+      ...(fixtureQuery.has('referenceFar')
+        ? Array.from({ length: 8 }, (_, i) => ({
+            id: `after-${i}`,
+            name: `后置音轨 ${i}`,
+            enabled: true,
+            isPercussion: false,
+          }))
+        : []),
+    ],
+    notes: [
+      ...project.document.notes,
+      {
+        id: 'reference-note',
+        trackId: 'reference',
+        pitch: 65,
+        velocity: 90,
+        startTick: 480,
+        endTick: 960,
+      },
+    ],
+  }
+}
 const showProjectList = new URLSearchParams(location.search).has('list')
 const projectSummary = {
   id: project.id,
@@ -222,6 +258,17 @@ const parsedSongs = new Map(
 let customSongs: MidiInfo[] | null = null
 let pendingParse: { filename: string; resolve: (() => void) | null } | null = null
 mockIPC((command, payload) => {
+  // 主题回归使用真实悬浮视图；只替换原生窗口切换和屏幕采集能力，不开启实际采集。
+  if (['enter_overlay_mode', 'exit_overlay_mode', 'stop_frame_rate_capture'].includes(command))
+    return
+  if (command === 'get_frame_rate_capture_capability')
+    return {
+      platform: 'browser',
+      supported: false,
+      provider: 'unsupported',
+      auto_capture_available: false,
+      message: 'Browser fixture',
+    }
   if (command === 'stop_playback') return
   if (command === 'save_midi_project_draft') {
     if (draftFailure) throw new Error('测试草稿保存失败')
@@ -425,7 +472,8 @@ await router.push(
 )
 const pinia = createPinia()
 // 详情进入编辑器时曲库已载入；夹具按真实前置状态装配，不等待主窗口的异步初始化。
-if (fixtureQuery.has('source')) usePlayerStore(pinia).midiLibrary = [midi]
+if (fixtureQuery.has('source') && !fixtureQuery.has('cold'))
+  usePlayerStore(pinia).midiLibrary = [midi]
 if (showOnlineList) {
   useOnlineMidiLibraryStore(pinia).setSongs(onlineSongFixtures, Date.now())
 }

@@ -6,6 +6,7 @@ import type {
 } from '@strawberrybear/midi-editor'
 import type { PianoRollLabels, PianoRollTransport } from '@strawberrybear/piano-roll/browser'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
+import type { MidiEditorPlaybackSnapshot } from '@/features/midi-editor/playbackController'
 
 /** 可安全通过 Tauri JSON 事件发送的编辑器快照。 */
 export interface MidiProjectEditorState extends Omit<
@@ -38,7 +39,7 @@ export type MidiProjectEditorCommand =
   | { kind: 'ready' | 'shown' | 'ping' | 'dock' }
   | { kind: 'prepare-playback' }
   | { kind: 'dispatch'; action: EditorAction }
-  | { kind: 'playback-position'; seconds: number }
+  | { kind: 'playback-state'; snapshot: MidiEditorPlaybackSnapshot }
   | { kind: 'viewport'; viewport: PianoWorkspaceState }
   | { kind: 'view-option'; option: 'showVelocity' | 'dimUnplayable'; value: boolean }
   | { kind: 'select-template'; templateId: string }
@@ -47,35 +48,34 @@ export type MidiProjectEditorCommand =
 
 export type MidiProjectEditorRequest = MidiProjectEditorCommand & {
   session: string
+  /** 每次 WebView 载入更新，隔离刷新前仍在传递的命令。 */
+  clientId: string
   sequence: number
 }
 
-export type MidiProjectEditorUpdate =
+export type MidiProjectEditorUpdate = {
+  session: string
+  clientId: string
+  sequence: number
+} & (
   | {
       kind: 'state'
-      session: string
-      sequence: number
       presentation: MidiProjectEditorPresentation
       viewport?: PianoWorkspaceState
     }
   | {
       kind: 'dock'
-      session: string
-      sequence: number
     }
   | {
       kind: 'pong'
-      session: string
-      sequence: number
     }
   | {
       kind: 'notice'
-      session: string
-      sequence: number
       level: 'success' | 'error' | 'warning'
       title: string
       description?: string
     }
+)
 
 export interface MidiProjectEditorWindowHandle {
   destroy(): Promise<void>

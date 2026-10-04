@@ -658,14 +658,21 @@ onBeforeUnmount(() => {
 .sidebar-nav-icon {
   @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg;
   background: var(--bg-primary-15);
-  color: var(--color-primary-active);
+  color: var(--icon-color);
+}
+
+.sidebar-nav-item:hover .sidebar-nav-icon {
+  color: var(--icon-hover-color);
+}
+
+.sidebar-entry-active .sidebar-nav-icon {
+  color: var(--icon-active-color);
 }
 
 .collapse-btn {
   @apply h-9 w-9 rounded-xl;
   background: var(--bg-white-70);
   border-color: var(--border-primary-30);
-  color: var(--color-primary-active);
   box-shadow: 0 8px 24px rgba(201, 67, 127, 0.1);
 }
 
@@ -696,7 +703,7 @@ onBeforeUnmount(() => {
 }
 
 .header-action-create-btn {
-  @apply ml-1.5 text-white;
+  @apply ml-1.5;
 }
 
 .header-action-icon {

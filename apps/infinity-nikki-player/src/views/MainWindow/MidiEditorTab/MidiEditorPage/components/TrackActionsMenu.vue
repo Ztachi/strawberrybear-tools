@@ -13,7 +13,8 @@ import {
   Drum,
   GripVertical,
   MoreVertical,
-  Pencil,
+  SquarePen,
+  TextCursorInput,
   Trash2,
 } from 'lucide-vue-next'
 import { TRACK_PALETTE } from '@strawberrybear/midi-editor'
@@ -83,9 +84,9 @@ function menuItems(track: PianoRollTrack) {
   const index = trackIndex.value.get(track.id) ?? 0
   const count = props.tracks.length
   return [
-    { key: 'edit', label: t('midiEditor.editTrack'), icon: icon(Pencil) },
+    { key: 'edit', label: t('midiEditor.editTrack'), icon: icon(SquarePen) },
     { type: 'divider' as const },
-    { key: 'rename', label: t('midiEditor.renameTrack'), icon: icon(Pencil) },
+    { key: 'rename', label: t('midiEditor.renameTrack'), icon: icon(TextCursorInput) },
     {
       key: 'color',
       label: t('midiEditor.trackColor'),
@@ -241,19 +242,9 @@ function submitRename(): void {
   min-width: 22px;
   height: 28px;
   padding: 0;
-  color: var(--color-muted-dark);
   cursor: grab;
-  opacity: 0.7;
   transform: translateY(-50%);
-  transition:
-    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.track-drag-handle:hover,
-.track-drag-handle:focus-visible {
-  color: var(--color-primary);
-  opacity: 1;
+  transition: color 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .track-drag-handle:active {

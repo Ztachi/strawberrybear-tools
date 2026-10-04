@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build": "node scripts/check-release-notes.mjs && vue-tsc -b && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc -b --noEmit && vue-tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
