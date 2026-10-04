@@ -8,10 +8,12 @@ import AppUpdateStatus from '@/components/AppUpdateStatus.vue'
 import AppUpdateButton from '@/components/AppUpdateButton.vue'
 import HeaderNavigation from '@/components/HeaderNavigation/index.vue'
 import AboutDialog from '@/components/AboutDialog/index.vue'
+import ReleaseNotesHost from '@/components/ReleaseNotesHost.vue'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import { getAntdvLocale } from '@/i18n'
 const { locale } = useI18n()
 const showAbout = new URLSearchParams(location.search).has('about')
+const showNotes = new URLSearchParams(location.search).has('notes')
 onMounted(() => { if (showAbout) void emit('show_about') })
 </script>
 <template>
@@ -19,8 +21,9 @@ onMounted(() => { if (showAbout) void emit('show_about') })
     <AntApp>
       <main class="fixture">
         <header><HeaderNavigation />无限暖暖自动演奏 <AppUpdateButton /></header>
-        <AboutDialog v-if="showAbout" />
-        <article v-else>
+        <AboutDialog v-if="showAbout || showNotes" />
+        <ReleaseNotesHost v-if="showNotes" :ready="true" />
+        <article v-if="!showAbout && !showNotes">
           <h1>关于 · v1.2.0</h1>
           <AppUpdateStatus version="1.2.0" />
         </article>

@@ -197,6 +197,7 @@ pub fn run() {
                 std::env::current_exe()
             );
             updater::initialize(app.handle());
+            commands::release_notes::initialize(app.handle());
             // 根据语言生成菜单
             let menu = if is_zh {
                 let app_name = "无限暖暖自动演奏";
@@ -434,6 +435,8 @@ pub fn run() {
             commands::song_lists::import_song_lists_archive,
             commands::settings::load_settings,
             commands::settings::save_settings,
+            commands::release_notes::get_release_notes_launch,
+            commands::release_notes::acknowledge_release_notes,
             commands::check_accessibility,
             commands::open_accessibility_settings,
         ])

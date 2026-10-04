@@ -661,7 +661,7 @@ test('编辑操作合并到单层标题栏，次要操作通过悬浮菜单收�
   await expect(help.getByText('Command/Ctrl + S', { exact: true })).toBeVisible()
   await expect(help.getByText('Option / Alt', { exact: true })).toBeVisible()
   const helpContents = help.getByRole('navigation', { name: '帮助目录', exact: true })
-  const helpScroller = help.locator('.midi-editor-help-content')
+  const helpScroller = help.locator('.section-document-content')
   await expect(helpContents).toBeVisible()
   await helpContents.getByRole('link', { name: '键盘快捷键', exact: true }).click()
   await expect

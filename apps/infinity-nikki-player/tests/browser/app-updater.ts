@@ -4,6 +4,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { createPinia } from 'pinia'
 import { feedback } from '@/lib/feedback'
 import { mockIPC } from '@tauri-apps/api/mocks'
+import { emit } from '@tauri-apps/api/event'
+import { RELEASE_NOTES } from '@/const'
 import {
   createUpdaterController,
   initialUpdateState,
@@ -18,6 +20,7 @@ import '@/style.css'
 const params = new URLSearchParams(location.search)
 i18n.global.locale.value = params.get('locale') === 'en-US' ? 'en-US' : 'zh-CN'
 const scenario = params.get('scenario') ?? 'available'
+const notesScenario = params.get('notes')
 let state: UpdateSnapshot = {
   ...initialUpdateState(),
   revision: 0,
@@ -53,7 +56,21 @@ mockIPC(
   (command) => {
     if (command === 'plugin:app|version') {
       calls.push('version')
-      return '1.2.0'
+      return notesScenario ? '1.3.1' : '1.2.0'
+    }
+    if (command === 'get_release_notes_launch') {
+      return {
+        currentVersion: '1.3.1',
+        historyVersions: RELEASE_NOTES.map((entry) => entry.version),
+        updateVersions:
+          notesScenario === 'update' && !localStorage.getItem('fixture:release-notes-seen')
+            ? ['1.3.1', '1.3.0', '1.2.0']
+            : [],
+      }
+    }
+    if (command === 'acknowledge_release_notes') {
+      localStorage.setItem('fixture:release-notes-seen', '1.3.1')
+      return
     }
     throw new Error(`界面验收不允许原生命令：${command}`)
   },
@@ -117,11 +134,12 @@ controller.setPrepareInstall(async () => {
 })
 declare global {
   interface Window {
-    updaterFixture: { complete(): void; calls: string[] }
+    updaterFixture: { complete(): void; calls: string[]; showAbout(): Promise<void> }
   }
 }
 window.updaterFixture = {
   calls,
+  showAbout: () => emit('show_about'),
   complete: () => {
     const next = update({ phase: 'ready', downloadedBytes: 10000000 })
     finishDownload?.(next)

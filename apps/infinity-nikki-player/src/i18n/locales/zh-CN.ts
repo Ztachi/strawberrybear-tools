@@ -1,6 +1,8 @@
 /**
  * @description: 中文翻译
  */
+import releaseNoteReleases from './release-notes/zh-CN.json'
+
 export default {
   app: {
     title: '无限暖暖自动演奏',
@@ -26,6 +28,7 @@ export default {
     clear: '清空',
     save: '保存',
     cancel: '取消',
+    close: '关闭',
     delete: '删除',
     edit: '编辑',
     detail: '详情',
@@ -991,6 +994,14 @@ export default {
       storage: '无法保存安装记录，请检查磁盘空间和目录权限后重试。',
       operationFailed: '操作未完成，已保留可恢复的更新状态。可重试、手动安装或导出诊断。',
     },
+  },
+  releaseNotes: {
+    title: '更新日志',
+    updatedTitle: '本次更新',
+    versions: '版本记录',
+    current: '当前版本',
+    loadFailed: '无法打开更新日志',
+    releases: releaseNoteReleases,
   },
   about: {
     title: '关于',

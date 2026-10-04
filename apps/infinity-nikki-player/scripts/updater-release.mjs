@@ -8,6 +8,7 @@ import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout } from 'node:timers/promises'
 import semver from 'semver'
+import { checkReleaseNotes } from './check-release-notes.mjs'
 
 export const CHANNEL = 'infinity-nikki-player-updates'
 export const REPOSITORY = 'Ztachi/strawberrybear-tools'
@@ -232,6 +233,7 @@ export function versionChanged(before, current) {
 
 function prepare() {
   const { version } = readVersion()
+  checkReleaseNotes(join('.', APP))
   const sha = process.env.GITHUB_SHA
   if (!/^[a-f0-9]{40}$/.test(sha ?? '')) throw new Error('发布提交必须是完整 Git SHA')
   const tag = `infinity-nikki-player@v${version}`

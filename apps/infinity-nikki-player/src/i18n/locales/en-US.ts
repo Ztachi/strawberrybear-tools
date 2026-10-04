@@ -1,6 +1,8 @@
 /**
  * @description: English translations
  */
+import releaseNoteReleases from './release-notes/en-US.json'
+
 export default {
   app: {
     title: 'Infinity Nikki Auto Player',
@@ -26,6 +28,7 @@ export default {
     clear: 'Clear',
     save: 'Save',
     cancel: 'Cancel',
+    close: 'Close',
     delete: 'Delete',
     edit: 'Edit',
     detail: 'Details',
@@ -1038,6 +1041,14 @@ export default {
       operationFailed:
         'The operation could not finish. You can retry, install manually, or export diagnostics.',
     },
+  },
+  releaseNotes: {
+    title: 'Release Notes',
+    updatedTitle: 'What’s New',
+    versions: 'Version History',
+    current: 'Current Version',
+    loadFailed: 'Could not open release notes',
+    releases: releaseNoteReleases,
   },
   about: {
     title: 'About',
