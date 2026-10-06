@@ -1,3 +1,5 @@
+import type { KeyTemplate } from '@/types'
+import type { TrackRecorderResult } from '@/features/midi-recording/types'
 import type {
   EditorAction,
   EditorSessionState,
@@ -33,11 +35,18 @@ export interface MidiProjectEditorPresentation {
   hasChanges: boolean
   /** 主窗口准备安装更新时，暂停独立窗口试听并锁定编辑。 */
   updateLocked?: boolean
+  recordingLocked?: boolean
+  templateMappings?: KeyTemplate[]
+  fps?: number
+  speed?: number
 }
 
 export type MidiProjectEditorCommand =
   | { kind: 'ready' | 'shown' | 'ping' | 'dock' }
   | { kind: 'prepare-playback' }
+  | { kind: 'recording-lock'; locked: boolean }
+  | { kind: 'recording-prepare'; requestId: string }
+  | { kind: 'recording-apply'; requestId: string; result: TrackRecorderResult }
   | { kind: 'dispatch'; action: EditorAction }
   | { kind: 'playback-state'; snapshot: MidiEditorPlaybackSnapshot }
   | { kind: 'viewport'; viewport: PianoWorkspaceState }
@@ -63,6 +72,7 @@ export type MidiProjectEditorUpdate = {
       presentation: MidiProjectEditorPresentation
       viewport?: PianoWorkspaceState
     }
+  | { kind: 'recording-reply'; requestId: string; error?: string }
   | {
       kind: 'dock'
     }

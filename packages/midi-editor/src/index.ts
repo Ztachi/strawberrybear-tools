@@ -3,7 +3,7 @@ export { createNoteId, createProjectId, createTrackId } from './ids'
 export { resolutionTicks, snapTick } from './snap'
 export { createHistory, type History } from './history'
 export { copyNotes, pasteNotes, type PasteOptions } from './clipboard'
-export { notesInBox, pruneSelection } from './selection'
+export { notesInBox, notesRelativeTo, pruneSelection } from './selection'
 export {
   addNote,
   clampGroupDelta,

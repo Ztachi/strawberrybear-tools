@@ -23,6 +23,9 @@ const props = defineProps<{
   clearKeyLog?: () => void
   keyCodeToPitch?: Map<string, number>
   verticalAlign?: 'center' | 'top'
+  /** 按住交互仅用于录制，缺省保留旧点击试听。 */
+  holdInteraction?: boolean
+  recordingStyle?: boolean
 }>()
 
 const activeKeySet = computed(() => props.activeKeys ?? new Set<string>())
@@ -52,6 +55,8 @@ let usesIntrinsicHeight = false
  */
 const emit = defineEmits<{
   keyClick: [code: string]
+  keyPress: [code: string, source: string]
+  keyRelease: [source: string]
 }>()
 
 /**
@@ -82,7 +87,29 @@ function handleKeyClick(code: string, event: MouseEvent) {
     event.currentTarget.blur()
   }
   if (!props.keyCodeToPitch?.has(code)) return
-  emit('keyClick', code)
+  if (!props.holdInteraction) emit('keyClick', code)
+}
+
+function pressPointer(code: string, event: PointerEvent): void {
+  if (!props.holdInteraction || !props.keyCodeToPitch?.has(code)) return
+  event.preventDefault()
+  const target = event.currentTarget as HTMLElement
+  target.setPointerCapture(event.pointerId)
+  emit('keyPress', code, `pointer:${event.pointerId}`)
+}
+/** 指针捕获期间浏览器不发送真实 leave，用坐标检测移出按住的键位。 */
+function movePointer(event: PointerEvent): void {
+  if (!props.holdInteraction) return
+  const target = event.currentTarget as HTMLElement
+  if (!target.hasPointerCapture(event.pointerId)) return
+  const bounds = target.getBoundingClientRect()
+  if (event.clientX < bounds.left || event.clientX >= bounds.right || event.clientY < bounds.top || event.clientY >= bounds.bottom) {
+    emit('keyRelease', `pointer:${event.pointerId}`)
+    target.releasePointerCapture(event.pointerId)
+  }
+}
+function releasePointer(event: PointerEvent): void {
+  if (props.holdInteraction) emit('keyRelease', `pointer:${event.pointerId}`)
 }
 
 function getKeyLabel(key: string): string {
@@ -117,6 +144,7 @@ function getKeyClass(key: string) {
 }
 
 function updateKeyboardScale(): void {
+  if (props.recordingStyle) { keyboardScale.value = 1; return }
   const shell = scaleShellRef.value
   const area = keyboardAreaRef.value
   if (!shell || !area) return
@@ -185,7 +213,11 @@ watch(
 </script>
 
 <template>
-  <div ref="keyboardPreviewRef" class="keyboard-preview">
+  <div
+    ref="keyboardPreviewRef"
+    class="keyboard-preview"
+    :class="{ 'recording-style': recordingStyle }"
+  >
     <!-- 顶部操作区 -->
     <div v-if="showToolbar" ref="toolbarRef" class="toolbar">
       <div class="toolbar-left">
@@ -212,7 +244,7 @@ watch(
         class="keyboard-area"
         :class="{ 'align-top': isTopAligned }"
         :style="{
-          transform: isTopAligned
+          transform: recordingStyle ? 'none' : isTopAligned
             ? `translateX(-50%) scale(${keyboardScale})`
             : `translate(-50%, -50%) scale(${keyboardScale})`,
         }"
@@ -244,6 +276,11 @@ watch(
               [getKeyClass(key.key)]: getKeyClass(key.key),
             }"
             @mousedown.prevent.stop
+            @pointerdown="pressPointer(key.code, $event)"
+            @pointermove="movePointer"
+            @pointerup="releasePointer"
+            @pointercancel="releasePointer"
+            @lostpointercapture="releasePointer"
             @click="handleKeyClick(key.code, $event)"
           >
             <!-- 按键标签 -->
@@ -260,6 +297,13 @@ watch(
 </template>
 
 <style scoped>
+.recording-style .keyboard-scale-shell { overflow-x: auto; min-height: 220px; }
+.recording-style .keyboard-area { position: relative; left: 0; top: 0; transform: none; margin: 0 auto; }
+.recording-style .key { width: 42px; height: 36px; }
+.recording-style .key .key-label { font-size: 12px; }
+.recording-style .key .pitch-label { font-size: 12px; }
+.recording-style .key:not(.clickable) { opacity: 0.4; }
+
 .keyboard-preview {
   @apply flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden rounded-lg p-1.5;
   background: var(--bg-primary-05);
