@@ -3,7 +3,10 @@
  */
 import releaseNoteReleases from './release-notes/en-US.json'
 
+import recording from './recording/en-US.json'
+
 export default {
+  recording,
   app: {
     title: 'Infinity Nikki Auto Player',
     overlayMode: 'Enter Overlay Mode',

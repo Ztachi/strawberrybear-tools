@@ -63,6 +63,9 @@ import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { midiEditorConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import type { MidiInfo } from '@/types'
+import TrackRecorderLauncher from '@/components/TrackRecorderLauncher.vue'
+import { applyRecorderResult } from '@/features/midi-recording/coordinator'
+import type { TrackRecorderResult } from '@/features/midi-recording/types'
 import EditorChoiceModal, { type EditorChoiceOption } from './components/EditorChoiceModal.vue'
 import EditorProjectActions from './components/EditorProjectActions.vue'
 import EditorToolbar from './components/EditorToolbar.vue'
@@ -94,6 +97,8 @@ const editor = shallowRef<MidiEditorSessionHandle | null>(null)
 const state = computed(() => editor.value?.state.value ?? null)
 const activeDocument = computed(() => state.value?.document ?? null)
 const loop = computed(() => state.value?.project.loop ?? null)
+const recorderLauncher = ref<InstanceType<typeof TrackRecorderLauncher> | null>(null)
+const recordingLocked = ref(false)
 const loading = ref(true)
 const loadError = ref('')
 const saving = ref(false)
@@ -223,7 +228,7 @@ function disposeEditor(): void {
 
 function installEditorShortcuts(): void {
   const handle = editor.value
-  if (!handle || uninstallShortcuts || updateLocked.value || editorWindowStatus.value !== 'docked' || !pageActive) return
+  if (!handle || uninstallShortcuts || recordingLocked.value || updateLocked.value || editorWindowStatus.value !== 'docked' || !pageActive) return
   uninstallShortcuts = handle.installShortcuts({
     togglePlayback: () => void playback.toggle(),
     save: () => void save(),
@@ -241,8 +246,13 @@ function uninstallEditorShortcuts(): void {
   uninstallShortcuts?.()
   uninstallShortcuts = null
 }
+watch(recordingLocked, locked => {
+  if (!locked) void projectStore.loadProjects().catch(() => {})
+  if (locked) uninstallEditorShortcuts(); else installEditorShortcuts()
+  editorWindow?.updateState()
+})
 watch(updateLocked, (locked) => {
-  if (locked) uninstallEditorShortcuts()
+  if (locked) { recorderLauncher.value?.pause(); uninstallEditorShortcuts() }
   else installEditorShortcuts()
 }, { flush: 'sync' })
 
@@ -317,7 +327,7 @@ async function loadFromRoute(): Promise<void> {
 
 // ---------- 编辑动作 ----------
 function dispatch(action: EditorAction): void {
-  if (updateLocked.value) return
+  if (updateLocked.value || recordingLocked.value) return
   editor.value?.dispatch(action)
 }
 function rememberWorkspace(next: PianoWorkspaceState): void {
@@ -495,6 +505,7 @@ async function leaveWithoutNewHistory(): Promise<void> {
  * @return {Promise<boolean>} 是否允许离开
  */
 async function confirmLeaveIfNeeded(): Promise<boolean> {
+  if (recordingLocked.value) return false
   if (!hasChanges.value) return true
   const decision = await ask(
     t('midiEditor.leaveConfirmTitle'),
@@ -549,6 +560,10 @@ function createWindowPresentation() {
     saving: saving.value,
     hasChanges: hasChanges.value,
     updateLocked: updateLocked.value,
+    recordingLocked: recordingLocked.value,
+    templateMappings: JSON.parse(JSON.stringify(settingsStore.templates)),
+    fps: settingsStore.autoFpsEnabled ? settingsStore.lastDetectedFps ?? settingsStore.manualFps : settingsStore.manualFps,
+    speed: playerStore.speed,
   }
 }
 
@@ -594,10 +609,44 @@ async function exitDetachedEditor(mode: 'save' | 'discard'): Promise<void> {
   }
 }
 
+async function prepareRecording(): Promise<void> {
+  playback.pause()
+  playerStore.pausePreviewPlayback()
+  await playerStore.stopPlayback()
+  const handle = editor.value
+  if (!handle) throw new Error('Editor is unavailable')
+  // 新建空项目也先保存基线，重启后录制草稿才能找回原项目身份。
+  await draftWriter.write(currentDraftKey.value, handle.session.toProject())
+}
+async function applyRecording(result: TrackRecorderResult): Promise<void> {
+  if (updateLocked.value) throw new Error('Editor is locked')
+  const handle = editor.value
+  if (!handle) throw new Error('Editor is unavailable')
+  await applyRecorderResult(() => handle.session.getState().project, action => handle.dispatch(action), project => draftWriter.write(currentDraftKey.value, project), result)
+  playback.seek(createTimeline(handle.session.getState().document).tickToSeconds(result.cursorTick))
+  editorWindow?.updateState()
+}
+async function handleRecordingRequest(command: Extract<MidiProjectEditorRequest, { kind: 'recording-prepare' | 'recording-apply' }>): Promise<void> {
+  try {
+    recordingLocked.value = true
+    if (command.kind === 'recording-prepare') await prepareRecording()
+    else await applyRecording(command.result)
+    editorWindow?.replyRecording(command.requestId)
+  } catch (cause) {
+    editorWindow?.replyRecording(command.requestId, String(cause))
+  }
+}
 function handleEditorWindowCommand(command: MidiProjectEditorRequest): void {
   // 安装准备期间阻止独立窗口的迟到编辑命令改变已落盘的最终快照。
   if (updateLocked.value && command.kind !== 'viewport' && command.kind !== 'playback-state') return
   switch (command.kind) {
+    case 'recording-lock':
+      recordingLocked.value = command.locked
+      break
+    case 'recording-prepare':
+    case 'recording-apply':
+      void handleRecordingRequest(command)
+      break
     case 'dispatch':
       dispatch(command.action)
       break
@@ -634,6 +683,7 @@ function handleEditorWindowCommand(command: MidiProjectEditorRequest): void {
 }
 
 function setEditorWindowStatus(status: 'docked' | 'opening' | 'detached'): void {
+  if (status === 'docked') recordingLocked.value = false
   const previous = editorWindowStatus.value
   editorWindowStatus.value = status
   mainWindowUi.setDetachedMidiEditorStatus(status)
@@ -743,6 +793,7 @@ onMounted(() => {
     presentation: createWindowPresentation,
     viewport: () => latestViewport.value,
     onCommand: handleEditorWindowCommand,
+    onClientReset: () => { recordingLocked.value = false },
     onDock: restoreEditorPage,
     onStatus: setEditorWindowStatus,
     onError: reportEditorWindowError,
@@ -755,6 +806,9 @@ onMounted(() => {
 const removeInstallParticipant = updater.registerInstallParticipant(async () => {
   if (saving.value) throw new Error('MIDI 项目正在保存，请保存完成后重试安装更新')
   playback.pause()
+  recorderLauncher.value?.pause()
+  await recorderLauncher.value?.checkpoint()
+  if (recordingLocked.value && !recorderLauncher.value?.isOpen) throw new Error('Recording is active in the editor window')
   await flushDraft()
 })
 onActivated(() => {
@@ -779,7 +833,7 @@ onBeforeUnmount(() => {
 
 <template>
   <ConfigProvider v-bind="midiEditorConfigProviderProps">
-    <section class="midi-editor-page" :inert="updateLocked">
+    <section class="midi-editor-page" :inert="updateLocked || recordingLocked">
       <header v-if="!loading && state" class="midi-editor-header">
         <div class="editor-project-identity">
           <Input
@@ -815,6 +869,22 @@ onBeforeUnmount(() => {
           @stop="playback.stop()"
           @set-bpm="setBpm"
           @set-meter="setMeter"
+        />
+        <TrackRecorderLauncher
+          v-if="state && editorWindowStatus === 'docked'"
+          ref="recorderLauncher"
+          :state="state"
+          :templates="settingsStore.templates"
+          :template-id="settingsStore.currentTemplateId"
+          :track-id="latestViewport?.selectedTrackId"
+          :position-seconds="playback.positionSeconds.value"
+          :fps="settingsStore.autoFpsEnabled ? settingsStore.lastDetectedFps ?? settingsStore.manualFps : settingsStore.manualFps"
+          :speed="playerStore.speed"
+          :auto-open="route.query.record === '1'"
+          :disabled="updateLocked"
+          :prepare-external="prepareRecording"
+          :apply-result="applyRecording"
+          @lock="recordingLocked = $event"
         />
         <EditorProjectActions
           :saving="saving"

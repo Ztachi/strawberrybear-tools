@@ -3,7 +3,10 @@
  */
 import releaseNoteReleases from './release-notes/zh-CN.json'
 
+import recording from './recording/zh-CN.json'
+
 export default {
+  recording,
   app: {
     title: '无限暖暖自动演奏',
     overlayMode: '进入悬浮模式',

@@ -1715,6 +1715,8 @@ export const usePlayerStore = defineStore('player', () => {
 
         setNoteFilter(({ pitch }) => templatePitches.includes(pitch))
         setPitchMapper((originalPitch: number): number | null => {
+          // 精确模板音高（包括黑键、宽音域）必须保持原音。
+          if (templatePitches.includes(originalPitch)) return originalPitch
           // 步骤1：量化到 C 大调白键
           const noteInOctave = originalPitch % 12
 
