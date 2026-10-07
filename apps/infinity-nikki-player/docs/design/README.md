@@ -6,13 +6,12 @@
 
 ## 文档目录
 
-| 文档                                           | 说明                                                 |
-| ---------------------------------------------- | ---------------------------------------------------- |
-| [ui-guide.md](ui-guide.md)                     | antdv-next 组件、Tailwind 原子类、弹层和反馈使用规范 |
-| [ui-framework.md](ui-framework.md)             | antdv-next 框架专项规范（按钮、Table、Select 等）    |
-| [theme.md](theme.md)                           | 无限暖暖主题 token、CSS 变量和视觉原则               |
-| [keyboard-recording.md](keyboard-recording.md) | 独立单轨录制、修正、草稿和宿主应用                   |
-| [piano-roll-design.md](piano-roll-design.md)   | 多轨总览、单轨浮层、MIDI 适配与验收                  |
+| 文档                                         | 说明                                                 |
+| -------------------------------------------- | ---------------------------------------------------- |
+| [ui-guide.md](ui-guide.md)                   | antdv-next 组件、Tailwind 原子类、弹层和反馈使用规范 |
+| [ui-framework.md](ui-framework.md)           | antdv-next 框架专项规范（按钮、Table、Select 等）    |
+| [theme.md](theme.md)                         | 无限暖暖主题 token、CSS 变量和视觉原则               |
+| [piano-roll-design.md](piano-roll-design.md) | 多轨总览、单轨浮层、MIDI 适配与验收                  |
 
 ## 技术栈
 

@@ -93,7 +93,6 @@ export function duplicateProject(
       name: uniqueProjectName(copyName(source.name), existing, source.name),
       document: source.document,
       source: source.source,
-      extensions: source.extensions ? structuredClone(source.extensions) : undefined,
     }),
     loop: source.loop ?? null,
     meta: computeProjectMeta(source.document),

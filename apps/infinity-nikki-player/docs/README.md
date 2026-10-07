@@ -15,7 +15,6 @@
 - [主题规范](design/theme.md)
 - [钢琴引擎设计](design/piano-engine-design.md)
 - [钢琴卷帘设计与验收](design/piano-roll-design.md)
-- [键盘录制工作区](design/keyboard-recording.md)
 - [错误追踪](error/README.md)
 - [Tauri 后端文档](../src-tauri/docs/README.md)
 

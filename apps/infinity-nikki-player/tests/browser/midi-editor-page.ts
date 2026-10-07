@@ -3,8 +3,6 @@ import { createApp, defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
 import { mockIPC } from '@tauri-apps/api/mocks'
-import { invoke } from '@tauri-apps/api/core'
-import type { RecorderAudio } from '@/features/midi-recording/types'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getAntdvLocale, i18n } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
@@ -272,7 +270,6 @@ mockIPC((command, payload) => {
       message: 'Browser fixture',
     }
   if (command === 'stop_playback') return
-  if (command === 'get_playback_state') return { is_playing: false, current_tick: 0 }
   if (command === 'save_midi_project_draft') {
     if (draftFailure) throw new Error('测试草稿保存失败')
     const draft = payload as { key: string; project: MidiProject }
@@ -487,8 +484,6 @@ declare global {
       seedDraft: (key: string, name: string, filename?: string) => void
       seedEntryDraft: (entry: MidiEditorEntry, name: string) => Promise<string>
       setSongs: (filenames: string[]) => void
-      draftNoteCounts: () => number[]
-      recordingDraft: (command: string, args: Record<string, unknown>) => Promise<unknown>
       draftKeys: () => string[]
       currentRoute: () => string
       deferParse: (filename: string) => void
@@ -533,8 +528,6 @@ window.midiEditorFixture = {
     for (const song of customSongs) parsedSongs.set(song.file_path, song)
     usePlayerStore(pinia).midiLibrary = customSongs
   },
-  recordingDraft: (command: string, args: Record<string, unknown>) => invoke(command, args),
-  draftNoteCounts: () => [...draftFiles.values()].map((project) => project.document.notes.length),
   draftKeys: () => [...draftFiles.keys()],
   currentRoute: () => router.currentRoute.value.fullPath,
   deferParse(filename) {
@@ -582,16 +575,6 @@ createApp({
   .use(pinia)
   .use(i18n)
   .use(router)
-  .provide(
-    'track-recorder-audio-factory',
-    (): RecorderAudio => ({
-      prepare: async () => {},
-      now: () => performance.now() / 1000,
-      note: () => ({ stop() {} }),
-      startAccompaniment() {},
-      stopAccompaniment() {},
-    })
-  )
   .provide(MIDI_PROJECT_EDITOR_WINDOW_PORT, browserMidiProjectEditorWindowPort())
   .provide(appUpdaterKey, updater)
   .mount('#app')

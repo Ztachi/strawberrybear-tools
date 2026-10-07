@@ -16,7 +16,6 @@ interface MidiProjectEditorWindowSessionOptions {
   onDock: () => Promise<void>
   onStatus: (status: 'docked' | 'opening' | 'detached') => void
   onError: (error: unknown) => void
-  onClientReset?: () => void
 }
 
 /** MIDI 项目编辑页与独立窗口之间的单实例会话。 */
@@ -134,21 +133,6 @@ export class MidiProjectEditorWindowSession {
     void this.options.port.send(update).catch((error) => this.fail(error))
   }
 
-  /** 录制准备/结果应用的回执，子窗口收到成功后才关闭本地工作区。 */
-  replyRecording(requestId: string, error?: string): void {
-    if (!this.ready || !this.session) return
-    void this.options.port
-      .send({
-        kind: 'recording-reply',
-        session: this.session,
-        clientId: this.clientId,
-        sequence: ++this.sequence,
-        requestId,
-        ...(error ? { error } : {}),
-      })
-      .catch((cause) => this.fail(cause))
-  }
-
   /** 主窗口主动结束编辑时关闭子窗口，不执行还原导航。 */
   async close(): Promise<void> {
     await this.release(true)
@@ -197,7 +181,6 @@ export class MidiProjectEditorWindowSession {
     )
       return
     if (request.kind === 'ready') {
-      if (this.clientId && this.clientId !== request.clientId) this.options.onClientReset?.()
       this.clientId = request.clientId
       this.received = request.sequence
       this.ready = true

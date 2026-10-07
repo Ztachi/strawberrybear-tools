@@ -4,16 +4,14 @@
  * @description 提供全局模板发音配置、键盘模拟开关、模板选择和实时键盘预览。
  */
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Button, Tooltip } from 'antdv-next'
+import { Tooltip } from 'antdv-next'
 import { Keyboard, Music2 } from 'lucide-vue-next'
 import VirtualKeyboardPanel from '@/components/VirtualKeyboardPanel/index.vue'
 import { getMidiDisplayName } from '@/lib/midiDisplay'
 import { usePlayerStore } from '@/stores/player'
 
 const { t } = useI18n()
-const router = useRouter()
 const playerStore = usePlayerStore()
 
 /** 当前播放歌曲展示名，空状态由页面文案兜底。 */
@@ -42,12 +40,6 @@ const hasCurrentMidi = computed(() => Boolean(playerStore.currentMidi))
           </p>
         </Tooltip>
       </div>
-      <Button
-        type="primary"
-        @click="router.push({ name: 'midi-editor-create', query: { record: '1' } })"
-      >
-        {{ t('recording.launch') }}
-      </Button>
     </header>
 
     <section class="keyboard-page-body">

@@ -322,9 +322,6 @@ pub struct MidiProject {
     #[serde(default)]
     pub r#loop: Option<serde_json::Value>,
     pub document: serde_json::Value,
-    /// 宿主扩展信息（模板快照、录制恢复信息），旧文件缺省为空。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extensions: Option<serde_json::Value>,
 }
 
 fn default_midi_project_schema_version() -> u32 {

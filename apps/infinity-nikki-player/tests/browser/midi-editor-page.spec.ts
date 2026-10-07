@@ -1,23 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test'
-
-async function useSilentChromiumAudioOutput(
-  context: BrowserContext,
-  browserName: string
-): Promise<void> {
-  if (browserName !== 'chromium') return
-  // 保留真实音色、AudioContext 和时钟，只将输出接到无声设备，避免宿主声卡停滞影响时序回归。
-  // https://developer.chrome.com/blog/audiocontext-setsinkid
-  await context.addInitScript(() => {
-    const NativeAudioContext = window.AudioContext
-    window.AudioContext = class extends NativeAudioContext {
-      constructor(options?: ConstructorParameters<typeof NativeAudioContext>[0]) {
-        super({ ...options, sinkId: { type: 'none' } } as ConstructorParameters<
-          typeof NativeAudioContext
-        >[0])
-      }
-    }
-  })
-}
+import { expect, test, type Page } from '@playwright/test'
 
 test('歌曲详情进入编辑后刷新，会等待曲库载入并保留来源名称', async ({ page }) => {
   await page.goto('/tests/browser/midi-editor-page.html?source&cold')
@@ -1202,12 +1183,7 @@ test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑�
   await expect(page.locator('.editor-template-select:visible')).toContainText('高音演奏键')
 })
 
-test('定位后打开独立窗口，首次播放及还原后的续播都从当前位置开始', async ({
-  page,
-  context,
-  browserName,
-}) => {
-  await useSilentChromiumAudioOutput(context, browserName)
+test('定位后打开独立窗口，首次播放及还原后的续播都从当前位置开始', async ({ page }) => {
   await page.goto('/tests/browser/midi-editor-page.html?populated=1')
   const mainHead = page.locator('.detail-piano-roll .pr-handle')
   const ruler = (await page.locator('.detail-piano-roll .pr-ruler').boundingBox())!
@@ -1250,9 +1226,7 @@ test('定位后打开独立窗口，首次播放及还原后的续播都从当�
 test('播放中的窗口交接保持播放状态，独立窗口刷新和原生关闭也使用最新快照', async ({
   page,
   context,
-  browserName,
 }, testInfo) => {
-  await useSilentChromiumAudioOutput(context, browserName)
   const webkit = testInfo.project.use.browserName === 'webkit'
   if (webkit) {
     // Tauri/Wry 默认允许自动播放；浏览器 WebKit 要求手势解锁。仅装配等价的设备权限边界，
@@ -1704,40 +1678,3 @@ test('窄窗口中单音符属性完整显示，力度通过悬浮纵向滑杆�
     page.getByRole('tooltip').filter({ hasText: '起点会对齐当前吸附网格' })
   ).toBeVisible()
 })
-
-for (const detached of [false, true]) {
-  test(`键盘录制通过宿主原子应用并撤销：${detached ? '独立编辑窗口' : '主窗口'}`, async ({
-    page,
-  }, testInfo) => {
-    let editor = page
-    if (detached) {
-      const opening = page.waitForEvent('popup')
-      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
-      editor = await opening
-      await expect(editor.locator('.detail-piano-roll')).toBeVisible()
-    }
-    await editor.getByRole('button', { name: '键盘录制', exact: true }).click()
-    const dialog = editor.getByRole('dialog').first()
-    await expect(dialog).toContainText('钢琴常用键')
-    await dialog.getByRole('button', { name: '开始录制', exact: true }).click()
-    await editor.keyboard.down('a')
-    await editor.waitForTimeout(150)
-    await editor.keyboard.up('a')
-    await editor.keyboard.press('Escape')
-    await expect(dialog.getByText('已停止，可试听、修改或重录')).toBeVisible()
-    await editor.screenshot({ path: testInfo.outputPath('recording-workspace.png') })
-    await dialog.getByRole('button', { name: '应用到音轨', exact: true }).click()
-    await expect(dialog).not.toBeVisible()
-    await expect
-      .poll(() => page.evaluate(() => window.midiEditorFixture.draftNoteCounts()))
-      .toEqual([1])
-    await expect(editor.getByRole('button', { name: /^撤销/ })).toBeEnabled()
-    await editor.getByRole('button', { name: /^撤销/ }).click()
-    await expect(editor.getByRole('button', { name: /^撤销/ })).toBeDisabled()
-    expect(
-      await page.evaluate(() =>
-        window.midiEditorFixture.draftKeys().some((key) => key.startsWith('recording-'))
-      )
-    ).toBe(false)
-  })
-}

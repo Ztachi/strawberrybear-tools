@@ -50,26 +50,3 @@ export function pruneSelection(
   for (const id of selection) if (existing.has(id)) next.add(id)
   return next
 }
-
-/** 按音符可见起止位置选择前方、后方或全部音符；省略 trackId 表示整个项目。 */
-export function notesRelativeTo(
-  document: PianoRollDocument,
-  options: { trackId?: string; noteId?: string | null; tick: number; direction: 'before' | 'after' | 'all' }
-): string[] {
-  const tracks = new Map(document.tracks.map(track => [track.id, track]))
-  const anchor = document.notes.find(note => note.id === options.noteId)
-  const anchorTrack = anchor && tracks.get(anchor.trackId)
-  const visibleAnchor = anchor && anchorTrack && clipNoteToTrackRegion(anchor, anchorTrack)
-  const boundary = visibleAnchor
-    ? options.direction === 'after' ? visibleAnchor.endTick : visibleAnchor.startTick
-    : options.tick
-  return document.notes.filter(note => {
-    if (options.trackId && note.trackId !== options.trackId) return false
-    const track = tracks.get(note.trackId)
-    const visible = track && clipNoteToTrackRegion(note, track)
-    if (!visible) return false
-    if (options.direction === 'all') return true
-    if (note.id === options.noteId) return false
-    return options.direction === 'after' ? visible.startTick >= boundary : visible.startTick < boundary
-  }).map(note => note.id)
-}

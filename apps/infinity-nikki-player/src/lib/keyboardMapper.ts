@@ -474,22 +474,6 @@ export class KeyboardMapper {
       return this.pitchCache.get(originalPitch)!
     }
 
-    // 录制使用模板原音高；无移调时精确映射优先于旧版白键/音域折叠。
-    const exact =
-      this.transposeSemitones === 0 &&
-      this.template?.mappings.find((mapping) => mapping.pitch === originalPitch)
-    if (exact) {
-      const key = exact.key.trim().toUpperCase()
-      const result = {
-        key,
-        code: mappingKeyToCode(key),
-        pitch: originalPitch,
-        originalPitch,
-        wasTransposed: false,
-      }
-      this.pitchCache.set(originalPitch, result)
-      return result
-    }
     // 步骤 1：移调到 C 大调
     const transposedPitch = originalPitch + this.transposeSemitones
 

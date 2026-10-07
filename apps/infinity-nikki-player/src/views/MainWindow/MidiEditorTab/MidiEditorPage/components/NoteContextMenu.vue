@@ -19,7 +19,7 @@ import {
   Trash2,
   Volume2,
 } from 'lucide-vue-next'
-import { notesRelativeTo, type EditorAction, type EditorSessionState } from '@strawberrybear/midi-editor'
+import type { EditorAction, EditorSessionState } from '@strawberrybear/midi-editor'
 import { clipNoteToTrackRegion } from '@strawberrybear/piano-roll/core'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
 
@@ -37,8 +37,6 @@ const props = defineProps<{
   state: EditorSessionState
   /** 当前详情视图正在编辑的轨道，用于空白处新增与粘贴。 */
   trackId: string | null
-  trackOnly?: boolean
-  popupContainer?: () => HTMLElement
 }>()
 const emit = defineEmits<{
   dispatch: [action: EditorAction]
@@ -55,24 +53,6 @@ function icon(component: unknown) {
 }
 
 const hasSelection = computed(() => props.state.selection.size > 0)
-function selectedBy(key: string): string[] {
-  const [, scope, direction] = key.split(':')
-  const anchor = props.state.document.notes.find(note => note.id === props.target?.noteId)
-  return notesRelativeTo(props.state.document, {
-    trackId: scope === 'track' ? anchor?.trackId ?? props.trackId ?? undefined : undefined,
-    noteId: props.target?.noteId, tick: props.target?.tick ?? 0,
-    direction: direction as 'before' | 'after' | 'all',
-  })
-}
-const selectionItems = computed(() => (props.trackOnly ? ['track'] : ['track', 'project']).map(scope => ({
-  key: `selection:${scope}`,
-  label: t(`recording.selection.${scope}`),
-  children: ['after', 'before', 'all'].map(direction => {
-    const key = `selection:${scope}:${direction}`
-    const count = selectedBy(key).length
-    return { key, label: t(`recording.selection.${direction}`, { count }), disabled: count === 0 }
-  }),
-})))
 const menuItems = computed(() => [
   ...(props.target?.noteId === null
     ? [{ key: 'add-note', label: t('midiEditor.contextMenu.addNote'), icon: icon(Music) }]
@@ -86,7 +66,7 @@ const menuItems = computed(() => [
     disabled: !props.state.clipboardAvailable || !props.trackId,
   },
   { key: 'duplicate', label: t('midiEditor.contextMenu.duplicate'), icon: icon(CopyPlus), disabled: !hasSelection.value },
-  { key: 'selection', label: t('recording.selection.title'), icon: icon(SquareDashedMousePointer), children: selectionItems.value },
+  { key: 'select-all', label: t('midiEditor.contextMenu.selectAll'), icon: icon(SquareDashedMousePointer) },
   { type: 'divider' as const },
   { key: 'quantize', label: t('midiEditor.contextMenu.quantize'), icon: icon(Grid2x2), disabled: !hasSelection.value || props.state.snap === 'off' },
   { key: 'transpose-up', label: t('midiEditor.contextMenu.transposeUp'), icon: icon(ArrowUpToLine), disabled: !hasSelection.value },
@@ -125,10 +105,6 @@ function handleMenuClick(info: { key: string | number }): void {
   const selected = Array.from(props.state.selection)
   emit('close')
   if (!target) return
-  if (key.startsWith('selection:')) {
-    emit('dispatch', { type: 'select', mode: 'replace', noteIds: selectedBy(key) })
-    return
-  }
   if (key.startsWith('velocity:')) {
     emit('dispatch', { type: 'set-selected-velocity', velocity: Number(key.slice('velocity:'.length)) })
     return
@@ -184,7 +160,7 @@ function handleOpenChange(open: boolean): void {
     :open="!!target"
     :trigger="['contextmenu']"
     placement="bottomLeft"
-    :get-popup-container="popupContainer ?? getMainWindowPopupContainer"
+    :get-popup-container="getMainWindowPopupContainer"
     :menu="{ items: menuItems, onClick: handleMenuClick }"
     @update:open="handleOpenChange"
   >
