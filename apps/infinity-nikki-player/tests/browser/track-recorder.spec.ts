@@ -387,6 +387,39 @@ for (const viewport of [
     await page.screenshot({
       path: testInfo.outputPath(`recorder-${viewport.width}x${viewport.height}.png`),
     })
+    await start.click()
+    await expect(dialog.getByText('按下第一个映射键开始', { exact: true })).toBeVisible()
+    async function expectStateFitsHeader(): Promise<void> {
+      const title = (await dialog.locator('.recorder-track-name').boundingBox())!
+      expect(title.width).toBeGreaterThan(0)
+      const helpBounds = (await dialog
+        .getByRole('button', { name: '录制帮助', exact: true })
+        .boundingBox())!
+      const closeBounds = (await dialog
+        .getByRole('button', { name: '关闭', exact: true })
+        .boundingBox())!
+      expect(helpBounds.x + helpBounds.width).toBeLessThanOrEqual(closeBounds.x)
+      expect(closeBounds.x + closeBounds.width).toBeLessThanOrEqual(viewport.width)
+      const stateCenters = await dialog
+        .locator('.ant-drawer-header button')
+        .evaluateAll((elements) =>
+          elements.map((element) => {
+            const rect = element.getBoundingClientRect()
+            return rect.y + rect.height / 2
+          })
+        )
+      expect(Math.max(...stateCenters) - Math.min(...stateCenters)).toBeLessThanOrEqual(4)
+    }
+    await expectStateFitsHeader()
+    await recordKey(page, 'a')
+    await expect(dialog.locator('.recorder-transport [role="status"]')).toHaveText('正在录制')
+    await expectStateFitsHeader()
+    await dialog.getByRole('button', { name: '暂停录制', exact: true }).click()
+    await expect(dialog.getByRole('button', { name: '继续录制', exact: true })).toBeVisible()
+    await expectStateFitsHeader()
+    await dialog.getByRole('button', { name: '停止录制', exact: true }).click()
+    await expect(dialog.getByRole('button', { name: '开始录制', exact: true })).toBeVisible()
+    await expectStateFitsHeader()
   })
 }
 

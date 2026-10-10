@@ -108,11 +108,12 @@ const statusText = computed(() => props.replaying ? t('recording.previewing') : 
     </Tooltip>
     <!-- 设置入口属于按钮组，不能被后方可伸缩的状态区域推到最右侧。 -->
     <slot name="settings" />
+    <!-- 状态按剩余空间展开，避免全文撑大工具栏的最小内容宽度。 -->
     <Tooltip :title="statusText">
       <span
         role="status"
         aria-live="polite"
-        class="min-w-0 flex-1 truncate text-sm text-[var(--color-muted-dark)]"
+        class="w-0 min-w-0 flex-1 truncate text-sm text-[var(--color-muted-dark)]"
         >{{ statusText }}</span
       >
     </Tooltip>
