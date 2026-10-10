@@ -26,9 +26,14 @@ const props = defineProps<{
   /** 按住交互仅用于录制，缺省保留旧点击试听。 */
   holdInteraction?: boolean
   recordingStyle?: boolean
+  /** 录制页仅展示含映射键的整排，保留各排内的真实键位关系。 */
+  mappedRowsOnly?: boolean
 }>()
 
 const activeKeySet = computed(() => props.activeKeys ?? new Set<string>())
+const visibleRows = computed(() => KEYBOARD_LAYOUT
+  .map((keys, index) => ({ keys, index }))
+  .filter(row => !props.mappedRowsOnly || row.keys.some(key => props.keyCodeToPitch?.has(key.code))))
 const showKeyLog = computed(
   () => Boolean(props.keyLog && props.getKeyLogByChapters && props.clearKeyLog)
 )
@@ -216,7 +221,7 @@ watch(
   <div
     ref="keyboardPreviewRef"
     class="keyboard-preview"
-    :class="{ 'recording-style': recordingStyle }"
+    :class="{ 'recording-style': recordingStyle, 'mapped-rows-only': mappedRowsOnly }"
   >
     <!-- 顶部操作区 -->
     <div v-if="showToolbar" ref="toolbarRef" class="toolbar">
@@ -251,14 +256,14 @@ watch(
       >
         <!-- 遍历每一行键盘布局 -->
         <div
-          v-for="(row, rowIndex) in KEYBOARD_LAYOUT"
-          :key="rowIndex"
+          v-for="row in visibleRows"
+          :key="row.index"
           class="keyboard-row"
-          :class="getRowClass(rowIndex)"
+          :class="getRowClass(row.index)"
         >
           <!-- 遍历每个按键 -->
           <div
-            v-for="key in row"
+            v-for="key in row.keys"
             :key="key.code"
             class="key"
             tabindex="-1"
@@ -298,6 +303,7 @@ watch(
 
 <style scoped>
 .recording-style .keyboard-scale-shell { overflow-x: auto; min-height: 220px; }
+.recording-style.mapped-rows-only .keyboard-scale-shell { overflow: auto; min-height: 0; }
 .recording-style .keyboard-area { position: relative; left: 0; top: 0; transform: none; margin: 0 auto; }
 .recording-style .key { width: 42px; height: 36px; }
 .recording-style .key .key-label { font-size: 12px; }
