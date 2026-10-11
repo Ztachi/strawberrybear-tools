@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 设置与帮助共用目录文档，常规选项修改即保存，关于复用更新和联系操作。 */
+/** 设置与帮助共用目录文档，常规选项修改即保存，联系与关于独立展示。 */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -12,11 +12,12 @@ import {
   Checkbox,
   Tooltip,
 } from 'antdv-next'
-import { SlidersHorizontal, BadgeInfo, CircleAlert } from 'lucide-vue-next'
+import { SlidersHorizontal, MessagesSquare, BadgeInfo, CircleAlert } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
 import { SUPPORTED_LOCALES, isSupportedLocale } from '@/i18n'
 import { feedback } from '@/lib/feedback'
 import AboutDialog from '@/components/AboutDialog/index.vue'
+import AppContact from '@/components/AppContact.vue'
 import SectionDocument from '@/components/SectionDocument.vue'
 const open = defineModel<boolean>('open', { default: false })
 const props = withDefaults(defineProps<{ initialCategory?: string; navigationKey?: number }>(), {
@@ -33,8 +34,9 @@ watch(open, (value) => {
 function afterOpenChange(value: boolean): void {
   documentReady.value = value && open.value
 }
+const categoryIcons = { general: SlidersHorizontal, contact: MessagesSquare, about: BadgeInfo }
 const categories = computed(() =>
-  ['general', 'about'].map((key) => ({
+  ['general', 'contact', 'about'].map((key) => ({
     key,
     href: `#app-settings-${key}`,
     title: t(`appSettings.${key}`),
@@ -81,7 +83,7 @@ function closeAction(value: unknown): void {
       <template #item="{ item }">
         <span class="flex items-center gap-2">
           <component
-            :is="item.key === 'general' ? SlidersHorizontal : BadgeInfo"
+            :is="categoryIcons[item.key as keyof typeof categoryIcons]"
             class="size-4 shrink-0"
             :stroke-width="2"
             aria-hidden="true"
@@ -152,10 +154,27 @@ function closeAction(value: unknown): void {
           </FormItem>
         </Form>
       </section>
-      <!-- 末节至少占一屏，保证目录定位能将“关于”标题滚到顶部并同步高亮。 -->
+      <section
+        id="app-settings-contact"
+        class="mt-3 scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
+        aria-labelledby="app-settings-contact-title"
+      >
+        <h3
+          id="app-settings-contact-title"
+          class="m-0 mb-4 flex items-center gap-2 text-sm font-semibold"
+        >
+          <MessagesSquare
+            class="size-4 shrink-0 text-primary"
+            :stroke-width="2"
+            aria-hidden="true"
+          />
+          {{ t('appSettings.contact') }}
+        </h3>
+        <AppContact />
+      </section>
       <section
         id="app-settings-about"
-        class="mt-3 min-h-full scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
+        class="mt-3 scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
         aria-labelledby="app-settings-about-title"
       >
         <h3

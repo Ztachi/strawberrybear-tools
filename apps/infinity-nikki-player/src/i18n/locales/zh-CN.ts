@@ -907,6 +907,8 @@ export default {
     },
   },
   overlay: {
+    allSongs: '全部歌曲',
+    selectPlaylist: '选择歌单',
     expand: '展开',
     collapse: '收起',
     close: '关闭悬浮',

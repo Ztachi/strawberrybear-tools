@@ -2,7 +2,7 @@ import { createProject, type MidiProject } from '@strawberrybear/midi-editor'
 import { createApp, defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
-import { mockIPC } from '@tauri-apps/api/mocks'
+import { mockIPC, mockWindows } from '@tauri-apps/api/mocks'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import type { RecorderAudio } from '@/features/midi-recording/types'
@@ -20,7 +20,10 @@ import MainWindow from '@/views/MainWindow/index.vue'
 import { APP_CLOSE_PLATFORM } from '@/platform/tauri/appClose'
 import type { CloseAction } from '@/features/app-close/controller'
 import { MIDI_PROJECT_EDITOR_WINDOW_PORT } from '@/features/midi-project-editor-window'
+import { createAppContext } from '@/bootstrap/createAppContext'
+import { bindAppContextStores } from '@/bootstrap/bindAppContextStores'
 import { usePlayerStore } from '@/stores/player'
+import { useSongListStore } from '@/stores/songLists'
 import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
 import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
 import AllSongsPage from '@/views/MainWindow/FilesTab/pages/AllSongsPage.vue'
@@ -261,15 +264,33 @@ const draftFiles = new Map<string, MidiProject>()
 const parsedSongs = new Map(
   [midi, switchedMidi, ...navigationMidiLibrary].map((song) => [song.file_path, song])
 )
+const openedUrls: string[] = []
 let customSongs: MidiInfo[] | null = null
 let pendingParse: { filename: string; resolve: (() => void) | null } | null = null
 let closeRequest: ((action?: CloseAction) => void) | undefined
 let trayHides = 0
 let quits = 0
 let savedSettings: Record<string, unknown> = {}
+mockWindows('main')
 const fixtureIPC: Parameters<typeof mockIPC>[0] = (command, payload) => {
   if (command === 'plugin:event|listen') return 0
   if (command === 'plugin:event|unlisten' || command === 'set_speed') return
+  if (command === 'plugin:window|set_size') return
+  if (command === 'open_url') {
+    openedUrls.push((payload as { url: string }).url)
+    return
+  }
+  if (command === 'get_frame_rate_snapshot')
+    return {
+      status: 'unsupported_platform',
+      current_fps: null,
+      stable_fps: null,
+      sample_count: 0,
+      source: 'unsupported',
+      target_process: null,
+      updated_at_ms: null,
+      message: null,
+    }
   if (command === 'plugin:app|version') return '1.3.2'
   if (command === 'save_settings') {
     savedSettings = { ...(payload as { settings: Record<string, unknown> }).settings }
@@ -496,6 +517,7 @@ await router.push(
                 : '/midi-editor/new'
 )
 const pinia = createPinia()
+if (fixtureQuery.has('overlay-playlist')) bindAppContextStores(pinia, createAppContext())
 // 详情进入编辑器时曲库已载入；夹具按真实前置状态装配，不等待主窗口的异步初始化。
 if (fixtureQuery.has('source') && !fixtureQuery.has('cold'))
   usePlayerStore(pinia).midiLibrary = [midi]
@@ -512,6 +534,13 @@ declare global {
       seedDraft: (key: string, name: string, filename?: string) => void
       seedEntryDraft: (entry: MidiEditorEntry, name: string) => Promise<string>
       setSongs: (filenames: string[]) => void
+      setSongLists: (lists: { id: string; name: string; filenames: string[] }[]) => void
+      openedUrls: () => string[]
+      previewState: () => {
+        filename: string | undefined
+        source: string | undefined
+        queue: string[]
+      }
       draftNoteCounts: () => number[]
       recordingDraft: (command: string, args: Record<string, unknown>) => Promise<unknown>
       draftKeys: () => string[]
@@ -560,6 +589,26 @@ window.midiEditorFixture = {
     }))
     for (const song of customSongs) parsedSongs.set(song.file_path, song)
     usePlayerStore(pinia).midiLibrary = customSongs
+  },
+  setSongLists(lists) {
+    useSongListStore(pinia).songLists = lists.map((list) => ({
+      id: list.id,
+      name: list.name,
+      description: '',
+      cover_filename: null,
+      song_filenames: list.filenames,
+      created_at: 1,
+      updated_at: 1,
+    }))
+  },
+  openedUrls: () => [...openedUrls],
+  previewState() {
+    const player = usePlayerStore(pinia)
+    return {
+      filename: player.currentMidi?.filename,
+      source: player.previewQueueContext?.id,
+      queue: player.activePreviewQueueItems.map((song) => song.filename),
+    }
   },
   recordingDraft: (command: string, args: Record<string, unknown>) => invoke(command, args),
   draftNoteCounts: () => [...draftFiles.values()].map((project) => project.document.notes.length),

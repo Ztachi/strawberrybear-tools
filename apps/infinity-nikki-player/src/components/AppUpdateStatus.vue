@@ -36,7 +36,7 @@ async function update(): Promise<void> {
         :shape="presentation === 'version' ? 'round' : undefined"
         :aria-label="presentation === 'action' ? buttonText : t('updater.checkNow')"
         :disabled="updater.isBusy.value"
-        icon-placement="end"
+        icon-placement="start"
         @click="update"
       >
         <span>{{ presentation === 'action' ? buttonText : `v${version}` }}</span>
@@ -59,7 +59,5 @@ async function update(): Promise<void> {
 .version-update-trigger :deep(button) {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
 }
 </style>

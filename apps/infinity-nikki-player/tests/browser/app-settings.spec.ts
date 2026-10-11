@@ -28,9 +28,9 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
   await expect(settings.getByRole('radio', { name: '最小化到系统托盘', exact: true })).toBeChecked()
   await expect(settings.getByRole('combobox', { name: '显示语言', exact: true })).toBeVisible()
   const contents = settings.getByRole('navigation', { name: '设置目录', exact: true })
-  await expect(contents.getByRole('link')).toHaveText(['常规', '关于'])
+  await expect(contents.getByRole('link')).toHaveText(['常规', '联系我们', '关于'])
   await expect(settings.getByRole('heading', { name: '设置目录', exact: true })).toHaveCount(0)
-  for (const title of ['常规', '关于']) {
+  for (const title of ['常规', '联系我们', '关于']) {
     await expect(
       contents.getByRole('link', { name: title, exact: true }).locator('svg')
     ).toHaveCount(1)
@@ -56,14 +56,38 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
   await expect(settings).toContainText('更新日志')
   await expect
     .poll(() => settings.locator('.section-document-content').evaluate((node) => node.scrollTop))
-    .toBeGreaterThan(100)
+    .toBeGreaterThan(0)
   const about = settings.locator('.embedded-about')
-  await expect(about.locator('.about-icon')).toHaveCount(0)
+  await expect(about.locator('.about-icon')).toHaveCount(1)
   await expect(about).toContainText('当前版本')
   await expect(about.getByRole('button', { name: '检测更新', exact: true })).toHaveText('检测更新')
-  expect(
-    await about.locator('.about-description').evaluate((node) => getComputedStyle(node).textAlign)
-  ).toBe('left')
+  await expect(about.locator('.about-description')).toHaveCount(0)
+  const buttons = about.getByRole('button')
+  await expect(buttons).toHaveText(['检测更新', '更新日志', '导出诊断'])
+  for (const button of await buttons.all()) {
+    await expect(button.locator('.ant-btn-icon')).toHaveCount(1)
+    expect(
+      await button.evaluate((node) => {
+        const icon = node.querySelector('.ant-btn-icon')!
+        return !!(
+          icon.compareDocumentPosition(node.lastElementChild!) & Node.DOCUMENT_POSITION_FOLLOWING
+        )
+      })
+    ).toBe(true)
+  }
+  expect((await settings.locator('#app-settings-about').boundingBox())!.height).toBeLessThan(300)
+  await contents.getByRole('link', { name: '联系我们', exact: true }).click()
+  const contact = settings.locator('#app-settings-contact')
+  await expect(contact).toContainText('967529814')
+  await contact.getByRole('button', { name: '官方网站', exact: true }).click()
+  expect(await page.evaluate(() => window.midiEditorFixture.openedUrls())).toEqual([
+    'https://ztachi.com/tools/infinity-nikki-player',
+  ])
+  await page.screenshot({
+    path: testInfo.outputPath('settings-contact.png'),
+    animations: 'disabled',
+  })
+  await contents.getByRole('link', { name: '关于', exact: true }).click()
   await page.screenshot({ path: testInfo.outputPath('settings-about.png'), animations: 'disabled' })
   await contents.getByRole('link', { name: '常规', exact: true }).click()
   await expect
@@ -186,7 +210,12 @@ test('系统关于入口定位同一设置正文，重新从设置打开回到�
       .poll(() =>
         content.evaluate((node) => {
           const about = node.querySelector('#app-settings-about')!
-          return Math.abs(about.getBoundingClientRect().top - node.getBoundingClientRect().top - 8)
+          const target =
+            about.getBoundingClientRect().top -
+            node.getBoundingClientRect().top +
+            node.scrollTop -
+            8
+          return Math.abs(node.scrollTop - Math.min(target, node.scrollHeight - node.clientHeight))
         })
       )
       .toBeLessThanOrEqual(1)

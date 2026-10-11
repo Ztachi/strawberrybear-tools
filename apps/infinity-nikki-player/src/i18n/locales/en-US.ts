@@ -944,6 +944,8 @@ export default {
     },
   },
   overlay: {
+    allSongs: 'All songs',
+    selectPlaylist: 'Choose playlist',
     expand: 'Expand',
     collapse: 'Collapse',
     close: 'Close Overlay',

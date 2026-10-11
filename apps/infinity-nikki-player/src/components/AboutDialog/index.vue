@@ -9,17 +9,15 @@
 <script setup lang="ts">
 /**
  * @description: 关于对话框组件
- * @description 监听 Tauri 菜单的 show_about 事件显示，包含应用图标、版本号和描述信息
+ * @description 监听 Tauri 菜单的 show_about 事件显示，包含应用图标、版本号和更新操作
  */
-import { computed, ref, onMounted, onUnmounted, watch, type Component } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { listen } from '@tauri-apps/api/event'
-import { DiscordFilled, QqOutlined } from '@antdv-next/icons'
-import { ExternalLink, FileDown } from 'lucide-vue-next'
+import { ScrollText, FileDown } from 'lucide-vue-next'
 import appLogo from '@/assets/images/logo.png'
-import { Button, Modal, TypographyParagraph } from 'antdv-next'
+import { Button, Modal } from 'antdv-next'
 import AppUpdateStatus from '@/components/AppUpdateStatus.vue'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import { useReleaseNotes } from '@/composables/useReleaseNotes'
@@ -27,28 +25,12 @@ import { feedback } from '@/lib/feedback'
 import { useMainWindowUiStore, type FloatingActionRegistration } from '@/stores/mainWindowUi'
 
 const props = defineProps<{ embedded?: boolean }>()
-const { t, tm } = useI18n()
+const { t } = useI18n()
 const ui = useMainWindowUiStore()
 const updater = useAppUpdater()
 const releaseNotes = useReleaseNotes()
 const aboutBody = ref<HTMLElement | null>(null)
 let backToTop: FloatingActionRegistration | undefined
-
-/**
- * @description: 关于页联系方式配置项
- * @description 文案来自 i18n 数组，组件只按 type 选择图标，避免每新增一种联系方式都改模板结构
- */
-interface AboutContact {
-  type: string
-  label: string
-  account: string
-}
-
-/** 联系方式类型到图标组件的注册表；新增品牌图标时只扩展这里，不新增重复 DOM。 */
-const contactIconMap: Record<string, Component> = {
-  qq: QqOutlined,
-  discord: DiscordFilled,
-}
 
 /** 对话框打开状态 @return {boolean} */
 const isOpen = ref(false)
@@ -65,24 +47,6 @@ const version = ref('')
 /** 事件监听取消函数 */
 let unlisten: (() => void) | undefined
 
-/** 当前语言下的联系方式列表，直接由 i18n 的 about.contacts 数组驱动。 */
-const contacts = computed<AboutContact[]>(() => {
-  const rawContacts = tm('about.contacts')
-  if (!Array.isArray(rawContacts)) return []
-
-  return rawContacts.filter(
-    (contact): contact is AboutContact =>
-      typeof contact === 'object' &&
-      contact !== null &&
-      'type' in contact &&
-      'label' in contact &&
-      'account' in contact &&
-      typeof contact.type === 'string' &&
-      typeof contact.label === 'string' &&
-      typeof contact.account === 'string'
-  )
-})
-
 /**
  * @description: 显示关于对话框
  * 首次打开时获取应用版本号
@@ -92,14 +56,6 @@ async function show() {
     version.value = await getVersion()
   }
   isOpen.value = true
-}
-
-/**
- * @description: 打开外部链接
- * 跳转到应用官网
- */
-async function openLink() {
-  await invoke('open_url', { url: 'https://ztachi.com/tools/infinity-nikki-player' })
 }
 
 /** @return 打开完整日志；读取故障通过全局通知反馈，关于弹窗保持可操作。 */
@@ -127,81 +83,36 @@ onUnmounted(() => {
 <template>
   <component
     :is="embedded ? 'section' : Modal"
-    v-bind="embedded ? { class: 'embedded-about' } : { open: isOpen, 'onUpdate:open': (value: boolean) => isOpen = value, footer: null, width: 'min(440px, calc(100vw - 32px))', centered: true, rootClass: 'about-modal-root', styles: { body: { padding: 0 }, container: { padding: 0 } } }"
+    v-bind="embedded ? { class: 'embedded-about' } : { open: isOpen, 'onUpdate:open': (value: boolean) => isOpen = value, footer: null, width: 'min(440px, calc(100vw - 32px))', centered: true, rootClass: 'about-modal-root' }"
   >
-    <!-- 自定义样式对话框内容 -->
     <div data-text-selectable class="about-card">
-      <!-- 头部区域：图标、名称、版本 -->
       <div class="about-header">
-        <div v-if="!embedded" class="about-icon">
-          <img :src="appLogo" class="about-icon-img" alt="app icon" />
+        <div class="about-icon">
+          <img :src="appLogo" class="about-icon-img" :alt="t('app.title')" />
         </div>
         <h2 v-if="!embedded" class="about-app-name">
           {{ t('app.title') }}
         </h2>
-        <div class="about-version-row">
-          <p v-if="embedded" class="about-current-version">
-            {{ t('about.currentVersion') }}<span class="ml-2 tabular-nums">{{ version }}</span>
-          </p>
-          <AppUpdateStatus :version="version" :presentation="embedded ? 'action' : 'version'" />
-          <Button
-            :type="embedded ? 'default' : 'link'"
-            size="small"
-            class="about-release-notes"
-            @click="showReleaseNotes"
-          >
-            {{ t('releaseNotes.title') }}
-          </Button>
-        </div>
+        <p class="about-current-version">
+          {{ t('about.currentVersion') }}<span class="ml-2 tabular-nums">v{{ version }}</span>
+        </p>
       </div>
-
-      <!-- 分隔线 -->
-      <div v-if="!embedded" class="about-divider" />
-
       <div
         ref="aboutBody"
-        class="about-body min-h-0 w-full overflow-y-auto text-center"
+        class="about-body"
         @scroll="backToTop?.setVisible((aboutBody?.scrollTop ?? 0) > 200)"
       >
-        <!-- 描述文本 -->
-        <p class="about-description">
-          {{ t('about.description') }}
-        </p>
-
-        <div class="about-contact">
-          <span class="about-contact-title">{{ t('about.contact') }}</span>
-          <div class="about-contact-list">
-            <div v-for="contact in contacts" :key="contact.type" class="about-contact-row">
-              <span class="about-contact-platform">
-                <component
-                  :is="contactIconMap[contact.type]"
-                  v-if="contactIconMap[contact.type]"
-                  class="about-contact-icon"
-                />
-                {{ contact.label }}
-              </span>
-              <TypographyParagraph
-                class="about-contact-account"
-                :copyable="{ text: contact.account }"
-                underline
-              >
-                {{ contact.account }}
-              </TypographyParagraph>
-            </div>
-          </div>
-        </div>
-
-        <!-- 次要操作并列，版本区只保留更新入口。 -->
         <div class="about-actions">
-          <Button type="link" @click="openLink">
+          <AppUpdateStatus :version="version" presentation="action" />
+          <Button size="small" class="about-release-notes" @click="showReleaseNotes">
             <template #icon>
-              <ExternalLink class="size-3.5" :stroke-width="2" />
+              <ScrollText :size="14" :stroke-width="2" aria-hidden="true" />
             </template>
-            {{ t(embedded ? 'about.officialSite' : 'about.learnMore') }}
+            {{ t('releaseNotes.title') }}
           </Button>
-          <Button type="link" @click="updater.exportDiagnostics">
+          <Button size="small" @click="updater.exportDiagnostics">
             <template #icon>
-              <FileDown class="size-3.5" :stroke-width="2" />
+              <FileDown :size="14" :stroke-width="2" aria-hidden="true" />
             </template>
             {{ t('updater.exportDiagnostics') }}
           </Button>
@@ -212,157 +123,44 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.embedded-about .about-card { max-height: none; padding: 0; align-items: stretch; }
-.embedded-about .about-header { align-items: flex-start; margin-bottom: 20px; }
-.embedded-about .about-version-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.about-current-version {
-  width: 100%;
-  margin: 0 0 8px;
-  color: var(--color-muted-dark);
-}
-.embedded-about .about-release-notes { margin-left: 0; padding-inline: 7px; }
-.embedded-about .about-body { overflow: visible; text-align: left; }
-.embedded-about .about-description { text-align: left; margin-bottom: 20px; }
-.embedded-about .about-contact { background: none; padding: 0; margin-bottom: 16px; font-size: 13px; }
-.embedded-about .about-contact-title { text-align: left; }
-.embedded-about .about-actions { justify-content: flex-start; gap: 8px 16px; }
-.embedded-about .about-actions :deep(button) { padding-inline: 0; }
 .about-card {
-  max-height: calc(100dvh - 64px);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
+  @apply flex flex-col gap-4;
 }
-
 .about-header {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  width: 100%;
+  @apply flex flex-col items-center gap-3;
 }
-
 .about-icon {
   width: 72px;
   height: 72px;
+  flex-shrink: 0;
   border-radius: 18px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(247, 192, 193, 0.35);
 }
-
 .about-icon-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
 }
-
 .about-app-name {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--color-foreground);
+  @apply m-0 text-base font-semibold;
+}
+.about-current-version {
   margin: 0;
-  letter-spacing: 0.01em;
-  text-align: center;
+  color: var(--color-muted-dark);
+  font-size: 13px;
 }
-
 .about-actions {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  @apply flex flex-wrap items-center justify-center gap-2;
 }
-
-.about-version-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  width: 100%;
+.embedded-about .about-header {
+  align-items: flex-start;
 }
-
-.about-version-row :deep(.version-update-trigger) {
-  grid-column: 2;
+.embedded-about .about-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
 }
-
-.about-release-notes {
-  grid-column: 3;
-  justify-self: start;
-  margin-left: 4px;
-  padding-inline: 4px;
-  font-size: 12px;
-}
-
-.about-divider {
-  flex-shrink: 0;
-  width: 100%;
-  height: 1px;
-  background: var(--border-primary-15);
-  margin-bottom: 18px;
-}
-
-.about-description {
-  font-size: 13.5px;
-  color: var(--color-foreground);
-  line-height: 1.65;
-  text-align: center;
-  margin: 0 0 14px;
-  width: 100%;
-}
-
-.about-contact {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 18px;
-  border-radius: 10px;
-  background: var(--bg-primary-10);
-  color: var(--color-foreground);
-  font-size: 12px;
-}
-
-.about-contact-title {
-  font-weight: 600;
-  color: var(--color-foreground);
-  text-align: center;
-}
-
-.about-contact-list {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.about-contact-row {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.about-contact-platform {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.about-contact-icon {
-  font-size: 17px;
-  color: var(--color-primary);
-}
-
-:deep(.about-contact-account.ant-typography) {
-  margin-bottom: 0;
-  min-width: 0;
-  color: var(--color-foreground);
-  font-weight: 600;
+.embedded-about .about-actions {
+  justify-content: flex-start;
 }
 </style>

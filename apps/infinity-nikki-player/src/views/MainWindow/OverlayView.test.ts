@@ -28,6 +28,7 @@ vi.mock('@/components/MusicPlayerCore/index.vue', () => ({ default: () => null }
 vi.mock('@/components/KeyTemplateSelect.vue', () => ({ default: () => null }))
 vi.mock('@/components/MarqueeText.vue', () => ({ default: () => null }))
 vi.mock('./components/OverlayFpsControl.vue', () => ({ default: () => null }))
+vi.mock('./components/OverlayPlaylistPanel.vue', () => ({ default: () => null }))
 
 const renderer = createRenderer<object, object>({
   createElement: () => ({}),

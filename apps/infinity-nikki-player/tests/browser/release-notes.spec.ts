@@ -15,19 +15,19 @@ test('升级首次进入只显示本次区间，刷新后不重复，关于入�
   await page.evaluate(() => window.updaterFixture.showAbout())
   const about = page.locator('.about-modal-root')
   await expect(about.getByRole('button', { name: '更新日志', exact: true })).toHaveClass(
-    /ant-btn-link/
+    /ant-btn-default/
   )
-  const versionAlignment = await about.locator('.about-version-row').evaluate((element) => {
-    const row = element.getBoundingClientRect()
-    const version = element.querySelector('.version-update-trigger')!.getBoundingClientRect()
-    const link = element.querySelector('.about-release-notes')!
-    return {
-      offset: Math.abs(version.x + version.width / 2 - row.x - row.width / 2),
-      fontSize: getComputedStyle(link).fontSize,
-    }
-  })
-  expect(versionAlignment.offset).toBeLessThanOrEqual(1)
-  expect(versionAlignment.fontSize).toBe('12px')
+  const actions = about.locator('.about-actions button')
+  await expect(actions).toHaveCount(3)
+  const sizes = await actions.evaluateAll((buttons) =>
+    buttons.map((button) => ({
+      height: button.getBoundingClientRect().height,
+      fontSize: getComputedStyle(button).fontSize,
+    }))
+  )
+  expect(
+    sizes.every((size) => size.height === sizes[0].height && size.fontSize === sizes[0].fontSize)
+  ).toBe(true)
   await about.getByRole('button', { name: '更新日志', exact: true }).click()
   const history = page.getByRole('dialog', { name: '更新日志', exact: true })
   await expect(history).toBeVisible()
