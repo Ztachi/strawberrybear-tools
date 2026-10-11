@@ -28,6 +28,7 @@ import { useOnlineMidiLibraryStore } from '@/stores/onlineMidiLibrary'
 import { usePlayerStore, type OnlineMidiMetadata } from '@/stores/player'
 import type { FloatingActionRegistration } from '@/stores/mainWindowUi'
 import type { MidiInfo } from '@/types'
+import PlaylistSongTitle from '@/components/PlaylistSongTitle/index.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -452,7 +453,13 @@ onBeforeUnmount(() => {
               <div class="song-card-head">
                 <div class="song-title-group">
                   <Tooltip :title="displaySongTitle(song)">
-                    <h3>{{ displaySongTitle(song) }}</h3>
+                    <h3>
+                      <PlaylistSongTitle
+                        :text="displaySongTitle(song)"
+                        :online-song-id="song.id"
+                        :online-sha256="song.sha256"
+                      />
+                    </h3>
                   </Tooltip>
                   <Tooltip :title="displaySongAuthor(song)">
                     <p>{{ displaySongAuthor(song) }}</p>

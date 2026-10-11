@@ -46,4 +46,14 @@ Antdv Next `Select` 必须使用 `options` 或合法的 `SelectOption` 结构，
 
 主窗口与音轨独立窗口使用 `components/WindowTitleBar`，通过 title、center、actions slots 组合内容；平台交通灯留白、Windows 窗口按钮和拖动区域只维护一份。主窗口专属导航与应用操作留在 `views/MainWindow/components/AppHeader`。
 
-歌曲名统一使用 `PlayerSongTitle`（Tooltip + MarqueeText）；播放模式与预览传输按钮统一使用无 store 依赖的 `PreviewPlaybackControls`。主窗口通过 `usePreviewPlaybackControls` 连接既有播放 actions，独立窗口经会话协议转发动作，不能为了复用 UI 再初始化播放器。
+播放器和窗口标题使用 `PlayerSongTitle`（Tooltip + MarqueeText）；播放模式与预览传输按钮统一使用无 store 依赖的 `PreviewPlaybackControls`。主窗口通过 `usePreviewPlaybackControls` 连接既有播放 actions，独立窗口经会话协议转发动作，不能为了复用 UI 再初始化播放器。
+
+## 播放列表曲名滚动
+
+`MarqueeText` 是通用文字组件，`enabled` 默认 `true`，不读取播放器 Store；只有文字溢出时左右往返滚动。关闭开关即停止动画并回到起点，用单行省略号显示；重新启用时测量当前宽度，短文字保持静态。
+
+歌曲列表统一使用 `PlaylistSongTitle`，只传名称与歌曲身份，当前歌曲判断封装在组件内，响应全局 `currentMidi`。本地歌曲按文件名匹配，在线歌曲按在线 ID 或文件哈希匹配，兼容临时试听与导入后的歌曲。选中尚未播放、暂停及停止都保留当前歌曲的滚动，切歌后上一首恢复静态；批量勾选不代表播放器当前歌曲。所有列表保留完整名称 Tooltip。
+
+该组件覆盖全部歌曲、自建歌单、在线曲库、悬浮列表，以及主窗口和独立窗口播放队列。独立窗口通过 `provideCurrentSong` 注入主窗口同步的响应式当前歌曲身份，复用同一判断，不初始化第二个播放器 Store。接入不改变歌曲行宽度、间距或时长位置。
+
+浏览器回归见 `tests/browser/playlist-marquee.spec.ts`，检查实际动画位移、选中未播放、暂停／停止、切歌恢复、短名称及窄悬浮窗口布局。

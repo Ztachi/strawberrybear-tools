@@ -534,6 +534,12 @@ declare global {
       seedDraft: (key: string, name: string, filename?: string) => void
       seedEntryDraft: (entry: MidiEditorEntry, name: string) => Promise<string>
       setSongs: (filenames: string[]) => void
+      setCurrentSong: (
+        filename: string | null,
+        status: 'playing' | 'paused' | 'stopped',
+        online?: { id?: string; sha256?: string }
+      ) => void
+      setOnlineTitles: (titles: string[]) => void
       setSongLists: (lists: { id: string; name: string; filenames: string[] }[]) => void
       openedUrls: () => string[]
       previewState: () => {
@@ -589,6 +595,22 @@ window.midiEditorFixture = {
     }))
     for (const song of customSongs) parsedSongs.set(song.file_path, song)
     usePlayerStore(pinia).midiLibrary = customSongs
+  },
+  // 仅提供播放状态输入，曲名组件、响应式 Store 与页面使用生产实现。
+  setCurrentSong(filename, status, online) {
+    const player = usePlayerStore(pinia)
+    const song = player.midiLibrary.find((item) => item.filename === filename)
+    player.currentMidi = song
+      ? { ...song, online_song_id: online?.id, online_sha256: online?.sha256 }
+      : null
+    player.isPreviewPlaying = status === 'playing'
+    player.isPreviewPaused = status === 'paused'
+  },
+  setOnlineTitles(titles) {
+    useOnlineMidiLibraryStore(pinia).setSongs(
+      titles.map((title, index) => ({ ...onlineSongFixtures[index]!, title })),
+      Date.now()
+    )
   },
   setSongLists(lists) {
     useSongListStore(pinia).songLists = lists.map((list) => ({

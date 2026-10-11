@@ -29,6 +29,7 @@ import { useListActionMenu } from '@/composables/useListActionMenu'
 import { buildCollectionContext, formatDuration, sortSongsByAddedTime } from '../utils'
 import SongActionMenu from './SongActionMenu.vue'
 import SongPlaybackCover from './SongPlaybackCover.vue'
+import PlaylistSongTitle from '@/components/PlaylistSongTitle/index.vue'
 
 const props = defineProps<{
   type: 'all' | 'songList'
@@ -497,9 +498,11 @@ onUnmounted(deactivatePageInteractions)
 
               <div class="song-main">
                 <Tooltip :title="getMidiDisplayName(filteredSongs[virtualRow.index]!)">
-                  <span class="song-title">
-                    {{ getMidiDisplayName(filteredSongs[virtualRow.index]!) }}
-                  </span>
+                  <PlaylistSongTitle
+                    class="song-title"
+                    :text="getMidiDisplayName(filteredSongs[virtualRow.index]!)"
+                    :filename="filteredSongs[virtualRow.index]!.filename"
+                  />
                 </Tooltip>
                 <span class="song-meta">
                   {{ filteredSongs[virtualRow.index]!.track_count }}

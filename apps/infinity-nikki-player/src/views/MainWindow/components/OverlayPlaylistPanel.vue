@@ -9,6 +9,7 @@ import { useSongListStore } from '@/stores/songLists'
 import type { MidiInfo } from '@/types'
 import type { MidiPreviewQueueContext } from '@/features/player/midiPreview'
 import { getMidiDisplayName } from '@/lib/midiDisplay'
+import PlaylistSongTitle from '@/components/PlaylistSongTitle/index.vue'
 import { buildCollectionContext, formatDuration, getSongListSongs } from '../FilesTab/utils'
 
 const props = defineProps<{ expanded: boolean }>()
@@ -122,7 +123,11 @@ async function locateCurrent(): Promise<void> {
         @click="play(song)"
       >
         <Tooltip :title="getMidiDisplayName(song)">
-          <span class="playlist-name">{{ getMidiDisplayName(song) }}</span>
+          <PlaylistSongTitle
+            class="playlist-name"
+            :text="getMidiDisplayName(song)"
+            :filename="song.filename"
+          />
         </Tooltip>
         <span class="playlist-duration">{{ formatDuration(song.duration_ms) }}</span>
       </button>
