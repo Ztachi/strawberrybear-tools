@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * @description: MIDI 编辑器紧凑工具栏：速度/拍号/吸附/工具/撤销重做/试听/显示开关
+ * @description: MIDI 编辑器紧凑工具栏：速度/拍号/工具/撤销重做/试听/显示开关
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,7 +21,6 @@ import {
 } from 'lucide-vue-next'
 import { MAX_BPM, MIN_BPM, tempoToBpm } from '@strawberrybear/midi-editor'
 import type { EditorAction, EditorSessionState } from '@strawberrybear/midi-editor'
-import EditorSnapSettings from '@/components/EditorSnapSettings.vue'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import EditorNumberInput from './EditorNumberInput.vue'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
@@ -277,8 +276,6 @@ function handleDimUnplayable(value: boolean): void {
           </template>
         </Button>
       </Popover>
-
-      <EditorSnapSettings :snap="state.snap" @dispatch="emit('dispatch', $event)" />
 
       <Popover
         v-model:open="settingsOpen"

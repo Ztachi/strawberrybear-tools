@@ -6,7 +6,8 @@ import { Button, Checkbox, Popover, Select, Switch, Tooltip } from 'antdv-next'
 import { CircleAlert, Magnet } from 'lucide-vue-next'
 import { SNAP_RESOLUTIONS, type EditorAction, type SnapResolution } from '@strawberrybear/midi-editor'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
-const props = defineProps<{ snap: SnapResolution; disabled?: boolean }>()
+import { preferenceValues, useUiPreferences } from '@/composables/useUiPreferences'
+const props = defineProps<{ snap: SnapResolution; disabled?: boolean; editorKind?: 'midi-editor' | 'keyboard-recording' }>()
 const emit = defineEmits<{ dispatch: [action: EditorAction] }>()
 const { t } = useI18n()
 const snapSettingsOpen = ref(false)
@@ -18,7 +19,11 @@ const beatSnapResolutions = SNAP_RESOLUTIONS.filter(
   (value): value is BeatSnapResolution => value !== 'off' && value !== 'bar'
 )
 const snapOptions = beatSnapResolutions.map((value) => ({ value, title: '', label: value }))
-const lastBeatSnap = ref<BeatSnapResolution>(DEFAULT_BEAT_SNAP)
+const preferences = useUiPreferences(`infinity-nikki-player:snap-grid:v1:${props.editorKind ?? 'midi-editor'}`, value => {
+  const saved = preferenceValues(value).lastBeatSnap as BeatSnapResolution
+  return { lastBeatSnap: beatSnapResolutions.includes(saved) ? saved : DEFAULT_BEAT_SNAP }
+})
+const lastBeatSnap = computed({ get: () => preferences.value.lastBeatSnap, set: (value: BeatSnapResolution) => { if (preferences.value.lastBeatSnap !== value) preferences.value = { lastBeatSnap: value } } })
 const snapEnabled = computed(() => props.snap !== 'off')
 const snapToBar = computed(() => props.snap === 'bar')
 const beatSnap = computed(() => {

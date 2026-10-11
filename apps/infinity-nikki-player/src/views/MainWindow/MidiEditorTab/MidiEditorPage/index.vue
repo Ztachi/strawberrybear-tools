@@ -69,6 +69,7 @@ import { applyRecorderResult } from '@/features/midi-recording/coordinator'
 import type { TrackRecorderResult } from '@/features/midi-recording/types'
 import EditorChoiceModal from '@/components/EditorChoiceModal.vue'
 import { useEditorChoice } from '@/composables/useEditorChoice'
+import { useMidiEditorPreferences } from '@/features/midi-editor/preferences'
 import EditorProjectActions from './components/EditorProjectActions.vue'
 import EditorToolbar from './components/EditorToolbar.vue'
 import MidiEditorWorkspace from './components/MidiEditorWorkspace.vue'
@@ -109,8 +110,11 @@ const persisted = ref(false)
 /** 已加载草稿但尚未保存时，会话 dirty 为 false，需要单独标记。 */
 const draftLoaded = ref(false)
 const hasChanges = computed(() => !!state.value && (state.value.dirty || draftLoaded.value))
-const showVelocity = ref(false)
-const dimUnplayable = ref(false)
+const { preferences: editorPreferences, showVelocity, dimUnplayable } = useMidiEditorPreferences()
+watch(() => state.value && [state.value.snap, state.value.tool] as const, value => {
+  if (value && (editorPreferences.value.snap !== value[0] || editorPreferences.value.tool !== value[1]))
+    editorPreferences.value = { ...editorPreferences.value, snap: value[0], tool: value[1] }
+}, { flush: 'sync' })
 const currentDraftKey = ref('create')
 const currentEntry = shallowRef<MidiEditorEntry>({ kind: 'create' })
 const workspace = ref<InstanceType<typeof MidiEditorWorkspace> | null>(null)
@@ -248,7 +252,7 @@ async function loadFromRoute(): Promise<void> {
   draftLoaded.value = false
   playback.stop()
   disposeEditor()
-  // 还原快照只属于原会话；载入另一个入口时不能沿用上一首歌的缩放、滚动和选轨。
+  // 迁移快照只属于原会话；新内容清理滚动和选轨，通用配置由公共偏好入口提供。
   latestViewport.value = undefined
   workspaceRestore.value = undefined
   try {
@@ -278,7 +282,7 @@ async function loadFromRoute(): Promise<void> {
     }
     if (generation !== loadGeneration) return
     persisted.value = loadingEditRoute
-    const handle = useMidiEditorSession(project, { trackDefaultName, trackCopyName })
+    const handle = useMidiEditorSession(project, { trackDefaultName, trackCopyName, snap: editorPreferences.value.snap, tool: editorPreferences.value.tool })
     editor.value = handle
     // 草稿选择结束、会话就绪后再显示编辑器，让后续打开空轨详情能取得已挂载的工作区。
     loading.value = false

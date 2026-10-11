@@ -25,6 +25,8 @@ import { mappingKeyToCode, normalizeMappingKeyFromEvent } from '@/lib/templateKe
 import { getContentDrawerRootStyle, getMainWindowPopupContainer, midiEditorPianoRollTheme } from '@/theme/infinityNikkiTheme'
 import EditorChoiceModal from '@/components/EditorChoiceModal.vue'
 import { useEditorChoice } from '@/composables/useEditorChoice'
+import { usePianoRollZoomPersistence } from '@/composables/usePianoRollZoomPersistence'
+import { useRecordingPreferences } from '@/features/midi-recording/preferences'
 import { recordingPreviewDocument } from '@/features/midi-recording/preview'
 import NoteContextMenu, { type NoteContextMenuTarget } from '@/components/NoteContextMenu.vue'
 import RecorderSettings from './components/RecorderSettings.vue'
@@ -36,7 +38,19 @@ const props = defineProps<{ input: TrackRecorderInput; services: TrackRecorderSe
 const headerPadding = props.nativeChrome && !/Windows/i.test(navigator.userAgent) ? '10px 12px 10px var(--window-title-safe-inset, 90px)' : '10px 12px'
 const emit = defineEmits<{ closed: [] }>()
 const { t } = useI18n()
+const recordingPreferences = useRecordingPreferences()
 const recorder = new TrackRecorder(props.input, props.services.audio)
+recorder.countIn = recordingPreferences.value.countIn
+recorder.metronome = recordingPreferences.value.metronome
+recorder.accompaniment = recordingPreferences.value.accompaniment
+recorder.editor.dispatch({ type: 'set-snap', resolution: recordingPreferences.value.snap })
+// 只记住录制方式，重录范围从这次传入的选段或当前小节重新生成。
+const initialBars = recordingRangeInBars(props.input.project.document, recorder.range ?? { startTick: recorder.cursorTick, endTick: recorder.cursorTick + 1 })
+recorder.configureMode(recordingPreferences.value.mode, recordingPreferences.value.mode === 'replace' ? {
+  startTick: Math.max(props.input.project.document.tracks.find(track => track.id === props.input.trackId)?.startTick ?? 0, recordingBarToTick(props.input.project.document, initialBars.start)),
+  endTick: recordingBarToTick(props.input.project.document, initialBars.end),
+} : undefined)
+const { editorTimeZoom, editorPitchZoom, persistEditor } = usePianoRollZoomPersistence()
 const version = ref(0)
 const localState = shallowRef(recorder.preview())
 const keyboard = ref<HTMLElement | null>(null)
@@ -66,6 +80,14 @@ let paintAt = 0
 let draftTimer: ReturnType<typeof setInterval> | undefined
 const draftWriter = createMidiDraftWriter(props.services.saveDraft)
 function refresh(): void { version.value++; localState.value = recorder.preview() }
+function rememberRecordingPreferences(): void {
+  const next = { ...recordingPreferences.value, snap: recorder.editor.getState().snap, mode: recorder.mode,
+    countIn: recorder.countIn, metronome: recorder.metronome, accompaniment: recorder.accompaniment }
+  if (JSON.stringify(next) !== JSON.stringify(recordingPreferences.value)) recordingPreferences.value = next
+}
+function rememberKeyboardHeight(sizes: number[]): void {
+  if (sizes[0] !== undefined) recordingPreferences.value = { ...recordingPreferences.value, keyboardHeight: sizes[0] }
+}
 const unsubscribe = recorder.subscribe(refresh)
 const ui = computed(() => { void version.value; return { busy: recorder.busy, status: recorder.status, dirty: recorder.dirty } })
 const currentTrack = computed(() => localState.value.document.tracks.find(track => track.id === props.input.trackId)!)
@@ -118,10 +140,11 @@ function changeSetting(setting: { key: 'countIn' | 'metronome' | 'accompaniment'
   if (ui.value.busy || locked.value) return
   stopPreview()
   recorder[setting.key] = setting.value
+  rememberRecordingPreferences()
   refresh()
   syncReplay()
 }
-function dispatch(action: EditorAction): void { if (editingLocked.value) return; stopPreview(); recorder.dispatch(action); syncReplay(); refresh() }
+function dispatch(action: EditorAction): void { if (editingLocked.value) return; stopPreview(); recorder.dispatch(action); rememberRecordingPreferences(); syncReplay(); refresh() }
 function showError(cause: unknown): void { error.value = `${t('recording.operationFailed')} ${String(cause)}` }
 async function begin(resume = false): Promise<void> {
   if (locked.value || (!resume && !canStart.value)) return
@@ -162,6 +185,7 @@ function changeMode(mode: TrackRecorder['mode']): void {
     endTick: recordingBarToTick(doc, bars.end),
   } : undefined
   recorder.configureMode(mode, range)
+  rememberRecordingPreferences()
   syncReplay(); replay.stop()
   refresh()
 }
@@ -173,7 +197,7 @@ function changeRange(range: { start: number; end: number }): void {
   const startTick = Math.max(currentTrack.value.startTick ?? 0, recordingBarToTick(doc, range.start))
   const endTick = recordingBarToTick(doc, range.end)
   if (endTick <= startTick) return
-  recorder.configureMode('replace', { startTick, endTick }); syncReplay(); replay.stop(); refresh()
+  recorder.configureMode('replace', { startTick, endTick }); rememberRecordingPreferences(); syncReplay(); replay.stop(); refresh()
 }
 function toggleRecording(): void {
   if (locked.value) return
@@ -418,8 +442,16 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
         >
           <div class="flex h-full min-h-[560px] flex-col gap-2 p-3">
             <Alert v-if="error" type="error" show-icon :message="error" class="shrink-0" />
-            <Splitter orientation="vertical" class="min-h-[536px] flex-1">
-              <SplitterPanel :default-size="180" :min="120" max="60%">
+            <Splitter
+              orientation="vertical"
+              class="min-h-[536px] flex-1"
+              :on-resize-end="rememberKeyboardHeight"
+            >
+              <SplitterPanel
+                :default-size="recordingPreferences.keyboardHeight"
+                :min="120"
+                max="60%"
+              >
                 <div
                   ref="keyboard"
                   tabindex="0"
@@ -448,6 +480,8 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
                   hide-reference-toggle
                   :title="t('recording.previewTitle')"
                   :document="documentView"
+                  :time-zoom="editorTimeZoom"
+                  :pitch-zoom="editorPitchZoom"
                   :transport="transport"
                   :selected-track-id="input.trackId"
                   :show-other-tracks="false"
@@ -457,9 +491,11 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
                   @seek="seek"
                   @seek-preview="previewSeek"
                   @edit-intent="handleIntent"
+                  @viewport-change="persistEditor"
                 >
                   <template #tools>
                     <EditorSnapSettings
+                      editor-kind="keyboard-recording"
                       :snap="localState.snap"
                       :disabled="editingLocked"
                       @dispatch="dispatch"

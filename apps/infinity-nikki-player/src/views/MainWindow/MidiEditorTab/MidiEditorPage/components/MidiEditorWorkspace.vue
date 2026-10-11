@@ -18,6 +18,7 @@ import {
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import { midiEditorPianoRollTheme } from '@/theme/infinityNikkiTheme'
 import NoteContextMenu, { type NoteContextMenuTarget } from '@/components/NoteContextMenu.vue'
+import EditorSnapSettings from '@/components/EditorSnapSettings.vue'
 import NoteInspector from './NoteInspector.vue'
 import TrackActionsMenu from './TrackActionsMenu.vue'
 import MidiEditorTour from './MidiEditorTour.vue'
@@ -157,6 +158,9 @@ defineExpose({
       @edit-intent="handleIntent"
       @migrate="emit('migrate')"
     >
+      <template #editor-tools>
+        <EditorSnapSettings :snap="state.snap" @dispatch="emit('dispatch', $event)" />
+      </template>
       <template #corner-actions>
         <Tooltip :title="t('midiEditor.addTrack')">
           <Button

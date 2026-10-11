@@ -241,7 +241,9 @@ async function openSettings(page: Page): Promise<void> {
 
 async function openSnapSettings(page: Page): Promise<void> {
   const trigger = page.getByRole('button', { name: '吸附', exact: true })
-  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
+  // 布局刚缩放时鼠标坐标会随工具栏移动；使用可访问的键盘入口明确打开浮层。
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.press('Enter')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
   await expect(page.getByRole('switch', { name: '启用吸附', exact: true })).toBeVisible()
 }
 
@@ -948,6 +950,12 @@ test('首次引导介绍音轨编辑与排序，完成后再次进入不重复�
 })
 
 test('吸附设置将总开关、小节模式和节拍选项分开表达', async ({ page }) => {
+  await expect(
+    page.locator('.editor-toolbar').getByRole('button', { name: '吸附', exact: true })
+  ).toHaveCount(0)
+  await expect(
+    page.locator('.detail-piano-editor').getByRole('button', { name: '吸附', exact: true })
+  ).toBeVisible()
   await openSnapSettings(page)
   const enabled = page.getByRole('switch', { name: '启用吸附', exact: true })
   const snapToBar = page.getByRole('checkbox', { name: '按小节吸附', exact: true })
@@ -980,6 +988,108 @@ test('吸附设置将总开关、小节模式和节拍选项分开表达', async
   await expect(enabled).toBeChecked()
   await expect(page.getByRole('checkbox', { name: '按小节吸附', exact: true })).not.toBeChecked()
   await expect(page.locator('.toolbar-snap:visible')).not.toHaveClass(/ant-select-disabled/)
+})
+
+for (const detached of [false, true]) {
+  test(`编辑偏好重开保留且吸附位于卷帘：${detached ? '独立窗口' : '主窗口'}`, async ({ page }) => {
+    let target = page
+    if (detached) {
+      const opening = page.waitForEvent('popup')
+      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+      target = await opening
+    }
+    await expect(
+      target.locator('.editor-toolbar').getByRole('button', { name: '吸附', exact: true })
+    ).toHaveCount(0)
+    const panel = target.locator('.detail-piano-editor')
+    await panel.getByRole('slider', { name: '音高缩放', exact: true }).focus()
+    await target.keyboard.press('End')
+    await target.getByRole('button', { name: '显示其他音轨', exact: true }).click()
+    const separator = target.getByRole('separator', { name: /^调整钢琴卷帘高度/ })
+    await separator.focus()
+    await target.keyboard.press('Home')
+    await openSnapSettings(target)
+    await target.getByRole('checkbox', { name: '按小节吸附', exact: true }).check()
+    // 独立窗口的偏好由主窗口处理消息后保存；等待权威状态再模拟刷新。
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(
+              localStorage.getItem('infinity-nikki-player:midi-editor-preferences:v1') ?? '{}'
+            ).snap
+        )
+      )
+      .toBe('bar')
+    await target.mouse.click(5, 50)
+    await expect(target.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+    expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
+    await target.reload()
+    await expect(target.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+      'aria-valuenow',
+      '36'
+    )
+    await expect(target.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
+    await expect(separator).toHaveAttribute('aria-valuenow', '25')
+    await openSnapSettings(target)
+    await expect(target.getByRole('checkbox', { name: '按小节吸附', exact: true })).toBeChecked()
+    await target.getByRole('checkbox', { name: '按小节吸附', exact: true }).uncheck()
+    await target.locator('.toolbar-snap:visible').click()
+    await target
+      .locator('.ant-select-dropdown:visible .ant-select-item-option')
+      .filter({ hasText: '1/8' })
+      .click()
+    await target.getByRole('switch', { name: '启用吸附', exact: true }).click()
+    await target.mouse.click(5, 50)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(
+              localStorage.getItem('infinity-nikki-player:midi-editor-preferences:v1') ?? '{}'
+            ).snap
+        )
+      )
+      .toBe('off')
+    await target.reload()
+    await openSnapSettings(target)
+    await expect(target.getByRole('switch', { name: '启用吸附', exact: true })).not.toBeChecked()
+    await target.getByRole('switch', { name: '启用吸附', exact: true }).click()
+    await expect(target.locator('.toolbar-snap:visible')).toContainText('1/8')
+  })
+}
+
+test('卷帘配置换项目和音轨继续沿用，录制与主编辑器共用缩放且不产生音乐改动', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1&colors=1')
+  await page.locator('.detail-piano-roll .pr-track-select').first().dblclick()
+  const pitch = page.getByRole('slider', { name: '音高缩放', exact: true })
+  await pitch.press('End')
+  await page.getByRole('button', { name: '显示其他音轨', exact: true }).click()
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/project-A'))
+  await page.locator('.detail-piano-roll .pr-track-select').first().dblclick()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '36')
+  await expect(page.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  const recording = page.getByRole('dialog').first()
+  const recordedPitch = recording.getByRole('slider', { name: '音高缩放', exact: true })
+  await expect(recordedPitch).toHaveAttribute('aria-valuenow', '36')
+  await recordedPitch.press('ArrowLeft')
+  await recording.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(recording).not.toBeVisible()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '35')
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/project-B'))
+  await page.locator('.detail-piano-roll .pr-track-select').first().dblclick()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '35')
+  await page.locator('.detail-piano-roll .pr-track-select').nth(1).click()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '35')
+  await expect(page.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+  expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
 })
 
 test('映射模板复用虚拟键盘选择器，切换后立即更新不可演奏提示', async ({ page }) => {

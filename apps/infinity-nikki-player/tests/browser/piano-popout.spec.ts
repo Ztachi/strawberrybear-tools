@@ -52,6 +52,16 @@ test('detached editor switches tracks and songs, restores on native close, and r
     .not.toContain(3)
   await page.evaluate(() => window.midiDetailFixture.navigate('second.mid'))
   await expect(popup.locator('.detached-song-title')).toHaveText('第二首验收歌曲')
+  await expect(popup.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+    'aria-valuenow',
+    pitch!
+  )
+  await popup.getByRole('slider', { name: '音高缩放', exact: true }).press('End')
+  await page.evaluate(() => window.midiDetailFixture.navigate('piano-detail-fixture.mid'))
+  await expect(popup.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+    'aria-valuenow',
+    '36'
+  )
   await popup.evaluate(() => window.dispatchEvent(new Event('test-native-close')))
   await expect.poll(() => popup.isClosed()).toBe(true)
   await expect(page.locator('.detail-piano-editor')).toBeVisible()
@@ -155,9 +165,7 @@ test('slider endpoints and low-factor pinches share exact bounds without a left 
       .toBeGreaterThan(10)
     const position = Number(await slider.getAttribute('aria-valuenow'))
     const zoom = await page.evaluate((selector) => {
-      const saved = JSON.parse(
-        localStorage.getItem('infinity-nikki-player:piano-roll-zoom:v1:piano-detail-fixture.mid')!
-      )
+      const saved = JSON.parse(localStorage.getItem('infinity-nikki-player:piano-roll-zoom:v2')!)
       return selector.includes('editor') ? saved.editorTimeZoom : saved.overviewTimeZoom
     }, selector)
     const width = await scroll.evaluate((el) => el.clientWidth)

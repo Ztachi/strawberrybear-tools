@@ -161,7 +161,7 @@ export default {
           zoom: {
             label: 'Independent zoom',
             description:
-              'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Views zoom independently, save per song, and restore when you return. Minimum time zoom fills one screen.',
+              'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Overview and details zoom independently, and settings carry over when you change songs. Minimum time zoom fills one screen.',
           },
           scroll: {
             label: 'Scrolling',

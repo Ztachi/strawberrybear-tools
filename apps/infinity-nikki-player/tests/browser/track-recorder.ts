@@ -252,6 +252,7 @@ const app = createApp(
                 : null,
               h(TrackRecorderLauncher, {
                 state: state.value,
+                draftScope: 'recorder-fixture',
                 templates: [
                   {
                     id: 'test',

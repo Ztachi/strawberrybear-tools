@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { effectScope, nextTick, shallowRef } from 'vue'
+import { effectScope, nextTick } from 'vue'
 import type { PianoRollViewport } from '@strawberrybear/piano-roll/browser'
 import {
   readPianoRollZoomPreferences,
@@ -26,54 +26,51 @@ const viewport = (timeZoom: number, pitchZoom = 16): Readonly<PianoRollViewport>
   follow: true,
 })
 
-describe('piano roll zoom persistence', () => {
-  it('isolates preferences by filename and ignores malformed values', () => {
+describe('shared piano roll zoom persistence', () => {
+  it('uses one global preference and ignores malformed values', () => {
     vi.stubGlobal('window', { localStorage: fakeStorage() })
-    writePianoRollZoomPreferences('song/a.mid', {
+    writePianoRollZoomPreferences({
       overviewTimeZoom: 72,
       editorTimeZoom: 180,
       editorPitchZoom: 24,
     })
-    expect(readPianoRollZoomPreferences('song/a.mid')).toEqual({
+    expect(readPianoRollZoomPreferences()).toEqual({
       overviewTimeZoom: 72,
       editorTimeZoom: 180,
       editorPitchZoom: 24,
     })
-    expect(readPianoRollZoomPreferences('song/b.mid')).toEqual({})
     window.localStorage.setItem(
-      'infinity-nikki-player:piano-roll-zoom:v1:broken',
+      'infinity-nikki-player:piano-roll-zoom:v2',
       JSON.stringify({ overviewTimeZoom: -1, editorPitchZoom: 'bad' })
     )
-    expect(readPianoRollZoomPreferences('broken')).toEqual({})
+    expect(readPianoRollZoomPreferences()).toEqual({})
     vi.unstubAllGlobals()
   })
 
   it('restores each view and persists only user-facing viewport changes', async () => {
     vi.stubGlobal('window', { localStorage: fakeStorage() })
-    writePianoRollZoomPreferences('song.mid', {
+    writePianoRollZoomPreferences({
       overviewTimeZoom: 60,
       editorTimeZoom: 140,
       editorPitchZoom: 20,
     })
-    const filename = shallowRef('song.mid')
     const scope = effectScope()
-    const zoom = scope.run(() => usePianoRollZoomPersistence(filename))!
+    const zoom = scope.run(usePianoRollZoomPersistence)!
     expect(zoom.overviewTimeZoom.value).toBe(60)
     expect(zoom.editorTimeZoom.value).toBe(140)
     expect(zoom.editorPitchZoom.value).toBe(20)
     await nextTick()
     zoom.persistOverview(viewport(88))
     zoom.persistEditor(viewport(200, 28))
-    expect(readPianoRollZoomPreferences('song.mid')).toEqual({
+    expect(readPianoRollZoomPreferences()).toEqual({
       overviewTimeZoom: 88,
       editorTimeZoom: 200,
       editorPitchZoom: 28,
     })
-    filename.value = 'other.mid'
-    await nextTick()
-    expect(zoom.overviewTimeZoom.value).toBeUndefined()
-    expect(zoom.editorTimeZoom.value).toBeUndefined()
-    expect(zoom.editorPitchZoom.value).toBeUndefined()
+    const reopened = scope.run(usePianoRollZoomPersistence)!
+    expect(reopened.overviewTimeZoom.value).toBe(88)
+    expect(reopened.editorTimeZoom.value).toBe(200)
+    expect(reopened.editorPitchZoom.value).toBe(28)
     scope.stop()
     vi.unstubAllGlobals()
   })

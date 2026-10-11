@@ -110,6 +110,37 @@ test('录制卷帘复用详情面板，音高缩放与琴键试听可用', async
     .toBeGreaterThan(0)
 })
 
+test('录制偏好退出和重载后保留，调整偏好不生成草稿', async ({ page }) => {
+  let dialog = await openRecorder(page)
+  const pitch = dialog.getByRole('slider', { name: '音高缩放', exact: true })
+  await pitch.focus()
+  await page.keyboard.press('End')
+  await expect(pitch).toHaveAttribute('aria-valuenow', '36')
+  await dialog.getByRole('button', { name: '吸附', exact: true }).click()
+  await page.getByRole('checkbox', { name: '按小节吸附', exact: true }).check()
+  await closePanel(page)
+  const settings = await openPanel(page, dialog, '录制设置')
+  await settings.getByRole('checkbox', { name: '节拍器', exact: true }).check()
+  await closePanel(page)
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(await page.evaluate(() => window.recorderFixture.draftCount())).toBe(0)
+  await page.reload()
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  dialog = page.getByRole('dialog').first()
+  await expect(dialog.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+    'aria-valuenow',
+    '36'
+  )
+  await dialog.getByRole('button', { name: '吸附', exact: true }).click()
+  await expect(page.getByRole('checkbox', { name: '按小节吸附', exact: true })).toBeChecked()
+  await closePanel(page)
+  const restored = await openPanel(page, dialog, '录制设置')
+  await expect(restored.getByRole('checkbox', { name: '节拍器', exact: true })).toBeChecked()
+  await expect(restored.getByRole('checkbox', { name: '播放伴奏', exact: true })).not.toBeChecked()
+  await expect(dialog.getByRole('button', { name: '应用到音轨', exact: true })).toBeDisabled()
+})
+
 /** 说明正文必须能在当前窗口内阅读，DOM 可见不足以排除原生窗口裁剪。 */
 async function expectTooltipWithinWindow(page: Page): Promise<void> {
   const tooltip = page.locator('.ant-tooltip:visible').filter({ has: page.locator('p strong') })
@@ -893,6 +924,13 @@ test('分割条可扩大卷帘区域，键盘映射行保持完整布局', async
   await expect(dialog.locator('.key-label').filter({ hasText: /^F1$/ })).toHaveCount(0)
   await expect(dialog.locator('.key-label').filter({ hasText: /^1$/ })).toHaveCount(0)
   await expect(dialog.locator('.key-label').filter({ hasText: /^D$/ })).toBeVisible()
+  const keyboardHeight = (await panels.first().boundingBox())!.height
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  await expect
+    .poll(async () => (await panels.first().boundingBox())?.height)
+    .toBeCloseTo(keyboardHeight, 0)
 })
 
 test('功能键和数字键映射显示对应整行，并通过真实键盘录入', async ({ page }) => {
