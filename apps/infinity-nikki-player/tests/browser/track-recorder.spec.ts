@@ -17,7 +17,8 @@ async function chooseMode(
   mode: string,
   keepOpen = false
 ): Promise<Locator> {
-  const popup = await openPanel(page, dialog, '录制方式')
+  const popup = await openPanel(page, dialog, '录制设置')
+  await expect(popup.getByText('录制设置', { exact: true })).toBeVisible()
   await popup.locator('.ant-select[aria-label="录制方式"]').click()
   await page
     .locator('.ant-select-dropdown:visible .ant-select-item-option')
@@ -61,15 +62,113 @@ async function recordKey(page: Page, key: string): Promise<void> {
   await page.keyboard.up(key)
 }
 
+/** 说明正文必须能在当前窗口内阅读，DOM 可见不足以排除原生窗口裁剪。 */
+async function expectTooltipWithinWindow(page: Page): Promise<void> {
+  const tooltip = page.locator('.ant-tooltip:visible')
+  await expect(tooltip).toHaveCount(1)
+  const viewport = page.viewportSize()!
+  await expect
+    .poll(() =>
+      tooltip.evaluate(
+        (element) =>
+          element
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === 'running').length
+      )
+    )
+    .toBe(0)
+  const bounds = (await tooltip.boundingBox())!
+  expect(bounds.x).toBeGreaterThanOrEqual(0)
+  expect(bounds.y).toBeGreaterThanOrEqual(0)
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width)
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height)
+}
+
+test('录制设置分为演奏辅助和录制方式，两栏说明完整列出全部选项', async ({ page }, testInfo) => {
+  const dialog = await openRecorder(page)
+  const popup = await openPanel(page, dialog, '录制设置')
+  const assistance = popup.getByRole('region', { name: '演奏辅助', exact: true })
+  const mode = popup.getByRole('region', { name: '录制方式', exact: true })
+  await expect(assistance.getByRole('checkbox')).toHaveCount(3)
+  for (const name of ['一小节倒数', '节拍器', '播放伴奏']) {
+    await expect(assistance.getByRole('checkbox', { name, exact: true })).not.toBeChecked()
+  }
+  expect(
+    (await assistance.boundingBox())!.y + (await assistance.boundingBox())!.height
+  ).toBeLessThanOrEqual((await mode.boundingBox())!.y)
+  await expect(mode.locator('.ant-select[aria-label="录制方式"]')).toBeVisible()
+  await page.screenshot({
+    path: testInfo.outputPath('recorder-settings.png'),
+    animations: 'disabled',
+  })
+  const hint = assistance.getByRole('button', { name: '演奏辅助说明', exact: true })
+  await hint.focus()
+  const tooltip = page.locator('.ant-tooltip-container[role="tooltip"]:visible')
+  await expect(tooltip).toContainText('倒数期间的按键只试听')
+  await expect(tooltip).toContainText('节拍声不会写入 MIDI')
+  await expect(tooltip).toContainText('默认关闭')
+  for (const name of ['一小节倒数', '节拍器', '播放伴奏']) {
+    await expect(tooltip.getByText(name, { exact: true })).toBeVisible()
+  }
+  await expectTooltipWithinWindow(page)
+  await hint.blur()
+  await expect(tooltip).not.toBeVisible()
+  const modeHint = mode.getByRole('button', { name: '录制方式说明', exact: true })
+  await modeHint.focus()
+  for (const name of ['接着录', '从光标补录', '重录选段']) {
+    await expect(tooltip.getByText(name, { exact: true })).toBeVisible()
+  }
+  await expect(tooltip).toContainText('空音轨从起点开始')
+  await expect(tooltip).toContainText('保留已有音符')
+  await expect(tooltip).toContainText('空录音不替换')
+  await expectTooltipWithinWindow(page)
+  await modeHint.blur()
+  await expect(tooltip).not.toBeVisible()
+  await chooseMode(page, dialog, '重录选段', true)
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0)
+  await modeHint.focus()
+  for (const name of ['接着录', '从光标补录', '重录选段']) {
+    await expect(tooltip.getByText(name, { exact: true })).toBeVisible()
+  }
+  await expectTooltipWithinWindow(page)
+  await page.screenshot({
+    path: testInfo.outputPath('recorder-mode-help.png'),
+    animations: 'disabled',
+  })
+})
+
+test('英文完整选项说明在短窗口内可阅读', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 720, height: 500 })
+  await page.goto('/tests/browser/track-recorder.html?main&english')
+  await page.getByRole('button', { name: 'Keyboard recording', exact: true }).click()
+  const dialog = page.getByRole('dialog').first()
+  await expect(dialog.getByRole('button', { name: 'Start recording', exact: true })).toBeEnabled()
+  const popup = await openPanel(page, dialog, 'Recording settings')
+  for (const [name, labels] of [
+    ['Playing aids explained', ['One-bar count-in', 'Metronome', 'Play accompaniment']],
+    ['Recording modes explained', ['Continue at end', 'Overdub at cursor', 'Re-record range']],
+  ] as const) {
+    const hint = popup.getByRole('button', { name, exact: true })
+    await hint.focus()
+    const tooltip = page.locator('.ant-tooltip-container[role="tooltip"]:visible')
+    for (const label of labels)
+      await expect(tooltip.getByText(label, { exact: true })).toBeVisible()
+    await expectTooltipWithinWindow(page)
+    await page.screenshot({ path: testInfo.outputPath(`${name}.png`), animations: 'disabled' })
+    await hint.blur()
+    await expect(tooltip).not.toBeVisible()
+  }
+})
+
 test('录制伴奏默认关闭，可以手动开启和再次关闭', async ({ page }) => {
   const dialog = await openRecorder(page)
-  const popup = await openPanel(page, dialog, '录制方式')
+  const popup = await openPanel(page, dialog, '录制设置')
   const accompaniment = popup.getByRole('checkbox', { name: '播放伴奏', exact: true })
   await expect(accompaniment).not.toBeChecked()
   await closePanel(page)
   let expectedStarts = 0
   for (const enabled of [false, true, false]) {
-    await openPanel(page, dialog, '录制方式')
+    await openPanel(page, dialog, '录制设置')
     await accompaniment.setChecked(enabled)
     await closePanel(page)
     await dialog.getByRole('button', { name: '开始录制', exact: true }).click()
@@ -88,7 +187,7 @@ test('试听也遵循伴奏开关，关闭时只听当前轨，开启后加入�
   await page.getByRole('button', { name: '键盘录制', exact: true }).click()
   const dialog = page.getByRole('dialog').first()
   await expect(dialog.getByRole('button', { name: '开始录制', exact: true })).toBeEnabled()
-  const popup = await openPanel(page, dialog, '录制方式')
+  const popup = await openPanel(page, dialog, '录制设置')
   const accompaniment = popup.getByRole('checkbox', { name: '播放伴奏', exact: true })
   await accompaniment.uncheck()
   await closePanel(page)
@@ -96,7 +195,7 @@ test('试听也遵循伴奏开关，关闭时只听当前轨，开启后加入�
   await recordKey(page, 'a')
   await dialog.getByRole('button', { name: '停止录制', exact: true }).click()
   for (const enabled of [false, true, false]) {
-    await openPanel(page, dialog, '录制方式')
+    await openPanel(page, dialog, '录制设置')
     await accompaniment.setChecked(enabled)
     await closePanel(page)
     await page.evaluate(() => window.recorderFixture.clearPreviewPitches())
@@ -222,7 +321,7 @@ test('暂停追加后改重录选段不会使用新录制方式提交旧音符',
   await page.getByRole('button', { name: '键盘录制' }).click()
   const dialog = page.getByRole('dialog').first()
   await chooseMode(page, dialog, '重录选段')
-  await openPanel(page, dialog, '录制方式')
+  await openPanel(page, dialog, '录制设置')
   await expect(page.getByRole('spinbutton', { name: '起始小节', exact: true })).toHaveValue('1')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).fill('2')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).blur()
@@ -266,7 +365,7 @@ test('重录小节范围决定首键位置，区间外既有音符保持原样',
   await page.getByRole('button', { name: '键盘录制', exact: true }).click()
   const dialog = page.getByRole('dialog').first()
   await chooseMode(page, dialog, '重录选段')
-  await openPanel(page, dialog, '录制方式')
+  await openPanel(page, dialog, '录制设置')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).fill('3')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).blur()
   await page.getByRole('spinbutton', { name: '起始小节', exact: true }).fill('2')
@@ -293,7 +392,7 @@ test('宿主半小节选区在重录时按设置展示的整小节替换，接�
   const dialog = page.getByRole('dialog').first()
   await expect(dialog.getByText(/^重录小节：/)).toHaveCount(0)
   await chooseMode(page, dialog, '重录选段')
-  await openPanel(page, dialog, '录制方式')
+  await openPanel(page, dialog, '录制设置')
   await expect(page.getByRole('spinbutton', { name: '起始小节', exact: true })).toHaveValue('1')
   await expect(page.getByRole('spinbutton', { name: '结束小节', exact: true })).toHaveValue('2')
   await closePanel(page)
@@ -338,7 +437,7 @@ for (const viewport of [
       dialog.getByRole('button', { name: /^撤销/ }),
       dialog.getByRole('button', { name: /^重做/ }),
       dialog.getByRole('button', { name: '键位映射', exact: true }),
-      dialog.getByRole('button', { name: '录制方式', exact: true }),
+      dialog.getByRole('button', { name: '录制设置', exact: true }),
       dialog.getByRole('button', { name: '录制帮助', exact: true }),
       dialog.getByRole('button', { name: '取消', exact: true }),
       dialog.getByRole('button', { name: '应用到音轨', exact: true }),
@@ -380,7 +479,7 @@ for (const viewport of [
       /^撤销 \(/,
       /^重做 \(/,
       '键位映射',
-      '录制方式',
+      '录制设置',
     ].entries()) {
       await expect(transportControls.nth(index + 1)).toHaveAttribute('aria-label', name)
     }
@@ -500,7 +599,7 @@ test('录制快捷键优先于映射 Enter，键盘焦点内支持撤销重做�
 test('录制方式与重录数字输入保持原生键盘交互，不触发录制快捷键或映射发音', async ({ page }) => {
   const dialog = await openRecorder(page)
   await chooseMode(page, dialog, '重录选段')
-  await openPanel(page, dialog, '录制方式')
+  await openPanel(page, dialog, '录制设置')
   const start = page.getByRole('spinbutton', { name: '起始小节', exact: true })
   await start.focus()
   await page.keyboard.press('ControlOrMeta+Enter')
@@ -509,7 +608,7 @@ test('录制方式与重录数字输入保持原生键盘交互，不触发录�
   await expect(dialog.getByRole('button', { name: '开始录制', exact: true })).toBeVisible()
   expect(await page.evaluate(() => window.recorderFixture.playedPitches())).toEqual([])
   await closePanel(page)
-  const popup = await openPanel(page, dialog, '录制方式')
+  const popup = await openPanel(page, dialog, '录制设置')
   await popup.locator('[aria-label="录制方式"] input[role="combobox"]').focus()
   await page.keyboard.press('ControlOrMeta+Enter')
   await page.keyboard.press('a')
@@ -562,7 +661,7 @@ test('试听循环随重录小节范围更新，接着录取消旧循环且暂�
   await page.getByRole('button', { name: '键盘录制', exact: true }).click()
   const dialog = page.getByRole('dialog').first()
   await chooseMode(page, dialog, '重录选段')
-  await openPanel(page, dialog, '录制方式')
+  await openPanel(page, dialog, '录制设置')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).fill('2')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).blur()
   await closePanel(page)
@@ -579,7 +678,7 @@ test('试听循环随重录小节范围更新，接着录取消旧循环且暂�
   expect((await page.evaluate(() => window.recorderFixture.previewState()))?.positionSeconds).toBe(
     paused!.positionSeconds
   )
-  await openPanel(page, dialog, '录制方式')
+  await openPanel(page, dialog, '录制设置')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).fill('3')
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).blur()
   await expect
@@ -596,12 +695,12 @@ test('录制中锁定方式，首段暂停允许撤销整次录入并重做', as
   const dialog = await openRecorder(page)
   await dialog.getByRole('button', { name: '开始录制', exact: true }).click()
   await recordKey(page, 'a')
-  const popup = await openPanel(page, dialog, '录制方式')
+  const popup = await openPanel(page, dialog, '录制设置')
   const mode = popup.locator('[aria-label="录制方式"] input[role="combobox"]')
   await expect(mode).toBeDisabled()
   await closePanel(page)
   await dialog.getByRole('button', { name: '暂停录制', exact: true }).click()
-  await openPanel(page, dialog, '录制方式')
+  await openPanel(page, dialog, '录制设置')
   await expect(mode).toBeEnabled()
   await closePanel(page)
   await expect(dialog.getByRole('button', { name: /^撤销/ })).toBeEnabled()
@@ -642,7 +741,7 @@ test('短窗口录制方式和帮助浮层完整可滚动，不被抽屉内容�
   await page.setViewportSize({ width: 720, height: 500 })
   const dialog = await openRecorder(page, '?main')
   await chooseMode(page, dialog, '重录选段')
-  const popup = await openPanel(page, dialog, '录制方式')
+  const popup = await openPanel(page, dialog, '录制设置')
   await expect(popup).toHaveCount(1)
   await expect(popup.getByRole('spinbutton', { name: '起始小节', exact: true })).toBeVisible()
   const accompaniment = popup.getByRole('checkbox', { name: '播放伴奏', exact: true })
@@ -653,6 +752,13 @@ test('短窗口录制方式和帮助浮层完整可滚动，不被抽屉内容�
   expect(await popup.evaluate((element) => !!element.closest('#main-window-portal-root'))).toBe(
     true
   )
+  for (const name of ['演奏辅助说明', '录制方式说明']) {
+    const hint = popup.getByRole('button', { name, exact: true })
+    await hint.focus()
+    await expectTooltipWithinWindow(page)
+    await hint.blur()
+    await expect(page.locator('.ant-tooltip:visible')).toHaveCount(0)
+  }
   await closePanel(page)
   await expect(popup).toHaveCount(0)
   await dialog.getByRole('button', { name: '录制帮助', exact: true }).click()
@@ -833,7 +939,7 @@ test('退出确认 Escape 只取消退出，不重开确认、不提交也不丢
   expect(await page.evaluate(() => window.recorderFixture.applyCount())).toBe(0)
 })
 
-for (const name of ['键位映射', '录制方式']) {
+for (const name of ['键位映射', '录制设置']) {
   test(`${name}图标焦点中 Escape 只关浮层，关闭后再按 Escape 才离开工作区`, async ({ page }) => {
     const dialog = await openRecorder(page)
     const button = dialog.getByRole('button', { name, exact: true })
@@ -899,13 +1005,11 @@ test('长音轨名只展示名称，复用往返跑马灯与完整 Tooltip，不
 test('同一录制方式浮层即时切换范围，重录出现小节设置、接着录立即隐藏', async ({ page }) => {
   const dialog = await openRecorder(page)
   const popup = await chooseMode(page, dialog, '重录选段', true)
-  const button = dialog.getByRole('button', { name: '录制方式', exact: true })
+  const button = dialog.getByRole('button', { name: '录制设置', exact: true })
   await expect(button).toHaveAttribute('aria-expanded', 'true')
   await expect(popup.getByRole('spinbutton', { name: '起始小节', exact: true })).toBeVisible()
   await expect(popup.getByRole('spinbutton', { name: '结束小节', exact: true })).toBeVisible()
-  await expect(
-    popup.getByRole('button', { name: '替换设定的小节范围，到结束小节自动停止。', exact: true })
-  ).toBeVisible()
+  await expect(popup.getByRole('button', { name: '录制方式说明', exact: true })).toBeVisible()
   for (const name of ['一小节倒数', '节拍器', '播放伴奏']) {
     await expect(popup.getByRole('checkbox', { name, exact: true })).toBeVisible()
   }
@@ -920,9 +1024,7 @@ test('同一录制方式浮层即时切换范围，重录出现小节设置、�
   await expect(button).toHaveAttribute('aria-expanded', 'true')
   await expect(popup.getByRole('spinbutton', { name: '起始小节', exact: true })).toHaveCount(0)
   await expect(popup.getByRole('spinbutton', { name: '结束小节', exact: true })).toHaveCount(0)
-  await expect(
-    popup.getByRole('button', { name: '从最后一个音符末尾继续录入。', exact: true })
-  ).toBeVisible()
+  await expect(popup.getByRole('button', { name: '录制方式说明', exact: true })).toBeVisible()
   await expect(metronome).toBeChecked()
   await metronome.uncheck()
   await expect(metronome).not.toBeChecked()
@@ -932,7 +1034,7 @@ test('同一录制方式浮层即时切换范围，重录出现小节设置、�
 })
 
 test('设置浮层内说明按钮持有焦点时 Escape 只关闭当前浮层', async ({ page }) => {
-  for (const name of ['键位映射', '录制方式']) {
+  for (const name of ['键位映射', '录制设置']) {
     const dialog = await openRecorder(page)
     await dialog.getByRole('button', { name, exact: true }).click()
     const popup = page.locator('.ant-popover:visible')

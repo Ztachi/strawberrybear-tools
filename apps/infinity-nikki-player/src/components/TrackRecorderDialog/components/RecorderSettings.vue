@@ -32,6 +32,16 @@ const range = computed(() => {
   return recordingRangeInBars(props.recorder.preview().document, props.recorder.range ?? { startTick: props.recorder.cursorTick, endTick: props.recorder.cursorTick + 1 })
 })
 const options = computed(() => ['append', 'overdub', 'replace'].map(value => ({ value, label: t(`recording.mode.${value}`) })))
+const auxiliaryOptions = computed(() => (['countIn', 'metronome', 'accompaniment'] as const).map(key => ({
+  key,
+  label: t(`recording.${key}`),
+  description: t(`recording.auxiliaryHint.${key}`),
+})))
+/** 从说明图标向下侧展开，避免覆盖顶部按钮导致 Escape 关闭后又触发悬停打开。 */
+const helpTooltipStyles = {
+  root: { width: '320px', maxWidth: 'calc(100vw - 32px)' },
+  container: { maxHeight: 'calc(100dvh - 120px)', overflowY: 'auto' },
+} as const
 const templateOptions = computed(() => { void props.version; return props.templates.some(template => template.id === props.recorder.template.id) ? props.templates : [...props.templates, props.recorder.template] })
 function templateChanged(id: string): void {
   const template = templateOptions.value.find(item => item.id === id)
@@ -102,6 +112,7 @@ function handleKeydown(event: KeyboardEvent): void {
     </Popover>
     <Popover
       v-model:open="settingsOpen"
+      :title="t('recording.settings')"
       :trigger="['hover', 'click']"
       placement="bottomRight"
       :mouse-enter-delay="0.12"
@@ -112,93 +123,121 @@ function handleKeydown(event: KeyboardEvent): void {
           class="flex max-h-[calc(100dvh-160px)] w-56 max-w-[calc(100vw-48px)] flex-col gap-3 overflow-y-auto"
           @keydown.capture="handleKeydown"
         >
-          <div class="flex items-center gap-1">
-            <span>{{ t('recording.method') }}</span>
-            <Tooltip
-              :title="t(`recording.modeHint.${settings.mode}`)"
-              :trigger="['hover', 'focus']"
-            >
-              <button
-                type="button"
-                class="nikki-icon-button inline-flex border-0 bg-transparent p-0"
-                :aria-label="t(`recording.modeHint.${settings.mode}`)"
+          <section :aria-label="t('recording.auxiliary')" class="flex flex-col gap-2.5">
+            <div class="flex items-center gap-1">
+              <span>{{ t('recording.auxiliary') }}</span>
+              <Tooltip
+                placement="rightTop"
+                :align="{ overflow: { adjustX: true, shiftY: true } }"
+                :styles="helpTooltipStyles"
+                :trigger="['hover', 'focus']"
               >
-                <CircleAlert class="size-3.5" />
-              </button>
-            </Tooltip>
-          </div>
-          <Select
-            :value="settings.mode"
-            :options="options"
-            :disabled="modeLocked"
-            :aria-label="t('recording.method')"
-            class="w-full"
-            @update:value="modeChanged"
-          />
-          <div v-if="settings.mode === 'replace'" class="flex flex-col gap-2">
-            <label class="flex items-center justify-between gap-3">
-              <span>{{ t('recording.rangeStart') }}</span>
-              <InputNumber
-                :value="range.start"
-                :min="1"
-                :max="range.end - 1"
-                :precision="0"
-                :disabled="modeLocked"
-                :aria-label="t('recording.rangeStart')"
-                class="w-24"
-                @update:value="emit('range', { start: Number($event), end: range.end })"
-              />
-            </label>
-            <label class="flex items-center justify-between gap-3">
-              <span>{{ t('recording.rangeEnd') }}</span>
-              <InputNumber
-                :value="range.end"
-                :min="range.start + 1"
-                :max="100000"
-                :precision="0"
-                :disabled="modeLocked"
-                :aria-label="t('recording.rangeEnd')"
-                class="w-24"
-                @update:value="emit('range', { start: range.start, end: Number($event) })"
-              />
-            </label>
-            <p class="m-0 max-w-72 text-xs text-[var(--color-muted-dark)]">
-              {{ t('recording.rangeHelp') }}
-            </p>
-            <p class="m-0 max-w-72 text-xs text-[var(--color-muted-dark)]">
-              {{ t('recording.replaceHint') }}
-            </p>
-          </div>
-          <Checkbox
-            :checked="settings.countIn"
-            :disabled="settings.busy || disabled"
-            @update:checked="emit('setting', { key: 'countIn', value: $event })"
-          >
-            {{ t('recording.countIn') }}
-          </Checkbox>
-          <Checkbox
-            :checked="settings.metronome"
-            :disabled="settings.busy || disabled"
-            @update:checked="emit('setting', { key: 'metronome', value: $event })"
-          >
-            {{ t('recording.metronome') }}
-          </Checkbox>
-          <Tooltip :title="t('recording.accompanimentHint')">
+                <template #title>
+                  <div class="flex flex-col gap-2">
+                    <p v-for="option in auxiliaryOptions" :key="option.key" class="m-0">
+                      <strong class="mr-1 font-semibold">{{ option.label }}</strong
+                      >{{ option.description }}
+                    </p>
+                  </div>
+                </template>
+                <button
+                  type="button"
+                  class="nikki-icon-button inline-flex border-0 bg-transparent p-0"
+                  :aria-label="t('recording.auxiliaryHelp')"
+                >
+                  <CircleAlert class="size-3.5" />
+                </button>
+              </Tooltip>
+            </div>
             <Checkbox
-              :checked="settings.accompaniment"
+              v-for="option in auxiliaryOptions"
+              :key="option.key"
+              :checked="settings[option.key]"
               :disabled="settings.busy || disabled"
-              @update:checked="emit('setting', { key: 'accompaniment', value: $event })"
+              @update:checked="emit('setting', { key: option.key, value: $event })"
             >
-              {{ t('recording.accompaniment') }}
+              {{ option.label }}
             </Checkbox>
-          </Tooltip>
+          </section>
+          <section
+            :aria-label="t('recording.method')"
+            class="flex flex-col gap-3 border-t border-primary/20 pt-3"
+          >
+            <div class="flex items-center gap-1">
+              <span>{{ t('recording.method') }}</span>
+              <Tooltip
+                placement="rightTop"
+                :align="{ overflow: { adjustX: true, shiftY: true } }"
+                :styles="helpTooltipStyles"
+                :trigger="['hover', 'focus']"
+              >
+                <template #title>
+                  <div class="flex flex-col gap-2">
+                    <p v-for="option in options" :key="option.value" class="m-0">
+                      <strong class="mr-1 font-semibold">{{ option.label }}</strong
+                      >{{ t(`recording.modeHint.${option.value}`) }}
+                    </p>
+                  </div>
+                </template>
+                <button
+                  type="button"
+                  class="nikki-icon-button inline-flex border-0 bg-transparent p-0"
+                  :aria-label="t('recording.modeHelp')"
+                >
+                  <CircleAlert class="size-3.5" />
+                </button>
+              </Tooltip>
+            </div>
+            <Select
+              :value="settings.mode"
+              :options="options"
+              :disabled="modeLocked"
+              :aria-label="t('recording.method')"
+              class="w-full"
+              @update:value="modeChanged"
+            />
+            <div v-if="settings.mode === 'replace'" class="flex flex-col gap-2">
+              <label class="flex items-center justify-between gap-3">
+                <span>{{ t('recording.rangeStart') }}</span>
+                <InputNumber
+                  :value="range.start"
+                  :min="1"
+                  :max="range.end - 1"
+                  :precision="0"
+                  :disabled="modeLocked"
+                  :aria-label="t('recording.rangeStart')"
+                  class="w-24"
+                  @update:value="emit('range', { start: Number($event), end: range.end })"
+                />
+              </label>
+              <label class="flex items-center justify-between gap-3">
+                <span>{{ t('recording.rangeEnd') }}</span>
+                <InputNumber
+                  :value="range.end"
+                  :min="range.start + 1"
+                  :max="100000"
+                  :precision="0"
+                  :disabled="modeLocked"
+                  :aria-label="t('recording.rangeEnd')"
+                  class="w-24"
+                  @update:value="emit('range', { start: range.start, end: Number($event) })"
+                />
+              </label>
+              <p class="m-0 max-w-72 text-xs text-[var(--color-muted-dark)]">
+                {{ t('recording.rangeHelp') }}
+              </p>
+              <p class="m-0 max-w-72 text-xs text-[var(--color-muted-dark)]">
+                {{ t('recording.replaceHint') }}
+              </p>
+            </div>
+          </section>
         </div>
       </template>
       <Button
         size="small"
         color="primary"
         variant="text"
-        :aria-label="t('recording.method')"
+        :aria-label="t('recording.settings')"
         :aria-expanded="settingsOpen"
       >
         <template #icon>

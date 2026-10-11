@@ -8,7 +8,14 @@
   "countIn": "One-bar count-in",
   "metronome": "Metronome",
   "accompaniment": "Play accompaniment",
-  "accompanimentHint": "Off by default so you hear only this track. Enable to play other enabled tracks; overdubbing also plays this track. The replacement range is muted during re-recording.",
+  "auxiliary": "Playing aids",
+  "auxiliaryHelp": "Playing aids explained",
+  "modeHelp": "Recording modes explained",
+  "auxiliaryHint": {
+    "countIn": "Count in for one bar before recording starts. Keys pressed during the count-in only audition; press them again afterward to record.",
+    "metronome": "Play beat cues while recording to help keep time. These clicks are not included in the MIDI file.",
+    "accompaniment": "Off by default, so recording and preview play only this track. Enable to hear other enabled tracks. Overdubbing also plays this track's existing notes; re-recording mutes the replacement range."
+  },
   "keyboard": "Performance keyboard",
   "start": "Start recording",
   "resume": "Resume recording",
@@ -22,7 +29,7 @@
   "pausePreview": "Pause preview",
   "keyboardHint": "Click the keyboard, then play the mapped keys. Hold a key to set note duration.",
   "noteCount": "{count} notes",
-  "settings": "More settings",
+  "settings": "Recording settings",
   "rangeStart": "Start bar",
   "rangeEnd": "End bar",
   "rangeHelp": "The start bar is included; the end bar is excluded. For example, 1 to 3 records bars 1–2.",
@@ -31,7 +38,7 @@
   "help": "Recording help",
   "helpIntro": "Record melodies and chords with your keyboard, preview them, then apply them to this track.",
   "helpRecord": "Choose a key template, start recording, then play the mapped keys. Hold keys to set duration and press keys together for chords. Pause and resume, or stop to preview and undo the take.",
-  "helpModes": "Choose a mode from the recording-mode icon popup. Continue at end adds notes after the last note. Overdub at cursor layers notes at the selected position. Re-record range replaces the bars chosen in the popup.",
+  "helpModes": "Choose a mode from the recording-settings popup. Continue at end adds notes after the last note. Overdub at cursor layers notes at the selected position. Re-record range replaces the bars chosen in the popup.",
   "helpShortcuts": "Ctrl/⌘+Enter records, pauses or resumes. Ctrl/⌘+Z undoes; Ctrl/⌘+Shift+Z redoes. Escape stops recording. Click the performance keyboard first to play mapped keys such as Space and Tab.",
   "helpDocument": {
     "contents": "Contents",
@@ -56,7 +63,7 @@
           },
           "timing": {
             "label": "Start on the first key, or count in",
-            "description": "Free recording starts with the first mapped key and keeps rests within your performance. Open the recording-mode icon popup in the header for a one-bar count-in, metronome and accompaniment. After the count-in, record to the beat; empty beats are kept too."
+            "description": "Free recording starts with the first mapped key and keeps rests within your performance. Open the recording-settings popup in the header for a one-bar count-in, metronome and accompaniment. After the count-in, record to the beat; empty beats are kept too."
           },
           "pause": {
             "label": "Pause, resume and finish",
@@ -69,15 +76,15 @@
         "items": {
           "append": {
             "label": "Continue at end",
-            "description": "Choose Continue at end in the recording-mode icon popup to continue after the last visible note in this track. An empty track starts at its beginning. Useful for recording a melody in several takes."
+            "description": "Choose Continue at end in the recording-settings popup to continue after the last visible note in this track. An empty track starts at its beginning. Useful for recording a melody in several takes."
           },
           "overdub": {
             "label": "Overdub at cursor",
-            "description": "Choose Overdub at cursor in the recording-mode icon popup, click the piano roll to position the cursor, then start recording. New notes layer over the existing music, adding chords or another melody."
+            "description": "Choose Overdub at cursor in the recording-settings popup, click the piano roll to position the cursor, then start recording. New notes layer over the existing music, adding chords or another melody."
           },
           "replace": {
             "label": "Re-record range",
-            "description": "Choose Re-record range in the recording-mode icon popup to show the start and end bars below it. The start is included and the end is excluded: 1 to 3 records bars 1–2. Once new notes are recorded, the take replaces that range, including silence if stopped early. Music outside it is kept, and recording stops automatically at its end."
+            "description": "Choose Re-record range in the recording-settings popup to show the start and end bars below it. The start is included and the end is excluded: 1 to 3 records bars 1–2. Once new notes are recorded, the take replaces that range, including silence if stopped early. Music outside it is kept, and recording stops automatically at its end."
           },
           "undo": {
             "label": "Undo or redo a take",
@@ -111,7 +118,7 @@
         "items": {
           "apply": {
             "label": "Apply to this track",
-            "description": "Apply to track writes the take and template back to this track and returns to the host, keeping other tracks intact. Accompaniment is off by default, so recording and preview play only this track. Enable Play accompaniment in Recording mode to hear other enabled tracks. Overdubbing also plays this track; re-recording mutes the replacement range."
+            "description": "Apply to track writes the take and template back to this track and returns to the host, keeping other tracks intact. Accompaniment is off by default, so recording and preview play only this track. Enable Play accompaniment in Recording settings to hear other enabled tracks. Overdubbing also plays this track; re-recording mutes the replacement range."
           },
           "recover": {
             "label": "Recover a recording draft",
@@ -149,7 +156,7 @@
   },
   "finishHint": "Apply, then continue refining in the MIDI editor.",
   "recordShortcut": "Ctrl/⌘+Enter: record, pause or resume",
-  "replaceRequired": "Choose a valid bar range in the recording-mode icon popup before re-recording.",
+  "replaceRequired": "Choose a valid bar range in the recording-settings popup before re-recording.",
   "apply": "Apply to track",
   "operationFailed": "The operation could not finish. Please retry.",
   "selectTool": "Select notes",
@@ -180,9 +187,9 @@
     "replace": "Re-record range"
   },
   "modeHint": {
-    "append": "Continue recording after the last note.",
-    "overdub": "Click the piano roll to position the cursor, then layer new notes there.",
-    "replace": "Replace the chosen bars; recording stops automatically at the end bar."
+    "append": "Continue after the last visible note in this track. An empty track starts at its beginning. Useful for recording in several takes.",
+    "overdub": "Click the piano roll to position the cursor, then layer new notes there. Existing notes are kept, so you can add a melody or chords.",
+    "replace": "Replace the chosen bars, including the start and excluding the end. Recording stops at the end. Silence from stopping early also replaces the range; an empty take leaves it unchanged. Music outside the range is kept."
   },
   "status": {
     "idle": "Ready to record",

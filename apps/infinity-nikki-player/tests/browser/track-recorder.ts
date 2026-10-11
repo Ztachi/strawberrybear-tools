@@ -35,6 +35,7 @@ let activeRecordingVoices = 0
 let accompanimentStarts = 0
 let previewController: MidiEditorPlaybackController | null = null
 const hasMainPortal = new URLSearchParams(window.location.search).has('main')
+const fixtureLocale = new URLSearchParams(window.location.search).has('english') ? 'en-US' : 'zh-CN'
 interface RecorderFixture {
   failDelete(value: boolean): void
   failSave(value: boolean): void
@@ -86,7 +87,7 @@ mockIPC((command, raw) => {
   }
   return null
 })
-i18n.global.locale.value = 'zh-CN'
+i18n.global.locale.value = fixtureLocale
 const session = createEditorSession(createProject())
 const audio = (): RecorderAudio => ({
   prepare: async () => {},
@@ -218,7 +219,7 @@ const app = createApp(
       return () =>
         h(
           ConfigProvider,
-          { ...infinityNikkiConfigProviderProps, locale: getAntdvLocale('zh-CN') },
+          { ...infinityNikkiConfigProviderProps, locale: getAntdvLocale(fixtureLocale) },
           () =>
             h(App, {}, () => [
               hasMainPortal
