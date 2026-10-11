@@ -26,6 +26,7 @@ import { useReleaseNotes } from '@/composables/useReleaseNotes'
 import { feedback } from '@/lib/feedback'
 import { useMainWindowUiStore, type FloatingActionRegistration } from '@/stores/mainWindowUi'
 
+const props = defineProps<{ embedded?: boolean }>()
 const { t, tm } = useI18n()
 const ui = useMainWindowUiStore()
 const updater = useAppUpdater()
@@ -52,6 +53,8 @@ const contactIconMap: Record<string, Component> = {
 /** 对话框打开状态 @return {boolean} */
 const isOpen = ref(false)
 watch(isOpen, (open) => {
+  // 内嵌内容由设置的滚动区承载，不占用独立弹窗的全局回到顶部入口。
+  if (props.embedded) return
   backToTop?.()
   backToTop = open ? ui.registerBackToTop(() => aboutBody.value?.scrollTo({ top: 0, behavior: 'smooth' })) : undefined
 })
@@ -110,7 +113,8 @@ async function showReleaseNotes(): Promise<void> {
 
 /** 组件挂载时监听 show_about 事件 */
 onMounted(async () => {
-  unlisten = await listen('show_about', () => show())
+  if (props.embedded) await show()
+  else unlisten = await listen('show_about', () => show())
 })
 
 /** 组件卸载时取消事件监听 */
@@ -121,13 +125,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Modal
-    v-model:open="isOpen"
-    :footer="null"
-    width="min(440px, calc(100vw - 32px))"
-    centered
-    root-class="about-modal-root"
-    :styles="{ body: { padding: 0 }, container: { padding: 0 } }"
+  <component
+    :is="embedded ? 'section' : Modal"
+    v-bind="embedded ? { class: 'embedded-about' } : { open: isOpen, 'onUpdate:open': (value: boolean) => isOpen = value, footer: null, width: 'min(440px, calc(100vw - 32px))', centered: true, rootClass: 'about-modal-root', styles: { body: { padding: 0 }, container: { padding: 0 } } }"
   >
     <!-- 自定义样式对话框内容 -->
     <div data-text-selectable class="about-card">
@@ -200,10 +200,12 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-  </Modal>
+  </component>
 </template>
 
 <style scoped>
+.embedded-about .about-card { max-height: none; padding: 0; }
+.embedded-about .about-body { overflow: visible; }
 .about-card {
   max-height: calc(100dvh - 64px);
   padding: 24px;

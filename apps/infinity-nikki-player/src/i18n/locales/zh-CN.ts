@@ -4,8 +4,10 @@
 import releaseNoteReleases from './release-notes/zh-CN.json'
 
 import recording from './recording/zh-CN.json'
+import appSettings from './appSettings/zh-CN.json'
 
 export default {
+  appSettings,
   recording,
   app: {
     title: '无限暖暖自动演奏',

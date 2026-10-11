@@ -88,7 +88,7 @@ const initialEditorSnapshot = ref('')
 /** 当前编辑会话使用的草稿持久化键。 */
 const activeDraftKey = ref('')
 /** 草稿自动保存计时器句柄。 */
-let draftTimer: ReturnType<typeof window.setInterval> | null = null
+let draftTimer: number | null = null
 /** promise 化三选离开确认状态。 */
 const leaveConfirm = ref<LeaveConfirmState>({
   open: false,

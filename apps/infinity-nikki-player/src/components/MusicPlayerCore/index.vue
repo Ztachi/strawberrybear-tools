@@ -9,6 +9,7 @@ import { HelpCircle } from 'lucide-vue-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import PreviewProgressBar from '@/components/PreviewPlayer/PreviewProgressBar.vue'
 import PreviewPlaybackControls from '@/components/PreviewPlayer/PreviewPlaybackControls.vue'
+import PlaybackSpeedControl from '@/components/PlaybackSpeedControl.vue'
 import { usePreviewPlaybackControls } from '@/composables/usePreviewPlaybackControls'
 import type { PreviewControlCommand } from '@/features/player/previewControls'
 import { usePlayerStore } from '@/stores/player'
@@ -99,14 +100,8 @@ function handleSeek(time: number): void {
 </script>
 
 <template>
-  <div
-    class="music-player-core"
-    :class="props.variant"
-  >
-    <div
-      class="core-control-row"
-      :class="{ 'no-template': !props.showTemplate }"
-    >
+  <div class="music-player-core" :class="props.variant">
+    <div class="core-control-row" :class="{ 'no-template': !props.showTemplate }">
       <PreviewPlaybackControls
         class="core-transport"
         :state="controls.state.value"
@@ -117,21 +112,18 @@ function handleSeek(time: number): void {
         @command="handleCommand"
         @toggle-mute="toggleMute"
         @set-volume="setVolume"
-      />
-
-      <div
-        v-if="props.showTemplate"
-        class="core-template-wrap"
       >
+        <template #actions>
+          <PlaybackSpeedControl :value="playerStore.speed" @change="playerStore.setSpeed" />
+        </template>
+      </PreviewPlaybackControls>
+
+      <div v-if="props.showTemplate" class="core-template-wrap">
         <KeyTemplateSelect class="core-template-select" />
       </div>
     </div>
 
-    <p
-      v-if="controls.state.value.error"
-      role="status"
-      class="text-xs text-red-600"
-    >
+    <p v-if="controls.state.value.error" role="status" class="text-xs text-red-600">
       {{ controls.state.value.error }}
     </p>
     <PreviewProgressBar
@@ -143,15 +135,9 @@ function handleSeek(time: number): void {
       @seek="handleSeek"
     />
 
-    <div
-      v-if="props.showModeRow"
-      class="core-mode-row"
-    >
+    <div v-if="props.showModeRow" class="core-mode-row">
       <div class="mode-toggle">
-        <Switch
-          :checked="settingsStore.playMode === 'piano'"
-          @update:checked="handleModeSwitch"
-        />
+        <Switch :checked="settingsStore.playMode === 'piano'" @update:checked="handleModeSwitch" />
         <span class="mode-label">{{ t('player.pianoMode') }}</span>
       </div>
       <div class="mode-toggle">
@@ -160,10 +146,7 @@ function handleSeek(time: number): void {
           :disabled="settingsStore.playMode !== 'piano'"
           @update:checked="(v) => settingsStore.setEnableKeyboardSim(!!v)"
         />
-        <span
-          class="mode-label"
-          :class="{ disabled: settingsStore.playMode !== 'piano' }"
-        >
+        <span class="mode-label" :class="{ disabled: settingsStore.playMode !== 'piano' }">
           {{ t('player.keyboardSim') }}
         </span>
         <Tooltip :title="t('player.keyboardSimTip')">

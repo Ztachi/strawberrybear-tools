@@ -26,7 +26,9 @@ import RecorderSettings from './components/RecorderSettings.vue'
 import RecorderTransport from './components/RecorderTransport.vue'
 import RecorderHelpDialog from './components/RecorderHelpDialog.vue'
 
-const props = defineProps<{ input: TrackRecorderInput; services: TrackRecorderServices }>()
+const props = defineProps<{ input: TrackRecorderInput; services: TrackRecorderServices; nativeChrome?: boolean }>()
+// 独立窗口的抽屉覆盖沉浸式标题栏，复用系统按钮安全距离；主窗口内容抽屉不需要额外避让。
+const headerPadding = props.nativeChrome && !/Windows/i.test(navigator.userAgent) ? '10px 12px 10px var(--window-title-safe-inset, 90px)' : '10px 12px'
 const emit = defineEmits<{ closed: [] }>()
 const { t } = useI18n()
 const recorder = new TrackRecorder(props.input, props.services.audio)
@@ -268,7 +270,7 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
       :title="currentTrack.name"
       :get-container="getMainWindowPopupContainer"
       :root-style="getContentDrawerRootStyle()"
-      :styles="{ wrapper: { width: '100%' }, header: { padding: '10px 12px' }, title: { flex: '0 1 200px', maxWidth: '22vw', minWidth: 0, marginInlineEnd: '12px' }, extra: { flex: '1 1 auto', minWidth: 'min-content' }, body: { padding: 0, overflow: 'hidden', minHeight: 0 } }"
+      :styles="{ wrapper: { width: '100%' }, header: { padding: headerPadding }, title: { flex: '0 1 200px', maxWidth: '22vw', minWidth: 0, marginInlineEnd: '12px' }, extra: { flex: '1 1 auto', minWidth: 'min-content' }, body: { padding: 0, overflow: 'hidden', minHeight: 0 } }"
       :mask="{ closable: false }"
       :keyboard="false"
       :closable="{ placement: 'end', disabled: applying }"

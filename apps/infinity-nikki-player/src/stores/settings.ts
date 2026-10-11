@@ -23,6 +23,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** 当前语言 */
   const locale = ref<LocaleType>(DEFAULT_LOCALE)
+  const closeAction = ref<'tray' | 'quit'>('tray')
+  const closeActionConfirmed = ref(false)
 
   /** 当前模板 ID */
   const currentTemplateId = ref<string | null>(null)
@@ -84,6 +86,8 @@ export const useSettingsStore = defineStore('settings', () => {
     try {
       // 从后端加载设置
       const settings = await loadSettingsApi()
+      closeAction.value = settings.close_action === 'quit' ? 'quit' : 'tray'
+      closeActionConfirmed.value = settings.close_action_confirmed === true
 
       // 设置语言
       if (settings.locale && isSupportedLocale(settings.locale)) {
@@ -155,6 +159,8 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   async function persistSettings() {
     await saveSettings({
+      close_action: closeAction.value,
+      close_action_confirmed: closeActionConfirmed.value,
       locale: locale.value,
       current_template_id: currentTemplateId.value,
       play_mode: playMode.value,
@@ -277,6 +283,20 @@ export const useSettingsStore = defineStore('settings', () => {
     await persistSettings()
   }
 
+  /** 设置关闭选项失败时恢复内存值，避免界面显示已记住但磁盘仍是旧设置。 */
+  async function setCloseAction(action: 'tray' | 'quit', confirmed = true): Promise<void> {
+    const previous = { action: closeAction.value, confirmed: closeActionConfirmed.value }
+    closeAction.value = action
+    closeActionConfirmed.value = confirmed
+    try {
+      await persistSettings()
+    } catch (error) {
+      closeAction.value = previous.action
+      closeActionConfirmed.value = previous.confirmed
+      throw error
+    }
+  }
+
   /**
    * @description: 选择模板
    * @param {string} templateId - 模板 ID
@@ -392,6 +412,9 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     // 状态
     locale,
+    closeAction,
+    closeActionConfirmed,
+    setCloseAction,
     currentTemplateId,
     playMode,
     enableKeyboardSim,

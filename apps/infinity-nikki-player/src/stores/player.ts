@@ -1976,7 +1976,7 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function setSpeed(newSpeed: number) {
     speed.value = newSpeed
-    // 试听音频是独立 WebAudio 时钟；同步它不会改写游戏内模拟按键调度器。
+    // 先重锚音频并采样当前位置，悬浮层的倍速侦听再从同一音乐位置重建按键执行器。
     midiPreview?.setPreviewSpeed(newSpeed)
     try {
       await invoke('set_speed', { speed: newSpeed })

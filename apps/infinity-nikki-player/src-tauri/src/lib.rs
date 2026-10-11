@@ -2,6 +2,7 @@
 //!
 //! 负责初始化 Tauri 应用、窗口配置、菜单设置和插件管理
 
+mod app_lifecycle;
 mod commands;
 mod keyboard;
 mod midi;
@@ -191,6 +192,7 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             log::info!("管理员身份：{}", is_running_as_admin());
             let is_zh = get_system_lang().starts_with("zh");
+            app_lifecycle::initialize(app.handle(), is_zh)?;
             log::info!(
                 "启动播放器，版本={}，运行路径={:?}",
                 app.package_info().version,
@@ -341,12 +343,17 @@ pub fn run() {
 
                 match id {
                     "quit" => {
-                        // 退出应用
-                        app_handle.exit(0);
+                        if let Err(error) = app_lifecycle::request_quit(app_handle) {
+                            log::error!("请求退出失败: {error}");
+                        }
                     }
                     "help_about" => {
-                        // 显示关于对话框
-                        let _ = app_handle.emit("show_about", ());
+                        // “关于”归入主窗口设置；主窗口在托盘中时也需先展示。
+                        if let Err(error) = app_lifecycle::restore_windows(app_handle) {
+                            log::error!("展示应用设置失败: {error}");
+                        } else {
+                            let _ = app_handle.emit_to("main", "show_about", ());
+                        }
                     }
                     _ => {}
                 }
@@ -358,8 +365,11 @@ pub fn run() {
             log::info!("App setup complete");
             Ok(())
         })
+        .on_window_event(app_lifecycle::handle_window_event)
         // 注册所有 Tauri 命令
         .invoke_handler(tauri::generate_handler![
+            app_lifecycle::hide_to_tray,
+            app_lifecycle::quit_application,
             commands::updater::get_update_state,
             commands::updater::check_app_update,
             commands::updater::download_app_update,
@@ -440,6 +450,21 @@ pub fn run() {
             commands::check_accessibility,
             commands::open_accessibility_settings,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| match event {
+            tauri::RunEvent::ExitRequested {
+                api, code: None, ..
+            } => {
+                api.prevent_exit();
+                if let Err(error) = app_lifecycle::request_quit(app) {
+                    log::error!("请求退出失败: {error}");
+                }
+            }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => {
+                let _ = app_lifecycle::restore_windows(app);
+            }
+            _ => {}
+        });
 }

@@ -24,6 +24,7 @@ const props = defineProps<{
   speed?: number
   disabled?: boolean
   autoOpen?: boolean
+  nativeChrome?: boolean
   prepareExternal: () => Promise<void>
   // eslint-disable-next-line no-unused-vars -- Vue ESLint 将类型签名的参数误识别为变量。
   applyResult(result: TrackRecorderResult): Promise<void>
@@ -94,6 +95,7 @@ defineExpose({ openTrackRecorder, close: () => dialog.value?.close(), checkpoint
     ref="dialog"
     :input="input"
     :services="services"
+    :native-chrome="nativeChrome"
     @closed="closed"
   />
 </template>

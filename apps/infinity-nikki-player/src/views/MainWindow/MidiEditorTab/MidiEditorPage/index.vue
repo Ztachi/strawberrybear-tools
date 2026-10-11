@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { registerAppCloseGuard } from '@/features/app-close/controller'
 /**
  * @description: MIDI 编辑页：载入项目 → 会话/试听/快捷键 → 复用 PianoWorkspace 编辑 → 保存/草稿/导出
  */
@@ -811,6 +812,19 @@ const removeInstallParticipant = updater.registerInstallParticipant(async () => 
   if (recordingLocked.value && !recorderLauncher.value?.isOpen) throw new Error('Recording is active in the editor window')
   await flushDraft()
 })
+const removeCloseGuard = registerAppCloseGuard(async () => {
+  if (recordingLocked.value) {
+    recorderLauncher.value?.pause()
+    await recorderLauncher.value?.checkpoint()
+    if (editorWindowStatus.value !== 'docked') await editorWindow?.focus()
+    toast.warning(t('appSettings.recordingBeforeQuit'))
+    return false
+  }
+  if (!(await confirmLeaveIfNeeded())) return false
+  playback.pause()
+  await flushDraft()
+  return true
+})
 onActivated(() => {
   pageActive = true
   installEditorShortcuts()
@@ -822,6 +836,7 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
   loadGeneration += 1
   removeInstallParticipant()
+  removeCloseGuard()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   if (draftTimer !== null) window.clearInterval(draftTimer)
   choice.value.resolve?.('cancel')

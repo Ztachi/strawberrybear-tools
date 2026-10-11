@@ -16,6 +16,8 @@ import {
   type UpdateSnapshot,
 } from '@/features/app-updater/controller'
 import MainWindow from '@/views/MainWindow/index.vue'
+import { APP_CLOSE_PLATFORM } from '@/platform/tauri/appClose'
+import type { CloseAction } from '@/features/app-close/controller'
 import { MIDI_PROJECT_EDITOR_WINDOW_PORT } from '@/features/midi-project-editor-window'
 import { usePlayerStore } from '@/stores/player'
 import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
@@ -23,6 +25,7 @@ import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
 import AllSongsPage from '@/views/MainWindow/FilesTab/pages/AllSongsPage.vue'
 import SongListDetailPage from '@/views/MainWindow/FilesTab/pages/SongListDetailPage.vue'
 import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
+import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
 import OnlineLibraryTab from '@/views/MainWindow/OnlineLibraryTab/index.vue'
 import { useOnlineMidiLibraryStore } from '@/stores/onlineMidiLibrary'
 import type { OnlineMidiSong } from '@/lib/onlineMidiLibraryApi'
@@ -259,7 +262,18 @@ const parsedSongs = new Map(
 )
 let customSongs: MidiInfo[] | null = null
 let pendingParse: { filename: string; resolve: (() => void) | null } | null = null
+let closeRequest: ((action?: CloseAction) => void) | undefined
+let trayHides = 0
+let quits = 0
+let savedSettings: Record<string, unknown> = {}
 mockIPC((command, payload) => {
+  if (command === 'plugin:event|listen') return 0
+  if (command === 'plugin:event|unlisten' || command === 'set_speed') return
+  if (command === 'plugin:app|version') return '1.3.2'
+  if (command === 'save_settings') {
+    savedSettings = { ...(payload as { settings: Record<string, unknown> }).settings }
+    return
+  }
   // 主题回归使用真实悬浮视图；只替换原生窗口切换和屏幕采集能力，不开启实际采集。
   if (['enter_overlay_mode', 'exit_overlay_mode', 'stop_frame_rate_capture'].includes(command))
     return
@@ -355,6 +369,7 @@ mockIPC((command, payload) => {
       enable_keyboard_sim: false,
       auto_fps_enabled: false,
       manual_fps: 60,
+      ...savedSettings,
     }
   throw new Error(`Unexpected native command in MIDI editor fixture: ${command}`)
 })
@@ -439,6 +454,11 @@ const router = createRouter({
       component: NavigationBackFixture,
     },
     {
+      name: 'templates-create',
+      path: '/templates/new',
+      component: TemplateEditorPage,
+    },
+    {
       name: 'online-library',
       path: '/online-library',
       component: OnlineLibraryTab,
@@ -484,6 +504,8 @@ if (showOnlineList) {
 declare global {
   interface Window {
     midiEditorFixture: {
+      requestClose: (action?: CloseAction) => void
+      closeState: () => { hides: number; quits: number; settings: Record<string, unknown> }
       seedDraft: (key: string, name: string, filename?: string) => void
       seedEntryDraft: (entry: MidiEditorEntry, name: string) => Promise<string>
       setSongs: (filenames: string[]) => void
@@ -508,6 +530,8 @@ declare global {
 }
 
 window.midiEditorFixture = {
+  requestClose: (action) => closeRequest?.(action),
+  closeState: () => ({ hides: trayHides, quits, settings: savedSettings }),
   seedDraft(key, name, filename) {
     draftFiles.set(key, {
       ...structuredClone(project),
@@ -593,5 +617,19 @@ createApp({
     })
   )
   .provide(MIDI_PROJECT_EDITOR_WINDOW_PORT, browserMidiProjectEditorWindowPort())
+  .provide(APP_CLOSE_PLATFORM, {
+    listen: async (callback: (action?: CloseAction) => void) => {
+      closeRequest = callback
+      return () => {
+        closeRequest = undefined
+      }
+    },
+    hide: async () => {
+      trayHides++
+    },
+    quit: async () => {
+      quits++
+    },
+  })
   .provide(appUpdaterKey, updater)
   .mount('#app')

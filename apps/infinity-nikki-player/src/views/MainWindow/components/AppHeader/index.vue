@@ -22,8 +22,7 @@ defineProps<{
 const emit = defineEmits<{
   openAccessibilitySettings: []
   enterOverlayMode: []
-  switchLocale: [locale: string]
-  openHelp: []
+  openSettings: []
 }>()
 </script>
 
@@ -35,12 +34,9 @@ const emit = defineEmits<{
         alt="logo"
         class="h-7 w-7 rounded-lg"
         data-tauri-drag-region
-      >
+      />
       <Tooltip :title="title">
-        <h1
-          class="truncate text-sm font-semibold text-foreground"
-          data-tauri-drag-region
-        >
+        <h1 class="truncate text-sm font-semibold text-foreground" data-tauri-drag-region>
           {{ title }}
         </h1>
       </Tooltip>
@@ -52,8 +48,7 @@ const emit = defineEmits<{
         :has-accessibility="hasAccessibility"
         @open-accessibility-settings="emit('openAccessibilitySettings')"
         @enter-overlay-mode="emit('enterOverlayMode')"
-        @switch-locale="emit('switchLocale', $event)"
-        @open-help="emit('openHelp')"
+        @open-settings="emit('openSettings')"
       />
     </template>
   </WindowTitleBar>

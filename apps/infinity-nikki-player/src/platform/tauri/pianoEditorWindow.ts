@@ -65,7 +65,8 @@ export function createPianoEditorWindowPort(): EditorWindowPort {
             .once('tauri://error', (event) => reject(new Error(String(event.payload))))
             .catch(reject)
         })
-        unlistenMainClose = await getCurrentWebviewWindow().onCloseRequested(() => {
+        // 隐藏到托盘不会销毁编辑会话，实际销毁主窗口时才清理子窗口。
+        unlistenMainClose = await getCurrentWebviewWindow().once('tauri://destroyed', () => {
           void child.destroy().catch(() => undefined)
         })
       } catch (error) {

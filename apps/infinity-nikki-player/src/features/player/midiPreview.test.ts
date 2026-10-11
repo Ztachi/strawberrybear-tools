@@ -95,6 +95,17 @@ afterEach(() => {
 })
 
 describe('MIDI 试听平台适配', () => {
+  it('变速时立即发布音频位置，让按键重建不等待下一次界面采样', async () => {
+    await player.play()
+    platform.position = 375
+    feature.setPreviewSpeed(2)
+    expect(player.getState().positionSeconds).toBe(0.375)
+    feature.setDragging(true)
+    feature.setPreviewTime(3200)
+    platform.position = 500
+    feature.setPreviewSpeed(1.5)
+    expect(player.getState().positionSeconds).toBe(3.2)
+  })
   it('reads the audio clock rather than advancing a wall-clock progress timer', async () => {
     await player.play()
     vi.advanceTimersByTime(2000)

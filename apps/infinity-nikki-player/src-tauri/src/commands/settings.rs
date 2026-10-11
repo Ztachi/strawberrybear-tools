@@ -7,6 +7,14 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CloseAction {
+    #[default]
+    Tray,
+    Quit,
+}
+
 /// 全局设置数据结构
 ///
 /// 注意：模板列表已从设置中移除，改为从 templates/ 目录独立加载
@@ -26,6 +34,10 @@ use tauri::Manager;
 /// * `last_preview_source_id` - 上次预览队列来源 ID
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
+    #[serde(default)]
+    pub close_action: CloseAction,
+    #[serde(default)]
+    pub close_action_confirmed: bool,
     /// 当前语言
     pub locale: String,
     /// 当前模板 ID
@@ -82,6 +94,8 @@ fn default_playlist_playback_mode() -> String {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            close_action: CloseAction::Tray,
+            close_action_confirmed: false,
             locale: "en-US".to_string(),
             current_template_id: None,
             play_mode: "auto".to_string(),
@@ -120,6 +134,25 @@ mod tests {
         assert!(!settings.song_list_sidebar_collapsed);
         assert_eq!(settings.last_preview_filename, None);
         assert_eq!(settings.last_preview_source_id, None);
+        assert_eq!(
+            serde_json::to_value(&settings).unwrap()["close_action"],
+            "tray"
+        );
+        assert_eq!(
+            serde_json::to_value(&settings).unwrap()["close_action_confirmed"],
+            false
+        );
+    }
+
+    #[test]
+    fn remembers_close_action_through_settings_roundtrip() {
+        let mut json = serde_json::to_value(AppSettings::default()).unwrap();
+        json["close_action"] = "quit".into();
+        json["close_action_confirmed"] = true.into();
+        let settings: AppSettings = serde_json::from_value(json).unwrap();
+        let restored = serde_json::to_value(settings).unwrap();
+        assert_eq!(restored["close_action"], "quit");
+        assert_eq!(restored["close_action_confirmed"], true);
     }
 }
 

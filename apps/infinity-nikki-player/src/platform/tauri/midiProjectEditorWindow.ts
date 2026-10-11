@@ -64,7 +64,8 @@ async function openMidiProjectEditorWindow(session: string) {
         .once('tauri://error', (event) => reject(new Error(String(event.payload))))
         .catch(reject)
     })
-    unlistenMainClose = await getCurrentWebviewWindow().onCloseRequested(() => {
+    // 关闭请求可能被托盘选择或取消拦截，只有主窗口实际销毁才清理独立窗口。
+    unlistenMainClose = await getCurrentWebviewWindow().once('tauri://destroyed', () => {
       void child.destroy().catch(() => undefined)
     })
   } catch (error) {

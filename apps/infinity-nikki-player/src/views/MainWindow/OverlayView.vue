@@ -266,7 +266,7 @@ function startKeystrokePlayback() {
   keystrokeSequencer.play(playerStore.previewCurrentTime)
 }
 
-// 监听播放状态与当前歌曲变化 - 合并在一个侦听器里，避免"切歌销毁"与"进入播放态启动"
+// 监听播放状态、歌曲与倍速变化 - 合并在一个侦听器里，避免"切歌销毁"与"进入播放态启动"
 // 在同一批响应式刷新中因执行顺序不同而互相覆盖：
 // 处于播放态（含切歌后继续播放）→ 按最新时间表重建执行器；暂停 → 释放按键；其余 → 销毁
 watch(
@@ -275,9 +275,11 @@ watch(
       playerStore.isPreviewPlaying,
       playerStore.isPreviewPaused,
       playerStore.currentMidi?.filename,
+      playerStore.speed,
     ] as const,
   ([playing, paused]) => {
     if (playing && !paused) {
+      // 执行器速度在创建时锁定；变速先释放旧按键，再从音频的当前音乐位置重建。
       startKeystrokePlayback()
     } else if (paused) {
       keystrokeSequencer?.pause()
@@ -379,8 +381,10 @@ async function exitOverlayMode() {
     )
     settingsStore.isOverlayMode = false
     await invoke('exit_overlay_mode')
+    return true
   } catch (e) {
     console.error('退出悬浮模式失败:', e)
+    return false
   }
 }
 
@@ -418,6 +422,7 @@ const currentMidiName = computed(() =>
 )
 // 当前曲目身份变化时重建跑马灯，悬浮条里长标题会从开头重新播放。
 const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'no-file')
+defineExpose({ exitOverlayMode })
 </script>
 
 <template>

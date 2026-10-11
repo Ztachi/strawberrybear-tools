@@ -4,6 +4,8 @@
 
 @layer base {
   :root {
+    /* macOS 沉浸式窗口的系统按钮区域，标题栏与覆盖它的录制抽屉共用。 */
+    --window-title-safe-inset: 90px;
     /* 品牌粉色系 */
     --color-primary: #f7b7be;
     --color-primary-light: #fff1f4;

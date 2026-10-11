@@ -11,6 +11,6 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     // 自定义 Vue renderer 需要客户端模板，但不依赖浏览器或音频设备。
-    testTransformMode: { web: ['**/editorHistory.test.ts'] },
+    testTransformMode: { web: ['**/editorHistory.test.ts', '**/OverlayView.test.ts'] },
   },
 })

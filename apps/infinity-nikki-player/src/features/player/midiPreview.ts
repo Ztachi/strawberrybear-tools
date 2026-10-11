@@ -323,12 +323,16 @@ export class MidiPreviewPlaybackFeature implements AudioPlayerPort {
   }
 
   /**
-   * @description: 更新试听速度，不触碰游戏内模拟按键速度。
+   * @description: 更新试听速度并发布当前音乐位置，供悬浮层同步重建按键调度。
    * @param {number} speed - 试听速度倍率
    * @return {void} 无返回值
    */
   setPreviewSpeed(speed: number): void {
     setPreviewSpeed(speed)
+    // 变速会重锚音频时钟；立即发布新位置，供悬浮层同批重建按键调度。
+    if (this.audioPrepared && !this.dragging) {
+      this.player?.updateProgress(getPreviewAudioTime() / 1000, this.getDurationMs() / 1000)
+    }
   }
 
   /**

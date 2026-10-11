@@ -4,8 +4,10 @@
 import releaseNoteReleases from './release-notes/en-US.json'
 
 import recording from './recording/en-US.json'
+import appSettings from './appSettings/en-US.json'
 
 export default {
+  appSettings,
   recording,
   app: {
     title: 'Infinity Nikki Auto Player',

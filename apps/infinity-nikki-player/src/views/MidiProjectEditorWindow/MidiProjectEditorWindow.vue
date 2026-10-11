@@ -450,20 +450,6 @@ onBeforeUnmount(() => {
                   />
                 </Tooltip>
               </div>
-              <TrackRecorderLauncher
-                ref="recorderLauncher"
-                :state="state"
-                :templates="presentation.templateMappings ?? []"
-                :template-id="presentation.currentTemplateId"
-                :track-id="workspace?.getState()?.selectedTrackId"
-                :position-seconds="playback.positionSeconds.value"
-                :fps="presentation.fps"
-                :speed="presentation.speed"
-                :disabled="updateLocked"
-                :prepare-external="prepareRecording"
-                :apply-result="result => recorderRequest('recording-apply', result)"
-                @lock="recordingLock"
-              />
               <EditorToolbar
                 :show-velocity="presentation.showVelocity"
                 :dim-unplayable="presentation.dimUnplayable"
@@ -480,6 +466,21 @@ onBeforeUnmount(() => {
                 @stop="playback.stop()"
                 @set-bpm="setBpm"
                 @set-meter="setMeter"
+              />
+              <TrackRecorderLauncher
+                ref="recorderLauncher"
+                native-chrome
+                :state="state"
+                :templates="presentation.templateMappings ?? []"
+                :template-id="presentation.currentTemplateId"
+                :track-id="workspace?.getState()?.selectedTrackId"
+                :position-seconds="playback.positionSeconds.value"
+                :fps="presentation.fps"
+                :speed="presentation.speed"
+                :disabled="updateLocked"
+                :prepare-external="prepareRecording"
+                :apply-result="result => recorderRequest('recording-apply', result)"
+                @lock="recordingLock"
               />
             </template>
             <template #actions>
