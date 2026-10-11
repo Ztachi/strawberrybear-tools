@@ -21,18 +21,30 @@ test('独立窗口录制按钮排在编辑工具后面，录制标题避开 macO
   expect((await child.locator('.recorder-track-name').boundingBox())!.x).toBeGreaterThanOrEqual(90)
 })
 
-test('设置分类包含关闭行为、语言和关于，倍速范围与标记符合要求', async ({ page }, testInfo) => {
+test('设置复用帮助目录，常规与关于连续滚动，倍速使用数字刻度', async ({ page }, testInfo) => {
   await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
   await page.getByRole('button', { name: '设置', exact: true }).click()
   const settings = page.getByRole('dialog', { name: '设置', exact: true })
   await expect(settings.getByRole('radio', { name: '最小化到系统托盘', exact: true })).toBeChecked()
   await expect(settings.getByRole('combobox', { name: '显示语言', exact: true })).toBeVisible()
+  const contents = settings.getByRole('navigation', { name: '设置目录', exact: true })
+  await expect(contents.getByRole('link')).toHaveText(['常规', '关于'])
+  await expect(settings.locator('#app-settings-general')).toBeAttached()
+  await expect(settings.locator('#app-settings-about')).toBeAttached()
+  await expect(settings).not.toContainText('沿用现有')
   await page.screenshot({
     path: testInfo.outputPath('settings-general.png'),
     animations: 'disabled',
   })
-  await settings.getByRole('menuitem', { name: '关于', exact: true }).click()
+  await contents.getByRole('link', { name: '关于', exact: true }).click()
   await expect(settings).toContainText('更新日志')
+  await expect
+    .poll(() => settings.locator('.section-document-content').evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(100)
+  await contents.getByRole('link', { name: '常规', exact: true }).click()
+  await expect
+    .poll(() => settings.locator('.section-document-content').evaluate((node) => node.scrollTop))
+    .toBe(0)
   await settings.getByRole('button', { name: 'Close', exact: true }).click()
   const speed = page.getByRole('button', { name: '倍速播放', exact: true }).first()
   await expect(speed).toHaveText('1.0x')
@@ -44,21 +56,21 @@ test('设置分类包含关闭行为、语言和关于，倍速范围与标记�
   await expect(speed).toHaveText('3.0x')
   await slider.press('ArrowLeft')
   await expect(speed).toHaveText('2.9x')
-  for (const mark of ['0.5x', '1.0x', '1.5x', '2.0x', '2.5x', '3.0x'])
+  for (const mark of ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0'])
     await expect(
       page.locator('.playback-speed-popover .ant-slider-mark').getByText(mark, { exact: true })
     ).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('playback-speed.png'), animations: 'disabled' })
   await page
     .locator('.playback-speed-popover .ant-slider-mark')
-    .getByText('1.5x', { exact: true })
+    .getByText('1.5', { exact: true })
     .click()
   await expect(speed).toHaveText('1.5x')
   await page.getByRole('button', { name: '恢复原速', exact: true }).click()
   await expect(speed).toHaveText('1.0x')
 })
 
-test('窄窗口设置可切换英文，分类与倍速控件仍可操作', async ({ page }, testInfo) => {
+test('窄窗口设置保持左侧目录，语言可保存，关于仍在同一正文中', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 540, height: 640 })
   await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
   await page.getByRole('button', { name: '设置', exact: true }).click()
@@ -74,14 +86,17 @@ test('窄窗口设置可切换英文，分类与倍速控件仍可操作', async
     .poll(() => page.evaluate(() => window.midiEditorFixture.closeState().settings.locale))
     .toBe('en-US')
   const firstCategory = (await settings
-    .getByRole('menuitem', { name: 'General', exact: true })
+    .getByRole('link', { name: 'General', exact: true })
     .boundingBox())!
   const lastCategory = (await settings
-    .getByRole('menuitem', { name: 'About', exact: true })
+    .getByRole('link', { name: 'About', exact: true })
     .boundingBox())!
-  expect(Math.abs(firstCategory.y - lastCategory.y)).toBeLessThan(2)
-  await settings.getByRole('menuitem', { name: 'Playback', exact: true }).click()
-  await expect(settings).toContainText('Game frame rate')
+  expect(Math.abs(firstCategory.x - lastCategory.x)).toBeLessThan(2)
+  expect(lastCategory.y).toBeGreaterThan(firstCategory.y)
+  const body = (await settings.locator('.section-document-content').boundingBox())!
+  expect(body.x).toBeGreaterThan(lastCategory.x + lastCategory.width)
+  await expect(settings.getByRole('link', { name: 'Playback', exact: true })).toHaveCount(0)
+  await expect(settings.getByRole('link', { name: 'Updates', exact: true })).toHaveCount(0)
   await page.screenshot({
     path: testInfo.outputPath('settings-narrow-en.png'),
     animations: 'disabled',
@@ -89,8 +104,76 @@ test('窄窗口设置可切换英文，分类与倍速控件仍可操作', async
   const bounds = (await settings.boundingBox())!
   expect(bounds.x).toBeGreaterThanOrEqual(0)
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(540)
-  await settings.getByRole('menuitem', { name: 'About', exact: true }).click()
+  await settings.getByRole('link', { name: 'About', exact: true }).click()
   await expect(settings).toContainText('Release Notes')
+})
+
+test('360×156 悬浮窗口内倍速浮层完整显示，刻度与恢复原速可点击', async ({ page }, testInfo) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await page.getByRole('button', { name: '进入悬浮模式', exact: true }).click()
+  await page.setViewportSize({ width: 360, height: 156 })
+  const speed = page.getByRole('button', { name: '倍速播放', exact: true })
+  await speed.click()
+  const popup = page.locator('.playback-speed-popover')
+  await expect(popup).toBeVisible()
+  await expect
+    .poll(async () => {
+      const box = (await popup.boundingBox())!
+      return box.x >= 0 && box.y >= 0 && box.x + box.width <= 360 && box.y + box.height <= 156
+    })
+    .toBe(true)
+  const box = (await popup.boundingBox())!
+  expect(box.width).toBeLessThanOrEqual(260)
+  expect(box.height).toBeLessThanOrEqual(90)
+  await expect(popup.locator('.ant-slider-mark-text')).toHaveText([
+    '0.5',
+    '1.0',
+    '1.5',
+    '2.0',
+    '2.5',
+    '3.0',
+  ])
+  await popup.getByText('2.5', { exact: true }).click()
+  await expect(speed).toHaveText('2.5x')
+  await popup.getByRole('button', { name: '恢复原速', exact: true }).click()
+  await expect(speed).toHaveText('1.0x')
+  await page.screenshot({
+    path: testInfo.outputPath('playback-speed-overlay.png'),
+    animations: 'disabled',
+  })
+})
+
+test('系统关于入口定位同一设置正文，重新从设置打开回到常规', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await expect(page.getByRole('button', { name: '设置', exact: true })).toBeVisible()
+  await page.evaluate(() => window.midiEditorFixture.showAbout())
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  const content = settings.locator('.section-document-content')
+  const url = page.url()
+  const historyLength = await page.evaluate(() => window.history.length)
+  async function expectAboutPosition(): Promise<void> {
+    await expect
+      .poll(() =>
+        content.evaluate((node) => {
+          const about = node.querySelector('#app-settings-about')!
+          return Math.abs(about.getBoundingClientRect().top - node.getBoundingClientRect().top - 8)
+        })
+      )
+      .toBeLessThanOrEqual(1)
+    await expect(settings.locator('[href="#app-settings-about"]')).toHaveClass(/title-active/)
+  }
+  await expect(settings).toBeVisible()
+  await expectAboutPosition()
+  await settings.getByRole('link', { name: '常规', exact: true }).click()
+  await expect.poll(() => content.evaluate((node) => node.scrollTop)).toBe(0)
+  await page.evaluate(() => window.midiEditorFixture.showAbout())
+  await expectAboutPosition()
+  await settings.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  await expect.poll(() => content.evaluate((node) => node.scrollTop)).toBe(0)
+  await expect(settings.locator('[href="#app-settings-general"]')).toHaveClass(/title-active/)
+  expect(page.url()).toBe(url)
+  expect(await page.evaluate(() => window.history.length)).toBe(historyLength)
 })
 
 test('首次关闭可以取消，记住托盘后直接隐藏，在设置中改为退出即可退出', async ({ page }) => {
@@ -165,7 +248,7 @@ test('访问关于后关闭设置，歌曲列表的返回顶部仍可使用', as
   await expect(back).toBeVisible()
   await page.getByRole('button', { name: '设置', exact: true }).click()
   const settings = page.getByRole('dialog', { name: '设置', exact: true })
-  await settings.getByRole('menuitem', { name: '关于', exact: true }).click()
+  await settings.getByRole('link', { name: '关于', exact: true }).click()
   await expect(settings).toContainText('更新日志')
   await settings.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(back).toBeVisible()

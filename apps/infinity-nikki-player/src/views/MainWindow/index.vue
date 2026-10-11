@@ -522,7 +522,13 @@ function bindDomDragEvents() {
 
 const settingsOpen = ref(false)
 const settingsCategory = ref('general')
-function openSettings(category = 'general'): void { settingsCategory.value = category; settingsOpen.value = true }
+const settingsNavigationKey = ref(0)
+function openSettings(category = 'general'): void {
+  settingsCategory.value = category
+  // 重复选择系统“关于”也要发出新的定位请求，不重建设置里的编辑控件。
+  settingsNavigationKey.value++
+  settingsOpen.value = true
+}
 let unlistenAbout: (() => void) | undefined
 let settingsHostDisposed = false
 onMounted(async () => {
@@ -715,7 +721,11 @@ provide(midiImportActionsKey, {
         />
       </main>
     </div>
-    <SettingsDialog v-model:open="settingsOpen" :initial-category="settingsCategory" />
+    <SettingsDialog
+      v-model:open="settingsOpen"
+      :initial-category="settingsCategory"
+      :navigation-key="settingsNavigationKey"
+    />
     <AppCloseHost :prepare-quit-display="prepareQuitDisplay" />
   </div>
 </template>

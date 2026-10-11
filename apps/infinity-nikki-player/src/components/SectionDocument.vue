@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** @description: 共用目录与正文滚动容器；Anchor 负责定位和滚动同步，不修改路由历史。 */
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { Anchor } from 'antdv-next'
 
 interface DocumentItem {
@@ -9,12 +9,28 @@ interface DocumentItem {
   title: string
 }
 
-defineProps<{
+const props = defineProps<{
   items: DocumentItem[]
   contentsLabel: string
+  initialHref?: string
+  navigationKey?: number
 }>()
 const content = ref<HTMLElement | null>(null)
 const contents = ref<HTMLElement | null>(null)
+
+// 外部定位也走已有目录链接，让 Anchor 统一处理动画和高亮，避免两套滚动互相覆盖。
+watch(
+  [() => props.initialHref, contents, () => props.navigationKey],
+  async ([href, container]) => {
+    if (!href || !container) return
+    await nextTick()
+    if (props.initialHref !== href || !container.isConnected) return
+    const link = Array.from(container.querySelectorAll<HTMLAnchorElement>('a'))
+      .find((item) => item.getAttribute('href') === href)
+    link?.click()
+  },
+  { flush: 'post' }
+)
 
 /** @return 当前弹窗的正文容器，避免目录错误地滚动主页面。 */
 function getContentContainer(): HTMLElement {

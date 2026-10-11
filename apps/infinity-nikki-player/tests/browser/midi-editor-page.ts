@@ -4,6 +4,7 @@ import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
 import { mockIPC } from '@tauri-apps/api/mocks'
 import { invoke } from '@tauri-apps/api/core'
+import { emit } from '@tauri-apps/api/event'
 import type { RecorderAudio } from '@/features/midi-recording/types'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getAntdvLocale, i18n } from '@/i18n'
@@ -266,7 +267,7 @@ let closeRequest: ((action?: CloseAction) => void) | undefined
 let trayHides = 0
 let quits = 0
 let savedSettings: Record<string, unknown> = {}
-mockIPC((command, payload) => {
+const fixtureIPC: Parameters<typeof mockIPC>[0] = (command, payload) => {
   if (command === 'plugin:event|listen') return 0
   if (command === 'plugin:event|unlisten' || command === 'set_speed') return
   if (command === 'plugin:app|version') return '1.3.2'
@@ -372,7 +373,8 @@ mockIPC((command, payload) => {
       ...savedSettings,
     }
   throw new Error(`Unexpected native command in MIDI editor fixture: ${command}`)
-})
+}
+mockIPC(fixtureIPC, { shouldMockEvents: true })
 i18n.global.locale.value = 'zh-CN'
 const NavigationDetailFixture = defineComponent({
   name: 'NavigationDetailFixture',
@@ -505,6 +507,7 @@ declare global {
   interface Window {
     midiEditorFixture: {
       requestClose: (action?: CloseAction) => void
+      showAbout: () => Promise<void>
       closeState: () => { hides: number; quits: number; settings: Record<string, unknown> }
       seedDraft: (key: string, name: string, filename?: string) => void
       seedEntryDraft: (entry: MidiEditorEntry, name: string) => Promise<string>
@@ -531,6 +534,7 @@ declare global {
 
 window.midiEditorFixture = {
   requestClose: (action) => closeRequest?.(action),
+  showAbout: () => emit('show_about'),
   closeState: () => ({ hides: trayHides, quits, settings: savedSettings }),
   seedDraft(key, name, filename) {
     draftFiles.set(key, {
