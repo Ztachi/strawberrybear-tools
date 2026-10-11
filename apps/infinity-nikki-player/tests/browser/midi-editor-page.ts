@@ -1,4 +1,5 @@
 import { createProject, type MidiProject } from '@strawberrybear/midi-editor'
+import { Player } from '@strawberrybear/player'
 import { createApp, defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
@@ -23,6 +24,7 @@ import { MIDI_PROJECT_EDITOR_WINDOW_PORT } from '@/features/midi-project-editor-
 import { createAppContext } from '@/bootstrap/createAppContext'
 import { bindAppContextStores } from '@/bootstrap/bindAppContextStores'
 import { usePlayerStore } from '@/stores/player'
+import { MidiPreviewPlaybackFeature } from '@/features/player/midiPreview'
 import { useSongListStore } from '@/stores/songLists'
 import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
 import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
@@ -31,6 +33,7 @@ import SongListDetailPage from '@/views/MainWindow/FilesTab/pages/SongListDetail
 import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
 import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
 import OnlineLibraryTab from '@/views/MainWindow/OnlineLibraryTab/index.vue'
+import OnlineSongDetailPage from '@/views/MainWindow/OnlineLibraryTab/pages/OnlineSongDetailPage.vue'
 import { useOnlineMidiLibraryStore } from '@/stores/onlineMidiLibrary'
 import type { OnlineMidiSong } from '@/lib/onlineMidiLibraryApi'
 import type { MidiInfo } from '@/types'
@@ -308,6 +311,13 @@ const fixtureIPC: Parameters<typeof mockIPC>[0] = (command, payload) => {
       message: 'Browser fixture',
     }
   if (command === 'stop_playback') return
+  if (command === 'prepare_online_midi_preview') {
+    const filename = (payload as { filename: string }).filename
+    const song = { ...midi, filename, file_path: `/fixture/temporary/${filename}` }
+    parsedSongs.set(song.file_path, song)
+    return song
+  }
+  if (command === 'cleanup_online_midi_preview') return
   if (command === 'get_playback_state') return { is_playing: false, current_tick: 0 }
   if (command === 'save_midi_project_draft') {
     if (draftFailure) throw new Error('测试草稿保存失败')
@@ -490,7 +500,7 @@ const router = createRouter({
     {
       name: 'online-library-song-detail',
       path: '/online-library/song/:id',
-      component: NavigationBackFixture,
+      component: fixtureQuery.has('online-playback') ? OnlineSongDetailPage : NavigationBackFixture,
     },
     {
       name: 'navigation-away',
@@ -518,6 +528,26 @@ await router.push(
 )
 const pinia = createPinia()
 if (fixtureQuery.has('overlay-playlist')) bindAppContextStores(pinia, createAppContext())
+if (fixtureQuery.has('online-playback')) {
+  // 只替换音频端口；页面动作、临时快照、来源切换与公共 Player 状态机都使用生产实现。
+  const audio = {
+    load: async () => {},
+    play: async () => {},
+    pause: async () => {},
+    stop: async () => {},
+    seek: async () => {},
+    setVolume: async () => {},
+    setMuted: async () => {},
+  }
+  const runtime = new Player({ audio })
+  const feature = new MidiPreviewPlaybackFeature()
+  feature.bindPlayer(runtime)
+  feature.seekMs = async (time, options = {}) => {
+    await runtime.seek(time / 1000)
+    if (options.autoPlay) await runtime.play()
+  }
+  usePlayerStore(pinia).bindPreviewRuntime(runtime, feature)
+}
 // 详情进入编辑器时曲库已载入；夹具按真实前置状态装配，不等待主窗口的异步初始化。
 if (fixtureQuery.has('source') && !fixtureQuery.has('cold'))
   usePlayerStore(pinia).midiLibrary = [midi]
@@ -537,11 +567,14 @@ declare global {
       setCurrentSong: (
         filename: string | null,
         status: 'playing' | 'paused' | 'stopped',
-        online?: { id?: string; sha256?: string }
+        online?: { id?: string; sha256?: string; temporary?: boolean },
+        sourceId?: string
       ) => void
       setOnlineTitles: (titles: string[]) => void
+      auditionOnlineSong: (id: string) => Promise<boolean>
       setSongLists: (lists: { id: string; name: string; filenames: string[] }[]) => void
       openedUrls: () => string[]
+      previewStatus: () => 'playing' | 'paused' | 'stopped'
       previewState: () => {
         filename: string | undefined
         source: string | undefined
@@ -597,12 +630,24 @@ window.midiEditorFixture = {
     usePlayerStore(pinia).midiLibrary = customSongs
   },
   // 仅提供播放状态输入，曲名组件、响应式 Store 与页面使用生产实现。
-  setCurrentSong(filename, status, online) {
+  setCurrentSong(filename, status, online, sourceId) {
     const player = usePlayerStore(pinia)
     const song = player.midiLibrary.find((item) => item.filename === filename)
-    player.currentMidi = song
-      ? { ...song, online_song_id: online?.id, online_sha256: online?.sha256 }
-      : null
+    if (song && online) {
+      song.online_song_id = online.id
+      song.online_sha256 = online.sha256
+    }
+    player.currentMidi = song ?? null
+    player.currentTemporaryOnlineSongId = online?.temporary ? (online.id ?? null) : null
+    if (sourceId) {
+      const list = useSongListStore(pinia).getSongListById(sourceId.replace(/^song-list:/, ''))
+      player.setPreviewQueueContext(
+        list
+          ? player.midiLibrary.filter((item) => list.song_filenames.includes(item.filename))
+          : player.midiLibrary,
+        { id: sourceId, title: list?.name ?? '全部歌曲' }
+      )
+    }
     player.isPreviewPlaying = status === 'playing'
     player.isPreviewPaused = status === 'paused'
   },
@@ -611,6 +656,9 @@ window.midiEditorFixture = {
       titles.map((title, index) => ({ ...onlineSongFixtures[index]!, title })),
       Date.now()
     )
+  },
+  async auditionOnlineSong(id) {
+    return usePlayerStore(pinia).playTemporaryMidiBuffer(`${id}.mid`, [], { onlineSongId: id })
   },
   setSongLists(lists) {
     useSongListStore(pinia).songLists = lists.map((list) => ({
@@ -624,6 +672,10 @@ window.midiEditorFixture = {
     }))
   },
   openedUrls: () => [...openedUrls],
+  previewStatus() {
+    const player = usePlayerStore(pinia)
+    return player.isPreviewPlaying ? 'playing' : player.isPreviewPaused ? 'paused' : 'stopped'
+  },
   previewState() {
     const player = usePlayerStore(pinia)
     return {

@@ -146,15 +146,23 @@ function findImportedMidi(song: OnlineMidiSong): MidiInfo | null {
   )
 }
 
-function isSongPlaying(song: OnlineMidiSong) {
+/** 在线试听使用临时来源；已导入歌曲的播放入口使用全部歌曲来源。 */
+function isSongSelected(song: OnlineMidiSong): boolean {
   if (
     playerStore.currentTemporaryOnlineSongId === song.id &&
     playerStore.currentMidi?.online_song_id === song.id
   ) {
-    return playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
+    return playerStore.isMidiSelectedInQueue(
+      playerStore.currentMidi.filename,
+      `online-preview:${song.id}`
+    )
   }
   const imported = findImportedMidi(song)
-  return imported ? playerStore.getSongPlaybackState(imported.filename) === 'playing' : false
+  return imported ? playerStore.isMidiSelectedInQueue(imported.filename, 'all') : false
+}
+
+function isSongPlaying(song: OnlineMidiSong): boolean {
+  return isSongSelected(song) && playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
 }
 
 async function getSongBytes(song: OnlineMidiSong) {
@@ -230,13 +238,14 @@ function scrollToTop(): void {
 async function togglePlay(song: OnlineMidiSong) {
   const imported = findImportedMidi(song)
   if (imported) {
+    const context = { id: 'all', title: t('songList.allSongs') }
     if (playerStore.currentTemporaryOnlineSongId) {
       await playerStore.restoreTemporaryOnlinePreview()
+      // 用户点击时是临时试听来源；恢复出的旧歌曲不能把这次“播放”变成暂停。
+      await playerStore.playMidiInQueue(imported, playerStore.midiLibrary, context)
+    } else {
+      await playerStore.toggleMidiInQueue(imported, playerStore.midiLibrary, context)
     }
-    await playerStore.toggleMidiInQueue(imported, playerStore.midiLibrary, {
-      id: 'all',
-      title: t('songList.allSongs'),
-    })
     return
   }
 
@@ -245,6 +254,7 @@ async function togglePlay(song: OnlineMidiSong) {
     return
   }
   if (
+    isSongSelected(song) &&
     playerStore.currentTemporaryOnlineSongId === song.id &&
     playerStore.isPreviewPaused
   ) {
@@ -456,8 +466,7 @@ onBeforeUnmount(() => {
                     <h3>
                       <PlaylistSongTitle
                         :text="displaySongTitle(song)"
-                        :online-song-id="song.id"
-                        :online-sha256="song.sha256"
+                        :selected="isSongSelected(song)"
                       />
                     </h3>
                   </Tooltip>

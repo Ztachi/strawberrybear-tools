@@ -41,7 +41,13 @@ const filteredSongs = computed(() => {
 const emptyText = computed(() => collectionSongs.value.length
   ? t('songList.noSearchResults')
   : t(collectionId.value === 'all' ? 'midi.libraryEmpty' : 'songList.noSongs'))
-const canLocate = computed(() => player.midiLibrary.some((song) => song.filename === player.currentMidi?.filename))
+function isCurrentSong(song: MidiInfo): boolean {
+  return player.isMidiSelectedInQueue(song.filename, collectionId.value)
+}
+const canLocate = computed(() =>
+  options.value.some(option => option.value === player.previewQueueContext?.id) &&
+  player.midiLibrary.some((song) => song.filename === player.currentMidi?.filename)
+)
 
 watch(options, () => { collectionId.value = availableCollection(collectionId.value) })
 watch(() => props.expanded, (expanded) => { if (!expanded) selectOpen.value = false })
@@ -60,10 +66,8 @@ function play(song: MidiInfo): void {
 async function locateCurrent(): Promise<void> {
   if (!canLocate.value) return
   query.value = ''
-  if (!collectionSongs.value.some((song) => song.filename === player.currentMidi?.filename)) {
-    collectionId.value = availableCollection(player.previewQueueContext?.id)
-    if (!collectionSongs.value.some((song) => song.filename === player.currentMidi?.filename)) collectionId.value = 'all'
-  }
+  // 当前浏览歌单也可能包含同一歌曲，定位必须回到实际播放来源。
+  collectionId.value = availableCollection(player.previewQueueContext?.id)
   await nextTick()
   playlist.value?.querySelector('.playlist-item.active')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
@@ -119,14 +123,14 @@ async function locateCurrent(): Promise<void> {
         :key="song.filename"
         type="button"
         class="playlist-item"
-        :class="{ active: player.currentMidi?.filename === song.filename }"
+        :class="{ active: isCurrentSong(song) }"
         @click="play(song)"
       >
         <Tooltip :title="getMidiDisplayName(song)">
           <PlaylistSongTitle
             class="playlist-name"
             :text="getMidiDisplayName(song)"
-            :filename="song.filename"
+            :selected="isCurrentSong(song)"
           />
         </Tooltip>
         <span class="playlist-duration">{{ formatDuration(song.duration_ms) }}</span>

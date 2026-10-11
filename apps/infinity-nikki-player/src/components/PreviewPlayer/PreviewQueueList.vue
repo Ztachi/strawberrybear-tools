@@ -51,7 +51,11 @@ defineExpose({ scrollToTop, locateCurrent, getScrollTop: () => queueListRef.valu
       </div>
       <div class="queue-main">
         <Tooltip :title="midi.title">
-          <PlaylistSongTitle class="queue-song-title" :text="midi.title" :filename="midi.id" />
+          <PlaylistSongTitle
+            class="queue-song-title"
+            :text="midi.title"
+            :selected="currentId === midi.id"
+          />
         </Tooltip>
         <span class="queue-song-meta">
           {{ midi.trackCount }} {{ t('midi.tracks') }} · {{ midi.noteCount || 0 }}

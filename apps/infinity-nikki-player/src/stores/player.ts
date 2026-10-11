@@ -890,11 +890,15 @@ export const usePlayerStore = defineStore('player', () => {
     previewPlayer?.clearQueue()
   }
 
-  /**
-   * @description: 获取指定歌曲相对于全局播放器的状态
-   * @param {string} filename - MIDI 文件名
-   * @return {SongPlaybackState} 当前播放状态
-   */
+  /** 当前项由歌曲和播放来源共同确定，歌单改名不改变来源 ID。 */
+  function isMidiSelectedInQueue(filename: string, sourceId: string | null): boolean {
+    return (
+      currentMidi.value?.filename === filename &&
+      (previewQueueContext.value?.id ?? null) === sourceId
+    )
+  }
+
+  /** 获取歌曲的全局播放状态；列表先使用所属播放域的选中结果限定作用范围。 */
   function getSongPlaybackState(filename: string): SongPlaybackState {
     if (currentMidi.value?.filename !== filename) return 'idle'
     if (isPreviewPlaying.value && !isPreviewPaused.value) return 'playing'
@@ -1076,7 +1080,8 @@ export const usePlayerStore = defineStore('player', () => {
     items: MidiInfo[],
     context: MidiPreviewQueueContext | null = null
   ): Promise<void> {
-    const isCurrent = currentMidi.value?.filename === midi.filename
+    // 同曲跨来源点击应切换播放域；只有当前来源内的点击才暂停或恢复。
+    const isCurrent = isMidiSelectedInQueue(midi.filename, context?.id ?? null)
     if (isCurrent && isPreviewPlaying.value && !isPreviewPaused.value) {
       pausePreviewPlayback()
       return
@@ -2146,6 +2151,7 @@ export const usePlayerStore = defineStore('player', () => {
     removeFromLibrary,
     syncActivePreviewQueue,
     setPreviewQueueContext,
+    isMidiSelectedInQueue,
     getSongPlaybackState,
     selectMidiInQueue,
     playMidiInQueue,

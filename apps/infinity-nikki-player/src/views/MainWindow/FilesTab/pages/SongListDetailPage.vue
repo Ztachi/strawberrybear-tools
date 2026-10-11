@@ -13,7 +13,7 @@ import {
   watch,
 } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Button, Popover } from 'antdv-next'
 import { Edit3, Play } from 'lucide-vue-next'
 import { usePlayerStore } from '@/stores/player'
@@ -34,10 +34,10 @@ const songListStore = useSongListStore()
  *
  * `useRoute()` 始终指向全局当前路由；页面进入 KeepAlive 后若继续直接计算
  * `route.params.id`，打开 MIDI 详情时参数会暂时消失并销毁隐藏页中的列表。
- * 这里让实例持有自己的参数，只在同一详情组件被路由复用时更新。
+ * mainPageIdentity 按完整路径缓存每个实例，不能让路由更新守卫把离开的实例改成另一歌单。
  */
-const songListId = ref(String(route.params.id ?? ''))
-const songList = computed(() => songListStore.getSongListById(songListId.value))
+const songListId = String(route.params.id ?? '')
+const songList = computed(() => songListStore.getSongListById(songListId))
 const songs = computed(() => getSongListSongs(songList.value, playerStore.midiLibrary))
 const coverUrl = computed(() =>
   songList.value?.cover_filename ? songListStore.coverUrls[songList.value.cover_filename] : null
@@ -49,10 +49,6 @@ const isDescriptionPopoverOpen = ref(false)
 
 let descriptionResizeObserver: ResizeObserver | null = null
 let pageActive = false
-
-onBeforeRouteUpdate((to) => {
-  songListId.value = String(to.params.id ?? '')
-})
 
 function updateDescriptionOverflow(): void {
   const element = descriptionRef.value

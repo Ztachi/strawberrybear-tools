@@ -10,7 +10,6 @@ import PianoQueueDrawer from './PianoQueueDrawer.vue'
 import PreviewQueueButton from '@/components/PreviewPlayer/PreviewQueueButton.vue'
 import type { PreviewQueueState } from '@/features/player/previewQueue'
 import PlayerSongTitle from '@/components/PlayerSongTitle.vue'
-import { provideCurrentSong } from '@/components/PlaylistSongTitle/currentSong'
 import PreviewPlaybackControls from '@/components/PreviewPlayer/PreviewPlaybackControls.vue'
 import WindowTitleBar from '@/components/WindowTitleBar/WindowTitleBar.vue'
 import type { PreviewControlState } from '@/features/player/previewControls'
@@ -38,8 +37,6 @@ const queueOpen = ref(false)
 const queue = shallowRef<PreviewQueueState>({ title: '', items: [], error: '' })
 let queueRevision = 0
 const playback = shallowRef<PreviewControlState>({ mediaId: null, isPlaying: false, isPaused: false, mode: 'sequential', error: '' })
-// 独立窗口只消费主窗口同步的当前歌曲，不创建第二个播放器 Store。
-provideCurrentSong(computed(() => playback.value.mediaId ? { filename: playback.value.mediaId } : null))
 const transport = shallowRef<PianoRollTransport>({
   positionSeconds: 0,
   isPlaying: false,

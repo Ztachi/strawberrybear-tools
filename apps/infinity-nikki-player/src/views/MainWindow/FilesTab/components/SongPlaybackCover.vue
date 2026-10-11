@@ -11,6 +11,7 @@ import type { MidiPreviewQueueContext } from '@/features/player/midiPreview'
 
 const props = defineProps<{
   midi: MidiInfo
+  selected: boolean
   queueItems: MidiInfo[]
   queueContext?: MidiPreviewQueueContext | null
 }>()
@@ -18,8 +19,9 @@ const props = defineProps<{
 const { t } = useI18n()
 const playerStore = usePlayerStore()
 
-const playbackState = computed(() => playerStore.getSongPlaybackState(props.midi.filename))
-const isPlaying = computed(() => playbackState.value === 'playing')
+const isPlaying = computed(
+  () => props.selected && playerStore.getSongPlaybackState(props.midi.filename) === 'playing'
+)
 
 async function handleCoverAction(event: MouseEvent): Promise<void> {
   event.stopPropagation()

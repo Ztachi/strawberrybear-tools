@@ -114,11 +114,10 @@ const selectedCount = computed(() => selectedFilenames.value.size)
 const selectedSongs = computed(() =>
   filteredSongs.value.filter((song) => selectedFilenames.value.has(song.filename))
 )
-const currentFilename = computed(() => playerStore.currentMidi?.filename ?? '')
-const currentSongInCollection = computed(() => {
-  const filename = currentFilename.value
-  return Boolean(filename && props.songs.some((song) => song.filename === filename))
-})
+function isCurrentSong(song: MidiInfo): boolean {
+  return playerStore.isMidiSelectedInQueue(song.filename, collectionContext.value.id)
+}
+const currentSongInCollection = computed(() => props.songs.some(isCurrentSong))
 
 const batchAddTargets = computed(() => {
   const filenames = selectedSongs.value.map((song) => song.filename)
@@ -268,6 +267,7 @@ function getCenteredScrollTop(index: number): number {
 }
 
 async function locateCurrentSong(): Promise<void> {
+  if (!currentSongInCollection.value) return
   const filename = playerStore.currentMidi?.filename
   if (!filename) return
 
@@ -308,9 +308,9 @@ watch(
 )
 
 watch(
-  [() => playerStore.currentMidi?.filename, () => props.songs.map((song) => song.filename).join('\n')],
-  () => {
-    locateCurrentRegistration?.setVisible(currentSongInCollection.value)
+  currentSongInCollection,
+  (visible) => {
+    locateCurrentRegistration?.setVisible(visible)
   },
   { immediate: true }
 )
@@ -475,7 +475,7 @@ onUnmounted(deactivatePageInteractions)
               class="song-row group/song-row"
               :class="{
                 'song-row-selected': selectedFilenames.has(filteredSongs[virtualRow.index]!.filename),
-                'song-row-current': currentFilename === filteredSongs[virtualRow.index]!.filename,
+                'song-row-current': isCurrentSong(filteredSongs[virtualRow.index]!),
               }"
               role="button"
               tabindex="0"
@@ -492,6 +492,7 @@ onUnmounted(deactivatePageInteractions)
 
               <SongPlaybackCover
                 :midi="filteredSongs[virtualRow.index]!"
+                :selected="isCurrentSong(filteredSongs[virtualRow.index]!)"
                 :queue-items="sortedSongs"
                 :queue-context="collectionContext"
               />
@@ -501,7 +502,7 @@ onUnmounted(deactivatePageInteractions)
                   <PlaylistSongTitle
                     class="song-title"
                     :text="getMidiDisplayName(filteredSongs[virtualRow.index]!)"
-                    :filename="filteredSongs[virtualRow.index]!.filename"
+                    :selected="isCurrentSong(filteredSongs[virtualRow.index]!)"
                   />
                 </Tooltip>
                 <span class="song-meta">
