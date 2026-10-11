@@ -3,7 +3,7 @@
 import { Button, Popover, Slider } from 'antdv-next'
 import { RotateCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-defineProps<{ value: number }>()
+defineProps<{ value: number; inverse?: boolean }>()
 const emit = defineEmits<{ change: [speed: number] }>()
 const { t } = useI18n()
 const marks = Object.fromEntries(
@@ -30,23 +30,22 @@ const marks = Object.fromEntries(
           :aria-label-for-handle="t('appSettings.playbackSpeed')"
           @update:value="emit('change', Number($event))"
         />
-        <Button
-          type="text"
-          size="small"
+        <button
+          type="button"
+          class="nikki-icon-button mt-0.5 flex size-4 shrink-0 items-center justify-center rounded p-0"
           :aria-label="t('appSettings.normalSpeed')"
           :title="t('appSettings.normalSpeed')"
           @click="emit('change', 1)"
         >
-          <template #icon>
-            <RotateCcw :size="14" :stroke-width="2" />
-          </template>
-        </Button>
+          <RotateCcw :size="14" :stroke-width="2" aria-hidden="true" />
+        </button>
       </div>
     </template>
     <Button
       type="text"
       size="small"
       class="playback-speed-button shrink-0 tabular-nums"
+      :class="{ 'nikki-inverse-controls': inverse }"
       :aria-label="t('appSettings.playbackSpeed')"
     >
       {{ value.toFixed(1) }}x

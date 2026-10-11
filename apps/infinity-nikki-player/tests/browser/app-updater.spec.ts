@@ -1,6 +1,26 @@
 /** 关于页使用稳定版本入口，更新反馈交由全局通知。 */
 import { expect, test } from '@playwright/test'
 
+test('内嵌关于的更新按钮名称与下载、安装动作同步', async ({ page }) => {
+  await page.goto('/tests/browser/app-updater.html?about&embedded')
+  const about = page.locator('.embedded-about')
+  const button = about.locator('.version-update-trigger button')
+  await expect(button).toHaveText('更新')
+  await expect(button).toHaveAccessibleName('更新')
+  await button.click()
+  await expect(button).toHaveText('下载中')
+  await expect(button).toHaveAccessibleName('下载中')
+  await expect(button).toBeDisabled()
+  await page.evaluate(() => window.updaterFixture.complete())
+  await expect(button).toHaveText('安装并重启')
+  await expect(button).toHaveAccessibleName('安装并重启')
+  await expect(button).toBeEnabled()
+  await button.click()
+  const calls = await page.evaluate(() => window.updaterFixture.calls)
+  expect(calls.filter((call) => call === 'download')).toHaveLength(1)
+  expect(calls).not.toContain('install')
+})
+
 test('未发布版本的检查结果仅在全局通知显示', async ({ page }) => {
   await page.goto('/tests/browser/app-updater.html?about&scenario=unpublished')
   const dialog = page.getByRole('dialog')

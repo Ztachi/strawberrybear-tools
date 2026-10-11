@@ -9,12 +9,13 @@ interface DocumentItem {
   title: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   items: DocumentItem[]
   contentsLabel: string
+  showContentsTitle?: boolean
   initialHref?: string
   navigationKey?: number
-}>()
+}>(), { showContentsTitle: true })
 const content = ref<HTMLElement | null>(null)
 const contents = ref<HTMLElement | null>(null)
 
@@ -70,7 +71,10 @@ async function keepActiveVisible(href: string): Promise<void> {
       ref="contents"
       class="min-h-0 overflow-y-auto border-r border-primary/15 pr-4 max-[560px]:pr-2"
     >
-      <h3 class="mb-3 mt-0 text-xs font-semibold text-[var(--color-muted-dark)]">
+      <h3
+        v-if="showContentsTitle"
+        class="mb-3 mt-0 text-xs font-semibold text-[var(--color-muted-dark)]"
+      >
         {{ contentsLabel }}
       </h3>
       <nav :aria-label="contentsLabel">

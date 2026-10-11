@@ -133,22 +133,30 @@ onUnmounted(() => {
     <div data-text-selectable class="about-card">
       <!-- 头部区域：图标、名称、版本 -->
       <div class="about-header">
-        <div class="about-icon">
+        <div v-if="!embedded" class="about-icon">
           <img :src="appLogo" class="about-icon-img" alt="app icon" />
         </div>
-        <h2 class="about-app-name">
+        <h2 v-if="!embedded" class="about-app-name">
           {{ t('app.title') }}
         </h2>
         <div class="about-version-row">
-          <AppUpdateStatus :version="version" />
-          <Button type="link" size="small" class="about-release-notes" @click="showReleaseNotes">
+          <p v-if="embedded" class="about-current-version">
+            {{ t('about.currentVersion') }}<span class="ml-2 tabular-nums">{{ version }}</span>
+          </p>
+          <AppUpdateStatus :version="version" :presentation="embedded ? 'action' : 'version'" />
+          <Button
+            :type="embedded ? 'default' : 'link'"
+            size="small"
+            class="about-release-notes"
+            @click="showReleaseNotes"
+          >
             {{ t('releaseNotes.title') }}
           </Button>
         </div>
       </div>
 
       <!-- 分隔线 -->
-      <div class="about-divider" />
+      <div v-if="!embedded" class="about-divider" />
 
       <div
         ref="aboutBody"
@@ -189,7 +197,7 @@ onUnmounted(() => {
             <template #icon>
               <ExternalLink class="size-3.5" :stroke-width="2" />
             </template>
-            {{ t('about.learnMore') }}
+            {{ t(embedded ? 'about.officialSite' : 'about.learnMore') }}
           </Button>
           <Button type="link" @click="updater.exportDiagnostics">
             <template #icon>
@@ -204,8 +212,21 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.embedded-about .about-card { max-height: none; padding: 0; }
-.embedded-about .about-body { overflow: visible; }
+.embedded-about .about-card { max-height: none; padding: 0; align-items: stretch; }
+.embedded-about .about-header { align-items: flex-start; margin-bottom: 20px; }
+.embedded-about .about-version-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.about-current-version {
+  width: 100%;
+  margin: 0 0 8px;
+  color: var(--color-muted-dark);
+}
+.embedded-about .about-release-notes { margin-left: 0; padding-inline: 7px; }
+.embedded-about .about-body { overflow: visible; text-align: left; }
+.embedded-about .about-description { text-align: left; margin-bottom: 20px; }
+.embedded-about .about-contact { background: none; padding: 0; margin-bottom: 16px; font-size: 13px; }
+.embedded-about .about-contact-title { text-align: left; }
+.embedded-about .about-actions { justify-content: flex-start; gap: 8px 16px; }
+.embedded-about .about-actions :deep(button) { padding-inline: 0; }
 .about-card {
   max-height: calc(100dvh - 64px);
   padding: 24px;

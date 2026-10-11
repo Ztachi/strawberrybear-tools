@@ -114,7 +114,11 @@ function handleSeek(time: number): void {
         @set-volume="setVolume"
       >
         <template #actions>
-          <PlaybackSpeedControl :value="playerStore.speed" @change="playerStore.setSpeed" />
+          <PlaybackSpeedControl
+            :value="playerStore.speed"
+            :inverse="props.variant === 'overlay'"
+            @change="playerStore.setSpeed"
+          />
         </template>
       </PreviewPlaybackControls>
 

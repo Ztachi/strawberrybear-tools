@@ -13,6 +13,7 @@ import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import { getAntdvLocale } from '@/i18n'
 const { locale } = useI18n()
 const showAbout = new URLSearchParams(location.search).has('about')
+const embeddedAbout = new URLSearchParams(location.search).has('embedded')
 const showNotes = new URLSearchParams(location.search).has('notes')
 onMounted(() => { if (showAbout) void emit('show_about') })
 </script>
@@ -21,7 +22,7 @@ onMounted(() => { if (showAbout) void emit('show_about') })
     <AntApp>
       <main class="fixture">
         <header><HeaderNavigation />无限暖暖自动演奏 <AppUpdateButton /></header>
-        <AboutDialog v-if="showAbout || showNotes" />
+        <AboutDialog v-if="showAbout || showNotes" :embedded="embeddedAbout" />
         <ReleaseNotesHost v-if="showNotes" :ready="true" />
         <article v-if="!showAbout && !showNotes">
           <h1>关于 · v1.2.0</h1>

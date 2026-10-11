@@ -1058,6 +1058,7 @@ export default {
   about: {
     title: 'About',
     version: 'Version',
+    currentVersion: 'Current version:',
     description:
       'A MIDI auto-play tool for Infinity Nikki. Import MIDI files and let the app simulate key presses in-game.',
     learnMore: 'Learn More',

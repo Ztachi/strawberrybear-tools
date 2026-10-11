@@ -29,6 +29,22 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
   await expect(settings.getByRole('combobox', { name: '显示语言', exact: true })).toBeVisible()
   const contents = settings.getByRole('navigation', { name: '设置目录', exact: true })
   await expect(contents.getByRole('link')).toHaveText(['常规', '关于'])
+  await expect(settings.getByRole('heading', { name: '设置目录', exact: true })).toHaveCount(0)
+  for (const title of ['常规', '关于']) {
+    await expect(
+      contents.getByRole('link', { name: title, exact: true }).locator('svg')
+    ).toHaveCount(1)
+    await expect(
+      settings.getByRole('heading', { name: title, exact: true }).locator('svg')
+    ).toHaveCount(1)
+  }
+  const hint = '最小化到托盘后，播放和编辑会话仍会保留。可通过托盘图标重新打开窗口。'
+  await expect(settings).not.toContainText(hint)
+  await settings.getByRole('button', { name: '托盘说明', exact: true }).focus()
+  await expect(page.getByRole('tooltip')).toHaveText(hint)
+  await contents.getByRole('link', { name: '常规', exact: true }).focus()
+  await contents.getByRole('link', { name: '关于', exact: true }).hover()
+  await expect(page.getByRole('tooltip')).not.toBeVisible()
   await expect(settings.locator('#app-settings-general')).toBeAttached()
   await expect(settings.locator('#app-settings-about')).toBeAttached()
   await expect(settings).not.toContainText('沿用现有')
@@ -41,6 +57,14 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
   await expect
     .poll(() => settings.locator('.section-document-content').evaluate((node) => node.scrollTop))
     .toBeGreaterThan(100)
+  const about = settings.locator('.embedded-about')
+  await expect(about.locator('.about-icon')).toHaveCount(0)
+  await expect(about).toContainText('当前版本')
+  await expect(about.getByRole('button', { name: '检测更新', exact: true })).toHaveText('检测更新')
+  expect(
+    await about.locator('.about-description').evaluate((node) => getComputedStyle(node).textAlign)
+  ).toBe('left')
+  await page.screenshot({ path: testInfo.outputPath('settings-about.png'), animations: 'disabled' })
   await contents.getByRole('link', { name: '常规', exact: true }).click()
   await expect
     .poll(() => settings.locator('.section-document-content').evaluate((node) => node.scrollTop))
@@ -113,6 +137,9 @@ test('360×156 悬浮窗口内倍速浮层完整显示，刻度与恢复原速�
   await page.getByRole('button', { name: '进入悬浮模式', exact: true }).click()
   await page.setViewportSize({ width: 360, height: 156 })
   const speed = page.getByRole('button', { name: '倍速播放', exact: true })
+  expect(await speed.evaluate((node) => getComputedStyle(node).color)).toMatch(
+    /^rgba?\(255, 255, 255(?:, 0\.9)?\)$/
+  )
   await speed.click()
   const popup = page.locator('.playback-speed-popover')
   await expect(popup).toBeVisible()
@@ -135,7 +162,10 @@ test('360×156 悬浮窗口内倍速浮层完整显示，刻度与恢复原速�
   ])
   await popup.getByText('2.5', { exact: true }).click()
   await expect(speed).toHaveText('2.5x')
-  await popup.getByRole('button', { name: '恢复原速', exact: true }).click()
+  const reset = popup.getByRole('button', { name: '恢复原速', exact: true })
+  expect((await reset.boundingBox())!.width).toBeLessThanOrEqual(18)
+  expect(await reset.evaluate((node) => getComputedStyle(node).padding)).toBe('0px')
+  await reset.click()
   await expect(speed).toHaveText('1.0x')
   await page.screenshot({
     path: testInfo.outputPath('playback-speed-overlay.png'),
@@ -169,7 +199,11 @@ test('系统关于入口定位同一设置正文，重新从设置打开回到�
   await page.evaluate(() => window.midiEditorFixture.showAbout())
   await expectAboutPosition()
   await settings.getByRole('button', { name: 'Close', exact: true }).click()
+  // 关闭后确实销毁正文；重新打开的第一帧就应从顶部开始。
+  await expect(page.locator('.app-settings-modal .section-document')).toHaveCount(0)
   await page.getByRole('button', { name: '设置', exact: true }).click()
+  await expect(settings).toBeVisible()
+  expect(await content.evaluate((node) => node.scrollTop)).toBe(0)
   await expect.poll(() => content.evaluate((node) => node.scrollTop)).toBe(0)
   await expect(settings.locator('[href="#app-settings-general"]')).toHaveClass(/title-active/)
   expect(page.url()).toBe(url)

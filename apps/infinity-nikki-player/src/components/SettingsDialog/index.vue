@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 设置与帮助共用目录文档，常规选项修改即保存，关于沿用原有内容。 */
+/** 设置与帮助共用目录文档，常规选项修改即保存，关于复用更新和联系操作。 */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -10,8 +10,9 @@ import {
   RadioGroup,
   Radio,
   Checkbox,
+  Tooltip,
 } from 'antdv-next'
-import { Settings, Info } from 'lucide-vue-next'
+import { SlidersHorizontal, BadgeInfo, CircleAlert } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
 import { SUPPORTED_LOCALES, isSupportedLocale } from '@/i18n'
 import { feedback } from '@/lib/feedback'
@@ -64,6 +65,7 @@ function closeAction(value: unknown): void {
     :title="t('appSettings.title')"
     :footer="null"
     centered
+    destroy-on-hidden
     width="min(780px, calc(100vw - 32px))"
     :styles="{ body: { height: 'min(72vh, 640px)', overflow: 'hidden' } }"
     :after-open-change="afterOpenChange"
@@ -72,9 +74,21 @@ function closeAction(value: unknown): void {
     <SectionDocument
       :items="categories"
       :contents-label="t('appSettings.contents')"
+      :show-contents-title="false"
       :initial-href="open && documentReady ? `#app-settings-${props.initialCategory}` : undefined"
       :navigation-key="props.navigationKey"
     >
+      <template #item="{ item }">
+        <span class="flex items-center gap-2">
+          <component
+            :is="item.key === 'general' ? SlidersHorizontal : BadgeInfo"
+            class="size-4 shrink-0"
+            :stroke-width="2"
+            aria-hidden="true"
+          />
+          {{ item.title }}
+        </span>
+      </template>
       <section
         id="app-settings-general"
         class="scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
@@ -84,7 +98,11 @@ function closeAction(value: unknown): void {
           id="app-settings-general-title"
           class="m-0 mb-4 flex items-center gap-2 text-sm font-semibold"
         >
-          <Settings class="size-4 shrink-0 text-primary" />
+          <SlidersHorizontal
+            class="size-4 shrink-0 text-primary"
+            :stroke-width="2"
+            aria-hidden="true"
+          />
           {{ t('appSettings.general') }}
         </h3>
         <Form layout="vertical">
@@ -113,16 +131,24 @@ function closeAction(value: unknown): void {
                 {{ t('appSettings.quit') }}
               </Radio>
             </RadioGroup>
-            <p class="mt-3 text-sm text-muted-foreground">
-              {{ t('appSettings.closeHint') }}
-            </p>
-            <Checkbox
-              :checked="!settings.closeActionConfirmed"
-              :disabled="busy"
-              @update:checked="save(() => settings.setCloseAction(settings.closeAction, !$event))"
-            >
-              {{ t('appSettings.askClose') }}
-            </Checkbox>
+            <div class="mt-3 flex items-center gap-1.5">
+              <Checkbox
+                :checked="!settings.closeActionConfirmed"
+                :disabled="busy"
+                @update:checked="save(() => settings.setCloseAction(settings.closeAction, !$event))"
+              >
+                {{ t('appSettings.askClose') }}
+              </Checkbox>
+              <Tooltip :title="t('appSettings.closeHint')" :trigger="['hover', 'focus']">
+                <button
+                  type="button"
+                  class="nikki-icon-button flex size-4 shrink-0 items-center justify-center rounded p-0"
+                  :aria-label="t('appSettings.closeHintLabel')"
+                >
+                  <CircleAlert :size="14" :stroke-width="2" aria-hidden="true" />
+                </button>
+              </Tooltip>
+            </div>
           </FormItem>
         </Form>
       </section>
@@ -136,7 +162,7 @@ function closeAction(value: unknown): void {
           id="app-settings-about-title"
           class="m-0 mb-4 flex items-center gap-2 text-sm font-semibold"
         >
-          <Info class="size-4 shrink-0 text-primary" />
+          <BadgeInfo class="size-4 shrink-0 text-primary" :stroke-width="2" aria-hidden="true" />
           {{ t('appSettings.about') }}
         </h3>
         <AboutDialog embedded />

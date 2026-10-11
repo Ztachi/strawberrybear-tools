@@ -10,7 +10,9 @@ import { useAppUpdater } from '@/composables/useAppUpdater'
 const { t } = useI18n()
 const updater = useAppUpdater()
 const state = updater.state
-defineProps<{ version: string }>()
+withDefaults(defineProps<{ version: string; presentation?: 'version' | 'action' }>(), {
+  presentation: 'version',
+})
 const buttonText = computed(() => {
   if (updater.isPreparing.value) return t('updater.preparing')
   if (state.value.phase === 'ready') return t('updater.installNow')
@@ -31,19 +33,23 @@ async function update(): Promise<void> {
     <span class="version-update-trigger">
       <Button
         size="small"
-        shape="round"
-        :aria-label="t('updater.checkNow')"
+        :shape="presentation === 'version' ? 'round' : undefined"
+        :aria-label="presentation === 'action' ? buttonText : t('updater.checkNow')"
         :disabled="updater.isBusy.value"
+        icon-placement="end"
         @click="update"
       >
-        <span>v{{ version }}</span>
-        <IconRotation :size="14" :spinning="updater.isBusy.value">
-          <component
-            :is="updater.hasUpdate.value && !updater.isBusy.value ? Download : RefreshCw"
-            :size="14"
-            :stroke-width="2"
-          />
-        </IconRotation>
+        <span>{{ presentation === 'action' ? buttonText : `v${version}` }}</span>
+        <template #icon>
+          <IconRotation :size="14" :spinning="updater.isBusy.value">
+            <component
+              :is="updater.hasUpdate.value && !updater.isBusy.value ? Download : RefreshCw"
+              :size="14"
+              :stroke-width="2"
+              aria-hidden="true"
+            />
+          </IconRotation>
+        </template>
       </Button>
     </span>
   </Tooltip>

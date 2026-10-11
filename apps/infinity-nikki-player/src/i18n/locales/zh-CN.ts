@@ -1011,6 +1011,7 @@ export default {
   about: {
     title: '关于',
     version: '版本',
+    currentVersion: '当前版本：',
     description:
       '一款适用于无限暖暖的 MIDI 自动演奏工具。导入 MIDI 文件，应用会自动模拟游戏内按键操作。',
     learnMore: '了解更多',

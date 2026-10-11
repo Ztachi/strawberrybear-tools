@@ -10,6 +10,7 @@
   "askClose": "Ask when closing",
   "closeTitle": "Close window",
   "closeHint": "Minimizing keeps playback and editing sessions open. Use the tray icon to reopen the window.",
+  "closeHintLabel": "About minimizing to tray",
   "remember": "Remember my choice",
   "confirmClose": "Confirm",
   "playbackSpeed": "Playback speed",
