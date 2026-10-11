@@ -54,9 +54,10 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
   })
   await contents.getByRole('link', { name: '关于', exact: true }).click()
   await expect(settings).toContainText('更新日志')
-  await expect
-    .poll(() => settings.locator('.section-document-content').evaluate((node) => node.scrollTop))
-    .toBeGreaterThan(0)
+  await expect(settings.locator('#app-settings-about')).toBeInViewport()
+  await expect(contents.getByRole('link', { name: '关于', exact: true })).toHaveClass(
+    /title-active/
+  )
   const about = settings.locator('.embedded-about')
   await expect(about.locator('.about-icon')).toHaveCount(1)
   await expect(about).toContainText('当前版本')

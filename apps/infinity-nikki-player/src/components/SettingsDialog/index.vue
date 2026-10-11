@@ -159,17 +159,6 @@ function closeAction(value: unknown): void {
         class="mt-3 scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
         aria-labelledby="app-settings-contact-title"
       >
-        <h3
-          id="app-settings-contact-title"
-          class="m-0 mb-4 flex items-center gap-2 text-sm font-semibold"
-        >
-          <MessagesSquare
-            class="size-4 shrink-0 text-primary"
-            :stroke-width="2"
-            aria-hidden="true"
-          />
-          {{ t('appSettings.contact') }}
-        </h3>
         <AppContact />
       </section>
       <section

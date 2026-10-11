@@ -4,8 +4,8 @@ import { computed, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { DiscordFilled, QqOutlined } from '@antdv-next/icons'
-import { ExternalLink } from 'lucide-vue-next'
-import { Button, TypographyParagraph } from 'antdv-next'
+import { ExternalLink, MessagesSquare } from 'lucide-vue-next'
+import { Button, TypographyText } from 'antdv-next'
 
 interface Contact {
   type: string
@@ -31,9 +31,21 @@ async function openWebsite(): Promise<void> {
 
 <template>
   <div class="app-contact">
-    <div class="contact-grid">
-      <div v-for="contact in contacts" :key="contact.type" class="contact-card">
-        <span class="contact-label">
+    <div class="contact-header">
+      <h3 id="app-settings-contact-title" class="contact-title">
+        <MessagesSquare class="size-4 shrink-0 text-primary" :stroke-width="2" aria-hidden="true" />
+        {{ t('appSettings.contact') }}
+      </h3>
+      <Button type="link" size="small" @click="openWebsite">
+        <template #icon>
+          <ExternalLink :size="14" :stroke-width="2" aria-hidden="true" />
+        </template>
+        {{ t('about.officialSite') }}
+      </Button>
+    </div>
+    <div class="contact-list">
+      <div v-for="contact in contacts" :key="contact.type" class="contact-row">
+        <span class="contact-platform">
           <component
             :is="icons[contact.type]"
             v-if="icons[contact.type]"
@@ -42,40 +54,32 @@ async function openWebsite(): Promise<void> {
           />
           {{ contact.label }}
         </span>
-        <TypographyParagraph :copyable="{ text: contact.account }" class="contact-account">
+        <TypographyText :copyable="{ text: contact.account }" class="contact-account">
           {{ contact.account }}
-        </TypographyParagraph>
+        </TypographyText>
       </div>
-    </div>
-    <div class="contact-website">
-      <Button size="small" @click="openWebsite">
-        <template #icon>
-          <ExternalLink :size="14" :stroke-width="2" aria-hidden="true" />
-        </template>
-        {{ t('about.officialSite') }}
-      </Button>
-      <span class="text-xs text-[var(--color-muted-dark)]">ztachi.com</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-.contact-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
-  gap: 10px;
+.contact-header {
+  @apply mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1;
 }
-.contact-card {
-  @apply min-w-0 rounded-lg border border-primary/15 bg-white/70 px-3 py-2.5;
+.contact-title {
+  @apply m-0 flex items-center gap-2 text-sm font-semibold;
 }
-.contact-label {
-  @apply flex items-center gap-2 text-xs text-[var(--color-muted-dark)];
+.contact-list {
+  @apply flex flex-col gap-2;
+}
+.contact-row {
+  @apply grid min-w-0 grid-cols-[100px_minmax(0,1fr)] items-center gap-3;
+}
+.contact-platform {
+  @apply flex items-center gap-2 text-sm text-[var(--color-muted-dark)];
 }
 .contact-account {
-  margin: 6px 0 0;
   font-size: 14px;
-}
-.contact-website {
-  @apply mt-3 flex flex-wrap items-center gap-3;
+  overflow-wrap: anywhere;
 }
 </style>
