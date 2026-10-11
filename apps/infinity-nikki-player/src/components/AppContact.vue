@@ -52,10 +52,24 @@ async function openWebsite(): Promise<void> {
             class="text-base text-primary"
             aria-hidden="true"
           />
-          {{ contact.label }}
+          <span>{{ contact.label }}</span>
         </span>
-        <TypographyText :copyable="{ text: contact.account }" class="contact-account">
-          {{ contact.account }}
+        <TypographyText
+          :copyable="{ text: contact.account }"
+          :styles="{
+            root: {
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              overflowWrap: 'anywhere',
+            },
+            actions: { display: 'inline-flex', alignItems: 'center' },
+            action: { display: 'inline-flex', alignItems: 'center', minHeight: '1.25rem' },
+          }"
+          class="contact-account"
+        >
+          <span>{{ contact.account }}</span>
         </TypographyText>
       </div>
     </div>
@@ -73,13 +87,9 @@ async function openWebsite(): Promise<void> {
   @apply flex flex-col gap-2;
 }
 .contact-row {
-  @apply grid min-w-0 grid-cols-[100px_minmax(0,1fr)] items-center gap-3;
+  @apply grid min-w-0 grid-cols-[100px_minmax(0,1fr)] items-center gap-3 text-sm leading-5;
 }
 .contact-platform {
-  @apply flex items-center gap-2 text-sm text-[var(--color-muted-dark)];
-}
-.contact-account {
-  font-size: 14px;
-  overflow-wrap: anywhere;
+  @apply flex items-center gap-2 text-[var(--color-muted-dark)];
 }
 </style>
