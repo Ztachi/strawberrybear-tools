@@ -85,7 +85,7 @@ export class TrackRecorder {
       )
     )
     this.baseTemplate = JSON.stringify(this.template)
-    this.editor = createEditorSession(project, { snap: 'off' })
+    this.editor = createEditorSession(project, { snap: '1/16' })
     this.editor.subscribe(() => this.notify())
     this.range = input.range
     this.cursorTick = input.startTick
@@ -108,7 +108,6 @@ export class TrackRecorder {
   }
   get dirty(): boolean {
     return (
-      this.restored ||
       this.editor.getState().dirty ||
       this.take.length > 0 ||
       JSON.stringify(this.template) !== this.baseTemplate
@@ -395,6 +394,11 @@ export class TrackRecorder {
     this.notify()
   }
   dispatch(action: EditorAction): void {
+    // 编辑偏好不改变录音，也不应结束暂停中的同一次重录。
+    if (this.status === 'paused' && (action.type === 'set-snap' || action.type === 'set-tool')) {
+      this.editor.dispatch(action)
+      return
+    }
     if (this.status === 'paused') this.stop()
     if (this.busy || this.status === 'disposed') return
     if (action.type === 'loop-change') {
@@ -443,8 +447,21 @@ export class TrackRecorder {
     this.editor.dispatch(action)
   }
   restoreDraft(project: MidiProject): void {
-    this.editor.replaceProject({ ...project, id: this.input.project.id })
-    const draft = project.extensions?.recordingDraft as { cursorTick?: number } | undefined
+    const draft = project.extensions?.recordingDraft as
+      | { cursorTick?: number; trackId?: string }
+      | undefined
+    const sourceTrackId = draft?.trackId ?? this.input.trackId
+    const track = project.document.tracks.find((track) => track.id === sourceTrackId)
+    if (!track) throw new Error('Recording draft track does not exist')
+    // 仅恢复目标轨；重新打开未保存项目时，把旧轨道身份映射到本次会话。
+    this.editor.dispatch({
+      type: 'apply-track-edit',
+      trackId: this.input.trackId,
+      notes: project.document.notes
+        .filter((note) => note.trackId === sourceTrackId)
+        .map((note) => ({ ...note, trackId: this.input.trackId })),
+      endTick: track.endTick ?? project.document.durationTicks,
+    })
     const binding = project.extensions?.keyboardRecording as { template?: KeyTemplate } | undefined
     if (binding?.template) this.template = JSON.parse(JSON.stringify(binding.template))
     if (Number.isFinite(draft?.cursorTick)) this.cursorTick = draft!.cursorTick!
@@ -512,6 +529,7 @@ export class TrackRecorder {
         keyboardRecording: { template: this.template },
         recordingDraft: {
           baseRevision: this.input.baseRevision,
+          baseContentRevision: this.input.baseContentRevision,
           trackId: this.input.trackId,
           cursorTick: this.cursorTick,
         },

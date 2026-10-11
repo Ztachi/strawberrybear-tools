@@ -25,7 +25,7 @@
   "preview": "Preview",
   "previewing": "Previewing",
   "templateHint": "Choose a key template for this recording. The keyboard shows its mapped pitches.",
-  "previewTitle": "Recording preview",
+  "previewTitle": "Note editor",
   "pausePreview": "Pause preview",
   "keyboardHint": "Click the keyboard, then play the mapped keys. Hold a key to set note duration.",
   "noteCount": "{count} notes",
@@ -67,7 +67,7 @@
           },
           "pause": {
             "label": "Pause, resume and finish",
-            "description": "Pausing releases held sounds. Press the keys again after resuming; free recording continues at the last note's end. Stop recording finishes the take so you can preview or undo it."
+            "description": "Pause releases sounds and keeps the take open: preview it, then resume. Stop finishes one undoable take. In Re-record range, Resume continues at the current position; starting after Stop begins at the range start."
           }
         }
       },
@@ -101,15 +101,15 @@
           },
           "listen": {
             "label": "Preview and return to start",
-            "description": "After stopping, click Preview to listen and click again to pause. Return to start positions the cursor at the track's beginning for playback or overdubbing."
+            "description": "Preview while paused or stopped; it ends at this track’s last audible note. Click again to pause preview. Rewind returns to the track start. Previewing or seeking while recording is paused preserves its resume position."
           },
           "layout": {
             "label": "Adjust keyboard and piano-roll height",
             "description": "The track name, recording controls and settings share a single header row. Drag the divider between the keyboard and piano roll to divide their height. The keyboard keeps whole rows containing mapped keys. In smaller windows, scroll within each area while the header and apply buttons stay fixed."
           },
           "refine": {
-            "label": "Continue refining in the MIDI editor",
-            "description": "Apply the recording to the track, then use the MIDI editor to select and move notes, adjust duration and velocity, and refine the arrangement."
+            "label": "Edit notes in the piano roll",
+            "description": "Move, resize, or delete notes; right-click for selection, copy, quantize, and more. Snap affects editing without quantizing recordings. Click piano keys to audition with row highlighting, and use Pitch zoom to adjust key height."
           }
         }
       },
@@ -122,11 +122,11 @@
           },
           "recover": {
             "label": "Recover a recording draft",
-            "description": "An independent draft is saved automatically as you record and can be continued when reopened. If the original project has changed, recover the draft as a copy to keep this music."
+            "description": "Recording drafts are saved separately. When reopened, choose Load draft, Discard draft, or Cancel. Only Apply updates the host editor. If the original has changed, save as a new project to keep the recording."
           },
           "close": {
             "label": "Choose how to keep your changes",
-            "description": "Closing with changes offers staying in the workspace, applying and closing, or discarding. If applying fails, the recording stays available with an option to recover it as a copy."
+            "description": "Closing with changes offers staying in the workspace, applying and closing, or discarding. If applying fails, the recording stays available and can be saved as a new project."
           }
         }
       }
@@ -176,11 +176,11 @@
   "discard": "Discard changes",
   "applyClose": "Apply and close",
   "draftFound": "An unapplied recording draft was found",
-  "draftConflict": "The original project has changed. Recover the recording draft as a copy.",
+  "draftConflict": "This project has changed, so this recording draft cannot be loaded. Save it as a new project to keep the recording.",
   "recover": "Continue draft",
-  "recoverCopy": "Recover as copy",
+  "recoverCopy": "Save as new project",
   "discardDraft": "Discard draft",
-  "copyName": "{name} recording copy",
+  "copyName": "{name} Recording",
   "mode": {
     "append": "Continue at end",
     "overdub": "Overdub at cursor",
@@ -214,5 +214,7 @@
     "merged": "Same key at same time ({count})",
     "overlap": "Overlapping key ({count})",
     "timing": "Key timing too short ({count})"
-  }
+  },
+  "loadDraftPrompt": "An unfinished keyboard recording was found. Load the draft to continue editing?",
+  "savedAsProject": "Open this recording from the MIDI editor project list."
 }

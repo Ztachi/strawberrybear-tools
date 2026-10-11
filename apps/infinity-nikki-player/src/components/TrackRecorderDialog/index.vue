@@ -4,7 +4,11 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef
 import { useI18n } from 'vue-i18n'
 import { Alert, Button, ConfigProvider, Drawer, Splitter, SplitterPanel, Tooltip } from 'antdv-next'
 import { CircleHelp } from 'lucide-vue-next'
-import PianoRoll from '@strawberrybear/piano-roll'
+import PianoEditorPanel from '@/components/PianoEditorPanel/PianoEditorPanel.vue'
+import EditorSnapSettings from '@/components/EditorSnapSettings.vue'
+import { resolutionTicks, snapTick } from '@strawberrybear/midi-editor'
+import type { PianoRollEditIntent } from '@strawberrybear/piano-roll/browser'
+import type { PianoRollProps } from '@strawberrybear/piano-roll/vue'
 import { clipNoteToTrackRegion, createTimeline } from '@strawberrybear/piano-roll/core'
 import type { EditorAction, MidiProject } from '@strawberrybear/midi-editor'
 import KeyboardPreview from '@/components/KeyboardPreview/index.vue'
@@ -13,15 +17,16 @@ import { usePianoRollLabels } from '@/components/PianoWorkspace/usePianoRollLabe
 import { useMainWindowUiStore } from '@/stores/mainWindowUi'
 import { TrackRecorder } from '@/features/midi-recording/controller'
 import type { TrackRecorderInput, TrackRecorderServices } from '@/features/midi-recording/types'
-import { recorderDraftKey } from '@/features/midi-recording/coordinator'
+import { recorderDraftKey, recordingDraftKey, recordingDraftConflicts } from '@/features/midi-recording/coordinator'
 import { createMidiDraftWriter } from '@/features/midi-editor/draftWriter'
 import { createMidiEditorPlaybackController } from '@/features/midi-editor/playbackController'
 import { recordingBarToTick, recordingRangeInBars } from '@/features/midi-recording/range'
 import { mappingKeyToCode, normalizeMappingKeyFromEvent } from '@/lib/templateKeys'
 import { getContentDrawerRootStyle, getMainWindowPopupContainer, midiEditorPianoRollTheme } from '@/theme/infinityNikkiTheme'
-import PianoRollControls from '@/components/PianoRollControls.vue'
-import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
-import EditorChoiceModal from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorChoiceModal.vue'
+import EditorChoiceModal from '@/components/EditorChoiceModal.vue'
+import { useEditorChoice } from '@/composables/useEditorChoice'
+import { recordingPreviewDocument } from '@/features/midi-recording/preview'
+import NoteContextMenu, { type NoteContextMenuTarget } from '@/components/NoteContextMenu.vue'
 import RecorderSettings from './components/RecorderSettings.vue'
 import RecorderTransport from './components/RecorderTransport.vue'
 import RecorderHelpDialog from './components/RecorderHelpDialog.vue'
@@ -36,15 +41,18 @@ const version = ref(0)
 const localState = shallowRef(recorder.preview())
 const keyboard = ref<HTMLElement | null>(null)
 const scrollBody = ref<HTMLElement | null>(null)
-const roll = ref<InstanceType<typeof PianoRoll> | null>(null)
+const drawerOpen = ref(true)
+const contextTarget = ref<NoteContextMenuTarget | null>(null)
 const loadingDraft = ref(true)
 const applying = ref(false)
 const error = ref('')
 const recovery = shallowRef<MidiProject | null>(null)
 const recoveryConflict = ref(false)
-const closeChoice = ref(false)
+const { choice, ask, askDraft, resolveChoice } = useEditorChoice()
 const helpOpen = ref(false)
 const replaying = ref(false)
+const previewCursorSeconds = ref<number | null>(null)
+const seekPreviewSeconds = ref<number | null>(null)
 const previewKeys = shallowRef<ReadonlySet<string>>(new Set())
 const labels = usePianoRollLabels()
 const scrollRegistration = useMainWindowUiStore().registerBackToTop(() => scrollBody.value?.scrollTo({ top: 0, behavior: 'smooth' }))
@@ -61,11 +69,11 @@ function refresh(): void { version.value++; localState.value = recorder.preview(
 const unsubscribe = recorder.subscribe(refresh)
 const ui = computed(() => { void version.value; return { busy: recorder.busy, status: recorder.status, dirty: recorder.dirty } })
 const currentTrack = computed(() => localState.value.document.tracks.find(track => track.id === props.input.trackId)!)
-const position = computed(() => { void version.value; const p = createTimeline(localState.value.document).tickToBarPosition(recorder.cursorTick); return `${p.bar}.${p.beat}` })
+const position = computed(() => { void version.value; const p = createTimeline(localState.value.document).tickToBarPosition(createTimeline(localState.value.document).secondsToTick(transport.value.positionSeconds)); return `${p.bar}.${p.beat}` })
 const pitches = computed(() => { void version.value; return new Set(recorder.template.mappings.map(m => m.pitch)) })
 const mapping = computed(() => { void version.value; return new Map(recorder.template.mappings.map(m => [mappingKeyToCode(m.key), m.pitch])) })
 const active = computed(() => { void version.value; return new Set([...recorder.activeKeys().map(mappingKeyToCode), ...previewKeys.value]) })
-const locked = computed(() => accepted.value || applying.value || loadingDraft.value || !!recovery.value)
+const locked = computed(() => !drawerOpen.value || accepted.value || applying.value || loadingDraft.value || !!recovery.value)
 const editingLocked = computed(() => (ui.value.busy && ui.value.status !== 'paused') || locked.value)
 // 暂停的录音尚未进入历史；撤销会先收尾，而重做需等本次录音结束。
 const pendingTake = computed(() => ui.value.busy && localState.value.document !== recorder.editor.getState().document)
@@ -73,31 +81,38 @@ const canUndo = computed(() => localState.value.canUndo || (ui.value.status === 
 const canRedo = computed(() => localState.value.canRedo && !pendingTake.value)
 const noteCount = computed(() => localState.value.document.notes.filter(note => note.trackId === props.input.trackId && clipNoteToTrackRegion(note, currentTrack.value)).length)
 const canStart = computed(() => { void version.value; return mapping.value.size > 0 && (recorder.mode !== 'replace' || !!recorder.range) })
-// 复用卷帘的状态投影和范围高亮，不安装第二套音符编辑手势。
-const editing = computed(() => ({ enabled: false, tool: 'select' as const, snapTicks: (tick: number) => tick, defaultDurationTicks: localState.value.document.ticksPerBeat, selectedNoteIds: localState.value.selection, highlightPitches: pitches.value, loop: recorder.mode === 'replace' ? recorder.range ?? null : null }))
+// 复用详情面板与 MIDI 编辑器的吸附、编辑意图及钢琴试听。
+const editing = computed<PianoRollProps['editing']>(() => ({
+  enabled: !editingLocked.value, tool: localState.value.tool,
+  snapTicks: (tick, mode) => snapTick(tick, localState.value.snap, localState.value.document, mode),
+  snapToNoteEnds: localState.value.snap !== 'off',
+  gridTicks: localState.value.snap === 'bar' ? 'bar' : resolutionTicks(localState.value.snap, localState.value.document) || undefined,
+  defaultDurationTicks: resolutionTicks(localState.value.snap, localState.value.document) || localState.value.document.ticksPerBeat,
+  selectedNoteIds: localState.value.selection, highlightPitches: pitches.value,
+  loop: recorder.mode === 'replace' ? recorder.range ?? null : null,
+}))
+function handleIntent(intent: PianoRollEditIntent): void {
+  if (editingLocked.value) return
+  if (intent.type === 'audition') { void replay.audition(intent.pitch, intent.velocity, intent.durationSeconds).catch(showError); return }
+  if (intent.type === 'context-menu') { contextTarget.value = intent; return }
+  dispatch(intent)
+}
 const documentView = computed(() => ({ ...localState.value.document, durationTicks: Math.max(localState.value.document.durationTicks, recorder.cursorTick + localState.value.document.ticksPerBeat * 4) }))
-/** 伴奏关闭时试听也只播放当前轨；临时投影不改变项目的音轨开关。 */
-const replayDocument = computed(() => {
-  void version.value
-  const document = localState.value.document
-  return recorder.accompaniment ? document : {
-    ...document,
-    tracks: document.tracks.map(track => ({ ...track, enabled: track.enabled && track.id === props.input.trackId })),
-  }
-})
-const transport = shallowRef({ positionSeconds: 0, isPlaying: false, playbackRate: 1 })
+/** 试听一次到当前轨最后一个音符；其他轨、原区域尾部和重录范围不延长试听。 */
+const replayDocument = computed(() => { void version.value; return recordingPreviewDocument(localState.value.document, props.input.trackId, recorder.accompaniment) })
+const transport = shallowRef({ positionSeconds: 0, isPlaying: false, playbackRate: 1, activePitches: [] as readonly number[] })
 const createPlayback = inject('track-recorder-playback-factory', createMidiEditorPlaybackController)
-const replay = createPlayback({ getDocument: () => replayDocument.value, getLoop: () => recorder.mode === 'replace' ? recorder.range : null, onChange: state => {
-  // 暂停和试听结束时同步显示位置；显式停止提前清除标记，不覆盖录制游标。
-  if (replaying.value && !state.isPlaying) {
+const replay = createPlayback({ getDocument: () => replayDocument.value, getLoop: () => null, onChange: state => {
+  // 暂停中的试听不改同一次录音的续录位置。
+  if (replaying.value && !state.isPlaying && recorder.status !== 'paused') {
     recorder.cursorTick = Math.round(createTimeline(localState.value.document).secondsToTick(state.positionSeconds)); refresh()
-  }
+  } else if (replaying.value && !state.isPlaying) previewCursorSeconds.value = state.positionSeconds
   replaying.value = state.isPlaying
 } })
 /** 显式结束试听保留录制游标，避免循环区间的起点回调覆盖定位。 */
-function stopPreview(): void { replaying.value = false; replay.stop(); previewKeys.value = new Set() }
+function stopPreview(): void { previewCursorSeconds.value = null; seekPreviewSeconds.value = null; replaying.value = false; replay.stop(); previewKeys.value = new Set() }
 /** 试听调度器缓存文档与循环范围；录入提交及历史操作后需要显式同步。 */
-function syncReplay(): void { replay.setLoop(recorder.mode === 'replace' ? recorder.range : null); replay.invalidate() }
+function syncReplay(): void { replay.setLoop(null); replay.invalidate() }
 /** 切换伴奏先停止旧试听并刷新调度文档，避免关掉后仍播放缓存的其他音轨。 */
 function changeSetting(setting: { key: 'countIn' | 'metronome' | 'accompaniment'; value: boolean }): void {
   if (ui.value.busy || locked.value) return
@@ -115,16 +130,26 @@ async function begin(resume = false): Promise<void> {
 }
 function stop(): void { recorder.stop(); stopPreview(); syncReplay(); replay.stop(); refresh() }
 async function play(): Promise<void> {
-  if (locked.value || ui.value.busy) return
+  if (editingLocked.value) return
   recorder.releaseAll()
   if (replaying.value) { replay.pause(); return }
   syncReplay()
   try { await replay.play() } catch (cause) { showError(cause) }
 }
+function snappedSeekSeconds(seconds: number): number {
+  const timeline = createTimeline(localState.value.document)
+  const tick = Math.max(currentTrack.value.startTick ?? 0, recorder.editor.snapTick(timeline.secondsToTick(seconds), 'nearest'))
+  return timeline.tickToSeconds(tick)
+}
+function previewSeek(seconds: number | null): void {
+  if (!editingLocked.value) seekPreviewSeconds.value = seconds === null ? null : snappedSeekSeconds(seconds)
+}
 function seek(seconds: number): void {
-  if (ui.value.busy || applying.value || accepted.value || recovery.value || loadingDraft.value) return
-  recorder.cursorTick = Math.max(currentTrack.value.startTick ?? 0, Math.round(createTimeline(localState.value.document).secondsToTick(seconds)))
-  replay.seek(seconds); refresh()
+  if (editingLocked.value) return
+  const snapped = snappedSeekSeconds(seconds)
+  if (recorder.status !== 'paused') recorder.cursorTick = Math.round(createTimeline(localState.value.document).secondsToTick(snapped))
+  else previewCursorSeconds.value = snapped
+  replay.seek(snapped); refresh()
 }
 /** 录制方式切换收尾暂停的录音，重录范围统一为设置中展示的小节边界。 */
 function changeMode(mode: TrackRecorder['mode']): void {
@@ -157,7 +182,7 @@ function toggleRecording(): void {
   else pauseForFocus()
 }
 function rewind(): void {
-  if (locked.value || ui.value.busy) return
+  if (editingLocked.value) return
   stopPreview(); seek(createTimeline(localState.value.document).tickToSeconds(currentTrack.value.startTick ?? 0))
 }
 function pointerPress(code: string, source: string): void {
@@ -170,7 +195,7 @@ function pointerPress(code: string, source: string): void {
 }
 function handleKeydown(event: KeyboardEvent): void {
   // 框架弹层可能在同一个 window 上先消费按键，关闭后的状态不能代替事件判定。
-  if (event.defaultPrevented || accepted.value || applying.value || loadingDraft.value || recovery.value || closeChoice.value || helpOpen.value || event.isComposing) return
+  if (event.defaultPrevented || !drawerOpen.value || accepted.value || applying.value || loadingDraft.value || recovery.value || choice.value.open || helpOpen.value || event.isComposing) return
   const target = event.target as HTMLElement | null
   // 弹框内的输入由框架处理；关闭事件同步更新状态后，仍按事件来源隔离背景快捷键。
   if (target?.closest('.ant-modal, input, textarea, [contenteditable="true"], [role="combobox"], [role="menu"], [role="listbox"]')) return
@@ -198,57 +223,89 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 function handleKeyup(event: KeyboardEvent): void { recorder.release(`keyboard:${event.code}`) }
-function pauseForFocus(): void { recorder.pause(); replay.pause(); previewKeys.value = new Set(); refresh() }
+function pauseForFocus(): void { recorder.pause(); replay.pause(); contextTarget.value = null; previewKeys.value = new Set(); refresh() }
 function openHelp(): void { pauseForFocus(); helpOpen.value = true }
 function visibility(): void { if (document.hidden) pauseForFocus() }
 function beforeUnload(): void { pauseForFocus(); void checkpoint().catch(() => {}) }
 async function checkpoint(final = false): Promise<void> {
-  if ((!final && applying.value) || accepted.value || !draftKey || !ui.value.dirty || recovery.value || loadingDraft.value || disposed) return
+  if ((!final && applying.value) || accepted.value || !draftKey || !ui.value.dirty || recovery.value || loadingDraft.value || disposed || !drawerOpen.value) return
   const project = recorder.checkpoint()
   const stamp = JSON.stringify(project)
   if (stamp === draftStamp) return
   await draftWriter.write(draftKey, project); draftStamp = stamp
 }
 async function apply(): Promise<void> {
-  if (applying.value) return
+  if (!drawerOpen.value || applying.value || loadingDraft.value || recovery.value) return
   stop(); applying.value = true; error.value = ''
   try {
     await checkpoint(true); await draftWriter.flush()
     if (!accepted.value) { await props.services.apply(recorder.result()); accepted.value = true; finalized = true }
     await props.services.deleteDraft(draftKey)
-    finalized = true; emit('closed')
+    finalized = true; finishClose()
   } catch (cause) { showError(cause) } finally { applying.value = false }
 }
 async function discard(): Promise<void> {
-  if (applying.value) return
+  if (!drawerOpen.value || applying.value) return
   applying.value = true
-  try { await draftWriter.flush().catch(() => {}); await props.services.deleteDraft(draftKey); finalized = true; emit('closed') } catch (cause) { showError(cause) } finally { applying.value = false }
+  try { await draftWriter.flush().catch(() => {}); await props.services.deleteDraft(draftKey); finalized = true; finishClose() } catch (cause) { showError(cause) } finally { applying.value = false }
 }
+/** 保持组件挂载直到框架退场动效完成，期间宿主继续保持锁定。 */
+function finishClose(): void { stopPreview(); recorder.releaseAll(); contextTarget.value = null; drawerOpen.value = false }
+function afterOpenChange(open: boolean): void { if (!open) emit('closed') }
 async function close(): Promise<void> {
-  if (applying.value) return
+  if (applying.value || choice.value.open || !drawerOpen.value) return
+  if (loadingDraft.value) { finalized = true; finishClose(); return }
   stop(); recorder.releaseAll()
   if (accepted.value) { await discard(); return }
-  if (ui.value.dirty) closeChoice.value = true
-  else emit('closed')
+  if (!ui.value.dirty) { await discard(); return }
+  const decision = await ask(t('recording.closeTitle'), t('recording.closeDescription'), [
+    { key: 'continue', label: t('recording.continueEditing'), primary: true },
+    { key: 'discard', label: t('recording.discard'), danger: true },
+    { key: 'apply', label: t('recording.applyClose') },
+  ])
+  if (decision === 'apply') await apply()
+  else if (decision === 'discard') await discard()
 }
 async function recoverCopy(): Promise<void> {
-  if (applying.value) return
+  if (!drawerOpen.value || applying.value || loadingDraft.value) return
   if (accepted.value) { await discard(); return }
   stop(); applying.value = true
-  try { await draftWriter.flush().catch(() => {}); await props.services.recoverCopy(recovery.value ?? recorder.checkpoint()); accepted.value = true; finalized = true; await props.services.deleteDraft(draftKey); finalized = true; emit('closed') } catch (cause) { showError(cause) } finally { applying.value = false }
+  try { await draftWriter.flush().catch(() => {}); await props.services.recoverCopy(recovery.value ?? recorder.checkpoint()); accepted.value = true; finalized = true; await props.services.deleteDraft(draftKey); finalized = true; finishClose() } catch (cause) { showError(cause) } finally { applying.value = false }
 }
 function recover(): void {
   if (!recovery.value || recoveryConflict.value) return
   recorder.restoreDraft(recovery.value); recovery.value = null; syncReplay(); replay.stop(); refresh()
 }
+async function chooseRecovery(): Promise<void> {
+  while (recovery.value && !disposed && drawerOpen.value) {
+    const decision = recoveryConflict.value
+      ? await ask(t('midiEditor.draftFound'), t('recording.draftConflict'), [
+        { key: 'cancel', label: t('actions.cancel') },
+        { key: 'discard', label: t('midiEditor.discardDraft'), danger: true },
+        { key: 'save', label: t('recording.recoverCopy'), primary: true },
+      ])
+      : await askDraft(t, t('midiEditor.draftFound'), t('recording.loadDraftPrompt'))
+    if (disposed) return
+    if (decision === 'cancel') { finalized = true; finishClose(); return }
+    try {
+      if (decision === 'load') recover()
+      else if (decision === 'save') { await recoverCopy(); if (!drawerOpen.value) return }
+      else { await draftWriter.flush().catch(() => {}); await props.services.deleteDraft(draftKey); recovery.value = null }
+    } catch (cause) { showError(cause) }
+  }
+}
 function frame(time: number): void {
   if (disposed) return
   recorder.advance()
   if (recorder.status === 'recording' && time - paintAt > 60) { refresh(); paintAt = time }
-  const positionSeconds = replaying.value ? replay.getState().positionSeconds : createTimeline(localState.value.document).tickToSeconds(recorder.cursorTick)
-  const audiblePitches = new Set(replaying.value ? replay.getActivePitches() : [])
+  const positionSeconds = seekPreviewSeconds.value ?? (replaying.value ? replay.getState().positionSeconds : previewCursorSeconds.value ?? createTimeline(localState.value.document).tickToSeconds(recorder.cursorTick))
+  const audiblePitches = new Set(replay.getActivePitches())
+  for (const key of recorder.activeKeys()) {
+    const pitch = recorder.template.mappings.find(mapping => mapping.key.toUpperCase() === key)?.pitch
+    if (pitch !== undefined) audiblePitches.add(pitch)
+  }
   previewKeys.value = new Set(recorder.template.mappings.filter(mapping => audiblePitches.has(mapping.pitch)).map(mapping => mappingKeyToCode(mapping.key)))
-  transport.value = { positionSeconds, isPlaying: recorder.status === 'recording' || replaying.value, playbackRate: 1 }
+  transport.value = { positionSeconds, isPlaying: recorder.status === 'recording' || replaying.value, playbackRate: 1, activePitches: [...audiblePitches] }
   frameHandle = requestAnimationFrame(frame)
 }
 function onScroll(): void { scrollRegistration.setVisible((scrollBody.value?.scrollTop ?? 0) > 200) }
@@ -260,19 +317,26 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', visibility)
   frameHandle = requestAnimationFrame(frame)
   try {
-    draftKey = await recorderDraftKey(props.input.project.id, props.input.trackId)
-    const draft = await props.services.loadDraft(draftKey)
-    if (!disposed && draft) {
+    draftKey = await recordingDraftKey(props.input)
+    let draft = await props.services.loadDraft(draftKey)
+    // 兼容升级前保存的项目 ID 草稿；加载后在同一键上完成删除或更新。
+    if (!draft && props.input.draftScope) {
+      const legacyKey = await recorderDraftKey(props.input.project.id, props.input.trackId)
+      draft = await props.services.loadDraft(legacyKey)
+      if (draft) draftKey = legacyKey
+    }
+    if (!disposed && drawerOpen.value && draft) {
       recovery.value = draft
-      const metadata = draft.extensions?.recordingDraft as { baseRevision?: string } | undefined
-      recoveryConflict.value = metadata?.baseRevision !== props.input.baseRevision
+      recoveryConflict.value = recordingDraftConflicts(props.input, draft)
     }
   } catch (cause) { showError(cause) } finally { loadingDraft.value = false }
+  if (recovery.value) await chooseRecovery()
+  if (disposed || !drawerOpen.value) return
   draftTimer = setInterval(() => void checkpoint().catch(showError), 1000)
 })
 onBeforeUnmount(() => {
   if (!finalized) void checkpoint().catch(() => {})
-  disposed = true; unsubscribe(); recorder.dispose(); replay.dispose(); scrollRegistration()
+  disposed = true; resolveChoice('cancel'); unsubscribe(); recorder.dispose(); replay.dispose(); scrollRegistration()
   clearInterval(draftTimer); cancelAnimationFrame(frameHandle)
   window.removeEventListener('keydown', handleKeydown); window.removeEventListener('keyup', handleKeyup); window.removeEventListener('blur', pauseForFocus); window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('visibilitychange', visibility)
 })
@@ -282,7 +346,7 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
 <template>
   <ConfigProvider :get-popup-container="getMainWindowPopupContainer">
     <Drawer
-      :open="true"
+      :open="drawerOpen"
       placement="right"
       :title="currentTrack.name"
       :get-container="getMainWindowPopupContainer"
@@ -292,6 +356,7 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
       :keyboard="false"
       :closable="{ placement: 'end', disabled: applying }"
       root-class="track-recorder-drawer"
+      :after-open-change="afterOpenChange"
       @close="close"
     >
       <template #title>
@@ -353,30 +418,6 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
         >
           <div class="flex h-full min-h-[560px] flex-col gap-2 p-3">
             <Alert v-if="error" type="error" show-icon :message="error" class="shrink-0" />
-            <Alert
-              v-if="recovery"
-              type="warning"
-              show-icon
-              class="shrink-0"
-              :message="t(recoveryConflict ? 'recording.draftConflict' : 'recording.draftFound')"
-            >
-              <template #description>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  <Button v-if="!recoveryConflict" :disabled="applying" @click="recover">
-                    {{ t('recording.recover') }}
-                  </Button>
-                  <Button :disabled="applying" @click="recoverCopy">
-                    {{ t('recording.recoverCopy') }}
-                  </Button>
-                  <Button
-                    :disabled="applying"
-                    @click="services.deleteDraft(draftKey).then(() => recovery = null).catch(showError)"
-                  >
-                    {{ t('recording.discardDraft') }}
-                  </Button>
-                </div>
-              </template>
-            </Alert>
             <Splitter orientation="vertical" class="min-h-[536px] flex-1">
               <SplitterPanel :default-size="180" :min="120" max="60%">
                 <div
@@ -398,28 +439,33 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
                   />
                 </div>
               </SplitterPanel>
-              <SplitterPanel :min="280">
-                <PianoRoll
-                  ref="roll"
-                  variant="editor"
+              <SplitterPanel
+                :min="280"
+                @pointerdown.capture="ui.busy && ui.status !== 'paused' && pauseForFocus()"
+              >
+                <PianoEditorPanel
+                  hide-close
+                  hide-reference-toggle
+                  :title="t('recording.previewTitle')"
                   :document="documentView"
                   :transport="transport"
                   :selected-track-id="input.trackId"
                   :show-other-tracks="false"
-                  :show-toolbar-controls="false"
                   :labels="labels"
                   :theme="midiEditorPianoRollTheme"
                   :editing="editing"
                   @seek="seek"
+                  @seek-preview="previewSeek"
+                  @edit-intent="handleIntent"
                 >
-                  <template #title>
-                    {{ t('recording.previewTitle') }}
+                  <template #tools>
+                    <EditorSnapSettings
+                      :snap="localState.snap"
+                      :disabled="editingLocked"
+                      @dispatch="dispatch"
+                    />
                   </template>
-                  <template #toolbar="{ view, viewport }">
-                    <PianoRollFollowButton :view="view" :viewport="viewport" :labels="labels" />
-                    <PianoRollControls :view="view" :viewport="viewport" :labels="labels" />
-                  </template>
-                </PianoRoll>
+                </PianoEditorPanel>
               </SplitterPanel>
             </Splitter>
           </div>
@@ -427,28 +473,40 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
       </div>
       <template #footer>
         <div class="flex items-center justify-end gap-2">
-          <Button :disabled="applying" :aria-label="t('actions.cancel')" @click="close">
+          <Button
+            :disabled="applying || !drawerOpen"
+            :aria-label="t('actions.cancel')"
+            @click="close"
+          >
             {{ t('actions.cancel') }}
           </Button>
-          <Button v-if="error && ui.dirty" :disabled="applying" @click="recoverCopy">
+          <Button v-if="error && ui.dirty" :disabled="applying || !drawerOpen" @click="recoverCopy">
             {{ t('recording.recoverCopy') }}
           </Button>
           <Button
             type="primary"
             :loading="applying"
-            :disabled="loadingDraft || !!recovery || !ui.dirty"
+            :disabled="!drawerOpen || loadingDraft || !!recovery || !ui.dirty"
             @click="apply"
           >
             {{ t('recording.apply') }}
           </Button>
         </div>
       </template>
+      <NoteContextMenu
+        :target="contextTarget"
+        :state="localState"
+        :track-id="input.trackId"
+        track-only
+        @dispatch="dispatch"
+        @close="contextTarget = null"
+      />
       <EditorChoiceModal
-        :open="closeChoice"
-        :title="t('recording.closeTitle')"
-        :description="t('recording.closeDescription')"
-        :options="[{ key: 'continue', label: t('recording.continueEditing'), primary: true }, { key: 'discard', label: t('recording.discard'), danger: true }, { key: 'apply', label: t('recording.applyClose') }]"
-        @choose="closeChoice = false; $event === 'apply' ? apply() : $event === 'discard' ? discard() : undefined"
+        :open="choice.open"
+        :title="choice.title"
+        :description="choice.description"
+        :options="choice.options"
+        @choose="resolveChoice"
       />
       <RecorderHelpDialog v-model:open="helpOpen" />
     </Drawer>

@@ -166,7 +166,7 @@ test('参考音轨默认开启，图标开关和跨轨拖动编辑一致，独�
   const toggle = page.getByRole('button', { name: '显示其他音轨', exact: true })
   await expect(toggle).toHaveAttribute('aria-pressed', 'true')
   await toggle.hover()
-  await expect(page.getByRole('tooltip')).toContainText('点击参考音符')
+  await expect(page.getByRole('tooltip')).toHaveText('仅显示当前音轨')
   const point = await referenceNotePoint(page)
   await page.mouse.move(point.x, point.y)
   await page.mouse.down()
@@ -1706,6 +1706,23 @@ test('窄窗口中单音符属性完整显示，力度通过悬浮纵向滑杆�
 })
 
 for (const detached of [false, true]) {
+  test(`未改动退出录制不生成主草稿：${detached ? '独立编辑窗口' : '主窗口'}`, async ({ page }) => {
+    await page.goto('/tests/browser/midi-editor-page.html')
+    let editor = page
+    if (detached) {
+      const opening = page.waitForEvent('popup')
+      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+      editor = await opening
+    }
+    await expect(editor.locator('.detail-piano-roll')).toBeVisible()
+    expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
+    await editor.getByRole('button', { name: '键盘录制', exact: true }).click()
+    const dialog = editor.getByRole('dialog').first()
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await expect(dialog).not.toBeVisible()
+    expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
+    await expect(editor.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+  })
   test(`键盘录制通过宿主原子应用并撤销：${detached ? '独立编辑窗口' : '主窗口'}`, async ({
     page,
   }, testInfo) => {
@@ -1740,5 +1757,68 @@ for (const detached of [false, true]) {
         window.midiEditorFixture.draftKeys().some((key) => key.startsWith('recording-'))
       )
     ).toBe(false)
+  })
+}
+
+test('新建项目重载后独立录制草稿可加载，取消保留、应用形成一次主撤销', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?recordingReload')
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  let recorder = page.getByRole('dialog').first()
+  await recorder.getByRole('button', { name: '开始录制', exact: true }).click()
+  await page.keyboard.down('a')
+  await page.waitForTimeout(120)
+  await page.keyboard.up('a')
+  await recorder.getByRole('button', { name: '停止录制', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.midiEditorFixture.draftKeys()))
+    .toEqual([expect.stringMatching(/^recording-/)])
+  await page.reload()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  const draft = page.getByRole('dialog').filter({ hasText: '发现草稿' })
+  await expect(draft).toContainText('未完成的键盘录制')
+  await expect(draft.getByRole('button', { name: '另存为新项目', exact: true })).toHaveCount(0)
+  await draft.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.locator('.track-recorder-drawer')).toHaveCount(0)
+  expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([
+    expect.stringMatching(/^recording-/),
+  ])
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  await draft.getByRole('button', { name: '加载草稿', exact: true }).click()
+  recorder = page.getByRole('dialog').first()
+  await expect(recorder.getByText(/· 1 个音符/)).toBeVisible()
+  await recorder.getByRole('button', { name: '应用到音轨', exact: true }).click()
+  await expect(page.locator('.track-recorder-drawer')).toHaveCount(0)
+  expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual(['create'])
+  expect(await page.evaluate(() => window.midiEditorFixture.draftNoteCounts())).toEqual([1])
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  await expect(undo).toBeEnabled()
+  await undo.click()
+  await expect(undo).toBeDisabled()
+})
+
+for (const detached of [false, true]) {
+  test(`项目保存期间禁止打开录制避免草稿归属切换：${detached ? '独立窗口' : '主窗口'}`, async ({
+    page,
+  }) => {
+    await page.goto('/tests/browser/midi-editor-page.html')
+    let editor = page
+    if (detached) {
+      const opening = page.waitForEvent('popup')
+      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+      editor = await opening
+      await expect(editor.locator('.detail-piano-roll')).toBeVisible()
+    }
+    await page.evaluate(() => window.midiEditorFixture.deferProjectSave(true))
+    await editor.getByRole('button', { name: '保存', exact: true }).click()
+    await expect
+      .poll(() => page.evaluate(() => window.midiEditorFixture.projectSavePending()))
+      .toBe(true)
+    const launch = editor.getByRole('button', { name: '键盘录制', exact: true })
+    await expect(launch).toBeDisabled()
+    await page.evaluate(() => window.midiEditorFixture.finishProjectSave())
+    await expect(launch).toBeEnabled()
+    await expect(editor.locator('.track-recorder-drawer')).toHaveCount(0)
   })
 }

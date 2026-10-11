@@ -2,14 +2,13 @@
 /**
  * @description: MIDI 编辑器紧凑工具栏：速度/拍号/吸附/工具/撤销重做/试听/显示开关
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button, Checkbox, Popover, Select, Switch, Tooltip } from 'antdv-next'
+import { Button, Popover, Select, Switch, Tooltip } from 'antdv-next'
 import {
   CircleAlert,
   HelpCircle,
   KeyboardMusic,
-  Magnet,
   MousePointer2,
   Pause,
   Pencil,
@@ -20,8 +19,9 @@ import {
   Square,
   Undo2,
 } from 'lucide-vue-next'
-import { MAX_BPM, MIN_BPM, SNAP_RESOLUTIONS, tempoToBpm } from '@strawberrybear/midi-editor'
-import type { EditorAction, EditorSessionState, SnapResolution } from '@strawberrybear/midi-editor'
+import { MAX_BPM, MIN_BPM, tempoToBpm } from '@strawberrybear/midi-editor'
+import type { EditorAction, EditorSessionState } from '@strawberrybear/midi-editor'
+import EditorSnapSettings from '@/components/EditorSnapSettings.vue'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import EditorNumberInput from './EditorNumberInput.vue'
 import { getMainWindowPopupContainer } from '@/theme/infinityNikkiTheme'
@@ -48,7 +48,6 @@ const emit = defineEmits<{
   'select-template': [templateId: string]
 }>()
 const { t } = useI18n()
-const snapSettingsOpen = ref(false)
 const templateSettingsOpen = ref(false)
 const settingsOpen = ref(false)
 
@@ -61,28 +60,6 @@ const denominatorOptions = METER_DENOMINATORS.map((value) => ({ value, label: St
 
 const bpm = computed(() => tempoToBpm(props.state.document.tempoMap[0]?.microsecondsPerQuarter ?? 0))
 const meter = computed(() => props.state.document.timeSignatureMap[0] ?? { numerator: 4, denominator: 4 })
-type BeatSnapResolution = Exclude<SnapResolution, 'off' | 'bar'>
-const DEFAULT_BEAT_SNAP: BeatSnapResolution = '1/16'
-/** 下拉框只负责节拍网格；开关和按小节吸附使用独立控件表达。 */
-const beatSnapResolutions = SNAP_RESOLUTIONS.filter(
-  (value): value is BeatSnapResolution => value !== 'off' && value !== 'bar'
-)
-const snapOptions = beatSnapResolutions.map((value) => ({ value, title: '', label: value }))
-const lastBeatSnap = ref<BeatSnapResolution>(DEFAULT_BEAT_SNAP)
-const snapEnabled = computed(() => props.state.snap !== 'off')
-const snapToBar = computed(() => props.state.snap === 'bar')
-const beatSnap = computed(() => {
-  const current = props.state.snap
-  return current !== 'off' && current !== 'bar' ? current : lastBeatSnap.value
-})
-
-watch(
-  () => props.state.snap,
-  (value) => {
-    if (value !== 'off' && value !== 'bar') lastBeatSnap.value = value
-  },
-  { immediate: true }
-)
 const toolOptions = [
   { value: 'select', icon: MousePointer2, help: 'selectTool' },
   { value: 'draw', icon: Pencil, help: 'drawTool' },
@@ -99,26 +76,7 @@ function handleNumerator(value: unknown): void {
 function handleDenominator(value: unknown): void {
   emit('set-meter', meter.value.numerator, Number(value))
 }
-function setSnap(resolution: SnapResolution): void {
-  emit('dispatch', { type: 'set-snap', resolution })
-}
-function handleSnapEnabled(value: boolean): void {
-  setSnap(value ? lastBeatSnap.value : 'off')
-}
-function handleSnapToBar(): void {
-  setSnap(snapToBar.value ? lastBeatSnap.value : 'bar')
-}
-function handleBeatSnap(value: unknown): void {
-  const resolution = value as BeatSnapResolution
-  if (!beatSnapResolutions.includes(resolution)) return
-  lastBeatSnap.value = resolution
-  setSnap(resolution)
-}
-/**
- * @description: 更新力度条显示状态
- * @param {boolean} value - 是否显示力度条
- * @return {void}
- */
+
 function handleVelocityLane(value: boolean): void {
   emit('update:showVelocity', value)
 }
@@ -320,74 +278,7 @@ function handleDimUnplayable(value: boolean): void {
         </Button>
       </Popover>
 
-      <Popover
-        v-model:open="snapSettingsOpen"
-        :trigger="['hover', 'click']"
-        placement="bottomRight"
-        :mouse-enter-delay="0.12"
-        :mouse-leave-delay="0.14"
-        :get-popup-container="getMainWindowPopupContainer"
-      >
-        <template #content>
-          <div id="midi-snap-settings" class="snap-settings">
-            <h3 class="settings-title settings-title-with-help">
-              {{ t('midiEditor.toolbar.snap') }}
-              <Tooltip :title="t('midiEditor.toolbar.snapTip')" :trigger="['hover', 'focus']">
-                <CircleAlert
-                  class="property-help-icon"
-                  tabindex="0"
-                  role="img"
-                  :aria-label="t('midiEditor.toolbar.snapTip')"
-                />
-              </Tooltip>
-            </h3>
-
-            <label class="settings-switch-row">
-              <span>{{ t('midiEditor.toolbar.snapEnabled') }}</span>
-              <Switch
-                size="small"
-                :checked="snapEnabled"
-                :aria-label="t('midiEditor.toolbar.snapEnabled')"
-                @change="handleSnapEnabled"
-              />
-            </label>
-
-            <div v-if="snapEnabled" class="snap-settings-options">
-              <Checkbox :checked="snapToBar" @change="handleSnapToBar">
-                {{ t('midiEditor.toolbar.snapToBar') }}
-              </Checkbox>
-              <label class="toolbar-field">
-                <span class="toolbar-label">{{ t('midiEditor.toolbar.snapResolution') }}</span>
-                <Select
-                  class="toolbar-snap"
-                  :aria-label="t('midiEditor.toolbar.snapResolution')"
-                  :style="{ width: '100px', flex: '0 0 100px' }"
-                  :popup-match-select-width="148"
-                  size="small"
-                  :disabled="snapToBar"
-                  :value="beatSnap"
-                  :options="snapOptions"
-                  :get-popup-container="getMainWindowPopupContainer"
-                  @change="handleBeatSnap"
-                />
-              </label>
-            </div>
-          </div>
-        </template>
-        <Button
-          size="small"
-          color="primary"
-          variant="text"
-          class="settings-icon-trigger"
-          :aria-expanded="snapSettingsOpen"
-          aria-controls="midi-snap-settings"
-          :aria-label="t('midiEditor.toolbar.snap')"
-        >
-          <template #icon>
-            <Magnet class="toolbar-icon" />
-          </template>
-        </Button>
-      </Popover>
+      <EditorSnapSettings :snap="state.snap" @dispatch="emit('dispatch', $event)" />
 
       <Popover
         v-model:open="settingsOpen"
@@ -519,9 +410,7 @@ function handleDimUnplayable(value: boolean): void {
 .toolbar-edit-group > :first-child { @apply mr-2 rounded-md bg-primary/10 p-0.5; }
 .toolbar-separator { @apply mx-0.5 h-4 w-px shrink-0 bg-primary/15; }
 .toolbar-settings-group :deep(.settings-icon-trigger) { width: 30px; min-width: 30px; padding: 0; }
-.snap-settings { @apply flex flex-col gap-3; width: 224px; }
 .template-settings { @apply flex flex-col gap-3; width: 224px; }
-.snap-settings-options { @apply flex flex-col gap-3 border-t border-primary/10 pt-3 text-xs; color: var(--color-muted-dark); }
 .editor-settings { @apply flex flex-col gap-3; width: 244px; }
 .settings-title { @apply m-0 text-xs font-semibold; color: var(--color-foreground); }
 .settings-divider { @apply border-t border-primary/10 pt-3; }

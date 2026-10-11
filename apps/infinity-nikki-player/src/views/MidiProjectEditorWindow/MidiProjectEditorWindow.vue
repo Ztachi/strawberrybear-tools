@@ -24,9 +24,8 @@ import { getAntdvLocale, isSupportedLocale } from '@/i18n'
 import { midiEditorConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import MidiEditorWorkspace from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/MidiEditorWorkspace.vue'
 import { useMidiEditorPlayback } from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/useMidiEditorPlayback'
-import EditorChoiceModal, {
-  type EditorChoiceOption,
-} from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorChoiceModal.vue'
+import EditorChoiceModal from '@/components/EditorChoiceModal.vue'
+import { useEditorChoice } from '@/composables/useEditorChoice'
 import EditorProjectActions from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorProjectActions.vue'
 import EditorToolbar from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorToolbar.vue'
 
@@ -74,13 +73,7 @@ watch(updateLocked, (locked) => {
   if (locked) { playback.pause(); recorderLauncher.value?.pause() }
 })
 const configLocale = computed(() => getAntdvLocale(locale.value))
-const choice = ref<{
-  open: boolean
-  title: string
-  description: string
-  options: EditorChoiceOption[]
-  resolve: CallableFunction | null
-}>({ open: false, title: '', description: '', options: [], resolve: null })
+const { choice, ask, resolveChoice } = useEditorChoice()
 
 function send(command: MidiProjectEditorCommand): Promise<void> {
   if (!session || !active) return Promise.resolve()
@@ -121,20 +114,6 @@ async function dockEditor(): Promise<void> {
   await send({ kind: 'playback-state', snapshot })
   if (viewport) await send({ kind: 'viewport', viewport })
   await send({ kind: 'dock' })
-}
-
-function ask(title: string, description: string, options: EditorChoiceOption[]): Promise<string> {
-  choice.value.resolve?.('cancel')
-  return new Promise((resolve) => {
-    choice.value = { open: true, title, description, options, resolve }
-  })
-}
-
-function resolveChoice(key: string): void {
-  const resolve = choice.value.resolve
-  choice.value.open = false
-  choice.value.resolve = null
-  resolve?.(key)
 }
 
 async function confirm(
@@ -419,7 +398,7 @@ onBeforeUnmount(() => {
   for (const request of recorderRequests.values()) { clearTimeout(request.timer); request.reject(new Error('Editor window closed')) }
   recorderRequests.clear()
   window.clearTimeout(viewportTimer)
-  choice.value.resolve?.('cancel')
+  resolveChoice('cancel')
   for (const cleanup of cleanups) cleanup()
 })
 </script>
@@ -477,7 +456,8 @@ onBeforeUnmount(() => {
                 :position-seconds="playback.positionSeconds.value"
                 :fps="presentation.fps"
                 :speed="presentation.speed"
-                :disabled="updateLocked"
+                :draft-scope="presentation.recordingDraftScope"
+                :disabled="updateLocked || presentation.saving"
                 :prepare-external="prepareRecording"
                 :apply-result="result => recorderRequest('recording-apply', result)"
                 @lock="recordingLock"

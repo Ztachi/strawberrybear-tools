@@ -33,6 +33,7 @@ const playedPitches: number[] = []
 const previewPitches: number[] = []
 let activeRecordingVoices = 0
 let accompanimentStarts = 0
+const savedProjectNotes: { pitch: number }[][] = []
 let previewController: MidiEditorPlaybackController | null = null
 const hasMainPortal = new URLSearchParams(window.location.search).has('main')
 const fixtureLocale = new URLSearchParams(window.location.search).has('english') ? 'en-US' : 'zh-CN'
@@ -40,6 +41,7 @@ interface RecorderFixture {
   failDelete(value: boolean): void
   failSave(value: boolean): void
   seedDraft(conflict: boolean, deletedTemplate?: boolean): Promise<void>
+  savedProjectNotes(): { pitch: number }[][]
   applyCount(): number
   deferDrafts(value: boolean): void
   pendingDrafts(): number
@@ -66,6 +68,13 @@ declare global {
 
 mockIPC((command, raw) => {
   const args = raw as { key: string; project: unknown }
+  if (command === 'get_midi_projects') return []
+  if (command === 'save_midi_project') {
+    savedProjectNotes.push(
+      (args.project as { document: { notes: { pitch: number }[] } }).document.notes
+    )
+    return
+  }
   if (command === 'load_midi_project_draft') return drafts.get(args?.key) ?? null
   if (command === 'save_midi_project_draft') {
     if (failSave) throw new Error('disk-save')
@@ -111,6 +120,7 @@ const audio = (): RecorderAudio => ({
   stopAccompaniment() {},
 })
 window.recorderFixture = {
+  savedProjectNotes: () => savedProjectNotes,
   deferDrafts(value) {
     deferDrafts = value
   },

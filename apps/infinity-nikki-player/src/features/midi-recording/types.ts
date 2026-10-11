@@ -15,6 +15,9 @@ export interface TrackRecorderInput {
   templates: readonly KeyTemplate[]
   templateId: string | null
   baseRevision: string
+  baseContentRevision?: string
+  /** 主编辑器的稳定草稿入口；不依赖新建项目的随机 ID。 */
+  draftScope?: string
   fps?: number
   speed?: number
 }

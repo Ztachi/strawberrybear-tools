@@ -17,7 +17,7 @@ import {
 } from '@/components/PianoWorkspace/usePianoTrackHosts'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
 import { midiEditorPianoRollTheme } from '@/theme/infinityNikkiTheme'
-import NoteContextMenu, { type NoteContextMenuTarget } from './NoteContextMenu.vue'
+import NoteContextMenu, { type NoteContextMenuTarget } from '@/components/NoteContextMenu.vue'
 import NoteInspector from './NoteInspector.vue'
 import TrackActionsMenu from './TrackActionsMenu.vue'
 import MidiEditorTour from './MidiEditorTour.vue'

@@ -37,6 +37,7 @@ export interface MidiProjectEditorPresentation {
   updateLocked?: boolean
   recordingLocked?: boolean
   templateMappings?: KeyTemplate[]
+  recordingDraftScope?: string
   fps?: number
   speed?: number
 }

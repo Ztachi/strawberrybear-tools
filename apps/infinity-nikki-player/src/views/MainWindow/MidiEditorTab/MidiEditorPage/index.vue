@@ -67,7 +67,8 @@ import type { MidiInfo } from '@/types'
 import TrackRecorderLauncher from '@/components/TrackRecorderLauncher.vue'
 import { applyRecorderResult } from '@/features/midi-recording/coordinator'
 import type { TrackRecorderResult } from '@/features/midi-recording/types'
-import EditorChoiceModal, { type EditorChoiceOption } from './components/EditorChoiceModal.vue'
+import EditorChoiceModal from '@/components/EditorChoiceModal.vue'
+import { useEditorChoice } from '@/composables/useEditorChoice'
 import EditorProjectActions from './components/EditorProjectActions.vue'
 import EditorToolbar from './components/EditorToolbar.vue'
 import MidiEditorWorkspace from './components/MidiEditorWorkspace.vue'
@@ -136,33 +137,8 @@ const playback = useMidiEditorPlayback(
 )
 
 // ---------- 通用选择弹窗 ----------
-const choice = ref<{
-  open: boolean
-  title: string
-  description: string
-  options: EditorChoiceOption[]
-  resolve: CallableFunction | null
-}>({ open: false, title: '', description: '', options: [], resolve: null })
+const { choice, ask, askDraft, resolveChoice } = useEditorChoice()
 
-/**
- * @description: 弹出选择框并等待用户选择
- * @param {string} title 标题
- * @param {string} description 说明
- * @param {EditorChoiceOption[]} options 选项
- * @return {Promise<string>} 选中的 key；关闭为 `cancel`
- */
-function ask(title: string, description: string, options: EditorChoiceOption[]): Promise<string> {
-  choice.value.resolve?.('cancel')
-  return new Promise((resolve) => {
-    choice.value = { open: true, title, description, options, resolve }
-  })
-}
-function resolveChoice(key: string): void {
-  const resolve = choice.value.resolve
-  choice.value.open = false
-  choice.value.resolve = null
-  resolve?.(key)
-}
 /**
  * @description: 双按钮确认
  * @param {string} title 标题
@@ -287,11 +263,7 @@ async function loadFromRoute(): Promise<void> {
     currentEntry.value = entry
     currentDraftKey.value = loadingDraftKey
     if (draft) {
-      const decision = await ask(t('midiEditor.draftFound'), t('midiEditor.loadDraftPrompt'), [
-        { key: 'cancel', label: t('actions.cancel') },
-        { key: 'discard', label: t('midiEditor.discardDraft'), danger: true },
-        { key: 'load', label: t('midiEditor.loadDraft'), primary: true },
-      ])
+      const decision = await askDraft(t)
       if (generation !== loadGeneration) return
       if (decision === 'cancel') {
         await leaveWithoutNewHistory()
@@ -565,6 +537,7 @@ function createWindowPresentation() {
     templateMappings: JSON.parse(JSON.stringify(settingsStore.templates)),
     fps: settingsStore.autoFpsEnabled ? settingsStore.lastDetectedFps ?? settingsStore.manualFps : settingsStore.manualFps,
     speed: playerStore.speed,
+    recordingDraftScope: currentDraftKey.value,
   }
 }
 
@@ -616,8 +589,7 @@ async function prepareRecording(): Promise<void> {
   await playerStore.stopPlayback()
   const handle = editor.value
   if (!handle) throw new Error('Editor is unavailable')
-  // 新建空项目也先保存基线，重启后录制草稿才能找回原项目身份。
-  await draftWriter.write(currentDraftKey.value, handle.session.toProject())
+  // 录制草稿拥有独立入口标识；打开工作区不写入主编辑器草稿。
 }
 async function applyRecording(result: TrackRecorderResult): Promise<void> {
   if (updateLocked.value) throw new Error('Editor is locked')
@@ -839,7 +811,7 @@ onBeforeUnmount(() => {
   removeCloseGuard()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   if (draftTimer !== null) window.clearInterval(draftTimer)
-  choice.value.resolve?.('cancel')
+  resolveChoice('cancel')
   void editorWindow?.close()
   editorWindow = null
   disposeEditor()
@@ -895,8 +867,9 @@ onBeforeUnmount(() => {
           :position-seconds="playback.positionSeconds.value"
           :fps="settingsStore.autoFpsEnabled ? settingsStore.lastDetectedFps ?? settingsStore.manualFps : settingsStore.manualFps"
           :speed="playerStore.speed"
+          :draft-scope="currentDraftKey"
           :auto-open="route.query.record === '1'"
-          :disabled="updateLocked"
+          :disabled="updateLocked || saving"
           :prepare-external="prepareRecording"
           :apply-result="applyRecording"
           @lock="recordingLocked = $event"

@@ -62,6 +62,54 @@ async function recordKey(page: Page, key: string): Promise<void> {
   await page.keyboard.up(key)
 }
 
+test('录制抽屉关闭完成退场动画后才卸载', async ({ page }) => {
+  const dialog = await openRecorder(page)
+  const drawer = page.locator('.track-recorder-drawer')
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  expect(await drawer.count()).toBe(1)
+  await expect(drawer).not.toHaveClass(/ant-drawer-open/)
+  await expect(drawer).toHaveCount(0)
+})
+
+test('暂停可试听未提交的录音，曲尾停止后继续仍接在原录音末尾', async ({ page }) => {
+  const dialog = await openRecorder(page)
+  await dialog.getByRole('button', { name: '开始录制', exact: true }).click()
+  await recordKey(page, 'a')
+  await dialog.getByRole('button', { name: '暂停录制', exact: true }).click()
+  const preview = dialog.getByRole('button', { name: '试听', exact: true })
+  await expect(preview).toBeEnabled()
+  await preview.click()
+  await expect
+    .poll(() => page.evaluate(() => window.recorderFixture.previewPitches()))
+    .toContain(61)
+  await expect
+    .poll(() => page.evaluate(() => window.recorderFixture.previewState()?.isPlaying))
+    .toBe(false)
+  expect(
+    (await page.evaluate(() => window.recorderFixture.previewState()))!.durationSeconds
+  ).toBeLessThan(0.5)
+  await dialog.getByRole('button', { name: '继续录制', exact: true }).click()
+  await recordKey(page, 'Space')
+  await dialog.getByRole('button', { name: '停止录制', exact: true }).click()
+  await dialog.getByRole('button', { name: '应用到音轨', exact: true }).click()
+  const notes = await page.evaluate(() => window.recorderFixture.hostNotes())
+  expect(notes).toHaveLength(2)
+  expect(notes[1]!.startTick).toBe(notes[0]!.endTick)
+  await page.getByRole('button', { name: '主项目撤销', exact: true }).click()
+  await expect(page.getByTestId('host-note-count')).toHaveText('0')
+})
+
+test('录制卷帘复用详情面板，音高缩放与琴键试听可用', async ({ page }) => {
+  const dialog = await openRecorder(page)
+  const panel = dialog.locator('.detail-piano-editor')
+  await expect(panel).toBeVisible()
+  await expect(panel.getByRole('slider', { name: '音高缩放', exact: true })).toBeVisible()
+  await panel.locator('.pr-gutter').click({ position: { x: 10, y: 120 } })
+  await expect
+    .poll(() => page.evaluate(() => window.recorderFixture.previewPitches().length))
+    .toBeGreaterThan(0)
+})
+
 /** 说明正文必须能在当前窗口内阅读，DOM 可见不足以排除原生窗口裁剪。 */
 async function expectTooltipWithinWindow(page: Page): Promise<void> {
   const tooltip = page.locator('.ant-tooltip:visible')
@@ -285,7 +333,11 @@ test('恢复独立录制草稿；应用后删除失败只重试清理且不再�
   await page.evaluate(() => window.recorderFixture.seedDraft(false))
   await page.getByRole('button', { name: '键盘录制' }).click()
   const dialog = page.getByRole('dialog').first()
-  await dialog.getByRole('button', { name: '继续录制草稿', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .filter({ hasText: '发现草稿' })
+    .getByRole('button', { name: '加载草稿', exact: true })
+    .click()
   await page.evaluate(() => window.recorderFixture.failDelete(true))
   await dialog.getByRole('button', { name: '应用到音轨', exact: true }).click()
   await expect(dialog.getByRole('alert')).toContainText('disk-delete')
@@ -655,7 +707,7 @@ test('第二次录入和撤销后试听更新真实调度音高，失焦暂停�
   expect(await page.evaluate(() => window.recorderFixture.previewPitches())).not.toContain(108)
 })
 
-test('试听循环随重录小节范围更新，接着录取消旧循环且暂停保持位置', async ({ page }) => {
+test('重录范围不使试听循环，暂停试听保持位置', async ({ page }) => {
   await page.goto('/tests/browser/track-recorder.html')
   await page.evaluate(() => window.recorderFixture.seedExisting(5760))
   await page.getByRole('button', { name: '键盘录制', exact: true }).click()
@@ -668,7 +720,7 @@ test('试听循环随重录小节范围更新，接着录取消旧循环且暂�
   await dialog.getByRole('button', { name: '试听', exact: true }).click()
   await expect
     .poll(() => page.evaluate(() => window.recorderFixture.previewState()?.loop))
-    .toEqual({ startSeconds: 0, endSeconds: 2 })
+    .toBe(null)
   await page.waitForTimeout(100)
   await page.evaluate(() => window.dispatchEvent(new Event('blur')))
   const paused = await page.evaluate(() => window.recorderFixture.previewState())
@@ -683,7 +735,7 @@ test('试听循环随重录小节范围更新，接着录取消旧循环且暂�
   await page.getByRole('spinbutton', { name: '结束小节', exact: true }).blur()
   await expect
     .poll(() => page.evaluate(() => window.recorderFixture.previewState()?.loop))
-    .toEqual({ startSeconds: 0, endSeconds: 4 })
+    .toBe(null)
   await closePanel(page)
   await chooseMode(page, dialog, '接着录')
   await expect
@@ -719,7 +771,11 @@ test('已删除模板的录制草稿恢复后仍显示模板快照并可继续�
   await page.evaluate(() => window.recorderFixture.seedDraft(false, true))
   await page.getByRole('button', { name: '键盘录制', exact: true }).click()
   const dialog = page.getByRole('dialog').first()
-  await dialog.getByRole('button', { name: '继续录制草稿', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .filter({ hasText: '发现草稿' })
+    .getByRole('button', { name: '加载草稿', exact: true })
+    .click()
   const template = await openPanel(page, dialog, '键位映射')
   await expect(template.getByText('已删除的录制模板', { exact: true })).toBeVisible()
   await template.getByRole('combobox').click()
@@ -1047,4 +1103,72 @@ test('设置浮层内说明按钮持有焦点时 Escape 只关闭当前浮层', 
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('button', { name: '开始录制', exact: true })).toBeEnabled()
   }
+})
+
+test('加载录制草稿后撤销全部改动，退出清理草稿且重开不会复活音符', async ({ page }) => {
+  await page.goto('/tests/browser/track-recorder.html')
+  await page.evaluate(() => window.recorderFixture.seedDraft(false))
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  await page.getByRole('button', { name: '加载草稿', exact: true }).click()
+  let recorder = page.getByRole('dialog').first()
+  await recorder.getByRole('button', { name: /^撤销/ }).click()
+  await expect(recorder.getByText(/· 0 个音符/)).toBeVisible()
+  await recorder.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.locator('.track-recorder-drawer')).toHaveCount(0)
+  expect(await page.evaluate(() => window.recorderFixture.draftCount())).toBe(0)
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  recorder = page.getByRole('dialog').first()
+  await expect(recorder.getByRole('button', { name: '开始录制', exact: true })).toBeEnabled()
+  await expect(recorder.getByText(/· 0 个音符/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '加载草稿', exact: true })).toHaveCount(0)
+})
+
+test('暂停重录时调整吸附后仍可继续同一次录音，琴键试听不提交或丢失前半段', async ({ page }) => {
+  const recorder = await openRecorder(page)
+  await chooseMode(page, recorder, '重录选段')
+  await recorder.getByRole('button', { name: '开始录制', exact: true }).click()
+  await recordKey(page, 'a')
+  await recorder.getByRole('button', { name: '暂停录制', exact: true }).click()
+  await openPanel(page, recorder, '吸附')
+  await page.getByRole('checkbox', { name: '按小节吸附', exact: true }).check()
+  await closePanel(page)
+  await expect(recorder.getByRole('button', { name: '继续录制', exact: true })).toBeVisible()
+  await recorder.locator('.pr-gutter').click({ position: { x: 10, y: 120 } })
+  await expect(recorder.getByRole('button', { name: '继续录制', exact: true })).toBeVisible()
+  await recorder.getByRole('button', { name: '继续录制', exact: true }).click()
+  await recordKey(page, 'Space')
+  await recorder.getByRole('button', { name: '停止录制', exact: true }).click()
+  await recorder.getByRole('button', { name: '应用到音轨', exact: true }).click()
+  await expect(page.locator('.track-recorder-drawer')).toHaveCount(0)
+  const notes = await page.evaluate(() => window.recorderFixture.hostNotes())
+  expect(notes.map((note) => note.pitch)).toEqual([61, 60])
+  expect(notes[1]!.startTick).toBe(notes[0]!.endTick)
+})
+
+test('冲突草稿明确另存为新项目，不覆盖当前音轨，保存成功后清理独立草稿', async ({ page }) => {
+  await page.goto('/tests/browser/track-recorder.html')
+  await page.evaluate(() => window.recorderFixture.seedDraft(true))
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  const draft = page.getByRole('dialog').filter({ hasText: '发现草稿' })
+  await expect(draft).toContainText('原项目已修改')
+  await expect(draft.getByRole('button', { name: '加载草稿', exact: true })).toHaveCount(0)
+  await draft.getByRole('button', { name: '另存为新项目', exact: true }).click()
+  await expect(page.locator('.track-recorder-drawer')).toHaveCount(0)
+  expect(await page.evaluate(() => window.recorderFixture.savedProjectNotes())).toEqual([
+    [expect.objectContaining({ pitch: 61 })],
+  ])
+  expect(await page.evaluate(() => window.recorderFixture.hostNotes())).toEqual([])
+  expect(await page.evaluate(() => window.recorderFixture.draftCount())).toBe(0)
+  await expect(page.getByText('可在 MIDI 编辑的项目列表中打开这次录制。')).toBeVisible()
+})
+
+test('正常录制草稿可直接丢弃，工作区保持打开且不修改主项目', async ({ page }) => {
+  await page.goto('/tests/browser/track-recorder.html')
+  await page.evaluate(() => window.recorderFixture.seedDraft(false))
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  await page.getByRole('button', { name: '丢弃草稿', exact: true }).click()
+  const recorder = page.getByRole('dialog').first()
+  await expect(recorder.getByRole('button', { name: '开始录制', exact: true })).toBeEnabled()
+  expect(await page.evaluate(() => window.recorderFixture.draftCount())).toBe(0)
+  expect(await page.evaluate(() => window.recorderFixture.hostNotes())).toEqual([])
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * @description: 钢琴卷帘右键菜单：围绕选区的剪贴板/编辑动作，空白处可直接落音符
+ * @description: MIDI 编辑器与录制工作区共用的钢琴卷帘右键菜单。
  */
 import { computed, h } from 'vue'
 import { useI18n } from 'vue-i18n'

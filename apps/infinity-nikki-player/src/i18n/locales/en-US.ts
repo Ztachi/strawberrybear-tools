@@ -511,8 +511,8 @@ export default {
   },
   midiEditor: {
     otherTracks: 'Show Other Tracks',
-    otherTracksTip:
-      'Show reference notes in their track colors with dashed outlines. Click to switch tracks; drag to edit in editing mode.',
+    otherTracksTip: 'Show all tracks',
+    hideOtherTracksTip: 'Show current track only',
     title: 'MIDI Editor',
     description:
       'Create, edit, import and export MIDI projects; export .mid or add to the library when done',

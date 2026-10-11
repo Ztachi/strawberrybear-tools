@@ -31,6 +31,9 @@ const props = defineProps<{
   editing?: PianoRollProps['editing']
   /** 浏览与编辑共用的参考轨显示偏好。 */
   showOtherTracks: boolean
+  hideClose?: boolean
+  hideReferenceToggle?: boolean
+  title?: string
 }>()
 const emit = defineEmits<{
   'select-track': [trackId: string]
@@ -74,11 +77,14 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
     @select-track="emit('select-track', $event)"
   >
     <template #title="{ label }">
-      <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
+      <strong class="piano-roll-slot-title"><PianoTrackLabel :name="title ?? label" /></strong>
     </template>
     <template #corner="{ view, viewport }">
       <PianoRollFollowButton :view="view" :viewport="viewport" :labels="labels" />
-      <Tooltip :title="t('midiEditor.otherTracksTip')">
+      <Tooltip
+        v-if="!hideReferenceToggle"
+        :title="t(showOtherTracks ? 'midiEditor.hideOtherTracksTip' : 'midiEditor.otherTracksTip')"
+      >
         <Button
           class="piano-reference-button"
           size="small"
@@ -97,8 +103,9 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
     </template>
     <template #toolbar="{ view, viewport }">
       <div class="piano-roll-app-toolbar">
+        <slot name="tools" />
         <PianoRollControls :view="view" :viewport="viewport" :labels="labels" editor />
-        <Tooltip :title="labels.close">
+        <Tooltip v-if="!hideClose" :title="labels.close">
           <Button
             class="piano-roll-trailing-action"
             type="text"

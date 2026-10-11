@@ -412,3 +412,64 @@ it('工作区可编辑当前音轨区域边界，其他音轨的区域仍隔离'
   expect(r.result().endTick).toBe(240)
   expect(r.editor.getState().document.tracks[1]!.endTick).toBe(960)
 })
+
+it('恢复草稿只应用目标音轨，旧身份重映射且可撤销，不覆盖其他轨道', () => {
+  const { input, audio } = setup()
+  input.project.document.tracks.push({
+    id: 'other',
+    name: 'Other',
+    isPercussion: false,
+    enabled: true,
+  })
+  input.project.document.notes = [
+    { id: 'other-note', trackId: 'other', pitch: 70, velocity: 90, startTick: 0, endTick: 480 },
+  ]
+  const draft = structuredClone(input.project)
+  draft.document.tracks[0]!.id = 'previous-track'
+  draft.document.tracks[0]!.endTick = 240
+  draft.document.notes = [
+    {
+      id: 'recorded',
+      trackId: 'previous-track',
+      pitch: 61,
+      velocity: 80,
+      startTick: 0,
+      endTick: 240,
+    },
+  ]
+  draft.extensions = { recordingDraft: { trackId: 'previous-track', cursorTick: 240 } }
+  const recorder = new TrackRecorder(input, audio)
+  recorder.restoreDraft(draft)
+  expect(recorder.result().notes).toEqual([{ ...draft.document.notes[0]!, trackId: 'track-1' }])
+  expect(recorder.preview().document.notes.find((note) => note.id === 'other-note')).toEqual(
+    input.project.document.notes[0]
+  )
+  recorder.dispatch({ type: 'undo' })
+  expect(recorder.result().notes).toHaveLength(0)
+  expect(recorder.dirty).toBe(false)
+})
+
+it('暂停重录时切换编辑吸附不会结束同一次录音，继续保留前半段', async () => {
+  const { input, audio, time } = setup()
+  input.range = { startTick: 0, endTick: 1920 }
+  const recorder = new TrackRecorder(input, audio)
+  recorder.mode = 'replace'
+  await recorder.start()
+  recorder.press('A', 'A')
+  time(0.5)
+  recorder.pause()
+  recorder.dispatch({ type: 'set-snap', resolution: 'bar' })
+  expect(recorder.status).toBe('paused')
+  await recorder.resume()
+  recorder.press('S', 'S')
+  time(1)
+  recorder.stop()
+  expect(recorder.result().notes.map((note) => [note.pitch, note.startTick, note.endTick])).toEqual(
+    [
+      [61, 0, 480],
+      [108, 480, 960],
+    ]
+  )
+  recorder.dispatch({ type: 'undo' })
+  expect(recorder.result().notes).toHaveLength(0)
+})

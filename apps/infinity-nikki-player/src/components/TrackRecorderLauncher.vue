@@ -7,7 +7,7 @@ import { Circle } from 'lucide-vue-next'
 import { invoke } from '@tauri-apps/api/core'
 import { createProject, type EditorSessionState, type MidiProject } from '@strawberrybear/midi-editor'
 import type { KeyTemplate } from '@/types'
-import { recordingRevision } from '@/features/midi-recording/coordinator'
+import { recordingContentRevision, recordingRevision } from '@/features/midi-recording/coordinator'
 import { createRecorderAudio } from '@/features/midi-recording/audio'
 import type { TrackRecorderInput, TrackRecorderResult, TrackRecorderServices } from '@/features/midi-recording/types'
 import TrackRecorderDialog from './TrackRecorderDialog/index.vue'
@@ -22,6 +22,7 @@ const props = defineProps<{
   positionSeconds?: number
   fps?: number
   speed?: number
+  draftScope?: string
   disabled?: boolean
   autoOpen?: boolean
   nativeChrome?: boolean
@@ -66,13 +67,14 @@ async function openTrackRecorder(): Promise<void> {
         const extensions = { ...project.extensions }
         delete extensions.recordingDraft
         await invoke('save_midi_project', { project: { ...createProject({ document: project.document, extensions, name: uniqueProjectName(t('recording.copyName', { name: project.name }), new Set(existing.map(item => item.name)), project.name) }), loop: project.loop } })
+        feedback.success(t('midiEditor.saved'), { description: t('recording.savedAsProject') })
       },
     }
     input.value = {
       project, trackId: track.id, startTick: Math.max(track.startTick ?? 0, Math.round(createTimeline(project.document).secondsToTick(props.positionSeconds ?? 0))),
       range: selected.length ? { startTick: Math.min(...selected.map(note => note.startTick)), endTick: Math.max(...selected.map(note => note.endTick)) } : project.loop ?? undefined,
       templates: JSON.parse(JSON.stringify(props.templates)), templateId: props.templateId,
-      baseRevision: await recordingRevision(project), fps: props.fps, speed: props.speed,
+      baseRevision: await recordingRevision(project), baseContentRevision: await recordingContentRevision(project), draftScope: props.draftScope, fps: props.fps, speed: props.speed,
     }
   } catch (cause) {
     input.value = null; emit('lock', false)

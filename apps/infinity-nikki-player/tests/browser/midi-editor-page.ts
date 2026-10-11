@@ -234,6 +234,8 @@ const onlineSongFixtures = Array.from(
 // 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
 const savedDrafts: { key: string; name: string }[] = []
 let draftFailure = false
+let deferProjectSave = false
+let pendingProjectSave: (() => void) | null = null
 let installCalls = 0
 let updateState = { ...initialUpdateState(), revision: 0, currentVersion: '1.2.0' }
 let updateListener: (state: UpdateSnapshot) => void = () => {}
@@ -262,7 +264,14 @@ const updater = createUpdaterController({
 })
 await updater.start()
 // 模拟后端按 key 保存完整草稿，便于验证不同入口恢复的内容。
-const draftFiles = new Map<string, MidiProject>()
+const persistentDrafts = fixtureQuery.has('recordingReload')
+const draftFiles = new Map<string, MidiProject>(
+  persistentDrafts ? JSON.parse(sessionStorage.getItem('fixture-midi-drafts') ?? '[]') : []
+)
+function persistFixtureDrafts(): void {
+  if (persistentDrafts)
+    sessionStorage.setItem('fixture-midi-drafts', JSON.stringify([...draftFiles]))
+}
 // 原生解析按文件路径读取，不应受主窗口曲库 store 正在刷新影响。
 const parsedSongs = new Map(
   [midi, switchedMidi, ...navigationMidiLibrary].map((song) => [song.file_path, song])
@@ -324,11 +333,21 @@ const fixtureIPC: Parameters<typeof mockIPC>[0] = (command, payload) => {
     const draft = payload as { key: string; project: MidiProject }
     savedDrafts.push({ key: draft.key, name: draft.project.name })
     draftFiles.set(draft.key, structuredClone(draft.project))
+    persistFixtureDrafts()
     return
   }
   if (command === 'load_midi_project') return { ...project, id: (payload as { id: string }).id }
-  if (command === 'save_midi_project')
-    return { ...projectSummary, id: 'saved-fixture', updatedAt: Date.now() }
+  if (command === 'save_midi_project') {
+    const summary = { ...projectSummary, id: 'saved-fixture', updatedAt: Date.now() }
+    if (deferProjectSave)
+      return new Promise((resolve) => {
+        pendingProjectSave = () => {
+          pendingProjectSave = null
+          resolve(summary)
+        }
+      })
+    return summary
+  }
   if (command === 'import_midi_buffer')
     return {
       ...midi,
@@ -388,6 +407,7 @@ const fixtureIPC: Parameters<typeof mockIPC>[0] = (command, payload) => {
     return draftFiles.get((payload as { key: string }).key) ?? null
   if (command === 'delete_midi_project_draft') {
     draftFiles.delete((payload as { key: string }).key)
+    persistFixtureDrafts()
     return
   }
   if (command === 'check_accessibility') return true
@@ -583,6 +603,9 @@ declare global {
       draftNoteCounts: () => number[]
       recordingDraft: (command: string, args: Record<string, unknown>) => Promise<unknown>
       draftKeys: () => string[]
+      deferProjectSave: (value: boolean) => void
+      projectSavePending: () => boolean
+      finishProjectSave: () => void
       currentRoute: () => string
       deferParse: (filename: string) => void
       isParsePending: () => boolean
@@ -687,6 +710,11 @@ window.midiEditorFixture = {
   recordingDraft: (command: string, args: Record<string, unknown>) => invoke(command, args),
   draftNoteCounts: () => [...draftFiles.values()].map((project) => project.document.notes.length),
   draftKeys: () => [...draftFiles.keys()],
+  deferProjectSave: (value) => {
+    deferProjectSave = value
+  },
+  projectSavePending: () => !!pendingProjectSave,
+  finishProjectSave: () => pendingProjectSave?.(),
   currentRoute: () => router.currentRoute.value.fullPath,
   deferParse(filename) {
     pendingParse = { filename, resolve: null }

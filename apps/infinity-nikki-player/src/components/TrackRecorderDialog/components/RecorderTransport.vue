@@ -61,7 +61,7 @@ const statusText = computed(() => props.replaying ? t('recording.previewing') : 
     <Tooltip :title="t(replaying ? 'recording.pausePreview' : 'recording.preview')">
       <Button
         size="small"
-        :disabled="locked || busy || !hasNotes"
+        :disabled="editingLocked || !hasNotes"
         :aria-label="t(replaying ? 'recording.pausePreview' : 'recording.preview')"
         @click="$emit('preview')"
       >
@@ -73,7 +73,7 @@ const statusText = computed(() => props.replaying ? t('recording.previewing') : 
     <Tooltip :title="t('recording.rewind')">
       <Button
         size="small"
-        :disabled="locked || busy"
+        :disabled="editingLocked"
         :aria-label="t('recording.rewind')"
         @click="$emit('rewind')"
       >

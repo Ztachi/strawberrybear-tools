@@ -493,7 +493,8 @@ export default {
   },
   midiEditor: {
     otherTracks: '显示其他音轨',
-    otherTracksTip: '以原音轨配色和虚线轮廓显示参考音符；点击参考音符切换音轨，编辑时可直接拖动。',
+    otherTracksTip: '显示全部音轨',
+    hideOtherTracksTip: '仅显示当前音轨',
     title: 'MIDI 编辑',
     description: '创建、编辑、导入和导出 MIDI 项目，编辑完成后可导出 .mid 或直接加入曲库',
     projectList: '项目列表',
