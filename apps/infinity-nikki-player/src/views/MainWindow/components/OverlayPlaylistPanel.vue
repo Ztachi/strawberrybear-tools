@@ -157,7 +157,7 @@ async function locateCurrent(): Promise<void> {
   @apply min-h-0 flex-1 overflow-y-auto p-1.5;
 }
 .playlist-item {
-  @apply flex w-full cursor-pointer items-center justify-between rounded-md border-0 bg-transparent py-1.5 pl-2 pr-9 text-left;
+  @apply flex w-full cursor-pointer items-center justify-between rounded-md border-0 bg-transparent px-2 py-1.5 text-left;
 }
 .playlist-item:hover {
   background: rgba(247, 192, 193, 0.1);
