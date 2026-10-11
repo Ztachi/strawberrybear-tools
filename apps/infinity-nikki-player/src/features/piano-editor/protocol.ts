@@ -21,7 +21,7 @@ export interface EditorPresentation {
   loading: boolean
 }
 
-/** 整个音轨工作区的迁移快照；两个视图的缩放和滚动仍各自独立。 */
+/** 工作区迁移快照；配置字段保留协议兼容，恢复时仅采用导航状态。 */
 export interface PianoWorkspaceState {
   selectedTrackId: string | null
   editorOpen: boolean

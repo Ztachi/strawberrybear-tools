@@ -49,8 +49,18 @@ export function browserEditorClientPort(): EditorClientPort {
   return {
     async listen(callback) {
       const listener = (event: MessageEvent<{ update: EditorUpdate }>) => {
-        if (event.origin === location.origin && event.source === window.opener && event.data.update)
-          callback(event.data.update)
+        if (
+          event.origin !== location.origin ||
+          event.source !== window.opener ||
+          !event.data.update
+        )
+          return
+        const update = event.data.update
+        // 回归测试可模拟 IPC 缓存尚未收到最新视口；页面与持久化仍使用生产实现。
+        const stale = localStorage.getItem('fixture-stale-viewport')
+        callback(
+          stale && update.kind === 'state' ? { ...update, viewport: JSON.parse(stale) } : update
+        )
       }
       window.addEventListener('message', listener)
       return () => window.removeEventListener('message', listener)

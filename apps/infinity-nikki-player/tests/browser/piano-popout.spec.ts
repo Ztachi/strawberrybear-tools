@@ -84,6 +84,54 @@ test('a missing song ends loading in the detached workspace instead of retaining
   await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
 })
 
+test('stale migration layout never overrides current global preferences', async ({ page }) => {
+  await page.locator('.detail-piano-roll .pr-track[data-track-id="1"] .pr-track-select').dblclick()
+  await page.getByRole('slider', { name: '音高缩放', exact: true }).press('End')
+  await page.getByRole('button', { name: '显示其他音轨', exact: true }).click()
+  await page.getByRole('separator', { name: /^调整钢琴卷帘高度/ }).press('Home')
+  // 模拟 IPC 延迟使 ready 收到旧缓存：会话和导航状态有效，配置字段已经过期。
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'fixture-stale-viewport',
+      JSON.stringify({
+        selectedTrackId: '1',
+        editorOpen: true,
+        hideEmptyTracks: true,
+        editorHeight: 80,
+        showOtherTracks: true,
+        editor: {
+          scrollLeft: 0,
+          scrollTop: 0,
+          timeZoom: 120,
+          pitchZoom: 12,
+          minTimeZoom: 1,
+          maxTimeZoom: 4800,
+          follow: false,
+        },
+      })
+    )
+  })
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  await expect(popup.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+    'aria-valuenow',
+    '36'
+  )
+  await expect(popup.getByRole('separator', { name: /^调整钢琴卷帘高度/ })).toHaveAttribute(
+    'aria-valuenow',
+    '25'
+  )
+  await expect(popup.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  await expect(popup.locator('.detail-piano-editor .piano-follow-button')).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+})
+
 test('detached detail exposes edit and hands the song to a detached editor route', async ({
   page,
 }) => {

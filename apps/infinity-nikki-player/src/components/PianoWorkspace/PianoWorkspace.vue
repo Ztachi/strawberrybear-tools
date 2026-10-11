@@ -16,6 +16,7 @@ import type {
   PianoRollViewport,
 } from '@strawberrybear/piano-roll/browser'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
+import { restorePianoRollNavigation } from '@/features/piano-editor/navigation'
 import PianoEditorPanel from '@/components/PianoEditorPanel/PianoEditorPanel.vue'
 import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
 import PianoRollControls from '@/components/PianoRollControls.vue'
@@ -166,19 +167,18 @@ function migrate(): void {
 async function restoreWorkspace(): Promise<void> {
   const saved = props.restore
   if (!saved) {
+    restorePianoRollNavigation(overviewPanel.value?.getView(), undefined, { timeZoom: pianoOverviewTimeZoom.value })
     restoring = false
     return
   }
   restoring = true
   selectPianoTrack(saved.selectedTrackId ?? '')
   isPianoEditorOpen.value = saved.editorOpen && props.document.tracks.length > 0
-  hideEmptyPianoTracks.value = saved.hideEmptyTracks
-  showOtherTracks.value = saved.showOtherTracks ?? true
-  editorHeightPercent.value = saved.editorHeight
+  // 布局已经从全局配置读取；旧的窗口快照不再是这些配置的权威来源。
   editorRestoreViewport.value = saved.editor
   await nextTick()
-  if (saved.overview) overviewPanel.value?.getView()?.restoreViewport(saved.overview)
-  if (saved.editor) editorPanel.value?.getView()?.restoreViewport(saved.editor)
+  restorePianoRollNavigation(overviewPanel.value?.getView(), saved.overview, { timeZoom: pianoOverviewTimeZoom.value })
+  restorePianoRollNavigation(editorPanel.value?.getView(), saved.editor, { timeZoom: pianoEditorTimeZoom.value, pitchZoom: pianoEditorPitchZoom.value })
   restoring = false
   changed()
 }

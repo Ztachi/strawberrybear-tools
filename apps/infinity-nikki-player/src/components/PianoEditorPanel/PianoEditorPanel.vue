@@ -16,6 +16,7 @@ import type { PianoRollProps } from '@strawberrybear/piano-roll/vue'
 import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
 import PianoRollControls from '@/components/PianoRollControls.vue'
 import PianoTrackLabel from '@/components/PianoTrackLabel.vue'
+import { restorePianoRollNavigation } from '@/features/piano-editor/navigation'
 
 const props = defineProps<{
   document: PianoRollDocument
@@ -48,7 +49,7 @@ const { t } = useI18n()
 const roll = ref<{ getView: () => PianoRollView | null } | null>(null)
 /** 首次挂载和显式迁移时恢复视口，普通播放帧或轨道切换不会触发恢复。 */
 function restoreSavedViewport(): void {
-  if (props.restore) roll.value?.getView()?.restoreViewport(props.restore)
+  restorePianoRollNavigation(roll.value?.getView(), props.restore, { timeZoom: props.timeZoom, pitchZoom: props.pitchZoom })
 }
 onMounted(restoreSavedViewport)
 watch(() => props.restore, restoreSavedViewport, { flush: 'post' })

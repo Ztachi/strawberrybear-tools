@@ -1002,6 +1002,12 @@ for (const detached of [false, true]) {
       target.locator('.editor-toolbar').getByRole('button', { name: '吸附', exact: true })
     ).toHaveCount(0)
     const panel = target.locator('.detail-piano-editor')
+    for (const selector of ['.detail-piano-roll', '.detail-piano-editor']) {
+      await target
+        .locator(selector)
+        .getByRole('slider', { name: '时间缩放', exact: true })
+        .press('End')
+    }
     await panel.getByRole('slider', { name: '音高缩放', exact: true }).focus()
     await target.keyboard.press('End')
     await target.getByRole('button', { name: '显示其他音轨', exact: true }).click()
@@ -1034,6 +1040,11 @@ for (const detached of [false, true]) {
       'false'
     )
     await expect(separator).toHaveAttribute('aria-valuenow', '25')
+    for (const selector of ['.detail-piano-roll', '.detail-piano-editor']) {
+      await expect(
+        target.locator(selector).getByRole('slider', { name: '时间缩放', exact: true })
+      ).toHaveAttribute('aria-valuenow', '100')
+    }
     await openSnapSettings(target)
     await expect(target.getByRole('checkbox', { name: '按小节吸附', exact: true })).toBeChecked()
     await target.getByRole('checkbox', { name: '按小节吸附', exact: true }).uncheck()
