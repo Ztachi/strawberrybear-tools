@@ -1476,7 +1476,7 @@ test('主窗口离开编辑页并切歌后，还原独立窗口仍恢复原编�
   await expect(page.locator('.editor-window-error')).toHaveCount(0)
 })
 
-test('从歌曲进入的独立编辑窗口还原时保留来源，草稿仍保存到该歌曲', async ({ page }) => {
+test('独立窗口还原保留歌曲来源和草稿归属，换歌继续沿用全局缩放', async ({ page }) => {
   await page.evaluate(() => {
     window.midiEditorFixture.setSongs(['A.mid', 'B.mid'])
     return window.midiEditorFixture.navigate('/midi-editor/new?from=A.mid')
@@ -1508,7 +1508,7 @@ test('从歌曲进入的独立编辑窗口还原时保留来源，草稿仍保�
   })
   await page.getByRole('button', { name: '直接关闭', exact: true }).click()
   await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue('B')
-  await expect(overview.getByRole('slider', { name: '时间缩放', exact: true })).not.toHaveAttribute(
+  await expect(overview.getByRole('slider', { name: '时间缩放', exact: true })).toHaveAttribute(
     'aria-valuenow',
     '100'
   )
