@@ -51,10 +51,12 @@ const anchorItems = computed(() => [
 </script>
 
 <template>
+  <!-- 帮助覆盖整个窗口，显式挂到 body，避免继承录制工作区的内容区弹层容器。 -->
   <Modal
     :open="open"
     :title="t('recording.help')"
     :width="860"
+    get-container="body"
     centered
     :styles="{ body: { height: 'min(72vh, 640px)', overflow: 'hidden' } }"
     @cancel="closeHelp"

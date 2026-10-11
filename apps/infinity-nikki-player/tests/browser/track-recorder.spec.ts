@@ -608,6 +608,16 @@ test('短窗口录制方式和帮助浮层完整可滚动，不被抽屉内容�
   await dialog.getByRole('button', { name: '录制帮助', exact: true }).click()
   const help = page.getByRole('dialog', { name: '录制帮助', exact: true })
   await waitHelpReady(help)
+  // 帮助应覆盖整个窗口，不继承录制抽屉的主内容区挂载边界。
+  expect(await help.evaluate((element) => !!element.closest('#main-window-portal-root'))).toBe(
+    false
+  )
+  const helpMask = page.locator('.ant-modal-mask:visible')
+  const maskBounds = (await helpMask.boundingBox())!
+  expect(maskBounds.x).toBe(0)
+  expect(maskBounds.y).toBe(0)
+  expect(maskBounds.width).toBe(720)
+  expect(maskBounds.height).toBe(500)
   await expect(help).toContainText('用键盘录下旋律与和弦')
   await help.getByRole('link', { name: '快捷键', exact: true }).click()
   const shortcuts = help.locator('#recorder-help-shortcuts-title')
