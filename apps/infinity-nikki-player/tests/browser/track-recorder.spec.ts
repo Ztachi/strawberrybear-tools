@@ -112,7 +112,7 @@ test('录制卷帘复用详情面板，音高缩放与琴键试听可用', async
 
 /** 说明正文必须能在当前窗口内阅读，DOM 可见不足以排除原生窗口裁剪。 */
 async function expectTooltipWithinWindow(page: Page): Promise<void> {
-  const tooltip = page.locator('.ant-tooltip:visible')
+  const tooltip = page.locator('.ant-tooltip:visible').filter({ has: page.locator('p strong') })
   await expect(tooltip).toHaveCount(1)
   const viewport = page.viewportSize()!
   await expect
@@ -151,7 +151,10 @@ test('录制设置分为演奏辅助和录制方式，两栏说明完整列出�
   })
   const hint = assistance.getByRole('button', { name: '演奏辅助说明', exact: true })
   await hint.focus()
-  const tooltip = page.locator('.ant-tooltip-container[role="tooltip"]:visible')
+  // 只定位逐项说明，标题的悬停提示可能仍处于退场动画中。
+  const tooltip = page
+    .locator('.ant-tooltip-container[role="tooltip"]:visible')
+    .filter({ has: page.locator('p strong') })
   await expect(tooltip).toContainText('倒数期间的按键只试听')
   await expect(tooltip).toContainText('节拍声不会写入 MIDI')
   await expect(tooltip).toContainText('默认关闭')
@@ -198,7 +201,9 @@ test('英文完整选项说明在短窗口内可阅读', async ({ page }, testIn
   ] as const) {
     const hint = popup.getByRole('button', { name, exact: true })
     await hint.focus()
-    const tooltip = page.locator('.ant-tooltip-container[role="tooltip"]:visible')
+    const tooltip = page
+      .locator('.ant-tooltip-container[role="tooltip"]:visible')
+      .filter({ has: page.locator('p strong') })
     for (const label of labels)
       await expect(tooltip.getByText(label, { exact: true })).toBeVisible()
     await expectTooltipWithinWindow(page)
