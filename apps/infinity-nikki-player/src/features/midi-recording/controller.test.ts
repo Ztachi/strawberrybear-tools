@@ -44,6 +44,58 @@ function setup() {
 }
 
 describe('键盘录制会话', () => {
+  it.each(['append', 'overdub', 'replace'] as const)(
+    '%s 默认只发当前按键的声音，显式开启后才启动伴奏',
+    async (mode) => {
+      const { input, audio, time } = setup()
+      input.project.document.tracks.push({
+        id: 'other',
+        name: '伴奏',
+        enabled: true,
+        isPercussion: false,
+      })
+      input.project.document.notes = [
+        {
+          id: 'existing',
+          trackId: input.trackId,
+          pitch: 60,
+          startTick: 0,
+          endTick: 480,
+          velocity: 80,
+        },
+        { id: 'backing', trackId: 'other', pitch: 48, startTick: 0, endTick: 960, velocity: 80 },
+      ]
+      const recorder = new TrackRecorder(input, audio)
+      recorder.mode = mode
+      recorder.range = { startTick: 0, endTick: 1920 }
+      await recorder.start()
+      recorder.press('A', 'kbd:A')
+      expect(audio.note).toHaveBeenCalledWith(61, 80)
+      expect(audio.startAccompaniment).not.toHaveBeenCalled()
+      time(0.25)
+      recorder.pause()
+      await recorder.resume()
+      recorder.press('A', 'kbd:A')
+      expect(audio.startAccompaniment).not.toHaveBeenCalled()
+      recorder.stop()
+      recorder.accompaniment = true
+      await recorder.start()
+      recorder.press('S', 'kbd:S')
+      expect(audio.startAccompaniment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tracks: [
+            expect.objectContaining({ id: input.trackId, enabled: mode !== 'append' }),
+            expect.objectContaining({ id: 'other', enabled: true }),
+          ],
+        }),
+        recorder.cursorTick,
+        mode === 'replace' ? recorder.range : undefined,
+        0.25
+      )
+      recorder.stop()
+      expect(input.project.document.tracks.every((track) => track.enabled)).toBe(true)
+    }
+  )
   it('首键前等待及停止前空白不入曲，保留内部休止和准确模板音高', async () => {
     const { recorder: r, time, project } = setup()
     await r.start()

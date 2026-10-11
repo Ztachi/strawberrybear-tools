@@ -61,6 +61,56 @@ async function recordKey(page: Page, key: string): Promise<void> {
   await page.keyboard.up(key)
 }
 
+test('录制伴奏默认关闭，可以手动开启和再次关闭', async ({ page }) => {
+  const dialog = await openRecorder(page)
+  const popup = await openPanel(page, dialog, '录制方式')
+  const accompaniment = popup.getByRole('checkbox', { name: '播放伴奏', exact: true })
+  await expect(accompaniment).not.toBeChecked()
+  await closePanel(page)
+  let expectedStarts = 0
+  for (const enabled of [false, true, false]) {
+    await openPanel(page, dialog, '录制方式')
+    await accompaniment.setChecked(enabled)
+    await closePanel(page)
+    await dialog.getByRole('button', { name: '开始录制', exact: true }).click()
+    await recordKey(page, 'a')
+    await dialog.getByRole('button', { name: '停止录制', exact: true }).click()
+    if (enabled) expectedStarts++
+    expect(await page.evaluate(() => window.recorderFixture.accompanimentStarts())).toBe(
+      expectedStarts
+    )
+  }
+})
+
+test('试听也遵循伴奏开关，关闭时只听当前轨，开启后加入其他音轨', async ({ page }) => {
+  await page.goto('/tests/browser/track-recorder.html')
+  await page.evaluate(() => window.recorderFixture.seedOtherTrack(1))
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  const dialog = page.getByRole('dialog').first()
+  await expect(dialog.getByRole('button', { name: '开始录制', exact: true })).toBeEnabled()
+  const popup = await openPanel(page, dialog, '录制方式')
+  const accompaniment = popup.getByRole('checkbox', { name: '播放伴奏', exact: true })
+  await accompaniment.uncheck()
+  await closePanel(page)
+  await dialog.getByRole('button', { name: '开始录制', exact: true }).click()
+  await recordKey(page, 'a')
+  await dialog.getByRole('button', { name: '停止录制', exact: true }).click()
+  for (const enabled of [false, true, false]) {
+    await openPanel(page, dialog, '录制方式')
+    await accompaniment.setChecked(enabled)
+    await closePanel(page)
+    await page.evaluate(() => window.recorderFixture.clearPreviewPitches())
+    await dialog.getByRole('button', { name: '回到开头', exact: true }).click()
+    await dialog.getByRole('button', { name: '试听', exact: true }).click()
+    await expect
+      .poll(() => page.evaluate(() => window.recorderFixture.previewPitches()))
+      .toContain(61)
+    const pitches = await page.evaluate(() => window.recorderFixture.previewPitches())
+    expect(pitches.includes(60)).toBe(enabled)
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  }
+})
+
 test('独立工作区首键录制、停止后应用以及一次撤销', async ({ page }) => {
   const dialog = await openRecorder(page)
   await expect(dialog.getByText('按下第一个映射键开始')).not.toBeVisible()

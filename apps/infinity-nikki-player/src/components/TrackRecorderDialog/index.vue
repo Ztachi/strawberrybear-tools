@@ -76,9 +76,18 @@ const canStart = computed(() => { void version.value; return mapping.value.size 
 // 复用卷帘的状态投影和范围高亮，不安装第二套音符编辑手势。
 const editing = computed(() => ({ enabled: false, tool: 'select' as const, snapTicks: (tick: number) => tick, defaultDurationTicks: localState.value.document.ticksPerBeat, selectedNoteIds: localState.value.selection, highlightPitches: pitches.value, loop: recorder.mode === 'replace' ? recorder.range ?? null : null }))
 const documentView = computed(() => ({ ...localState.value.document, durationTicks: Math.max(localState.value.document.durationTicks, recorder.cursorTick + localState.value.document.ticksPerBeat * 4) }))
+/** 伴奏关闭时试听也只播放当前轨；临时投影不改变项目的音轨开关。 */
+const replayDocument = computed(() => {
+  void version.value
+  const document = localState.value.document
+  return recorder.accompaniment ? document : {
+    ...document,
+    tracks: document.tracks.map(track => ({ ...track, enabled: track.enabled && track.id === props.input.trackId })),
+  }
+})
 const transport = shallowRef({ positionSeconds: 0, isPlaying: false, playbackRate: 1 })
 const createPlayback = inject('track-recorder-playback-factory', createMidiEditorPlaybackController)
-const replay = createPlayback({ getDocument: () => localState.value.document, getLoop: () => recorder.mode === 'replace' ? recorder.range : null, onChange: state => {
+const replay = createPlayback({ getDocument: () => replayDocument.value, getLoop: () => recorder.mode === 'replace' ? recorder.range : null, onChange: state => {
   // 暂停和试听结束时同步显示位置；显式停止提前清除标记，不覆盖录制游标。
   if (replaying.value && !state.isPlaying) {
     recorder.cursorTick = Math.round(createTimeline(localState.value.document).secondsToTick(state.positionSeconds)); refresh()
@@ -89,6 +98,14 @@ const replay = createPlayback({ getDocument: () => localState.value.document, ge
 function stopPreview(): void { replaying.value = false; replay.stop(); previewKeys.value = new Set() }
 /** 试听调度器缓存文档与循环范围；录入提交及历史操作后需要显式同步。 */
 function syncReplay(): void { replay.setLoop(recorder.mode === 'replace' ? recorder.range : null); replay.invalidate() }
+/** 切换伴奏先停止旧试听并刷新调度文档，避免关掉后仍播放缓存的其他音轨。 */
+function changeSetting(setting: { key: 'countIn' | 'metronome' | 'accompaniment'; value: boolean }): void {
+  if (ui.value.busy || locked.value) return
+  stopPreview()
+  recorder[setting.key] = setting.value
+  refresh()
+  syncReplay()
+}
 function dispatch(action: EditorAction): void { if (editingLocked.value) return; stopPreview(); recorder.dispatch(action); syncReplay(); refresh() }
 function showError(cause: unknown): void { error.value = `${t('recording.operationFailed')} ${String(cause)}` }
 async function begin(resume = false): Promise<void> {
@@ -315,7 +332,7 @@ defineExpose({ close, checkpoint, pause: pauseForFocus })
                 @change="stopPreview(); refresh()"
                 @mode="changeMode"
                 @range="changeRange"
-                @setting="recorder[$event.key] = $event.value; refresh()"
+                @setting="changeSetting"
               />
             </template>
           </RecorderTransport>

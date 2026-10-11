@@ -8,7 +8,7 @@
   "countIn": "One-bar count-in",
   "metronome": "Metronome",
   "accompaniment": "Play accompaniment",
-  "accompanimentHint": "Play other enabled tracks; overdubbing also plays this track. The replacement range is muted during re-recording.",
+  "accompanimentHint": "Off by default so you hear only this track. Enable to play other enabled tracks; overdubbing also plays this track. The replacement range is muted during re-recording.",
   "keyboard": "Performance keyboard",
   "start": "Start recording",
   "resume": "Resume recording",
@@ -111,7 +111,7 @@
         "items": {
           "apply": {
             "label": "Apply to this track",
-            "description": "Apply to track writes the take and template back to this track and returns to the host, keeping other tracks intact. Accompaniment plays other enabled tracks while recording. Overdubbing also plays this track; re-recording mutes the replacement range."
+            "description": "Apply to track writes the take and template back to this track and returns to the host, keeping other tracks intact. Accompaniment is off by default, so recording and preview play only this track. Enable Play accompaniment in Recording mode to hear other enabled tracks. Overdubbing also plays this track; re-recording mutes the replacement range."
           },
           "recover": {
             "label": "Recover a recording draft",

@@ -32,6 +32,7 @@ const pendingDrafts: (() => void)[] = []
 const playedPitches: number[] = []
 const previewPitches: number[] = []
 let activeRecordingVoices = 0
+let accompanimentStarts = 0
 let previewController: MidiEditorPlaybackController | null = null
 const hasMainPortal = new URLSearchParams(window.location.search).has('main')
 interface RecorderFixture {
@@ -49,6 +50,7 @@ interface RecorderFixture {
   renameTrack(name: string): void
   playedPitches(): number[]
   activeRecordingVoices(): number
+  accompanimentStarts(): number
   hostNotes(): { pitch: number; startTick: number; endTick: number }[]
   previewPitches(): number[]
   clearPreviewPitches(): void
@@ -102,7 +104,9 @@ const audio = (): RecorderAudio => ({
       },
     }
   },
-  startAccompaniment() {},
+  startAccompaniment() {
+    accompanimentStarts++
+  },
   stopAccompaniment() {},
 })
 window.recorderFixture = {
@@ -116,6 +120,7 @@ window.recorderFixture = {
   draftCount: () => drafts.size,
   playedPitches: () => [...playedPitches],
   activeRecordingVoices: () => activeRecordingVoices,
+  accompanimentStarts: () => accompanimentStarts,
   previewPitches: () => [...previewPitches],
   clearPreviewPitches() {
     previewPitches.length = 0

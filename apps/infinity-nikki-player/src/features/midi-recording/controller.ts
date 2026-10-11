@@ -48,7 +48,7 @@ export class TrackRecorder {
   mode: RecorderMode = 'append'
   countIn = false
   metronome = false
-  accompaniment = true
+  accompaniment = false
   template: KeyTemplate
   range?: { startTick: number; endTick: number }
   cursorTick: number
