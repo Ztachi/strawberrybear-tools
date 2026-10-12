@@ -3,7 +3,12 @@
  */
 import releaseNoteReleases from './release-notes/zh-CN.json'
 
+import recording from './recording/zh-CN.json'
+import appSettings from './appSettings/zh-CN.json'
+
 export default {
+  appSettings,
+  recording,
   app: {
     title: '无限暖暖自动演奏',
     overlayMode: '进入悬浮模式',
@@ -150,7 +155,7 @@ export default {
           zoom: {
             label: '独立缩放',
             description:
-              '用滑块、触控板捏合或 Ctrl/Command + 滚轮调整时间缩放，详情还可调整音高缩放。两个视图独立，缩放按歌曲保存并恢复；时间缩放最小铺满一屏。',
+              '用滑块、触控板捏合或 Ctrl/Command + 滚轮调整时间缩放，详情还可调整音高缩放。总览和详情分别缩放，切换曲目会沿用设置；时间缩放最小铺满一屏。',
           },
           scroll: {
             label: '滚动',
@@ -488,7 +493,8 @@ export default {
   },
   midiEditor: {
     otherTracks: '显示其他音轨',
-    otherTracksTip: '以原音轨配色和虚线轮廓显示参考音符；点击参考音符切换音轨，编辑时可直接拖动。',
+    otherTracksTip: '显示全部音轨',
+    hideOtherTracksTip: '仅显示当前音轨',
     title: 'MIDI 编辑',
     description: '创建、编辑、导入和导出 MIDI 项目，编辑完成后可导出 .mid 或直接加入曲库',
     projectList: '项目列表',
@@ -902,6 +908,8 @@ export default {
     },
   },
   overlay: {
+    allSongs: '全部歌曲',
+    selectPlaylist: '选择歌单',
     expand: '展开',
     collapse: '收起',
     close: '关闭悬浮',
@@ -1006,6 +1014,7 @@ export default {
   about: {
     title: '关于',
     version: '版本',
+    currentVersion: '当前版本：',
     description:
       '一款适用于无限暖暖的 MIDI 自动演奏工具。导入 MIDI 文件，应用会自动模拟游戏内按键操作。',
     learnMore: '了解更多',

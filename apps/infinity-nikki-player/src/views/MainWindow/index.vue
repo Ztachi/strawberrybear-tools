@@ -27,7 +27,7 @@ import { usePlayerStore } from '@/stores/player'
 import { useSettingsStore } from '@/stores/settings'
 import { useSongListStore } from '@/stores/songLists'
 import { invoke } from '@tauri-apps/api/core'
-import { emit } from '@tauri-apps/api/event'
+import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { feedback as toast } from '@/lib/feedback'
 import { Upload } from 'lucide-vue-next'
@@ -36,11 +36,13 @@ import FloatingActionGroup from '@/components/FloatingActionGroup.vue'
 import OverlayView from './OverlayView.vue'
 import AppHeader from './components/AppHeader/index.vue'
 import GlobalMusicPlayer from '@/components/GlobalMusicPlayer/index.vue'
-import { isSupportedLocale } from '@/i18n'
+import SettingsDialog from '@/components/SettingsDialog/index.vue'
+import AppCloseHost from '@/components/AppCloseHost.vue'
 import { midiImportActionsKey } from './importActions'
 import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import { createRoutePageHost, type RoutePageLeaveGuard } from './routePageHost'
+import { registerAppCloseGuard } from '@/features/app-close/controller'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -48,6 +50,12 @@ const router = useRouter()
 const mainWindowUiStore = useMainWindowUiStore()
 const playerStore = usePlayerStore()
 const settingsStore = useSettingsStore()
+const overlayView = ref<InstanceType<typeof OverlayView> | null>(null)
+async function prepareQuitDisplay(): Promise<void> {
+  if (settingsStore.isOverlayMode && !(await overlayView.value?.exitOverlayMode())) {
+    throw new Error(t('appSettings.closeFailed'))
+  }
+}
 const songListStore = useSongListStore()
 const isMidiEditing = computed(() => route.meta.detachableEditor === true)
 
@@ -77,6 +85,12 @@ function getRoutePageHost(pageRoute: RouteLocationNormalizedLoaded): Component {
 const updater = useAppUpdater()
 /** 当前路由页面复用自身编辑保护，避免依赖进程退出时的 beforeunload。 */
 const activePage = ref<RoutePageLeaveGuard | null>(null)
+const removePageCloseGuard = registerAppCloseGuard(async () => {
+  // MIDI 会话（包括缓存中的独立窗口）自行参与退出；其他页面复用现有离开保护。
+  if (route.meta.detachableEditor) return true
+  return await activePage.value?.confirmLeaveIfNeeded?.() ?? true
+})
+onUnmounted(removePageCloseGuard)
 const removeInstallPreparation = updater.setPrepareInstall(async () => {
   if (activePage.value?.confirmLeaveIfNeeded && !(await activePage.value.confirmLeaveIfNeeded())) {
     return false
@@ -506,25 +520,22 @@ function bindDomDragEvents() {
   }
 }
 
-/**
- * @description: 切换语言
- * @param {string} targetLocale - Header 语言切换按钮发出的目标语言
- */
-function switchLocale(targetLocale: string) {
-  if (!isSupportedLocale(targetLocale)) {
-    console.warn('忽略不支持的语言切换请求:', targetLocale)
-    return
-  }
-
-  settingsStore.setLocale(targetLocale)
+const settingsOpen = ref(false)
+const settingsCategory = ref('general')
+const settingsNavigationKey = ref(0)
+function openSettings(category = 'general'): void {
+  settingsCategory.value = category
+  // 重复选择系统“关于”也要发出新的定位请求，不重建设置里的编辑控件。
+  settingsNavigationKey.value++
+  settingsOpen.value = true
 }
-
-/**
- * @description: 打开帮助/关于对话框
- */
-async function openHelp() {
-  await emit('show_about')
-}
+let unlistenAbout: (() => void) | undefined
+let settingsHostDisposed = false
+onMounted(async () => {
+  const cleanup = await listen('show_about', () => openSettings('about'))
+  if (settingsHostDisposed) cleanup(); else unlistenAbout = cleanup
+})
+onUnmounted(() => { settingsHostDisposed = true; unlistenAbout?.() })
 
 /**
  * @description: 打开辅助功能权限设置
@@ -660,7 +671,7 @@ provide(midiImportActionsKey, {
 
     <!-- 悬浮模式内容 -->
     <template v-if="settingsStore.isOverlayMode">
-      <OverlayView />
+      <OverlayView ref="overlayView" />
     </template>
 
     <!-- 正常模式内容：用 v-show 保留 DOM 和滚动状态，避免退出悬浮后页面重新创建 -->
@@ -670,8 +681,7 @@ provide(midiImportActionsKey, {
         :has-accessibility="playerStore.hasAccessibility"
         @open-accessibility-settings="openAccessibilitySettings"
         @enter-overlay-mode="enterOverlayMode"
-        @switch-locale="switchLocale"
-        @open-help="openHelp"
+        @open-settings="openSettings()"
       />
 
       <!-- 主内容区 -->
@@ -711,6 +721,12 @@ provide(midiImportActionsKey, {
         />
       </main>
     </div>
+    <SettingsDialog
+      v-model:open="settingsOpen"
+      :initial-category="settingsCategory"
+      :navigation-key="settingsNavigationKey"
+    />
+    <AppCloseHost :prepare-quit-display="prepareQuitDisplay" />
   </div>
 </template>
 

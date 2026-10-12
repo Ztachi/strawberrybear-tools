@@ -426,6 +426,7 @@ mod tests {
     fn project(id: &str, name: &str) -> MidiProject {
         MidiProject {
             schema_version: 1,
+            extensions: None,
             id: id.to_string(),
             name: name.to_string(),
             created_at: 0,
@@ -463,5 +464,22 @@ mod tests {
         assert!(json.get("createdAt").is_some());
         assert!(json.get("loop").is_some());
         assert_eq!(json["meta"]["trackCount"], 0);
+    }
+    #[test]
+    fn project_extensions_survive_disk_roundtrip_and_old_projects() {
+        let old = serde_json::to_vec(&project("old", "Old")).unwrap();
+        let old_project: MidiProject = serde_json::from_slice(&old).unwrap();
+        assert!(old_project.extensions.is_none());
+        let mut recorded = project("recorded", "Recorded");
+        recorded.extensions = Some(serde_json::json!({
+            "keyboardRecording": { "template": { "id": "deleted-template", "mappings": [{ "key": "A", "pitch": 61 }] } },
+            "recordingDraft": { "baseRevision": "revision", "cursorTick": 480 },
+            "thirdParty": { "unknown": [1, "value"] }
+        }));
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("project.json");
+        fs::write(&path, serde_json::to_vec(&recorded).unwrap()).unwrap();
+        let restored: MidiProject = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(normalize_project(restored).extensions, recorded.extensions);
     }
 }

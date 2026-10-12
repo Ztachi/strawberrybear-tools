@@ -52,6 +52,16 @@ test('detached editor switches tracks and songs, restores on native close, and r
     .not.toContain(3)
   await page.evaluate(() => window.midiDetailFixture.navigate('second.mid'))
   await expect(popup.locator('.detached-song-title')).toHaveText('第二首验收歌曲')
+  await expect(popup.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+    'aria-valuenow',
+    pitch!
+  )
+  await popup.getByRole('slider', { name: '音高缩放', exact: true }).press('End')
+  await page.evaluate(() => window.midiDetailFixture.navigate('piano-detail-fixture.mid'))
+  await expect(popup.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+    'aria-valuenow',
+    '36'
+  )
   await popup.evaluate(() => window.dispatchEvent(new Event('test-native-close')))
   await expect.poll(() => popup.isClosed()).toBe(true)
   await expect(page.locator('.detail-piano-editor')).toBeVisible()
@@ -72,6 +82,54 @@ test('a missing song ends loading in the detached workspace instead of retaining
   await expect(error).toBeVisible()
   expect(await error.evaluate((element) => getComputedStyle(element).userSelect)).toBe('text')
   await popup.getByRole('button', { name: '还原到主窗口', exact: true }).click()
+})
+
+test('stale migration layout never overrides current global preferences', async ({ page }) => {
+  await page.locator('.detail-piano-roll .pr-track[data-track-id="1"] .pr-track-select').dblclick()
+  await page.getByRole('slider', { name: '音高缩放', exact: true }).press('End')
+  await page.getByRole('button', { name: '显示其他音轨', exact: true }).click()
+  await page.getByRole('separator', { name: /^调整钢琴卷帘高度/ }).press('Home')
+  // 模拟 IPC 延迟使 ready 收到旧缓存：会话和导航状态有效，配置字段已经过期。
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'fixture-stale-viewport',
+      JSON.stringify({
+        selectedTrackId: '1',
+        editorOpen: true,
+        hideEmptyTracks: true,
+        editorHeight: 80,
+        showOtherTracks: true,
+        editor: {
+          scrollLeft: 0,
+          scrollTop: 0,
+          timeZoom: 120,
+          pitchZoom: 12,
+          minTimeZoom: 1,
+          maxTimeZoom: 4800,
+          follow: false,
+        },
+      })
+    )
+  })
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const popup = await opening
+  await expect(popup.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+    'aria-valuenow',
+    '36'
+  )
+  await expect(popup.getByRole('separator', { name: /^调整钢琴卷帘高度/ })).toHaveAttribute(
+    'aria-valuenow',
+    '25'
+  )
+  await expect(popup.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  await expect(popup.locator('.detail-piano-editor .piano-follow-button')).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
 })
 
 test('detached detail exposes edit and hands the song to a detached editor route', async ({
@@ -155,9 +213,7 @@ test('slider endpoints and low-factor pinches share exact bounds without a left 
       .toBeGreaterThan(10)
     const position = Number(await slider.getAttribute('aria-valuenow'))
     const zoom = await page.evaluate((selector) => {
-      const saved = JSON.parse(
-        localStorage.getItem('infinity-nikki-player:piano-roll-zoom:v1:piano-detail-fixture.mid')!
-      )
+      const saved = JSON.parse(localStorage.getItem('infinity-nikki-player:piano-roll-zoom:v2')!)
       return selector.includes('editor') ? saved.editorTimeZoom : saved.overviewTimeZoom
     }, selector)
     const width = await scroll.evaluate((el) => el.clientWidth)

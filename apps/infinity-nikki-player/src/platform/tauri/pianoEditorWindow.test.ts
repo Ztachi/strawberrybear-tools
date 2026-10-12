@@ -3,7 +3,10 @@ import { createPianoEditorWindowPort } from './pianoEditorWindow'
 
 const native = vi.hoisted(() => ({ options: {} as Record<string, unknown> }))
 vi.mock('@tauri-apps/api/webviewWindow', () => ({
-  getCurrentWebviewWindow: () => ({ onCloseRequested: async () => () => {} }),
+  getCurrentWebviewWindow: () => ({
+    onCloseRequested: async () => () => {},
+    once: async () => () => {},
+  }),
   WebviewWindow: class {
     static async getByLabel() {
       return null

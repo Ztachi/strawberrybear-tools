@@ -42,6 +42,8 @@ export interface MidiProject {
   loop?: MidiProjectLoop | null
   /** 完整音符/轨道/速度/拍号文档。 */
   document: PianoRollDocument
+  /** 宿主扩展元数据；公共包只透传，不解释业务字段。 */
+  extensions?: Record<string, unknown>
 }
 
 /** 吸附网格分辨率；`bar` 随当前拍号变化，`off` 表示不吸附。 */
@@ -114,6 +116,7 @@ export interface ClipboardPayload {
  * 宿主可直接透传；其余为工具栏、快捷键和菜单触发的编辑器级动作。
  */
 export type EditorAction =
+  | { type: 'apply-track-edit'; trackId: string; notes: readonly PianoRollNote[]; endTick: number; extensions?: Record<string, unknown> }
   | { type: 'select'; noteIds: readonly string[]; mode: 'replace' | 'toggle' | 'add' }
   | {
       type: 'add-note'

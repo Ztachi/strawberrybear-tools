@@ -46,4 +46,18 @@ Antdv Next `Select` 必须使用 `options` 或合法的 `SelectOption` 结构，
 
 主窗口与音轨独立窗口使用 `components/WindowTitleBar`，通过 title、center、actions slots 组合内容；平台交通灯留白、Windows 窗口按钮和拖动区域只维护一份。主窗口专属导航与应用操作留在 `views/MainWindow/components/AppHeader`。
 
-歌曲名统一使用 `PlayerSongTitle`（Tooltip + MarqueeText）；播放模式与预览传输按钮统一使用无 store 依赖的 `PreviewPlaybackControls`。主窗口通过 `usePreviewPlaybackControls` 连接既有播放 actions，独立窗口经会话协议转发动作，不能为了复用 UI 再初始化播放器。
+播放器和窗口标题使用 `PlayerSongTitle`（Tooltip + MarqueeText）；播放模式与预览传输按钮统一使用无 store 依赖的 `PreviewPlaybackControls`。主窗口通过 `usePreviewPlaybackControls` 连接既有播放 actions，独立窗口经会话协议转发动作，不能为了复用 UI 再初始化播放器。
+
+## 播放列表曲名滚动
+
+`MarqueeText` 是通用文字组件，`enabled` 默认 `true`，不读取播放器 Store；只有文字溢出时左右往返滚动。关闭开关即停止动画并回到起点，用单行省略号显示；重新启用时测量当前宽度，短文字保持静态。
+
+歌曲列表统一使用 `PlaylistSongTitle`，接收名称与父项的 `selected`，不读取 Store 或另行匹配歌曲。父项的高亮、封面播放状态与曲名滚动使用同一选中结果；只有歌曲文件名和播放来源 ID 同时匹配才选中。来源 ID 不依赖歌单名称，歌单改名不改变选择；批量勾选与播放器选择独立。选中尚未播放、暂停及停止都保留滚动，切歌后上一首恢复静态。所有列表保留完整名称 Tooltip。
+
+该组件覆盖全部歌曲、自建歌单、在线曲库、悬浮列表，以及主窗口和独立窗口播放队列。集合列表通过 Store 的 `isMidiSelectedInQueue` 响应当前歌曲和播放来源。播放队列展示的就是实际播放域，因此主窗口与独立窗口共用队列父项的 `currentId` 选中结果，无需读取第二个播放器 Store。在线曲库的已导入歌曲入口对应 `all`，临时试听对应 `online-preview:<id>`；在其他歌单播放同曲时，在线列表不会冒充当前项。接入不改变歌曲行宽度、间距或时长位置。
+
+同一来源中点击当前曲才暂停或恢复；另一来源内点击同曲会切换完整播放队列并播放。从在线临时试听切回已导入歌曲时，恢复快照后显式播放目标，避免把恢复出的旧歌曲误判断为本次点击前的当前项。浏览、搜索和改名不切换播放域，来源删除时沿用既有回退规则。悬浮列表定位清空搜索并回到实际播放来源，即使正在浏览的集合也包含同曲；主界面的定位入口仅在当前集合就是播放域时出现。
+
+歌单页面按完整路径缓存，每个实例固定持有自己的歌单 ID；切换到另一歌单不能重写离开页面的身份，返回后内容、选中结果与滚动位置保持一致。
+
+浏览器回归见 `tests/browser/playlist-marquee.spec.ts`，检查实际动画位移、选中未播放、暂停／停止、同曲跨播放域、歌单改名／删除、跨歌单返回、筛选与定位、临时试听切回播放，以及短名称及窄悬浮窗口布局。播放域谓词与同曲点击动作在 `src/stores/player.test.ts` 验证。

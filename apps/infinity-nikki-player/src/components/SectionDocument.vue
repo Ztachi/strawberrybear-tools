@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** @description: 共用目录与正文滚动容器；Anchor 负责定位和滚动同步，不修改路由历史。 */
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { Anchor } from 'antdv-next'
 
 interface DocumentItem {
@@ -9,12 +9,31 @@ interface DocumentItem {
   title: string
 }
 
-defineProps<{
+const props = withDefaults(defineProps<{
   items: DocumentItem[]
   contentsLabel: string
-}>()
+  showContentsTitle?: boolean
+  initialHref?: string
+  navigationKey?: number
+}>(), { showContentsTitle: true })
 const content = ref<HTMLElement | null>(null)
 const contents = ref<HTMLElement | null>(null)
+const scrollTop = ref(0)
+const navigation = ref<{ href: string; target: number; pending: boolean } | null>(null)
+
+// 外部定位也走已有目录链接，让 Anchor 统一处理动画和高亮，避免两套滚动互相覆盖。
+watch(
+  [() => props.initialHref, contents, () => props.navigationKey],
+  async ([href, container]) => {
+    if (!href || !container) return
+    await nextTick()
+    if (props.initialHref !== href || !container.isConnected) return
+    const link = Array.from(container.querySelectorAll<HTMLAnchorElement>('a'))
+      .find((item) => item.getAttribute('href') === href)
+    link?.click()
+  },
+  { flush: 'post' }
+)
 
 /** @return 当前弹窗的正文容器，避免目录错误地滚动主页面。 */
 function getContentContainer(): HTMLElement {
@@ -22,8 +41,32 @@ function getContentContainer(): HTMLElement {
 }
 
 /** @param {MouseEvent} event - 目录点击事件 @return 不给桌面导航栈新增 hash 记录。 */
-function preventHistoryChange(event: MouseEvent): void {
+function preventHistoryChange(event: MouseEvent, link: { href: string }): void {
   event.preventDefault()
+  const container = content.value
+  const href = link.href
+  const target = container?.querySelector<HTMLElement>(href)
+  if (!container || !target) return
+  const top = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 8
+  const clamped = Math.min(Math.max(top, 0), container.scrollHeight - container.clientHeight)
+  navigation.value = { href, target: clamped, pending: Math.abs(container.scrollTop - clamped) > 1 }
+}
+
+/** 自然高度的末节不能总是滚到顶端；通过 Anchor 的扩展接口保留已定位的章节。 */
+function currentAnchor(href: string): string {
+  const container = content.value
+  if (!container) return href
+  const request = navigation.value
+  if (request && (request.pending || Math.abs(scrollTop.value - request.target) <= 1)) return request.href
+  if (container.scrollHeight > container.clientHeight && scrollTop.value >= container.scrollHeight - container.clientHeight - 1) return props.items.at(-1)?.href ?? href
+  return href
+}
+function contentScrolled(): void {
+  scrollTop.value = content.value?.scrollTop ?? 0
+  const request = navigation.value
+  if (!request) return
+  if (Math.abs(scrollTop.value - request.target) <= 1) request.pending = false
+  else if (!request.pending) navigation.value = null
 }
 
 /** @param {string} href - Anchor 已确认的当前正文位置 @return 仅滚动目录，让当前项完整可见。 */
@@ -54,7 +97,10 @@ async function keepActiveVisible(href: string): Promise<void> {
       ref="contents"
       class="min-h-0 overflow-y-auto border-r border-primary/15 pr-4 max-[560px]:pr-2"
     >
-      <h3 class="mb-3 mt-0 text-xs font-semibold text-[var(--color-muted-dark)]">
+      <h3
+        v-if="showContentsTitle"
+        class="mb-3 mt-0 text-xs font-semibold text-[var(--color-muted-dark)]"
+      >
         {{ contentsLabel }}
       </h3>
       <nav :aria-label="contentsLabel">
@@ -63,6 +109,7 @@ async function keepActiveVisible(href: string): Promise<void> {
           :get-container="getContentContainer"
           :items="items"
           :target-offset="8"
+          :get-current-anchor="currentAnchor"
           :styles="{ itemTitle: { whiteSpace: 'normal' } }"
           @click="preventHistoryChange"
           @change="keepActiveVisible"
@@ -78,6 +125,7 @@ async function keepActiveVisible(href: string): Promise<void> {
     <div
       ref="content"
       class="section-document-content min-h-0 overflow-y-auto pl-5 pr-1 max-[560px]:pl-3"
+      @scroll="contentScrolled"
     >
       <slot />
     </div>

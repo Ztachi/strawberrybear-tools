@@ -45,6 +45,7 @@ const emit = defineEmits<{
         :color="option.primary ? undefined : 'primary'"
         :variant="option.primary ? undefined : 'outlined'"
         :danger="option.danger"
+        :aria-label="option.label"
         @click="emit('choose', option.key)"
       >
         {{ option.label }}

@@ -100,7 +100,7 @@ export class PianoEditorSession {
     }
   }
 
-  /** 数据身份变化立即作废旧命令；切歌恢复该歌曲偏好，切轨保留子窗口独立视口。 */
+  /** 数据身份变化立即作废旧命令；切歌沿用全局配置，切轨保留子窗口导航状态。 */
   updateState(restoreViewport = false): void {
     this.revision += 1
     this.statePending = true

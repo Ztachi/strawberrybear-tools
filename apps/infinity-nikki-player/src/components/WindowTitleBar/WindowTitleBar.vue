@@ -13,27 +13,15 @@ const slots = useSlots()
     :class="{ windows: isWindows, 'has-center': !!slots.center }"
     data-tauri-drag-region
   >
-    <div
-      class="window-title-bar__title"
-      data-tauri-drag-region
-    >
+    <div class="window-title-bar__title" data-tauri-drag-region>
       <slot name="title" />
     </div>
-    <div
-      v-if="slots.center"
-      class="window-title-bar__center"
-    >
+    <div v-if="slots.center" class="window-title-bar__center">
       <slot name="center" />
     </div>
-    <div
-      class="window-title-bar__actions"
-      data-tauri-drag-region
-    >
+    <div class="window-title-bar__actions" data-tauri-drag-region>
       <slot name="actions" />
-      <WindowsWindowControls
-        v-if="isWindows"
-        :snap-layouts="snapLayouts"
-      />
+      <WindowsWindowControls v-if="isWindows" :snap-layouts="snapLayouts" />
     </div>
   </header>
 </template>
@@ -42,12 +30,13 @@ const slots = useSlots()
 .window-title-bar {
   @apply relative z-30 flex shrink-0 select-none items-center justify-between gap-3 pr-4 pl-[90px];
   height: var(--global-menu-height, 46px);
+  padding-left: var(--window-title-safe-inset, 90px);
 }
 .window-title-bar.windows { @apply pl-4 pr-0; }
 .window-title-bar__title { @apply flex min-w-0 items-center gap-2.5; }
 .window-title-bar__actions { @apply flex h-full shrink-0 items-center justify-end gap-3; }
 .window-title-bar.has-center { @apply grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] px-0; }
-.window-title-bar.has-center .window-title-bar__title { @apply pl-[90px]; }
+.window-title-bar.has-center .window-title-bar__title { padding-left: var(--window-title-safe-inset, 90px); }
 .window-title-bar.has-center .window-title-bar__actions { @apply gap-2 pr-3; }
 .window-title-bar.has-center.windows .window-title-bar__actions { @apply pr-0; }
 .window-title-bar.has-center.windows .window-title-bar__title { @apply pl-4; }

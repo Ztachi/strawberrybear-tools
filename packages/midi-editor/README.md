@@ -70,7 +70,15 @@ const bytes = encodeMidi(session.getState().document, { name: session.getState()
 
 新建、新增或从 MIDI 导入的轨道不自动分配颜色，缺省配色交给宿主视图主题。`addTrack(document, { color })` 与 `updateTrack` 可显式设置颜色，复制、排序和工程保存会保留它。`TRACK_PALETTE` 仅作为颜色选择器的预设色表，不再作为自动配色策略。
 
-`MidiProject` 是持久化形态：`schemaVersion`、`id`、`name`、时间戳、来源、`meta` 摘要、`loop` 与完整 `document`。`session.toProject()` 会重算 `meta` 与 `updatedAt`，保存成功后调用 `session.markSaved()` 清除 dirty。
+`MidiProject` 是持久化形态：`schemaVersion`、`id`、`name`、时间戳、来源、`meta` 摘要、`loop`、可选 `extensions: Record<string, unknown>` 与完整 `document`。`session.toProject()` 会重算 `meta` 与 `updatedAt`，保存成功后调用 `session.markSaved()` 清除 dirty。
+
+## 单轨结果与时间选择
+
+`session.dispatch({ type: 'apply-track-edit', trackId, notes, endTick, extensions })` 一次替换目标轨完整音符、显式区域结束及可选项目扩展，形成一个撤销记录。其他轨保留，区域外音符仍存储且不自动扩展区域。输入需同轨、唯一 ID、整数 tick、合法音高及力度；无效结果不产生历史。`undo`／`redo` 同时恢复扩展；普通音符编辑保留扩展。
+
+`notesRelativeTo(document, { trackId?, noteId?, tick, direction })` 查询有效区域内的音符 ID。`before` 按开始时间 `<` 锚点开始，`after` 按开始时间 `>=` 锚点结束，`all` 全选；锚点音符自身排除。省略 `noteId` 以 `tick` 为边界，省略 `trackId` 查询全部轨（包含禁用但仍有有效区域的轨）。完全隐藏的音符不参与，跨边界音符按裁剪后的时间判断。
+
+`extensions` 由宿主定义，工程会话和 JSON 保存保留；标准 `.mid` 编码只使用 `document`，不包含扩展元数据。
 
 ## 验证
 

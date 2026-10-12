@@ -3,7 +3,12 @@
  */
 import releaseNoteReleases from './release-notes/en-US.json'
 
+import recording from './recording/en-US.json'
+import appSettings from './appSettings/en-US.json'
+
 export default {
+  appSettings,
+  recording,
   app: {
     title: 'Infinity Nikki Auto Player',
     overlayMode: 'Enter Overlay Mode',
@@ -156,7 +161,7 @@ export default {
           zoom: {
             label: 'Independent zoom',
             description:
-              'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Views zoom independently, save per song, and restore when you return. Minimum time zoom fills one screen.',
+              'Use the slider, trackpad pinch, or Ctrl/Command + wheel for time zoom; details also have pitch zoom. Overview and details zoom independently, and settings carry over when you change songs. Minimum time zoom fills one screen.',
           },
           scroll: {
             label: 'Scrolling',
@@ -506,8 +511,8 @@ export default {
   },
   midiEditor: {
     otherTracks: 'Show Other Tracks',
-    otherTracksTip:
-      'Show reference notes in their track colors with dashed outlines. Click to switch tracks; drag to edit in editing mode.',
+    otherTracksTip: 'Show all tracks',
+    hideOtherTracksTip: 'Show current track only',
     title: 'MIDI Editor',
     description:
       'Create, edit, import and export MIDI projects; export .mid or add to the library when done',
@@ -939,6 +944,8 @@ export default {
     },
   },
   overlay: {
+    allSongs: 'All songs',
+    selectPlaylist: 'Choose playlist',
     expand: 'Expand',
     collapse: 'Collapse',
     close: 'Close Overlay',
@@ -1053,6 +1060,7 @@ export default {
   about: {
     title: 'About',
     version: 'Version',
+    currentVersion: 'Current version:',
     description:
       'A MIDI auto-play tool for Infinity Nikki. Import MIDI files and let the app simulate key presses in-game.',
     learnMore: 'Learn More',

@@ -13,11 +13,14 @@ const props = withDefaults(
   defineProps<{
     /** 要展示的单行文本。 */
     text: string
+    /** 是否允许溢出文本自动滚动；关闭时保持单行省略号并回到起点。 */
+    enabled?: boolean
     /** 文本滚动速度，单位 px/s。 */
     speed?: number
   }>(),
   {
     speed: 34,
+    enabled: true,
   }
 )
 
@@ -34,6 +37,7 @@ const marqueeStyle = computed(() => ({
 }))
 
 function updateMarqueeMetrics(): void {
+  if (!props.enabled) return
   const viewport = viewportRef.value
   const content = contentRef.value
   if (!viewport || !content) return
@@ -48,11 +52,22 @@ function updateMarqueeMetrics(): void {
   animationDuration.value = Math.max(6, (nextDistance * 2) / safeSpeed / movingKeyframeRatio)
 }
 
+/** 静态列表项不监听尺寸；启用时重新测量，动画从起点开始。 */
+function syncMarqueeObservation(): void {
+  resizeObserver?.disconnect()
+  if (!props.enabled) {
+    isOverflowing.value = false
+    scrollDistance.value = 0
+    return
+  }
+  if (viewportRef.value) resizeObserver?.observe(viewportRef.value)
+  if (contentRef.value) resizeObserver?.observe(contentRef.value)
+  void nextTick(updateMarqueeMetrics)
+}
+
 onMounted(() => {
   resizeObserver = new ResizeObserver(() => updateMarqueeMetrics())
-  if (viewportRef.value) resizeObserver.observe(viewportRef.value)
-  if (contentRef.value) resizeObserver.observe(contentRef.value)
-  void nextTick(updateMarqueeMetrics)
+  syncMarqueeObservation()
 })
 
 onUnmounted(() => {
@@ -63,6 +78,7 @@ watch(
   () => [props.text, props.speed],
   () => void nextTick(updateMarqueeMetrics)
 )
+watch(() => props.enabled, syncMarqueeObservation)
 </script>
 
 <template>
@@ -70,7 +86,7 @@ watch(
     ref="viewportRef"
     v-bind="$attrs"
     class="marquee-text"
-    :class="{ 'is-overflowing': isOverflowing }"
+    :class="{ 'is-overflowing': enabled && isOverflowing }"
     :style="marqueeStyle"
   >
     <span ref="contentRef" class="marquee-text__content">
@@ -86,6 +102,10 @@ watch(
 
 .marquee-text__content {
   @apply inline-block whitespace-nowrap align-bottom;
+}
+
+.marquee-text:not(.is-overflowing) .marquee-text__content {
+  @apply block overflow-hidden text-ellipsis;
 }
 
 .marquee-text.is-overflowing .marquee-text__content {

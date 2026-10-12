@@ -16,6 +16,7 @@ import type {
   PianoRollViewport,
 } from '@strawberrybear/piano-roll/browser'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
+import { restorePianoRollNavigation } from '@/features/piano-editor/navigation'
 import PianoEditorPanel from '@/components/PianoEditorPanel/PianoEditorPanel.vue'
 import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
 import PianoRollControls from '@/components/PianoRollControls.vue'
@@ -25,7 +26,8 @@ import PianoRollHelpDialog from './components/PianoRollHelpDialog.vue'
 import { usePianoEditorResize } from './usePianoEditorResize'
 import { usePianoEditorSelection } from './usePianoEditorSelection'
 import { usePianoTrackHosts } from './usePianoTrackHosts'
-import { usePianoRollZoomPersistence } from './usePianoRollZoomPersistence'
+import { usePianoRollZoomPersistence } from '@/composables/usePianoRollZoomPersistence'
+import { usePianoWorkspacePreferences } from '@/composables/usePianoWorkspacePreferences'
 import { formatDuration } from '@/lib/formatDuration'
 
 const props = defineProps<{
@@ -59,6 +61,7 @@ const emit = defineEmits<{
   edit: []
 }>()
 const { t } = useI18n()
+const layoutPreferences = usePianoWorkspacePreferences(!!props.editing)
 const {
   heightPercent: editorHeightPercent,
   handleRef: editorResizeHandleRef,
@@ -67,7 +70,7 @@ const {
   move: moveEditorResize,
   end: endEditorResize,
   onKeydown: handleEditorResizeKey,
-} = usePianoEditorResize(() => closePianoEditor(), props.editing ? 70 : 55)
+} = usePianoEditorResize(() => closePianoEditor(), layoutPreferences.value.editorHeight)
 const {
   selectedTrackId,
   isOpen: isPianoEditorOpen,
@@ -82,9 +85,13 @@ const {
   }
 )
 // 编辑模式默认显示空轨，否则新建的空音轨会立刻从总览消失。
-const hideEmptyPianoTracks = ref(props.restore?.hideEmptyTracks ?? !props.editing)
+const hideEmptyPianoTracks = computed({ get: () => layoutPreferences.value.hideEmptyTracks, set: (value: boolean) => { layoutPreferences.value = { ...layoutPreferences.value, hideEmptyTracks: value } } })
 // 参考轨属于视图偏好，迁移窗口时保留，不写入 MIDI 文档或撤销历史。
-const showOtherTracks = ref(props.restore?.showOtherTracks ?? true)
+const showOtherTracks = computed({ get: () => layoutPreferences.value.showOtherTracks, set: (value: boolean) => { layoutPreferences.value = { ...layoutPreferences.value, showOtherTracks: value } } })
+watch(() => layoutPreferences.value.editorHeight, value => { editorHeightPercent.value = value }, { flush: 'sync' })
+watch(editorHeightPercent, value => {
+  if (value !== layoutPreferences.value.editorHeight) layoutPreferences.value = { ...layoutPreferences.value, editorHeight: value }
+}, { flush: 'sync' })
 const overviewPianoRollLabels = computed(() => ({
   ...props.labels,
   empty: hideEmptyPianoTracks.value ? t('midi.pianoRoll.noTracksWithNotes') : props.labels.empty,
@@ -95,7 +102,7 @@ const {
   editorPitchZoom: pianoEditorPitchZoom,
   persistOverview,
   persistEditor,
-} = usePianoRollZoomPersistence(computed(() => props.filename))
+} = usePianoRollZoomPersistence()
 const {
   labels: pianoTrackLabelHosts,
   toggles: pianoTrackToggleHosts,
@@ -160,19 +167,18 @@ function migrate(): void {
 async function restoreWorkspace(): Promise<void> {
   const saved = props.restore
   if (!saved) {
+    restorePianoRollNavigation(overviewPanel.value?.getView(), undefined, { timeZoom: pianoOverviewTimeZoom.value })
     restoring = false
     return
   }
   restoring = true
   selectPianoTrack(saved.selectedTrackId ?? '')
   isPianoEditorOpen.value = saved.editorOpen && props.document.tracks.length > 0
-  hideEmptyPianoTracks.value = saved.hideEmptyTracks
-  showOtherTracks.value = saved.showOtherTracks ?? true
-  editorHeightPercent.value = saved.editorHeight
+  // 布局已经从全局配置读取；旧的窗口快照不再是这些配置的权威来源。
   editorRestoreViewport.value = saved.editor
   await nextTick()
-  if (saved.overview) overviewPanel.value?.getView()?.restoreViewport(saved.overview)
-  if (saved.editor) editorPanel.value?.getView()?.restoreViewport(saved.editor)
+  restorePianoRollNavigation(overviewPanel.value?.getView(), saved.overview, { timeZoom: pianoOverviewTimeZoom.value })
+  restorePianoRollNavigation(editorPanel.value?.getView(), saved.editor, { timeZoom: pianoEditorTimeZoom.value, pitchZoom: pianoEditorPitchZoom.value })
   restoring = false
   changed()
 }
@@ -359,7 +365,11 @@ defineExpose({ getState, setTransport, openTrack, revealTrack })
         @viewport-change="persistEditorViewport"
         @edit-intent="forwardEditIntent"
         @close="closePianoEditor"
-      />
+      >
+        <template #tools>
+          <slot name="editor-tools" />
+        </template>
+      </PianoEditorPanel>
     </section>
   </div>
 </template>

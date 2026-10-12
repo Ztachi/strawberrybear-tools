@@ -133,15 +133,23 @@ function findImportedMidi(target: OnlineMidiSong): MidiInfo | null {
   )
 }
 
-function isSongPlaying(target: OnlineMidiSong) {
+/** 在线试听使用临时来源；已导入歌曲的播放入口使用全部歌曲来源。 */
+function isSongSelected(target: OnlineMidiSong): boolean {
   if (
     playerStore.currentTemporaryOnlineSongId === target.id &&
     playerStore.currentMidi?.online_song_id === target.id
   ) {
-    return playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
+    return playerStore.isMidiSelectedInQueue(
+      playerStore.currentMidi.filename,
+      `online-preview:${target.id}`
+    )
   }
   const imported = findImportedMidi(target)
-  return imported ? playerStore.getSongPlaybackState(imported.filename) === 'playing' : false
+  return imported ? playerStore.isMidiSelectedInQueue(imported.filename, 'all') : false
+}
+
+function isSongPlaying(target: OnlineMidiSong): boolean {
+  return isSongSelected(target) && playerStore.isPreviewPlaying && !playerStore.isPreviewPaused
 }
 
 async function getSongBytes(target: OnlineMidiSong) {
@@ -171,13 +179,14 @@ async function togglePlay(): Promise<void> {
   if (!song.value) return
   const imported = findImportedMidi(song.value)
   if (imported) {
+    const context = { id: 'all', title: t('songList.allSongs') }
     if (playerStore.currentTemporaryOnlineSongId) {
       await playerStore.restoreTemporaryOnlinePreview()
+      // 用户点击时是临时试听来源；恢复出的旧歌曲不能把这次“播放”变成暂停。
+      await playerStore.playMidiInQueue(imported, playerStore.midiLibrary, context)
+    } else {
+      await playerStore.toggleMidiInQueue(imported, playerStore.midiLibrary, context)
     }
-    await playerStore.toggleMidiInQueue(imported, playerStore.midiLibrary, {
-      id: 'all',
-      title: t('songList.allSongs'),
-    })
     return
   }
 
@@ -186,6 +195,7 @@ async function togglePlay(): Promise<void> {
     return
   }
   if (
+    isSongSelected(song.value) &&
     playerStore.currentTemporaryOnlineSongId === song.value.id &&
     playerStore.isPreviewPaused
   ) {

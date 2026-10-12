@@ -1,8 +1,12 @@
 import { createProject, type MidiProject } from '@strawberrybear/midi-editor'
+import { Player } from '@strawberrybear/player'
 import { createApp, defineComponent, h } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, useRouter } from 'vue-router'
-import { mockIPC } from '@tauri-apps/api/mocks'
+import { mockIPC, mockWindows } from '@tauri-apps/api/mocks'
+import { invoke } from '@tauri-apps/api/core'
+import { emit } from '@tauri-apps/api/event'
+import type { RecorderAudio } from '@/features/midi-recording/types'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getAntdvLocale, i18n } from '@/i18n'
 import { infinityNikkiConfigProviderProps } from '@/theme/infinityNikkiTheme'
@@ -14,14 +18,22 @@ import {
   type UpdateSnapshot,
 } from '@/features/app-updater/controller'
 import MainWindow from '@/views/MainWindow/index.vue'
+import { APP_CLOSE_PLATFORM } from '@/platform/tauri/appClose'
+import type { CloseAction } from '@/features/app-close/controller'
 import { MIDI_PROJECT_EDITOR_WINDOW_PORT } from '@/features/midi-project-editor-window'
+import { createAppContext } from '@/bootstrap/createAppContext'
+import { bindAppContextStores } from '@/bootstrap/bindAppContextStores'
 import { usePlayerStore } from '@/stores/player'
+import { MidiPreviewPlaybackFeature } from '@/features/player/midiPreview'
+import { useSongListStore } from '@/stores/songLists'
 import MidiEditorPage from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/index.vue'
 import MidiEditorTab from '@/views/MainWindow/MidiEditorTab/index.vue'
 import AllSongsPage from '@/views/MainWindow/FilesTab/pages/AllSongsPage.vue'
 import SongListDetailPage from '@/views/MainWindow/FilesTab/pages/SongListDetailPage.vue'
 import TemplateEditor from '@/views/MainWindow/TemplatesTab/components/TemplateEditor.vue'
+import TemplateEditorPage from '@/views/MainWindow/TemplatesTab/components/TemplateEditorPage.vue'
 import OnlineLibraryTab from '@/views/MainWindow/OnlineLibraryTab/index.vue'
+import OnlineSongDetailPage from '@/views/MainWindow/OnlineLibraryTab/pages/OnlineSongDetailPage.vue'
 import { useOnlineMidiLibraryStore } from '@/stores/onlineMidiLibrary'
 import type { OnlineMidiSong } from '@/lib/onlineMidiLibraryApi'
 import type { MidiInfo } from '@/types'
@@ -222,6 +234,8 @@ const onlineSongFixtures = Array.from(
 // 只替换桌面数据边界，使用真实主窗口、弹层容器、编辑会话与卷帘。
 const savedDrafts: { key: string; name: string }[] = []
 let draftFailure = false
+let deferProjectSave = false
+let pendingProjectSave: (() => void) | null = null
 let installCalls = 0
 let updateState = { ...initialUpdateState(), revision: 0, currentVersion: '1.2.0' }
 let updateListener: (state: UpdateSnapshot) => void = () => {}
@@ -250,14 +264,50 @@ const updater = createUpdaterController({
 })
 await updater.start()
 // 模拟后端按 key 保存完整草稿，便于验证不同入口恢复的内容。
-const draftFiles = new Map<string, MidiProject>()
+const persistentDrafts = fixtureQuery.has('recordingReload')
+const draftFiles = new Map<string, MidiProject>(
+  persistentDrafts ? JSON.parse(sessionStorage.getItem('fixture-midi-drafts') ?? '[]') : []
+)
+function persistFixtureDrafts(): void {
+  if (persistentDrafts)
+    sessionStorage.setItem('fixture-midi-drafts', JSON.stringify([...draftFiles]))
+}
 // 原生解析按文件路径读取，不应受主窗口曲库 store 正在刷新影响。
 const parsedSongs = new Map(
   [midi, switchedMidi, ...navigationMidiLibrary].map((song) => [song.file_path, song])
 )
+const openedUrls: string[] = []
 let customSongs: MidiInfo[] | null = null
 let pendingParse: { filename: string; resolve: (() => void) | null } | null = null
-mockIPC((command, payload) => {
+let closeRequest: ((action?: CloseAction) => void) | undefined
+let trayHides = 0
+let quits = 0
+let savedSettings: Record<string, unknown> = {}
+mockWindows('main')
+const fixtureIPC: Parameters<typeof mockIPC>[0] = (command, payload) => {
+  if (command === 'plugin:event|listen') return 0
+  if (command === 'plugin:event|unlisten' || command === 'set_speed') return
+  if (command === 'plugin:window|set_size') return
+  if (command === 'open_url') {
+    openedUrls.push((payload as { url: string }).url)
+    return
+  }
+  if (command === 'get_frame_rate_snapshot')
+    return {
+      status: 'unsupported_platform',
+      current_fps: null,
+      stable_fps: null,
+      sample_count: 0,
+      source: 'unsupported',
+      target_process: null,
+      updated_at_ms: null,
+      message: null,
+    }
+  if (command === 'plugin:app|version') return '1.3.2'
+  if (command === 'save_settings') {
+    savedSettings = { ...(payload as { settings: Record<string, unknown> }).settings }
+    return
+  }
   // 主题回归使用真实悬浮视图；只替换原生窗口切换和屏幕采集能力，不开启实际采集。
   if (['enter_overlay_mode', 'exit_overlay_mode', 'stop_frame_rate_capture'].includes(command))
     return
@@ -270,16 +320,34 @@ mockIPC((command, payload) => {
       message: 'Browser fixture',
     }
   if (command === 'stop_playback') return
+  if (command === 'prepare_online_midi_preview') {
+    const filename = (payload as { filename: string }).filename
+    const song = { ...midi, filename, file_path: `/fixture/temporary/${filename}` }
+    parsedSongs.set(song.file_path, song)
+    return song
+  }
+  if (command === 'cleanup_online_midi_preview') return
+  if (command === 'get_playback_state') return { is_playing: false, current_tick: 0 }
   if (command === 'save_midi_project_draft') {
     if (draftFailure) throw new Error('测试草稿保存失败')
     const draft = payload as { key: string; project: MidiProject }
     savedDrafts.push({ key: draft.key, name: draft.project.name })
     draftFiles.set(draft.key, structuredClone(draft.project))
+    persistFixtureDrafts()
     return
   }
   if (command === 'load_midi_project') return { ...project, id: (payload as { id: string }).id }
-  if (command === 'save_midi_project')
-    return { ...projectSummary, id: 'saved-fixture', updatedAt: Date.now() }
+  if (command === 'save_midi_project') {
+    const summary = { ...projectSummary, id: 'saved-fixture', updatedAt: Date.now() }
+    if (deferProjectSave)
+      return new Promise((resolve) => {
+        pendingProjectSave = () => {
+          pendingProjectSave = null
+          resolve(summary)
+        }
+      })
+    return summary
+  }
   if (command === 'import_midi_buffer')
     return {
       ...midi,
@@ -339,6 +407,7 @@ mockIPC((command, payload) => {
     return draftFiles.get((payload as { key: string }).key) ?? null
   if (command === 'delete_midi_project_draft') {
     draftFiles.delete((payload as { key: string }).key)
+    persistFixtureDrafts()
     return
   }
   if (command === 'check_accessibility') return true
@@ -352,9 +421,11 @@ mockIPC((command, payload) => {
       enable_keyboard_sim: false,
       auto_fps_enabled: false,
       manual_fps: 60,
+      ...savedSettings,
     }
   throw new Error(`Unexpected native command in MIDI editor fixture: ${command}`)
-})
+}
+mockIPC(fixtureIPC, { shouldMockEvents: true })
 i18n.global.locale.value = 'zh-CN'
 const NavigationDetailFixture = defineComponent({
   name: 'NavigationDetailFixture',
@@ -436,6 +507,11 @@ const router = createRouter({
       component: NavigationBackFixture,
     },
     {
+      name: 'templates-create',
+      path: '/templates/new',
+      component: TemplateEditorPage,
+    },
+    {
       name: 'online-library',
       path: '/online-library',
       component: OnlineLibraryTab,
@@ -444,7 +520,7 @@ const router = createRouter({
     {
       name: 'online-library-song-detail',
       path: '/online-library/song/:id',
-      component: NavigationBackFixture,
+      component: fixtureQuery.has('online-playback') ? OnlineSongDetailPage : NavigationBackFixture,
     },
     {
       name: 'navigation-away',
@@ -471,6 +547,27 @@ await router.push(
                 : '/midi-editor/new'
 )
 const pinia = createPinia()
+if (fixtureQuery.has('overlay-playlist')) bindAppContextStores(pinia, createAppContext())
+if (fixtureQuery.has('online-playback')) {
+  // 只替换音频端口；页面动作、临时快照、来源切换与公共 Player 状态机都使用生产实现。
+  const audio = {
+    load: async () => {},
+    play: async () => {},
+    pause: async () => {},
+    stop: async () => {},
+    seek: async () => {},
+    setVolume: async () => {},
+    setMuted: async () => {},
+  }
+  const runtime = new Player({ audio })
+  const feature = new MidiPreviewPlaybackFeature()
+  feature.bindPlayer(runtime)
+  feature.seekMs = async (time, options = {}) => {
+    await runtime.seek(time / 1000)
+    if (options.autoPlay) await runtime.play()
+  }
+  usePlayerStore(pinia).bindPreviewRuntime(runtime, feature)
+}
 // 详情进入编辑器时曲库已载入；夹具按真实前置状态装配，不等待主窗口的异步初始化。
 if (fixtureQuery.has('source') && !fixtureQuery.has('cold'))
   usePlayerStore(pinia).midiLibrary = [midi]
@@ -481,10 +578,34 @@ if (showOnlineList) {
 declare global {
   interface Window {
     midiEditorFixture: {
+      requestClose: (action?: CloseAction) => void
+      showAbout: () => Promise<void>
+      closeState: () => { hides: number; quits: number; settings: Record<string, unknown> }
       seedDraft: (key: string, name: string, filename?: string) => void
       seedEntryDraft: (entry: MidiEditorEntry, name: string) => Promise<string>
       setSongs: (filenames: string[]) => void
+      setCurrentSong: (
+        filename: string | null,
+        status: 'playing' | 'paused' | 'stopped',
+        online?: { id?: string; sha256?: string; temporary?: boolean },
+        sourceId?: string
+      ) => void
+      setOnlineTitles: (titles: string[]) => void
+      auditionOnlineSong: (id: string) => Promise<boolean>
+      setSongLists: (lists: { id: string; name: string; filenames: string[] }[]) => void
+      openedUrls: () => string[]
+      previewStatus: () => 'playing' | 'paused' | 'stopped'
+      previewState: () => {
+        filename: string | undefined
+        source: string | undefined
+        queue: string[]
+      }
+      draftNoteCounts: () => number[]
+      recordingDraft: (command: string, args: Record<string, unknown>) => Promise<unknown>
       draftKeys: () => string[]
+      deferProjectSave: (value: boolean) => void
+      projectSavePending: () => boolean
+      finishProjectSave: () => void
       currentRoute: () => string
       deferParse: (filename: string) => void
       isParsePending: () => boolean
@@ -503,6 +624,9 @@ declare global {
 }
 
 window.midiEditorFixture = {
+  requestClose: (action) => closeRequest?.(action),
+  showAbout: () => emit('show_about'),
+  closeState: () => ({ hides: trayHides, quits, settings: savedSettings }),
   seedDraft(key, name, filename) {
     draftFiles.set(key, {
       ...structuredClone(project),
@@ -528,7 +652,69 @@ window.midiEditorFixture = {
     for (const song of customSongs) parsedSongs.set(song.file_path, song)
     usePlayerStore(pinia).midiLibrary = customSongs
   },
+  // 仅提供播放状态输入，曲名组件、响应式 Store 与页面使用生产实现。
+  setCurrentSong(filename, status, online, sourceId) {
+    const player = usePlayerStore(pinia)
+    const song = player.midiLibrary.find((item) => item.filename === filename)
+    if (song && online) {
+      song.online_song_id = online.id
+      song.online_sha256 = online.sha256
+    }
+    player.currentMidi = song ?? null
+    player.currentTemporaryOnlineSongId = online?.temporary ? (online.id ?? null) : null
+    if (sourceId) {
+      const list = useSongListStore(pinia).getSongListById(sourceId.replace(/^song-list:/, ''))
+      player.setPreviewQueueContext(
+        list
+          ? player.midiLibrary.filter((item) => list.song_filenames.includes(item.filename))
+          : player.midiLibrary,
+        { id: sourceId, title: list?.name ?? '全部歌曲' }
+      )
+    }
+    player.isPreviewPlaying = status === 'playing'
+    player.isPreviewPaused = status === 'paused'
+  },
+  setOnlineTitles(titles) {
+    useOnlineMidiLibraryStore(pinia).setSongs(
+      titles.map((title, index) => ({ ...onlineSongFixtures[index]!, title })),
+      Date.now()
+    )
+  },
+  async auditionOnlineSong(id) {
+    return usePlayerStore(pinia).playTemporaryMidiBuffer(`${id}.mid`, [], { onlineSongId: id })
+  },
+  setSongLists(lists) {
+    useSongListStore(pinia).songLists = lists.map((list) => ({
+      id: list.id,
+      name: list.name,
+      description: '',
+      cover_filename: null,
+      song_filenames: list.filenames,
+      created_at: 1,
+      updated_at: 1,
+    }))
+  },
+  openedUrls: () => [...openedUrls],
+  previewStatus() {
+    const player = usePlayerStore(pinia)
+    return player.isPreviewPlaying ? 'playing' : player.isPreviewPaused ? 'paused' : 'stopped'
+  },
+  previewState() {
+    const player = usePlayerStore(pinia)
+    return {
+      filename: player.currentMidi?.filename,
+      source: player.previewQueueContext?.id,
+      queue: player.activePreviewQueueItems.map((song) => song.filename),
+    }
+  },
+  recordingDraft: (command: string, args: Record<string, unknown>) => invoke(command, args),
+  draftNoteCounts: () => [...draftFiles.values()].map((project) => project.document.notes.length),
   draftKeys: () => [...draftFiles.keys()],
+  deferProjectSave: (value) => {
+    deferProjectSave = value
+  },
+  projectSavePending: () => !!pendingProjectSave,
+  finishProjectSave: () => pendingProjectSave?.(),
   currentRoute: () => router.currentRoute.value.fullPath,
   deferParse(filename) {
     pendingParse = { filename, resolve: null }
@@ -575,6 +761,30 @@ createApp({
   .use(pinia)
   .use(i18n)
   .use(router)
+  .provide(
+    'track-recorder-audio-factory',
+    (): RecorderAudio => ({
+      prepare: async () => {},
+      now: () => performance.now() / 1000,
+      note: () => ({ stop() {} }),
+      startAccompaniment() {},
+      stopAccompaniment() {},
+    })
+  )
   .provide(MIDI_PROJECT_EDITOR_WINDOW_PORT, browserMidiProjectEditorWindowPort())
+  .provide(APP_CLOSE_PLATFORM, {
+    listen: async (callback: (action?: CloseAction) => void) => {
+      closeRequest = callback
+      return () => {
+        closeRequest = undefined
+      }
+    },
+    hide: async () => {
+      trayHides++
+    },
+    quit: async () => {
+      quits++
+    },
+  })
   .provide(appUpdaterKey, updater)
   .mount('#app')

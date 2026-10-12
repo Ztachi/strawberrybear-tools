@@ -1,4 +1,23 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+
+async function useSilentChromiumAudioOutput(
+  context: BrowserContext,
+  browserName: string
+): Promise<void> {
+  if (browserName !== 'chromium') return
+  // 保留真实音色、AudioContext 和时钟，只将输出接到无声设备，避免宿主声卡停滞影响时序回归。
+  // https://developer.chrome.com/blog/audiocontext-setsinkid
+  await context.addInitScript(() => {
+    const NativeAudioContext = window.AudioContext
+    window.AudioContext = class extends NativeAudioContext {
+      constructor(options?: ConstructorParameters<typeof NativeAudioContext>[0]) {
+        super({ ...options, sinkId: { type: 'none' } } as ConstructorParameters<
+          typeof NativeAudioContext
+        >[0])
+      }
+    }
+  })
+}
 
 test('歌曲详情进入编辑后刷新，会等待曲库载入并保留来源名称', async ({ page }) => {
   await page.goto('/tests/browser/midi-editor-page.html?source&cold')
@@ -147,7 +166,7 @@ test('参考音轨默认开启，图标开关和跨轨拖动编辑一致，独�
   const toggle = page.getByRole('button', { name: '显示其他音轨', exact: true })
   await expect(toggle).toHaveAttribute('aria-pressed', 'true')
   await toggle.hover()
-  await expect(page.getByRole('tooltip')).toContainText('点击参考音符')
+  await expect(page.getByRole('tooltip')).toHaveText('仅显示当前音轨')
   const point = await referenceNotePoint(page)
   await page.mouse.move(point.x, point.y)
   await page.mouse.down()
@@ -222,7 +241,9 @@ async function openSettings(page: Page): Promise<void> {
 
 async function openSnapSettings(page: Page): Promise<void> {
   const trigger = page.getByRole('button', { name: '吸附', exact: true })
-  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
+  // 布局刚缩放时鼠标坐标会随工具栏移动；使用可访问的键盘入口明确打开浮层。
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.press('Enter')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
   await expect(page.getByRole('switch', { name: '启用吸附', exact: true })).toBeVisible()
 }
 
@@ -929,6 +950,12 @@ test('首次引导介绍音轨编辑与排序，完成后再次进入不重复�
 })
 
 test('吸附设置将总开关、小节模式和节拍选项分开表达', async ({ page }) => {
+  await expect(
+    page.locator('.editor-toolbar').getByRole('button', { name: '吸附', exact: true })
+  ).toHaveCount(0)
+  await expect(
+    page.locator('.detail-piano-editor').getByRole('button', { name: '吸附', exact: true })
+  ).toBeVisible()
   await openSnapSettings(page)
   const enabled = page.getByRole('switch', { name: '启用吸附', exact: true })
   const snapToBar = page.getByRole('checkbox', { name: '按小节吸附', exact: true })
@@ -961,6 +988,119 @@ test('吸附设置将总开关、小节模式和节拍选项分开表达', async
   await expect(enabled).toBeChecked()
   await expect(page.getByRole('checkbox', { name: '按小节吸附', exact: true })).not.toBeChecked()
   await expect(page.locator('.toolbar-snap:visible')).not.toHaveClass(/ant-select-disabled/)
+})
+
+for (const detached of [false, true]) {
+  test(`编辑偏好重开保留且吸附位于卷帘：${detached ? '独立窗口' : '主窗口'}`, async ({ page }) => {
+    let target = page
+    if (detached) {
+      const opening = page.waitForEvent('popup')
+      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+      target = await opening
+    }
+    await expect(
+      target.locator('.editor-toolbar').getByRole('button', { name: '吸附', exact: true })
+    ).toHaveCount(0)
+    const panel = target.locator('.detail-piano-editor')
+    for (const selector of ['.detail-piano-roll', '.detail-piano-editor']) {
+      await target
+        .locator(selector)
+        .getByRole('slider', { name: '时间缩放', exact: true })
+        .press('End')
+    }
+    await panel.getByRole('slider', { name: '音高缩放', exact: true }).focus()
+    await target.keyboard.press('End')
+    await target.getByRole('button', { name: '显示其他音轨', exact: true }).click()
+    const separator = target.getByRole('separator', { name: /^调整钢琴卷帘高度/ })
+    await separator.focus()
+    await target.keyboard.press('Home')
+    await openSnapSettings(target)
+    await target.getByRole('checkbox', { name: '按小节吸附', exact: true }).check()
+    // 独立窗口的偏好由主窗口处理消息后保存；等待权威状态再模拟刷新。
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(
+              localStorage.getItem('infinity-nikki-player:midi-editor-preferences:v1') ?? '{}'
+            ).snap
+        )
+      )
+      .toBe('bar')
+    await target.mouse.click(5, 50)
+    await expect(target.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+    expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
+    await target.reload()
+    await expect(target.getByRole('slider', { name: '音高缩放', exact: true })).toHaveAttribute(
+      'aria-valuenow',
+      '36'
+    )
+    await expect(target.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
+    await expect(separator).toHaveAttribute('aria-valuenow', '25')
+    for (const selector of ['.detail-piano-roll', '.detail-piano-editor']) {
+      await expect(
+        target.locator(selector).getByRole('slider', { name: '时间缩放', exact: true })
+      ).toHaveAttribute('aria-valuenow', '100')
+    }
+    await openSnapSettings(target)
+    await expect(target.getByRole('checkbox', { name: '按小节吸附', exact: true })).toBeChecked()
+    await target.getByRole('checkbox', { name: '按小节吸附', exact: true }).uncheck()
+    await target.locator('.toolbar-snap:visible').click()
+    await target
+      .locator('.ant-select-dropdown:visible .ant-select-item-option')
+      .filter({ hasText: '1/8' })
+      .click()
+    await target.getByRole('switch', { name: '启用吸附', exact: true }).click()
+    await target.mouse.click(5, 50)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(
+              localStorage.getItem('infinity-nikki-player:midi-editor-preferences:v1') ?? '{}'
+            ).snap
+        )
+      )
+      .toBe('off')
+    await target.reload()
+    await openSnapSettings(target)
+    await expect(target.getByRole('switch', { name: '启用吸附', exact: true })).not.toBeChecked()
+    await target.getByRole('switch', { name: '启用吸附', exact: true }).click()
+    await expect(target.locator('.toolbar-snap:visible')).toContainText('1/8')
+  })
+}
+
+test('卷帘配置换项目和音轨继续沿用，录制与主编辑器共用缩放且不产生音乐改动', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?populated=1&colors=1')
+  await page.locator('.detail-piano-roll .pr-track-select').first().dblclick()
+  const pitch = page.getByRole('slider', { name: '音高缩放', exact: true })
+  await pitch.press('End')
+  await page.getByRole('button', { name: '显示其他音轨', exact: true }).click()
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/project-A'))
+  await page.locator('.detail-piano-roll .pr-track-select').first().dblclick()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '36')
+  await expect(page.getByRole('button', { name: '显示其他音轨', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  const recording = page.getByRole('dialog').first()
+  const recordedPitch = recording.getByRole('slider', { name: '音高缩放', exact: true })
+  await expect(recordedPitch).toHaveAttribute('aria-valuenow', '36')
+  await recordedPitch.press('ArrowLeft')
+  await recording.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(recording).not.toBeVisible()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '35')
+  await page.evaluate(() => window.midiEditorFixture.navigate('/midi-editor/project-B'))
+  await page.locator('.detail-piano-roll .pr-track-select').first().dblclick()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '35')
+  await page.locator('.detail-piano-roll .pr-track-select').nth(1).click()
+  await expect(pitch).toHaveAttribute('aria-valuenow', '35')
+  await expect(page.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+  expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
 })
 
 test('映射模板复用虚拟键盘选择器，切换后立即更新不可演奏提示', async ({ page }) => {
@@ -1183,7 +1323,12 @@ test('独立编辑窗口复用沉浸式标题栏，并在还原时保留编辑�
   await expect(page.locator('.editor-template-select:visible')).toContainText('高音演奏键')
 })
 
-test('定位后打开独立窗口，首次播放及还原后的续播都从当前位置开始', async ({ page }) => {
+test('定位后打开独立窗口，首次播放及还原后的续播都从当前位置开始', async ({
+  page,
+  context,
+  browserName,
+}) => {
+  await useSilentChromiumAudioOutput(context, browserName)
   await page.goto('/tests/browser/midi-editor-page.html?populated=1')
   const mainHead = page.locator('.detail-piano-roll .pr-handle')
   const ruler = (await page.locator('.detail-piano-roll .pr-ruler').boundingBox())!
@@ -1226,7 +1371,9 @@ test('定位后打开独立窗口，首次播放及还原后的续播都从当�
 test('播放中的窗口交接保持播放状态，独立窗口刷新和原生关闭也使用最新快照', async ({
   page,
   context,
+  browserName,
 }, testInfo) => {
+  await useSilentChromiumAudioOutput(context, browserName)
   const webkit = testInfo.project.use.browserName === 'webkit'
   if (webkit) {
     // Tauri/Wry 默认允许自动播放；浏览器 WebKit 要求手势解锁。仅装配等价的设备权限边界，
@@ -1329,7 +1476,7 @@ test('主窗口离开编辑页并切歌后，还原独立窗口仍恢复原编�
   await expect(page.locator('.editor-window-error')).toHaveCount(0)
 })
 
-test('从歌曲进入的独立编辑窗口还原时保留来源，草稿仍保存到该歌曲', async ({ page }) => {
+test('独立窗口还原保留歌曲来源和草稿归属，换歌继续沿用全局缩放', async ({ page }) => {
   await page.evaluate(() => {
     window.midiEditorFixture.setSongs(['A.mid', 'B.mid'])
     return window.midiEditorFixture.navigate('/midi-editor/new?from=A.mid')
@@ -1361,7 +1508,7 @@ test('从歌曲进入的独立编辑窗口还原时保留来源，草稿仍保�
   })
   await page.getByRole('button', { name: '直接关闭', exact: true }).click()
   await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue('B')
-  await expect(overview.getByRole('slider', { name: '时间缩放', exact: true })).not.toHaveAttribute(
+  await expect(overview.getByRole('slider', { name: '时间缩放', exact: true })).toHaveAttribute(
     'aria-valuenow',
     '100'
   )
@@ -1678,3 +1825,121 @@ test('窄窗口中单音符属性完整显示，力度通过悬浮纵向滑杆�
     page.getByRole('tooltip').filter({ hasText: '起点会对齐当前吸附网格' })
   ).toBeVisible()
 })
+
+for (const detached of [false, true]) {
+  test(`未改动退出录制不生成主草稿：${detached ? '独立编辑窗口' : '主窗口'}`, async ({ page }) => {
+    await page.goto('/tests/browser/midi-editor-page.html')
+    let editor = page
+    if (detached) {
+      const opening = page.waitForEvent('popup')
+      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+      editor = await opening
+    }
+    await expect(editor.locator('.detail-piano-roll')).toBeVisible()
+    expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
+    await editor.getByRole('button', { name: '键盘录制', exact: true }).click()
+    const dialog = editor.getByRole('dialog').first()
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await expect(dialog).not.toBeVisible()
+    expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([])
+    await expect(editor.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+  })
+  test(`键盘录制通过宿主原子应用并撤销：${detached ? '独立编辑窗口' : '主窗口'}`, async ({
+    page,
+  }, testInfo) => {
+    let editor = page
+    if (detached) {
+      const opening = page.waitForEvent('popup')
+      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+      editor = await opening
+      await expect(editor.locator('.detail-piano-roll')).toBeVisible()
+    }
+    await editor.getByRole('button', { name: '键盘录制', exact: true }).click()
+    const dialog = editor.getByRole('dialog').first()
+    await dialog.getByRole('button', { name: '键位映射', exact: true }).click()
+    await expect(editor.locator('.ant-popover:visible')).toContainText('钢琴常用键')
+    await dialog.getByRole('button', { name: '开始录制', exact: true }).click()
+    await editor.keyboard.down('a')
+    await editor.waitForTimeout(150)
+    await editor.keyboard.up('a')
+    await editor.keyboard.press('Escape')
+    await expect(dialog.getByText('已停止，可试听或继续录入')).toBeVisible()
+    await editor.screenshot({ path: testInfo.outputPath('recording-workspace.png') })
+    await dialog.getByRole('button', { name: '应用到音轨', exact: true }).click()
+    await expect(dialog).not.toBeVisible()
+    await expect
+      .poll(() => page.evaluate(() => window.midiEditorFixture.draftNoteCounts()))
+      .toEqual([1])
+    await expect(editor.getByRole('button', { name: /^撤销/ })).toBeEnabled()
+    await editor.getByRole('button', { name: /^撤销/ }).click()
+    await expect(editor.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+    expect(
+      await page.evaluate(() =>
+        window.midiEditorFixture.draftKeys().some((key) => key.startsWith('recording-'))
+      )
+    ).toBe(false)
+  })
+}
+
+test('新建项目重载后独立录制草稿可加载，取消保留、应用形成一次主撤销', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?recordingReload')
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  let recorder = page.getByRole('dialog').first()
+  await recorder.getByRole('button', { name: '开始录制', exact: true }).click()
+  await page.keyboard.down('a')
+  await page.waitForTimeout(120)
+  await page.keyboard.up('a')
+  await recorder.getByRole('button', { name: '停止录制', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.midiEditorFixture.draftKeys()))
+    .toEqual([expect.stringMatching(/^recording-/)])
+  await page.reload()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^撤销/ })).toBeDisabled()
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  const draft = page.getByRole('dialog').filter({ hasText: '发现草稿' })
+  await expect(draft).toContainText('未完成的键盘录制')
+  await expect(draft.getByRole('button', { name: '另存为新项目', exact: true })).toHaveCount(0)
+  await draft.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.locator('.track-recorder-drawer')).toHaveCount(0)
+  expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual([
+    expect.stringMatching(/^recording-/),
+  ])
+  await page.getByRole('button', { name: '键盘录制', exact: true }).click()
+  await draft.getByRole('button', { name: '加载草稿', exact: true }).click()
+  recorder = page.getByRole('dialog').first()
+  await expect(recorder.getByText(/· 1 个音符/)).toBeVisible()
+  await recorder.getByRole('button', { name: '应用到音轨', exact: true }).click()
+  await expect(page.locator('.track-recorder-drawer')).toHaveCount(0)
+  expect(await page.evaluate(() => window.midiEditorFixture.draftKeys())).toEqual(['create'])
+  expect(await page.evaluate(() => window.midiEditorFixture.draftNoteCounts())).toEqual([1])
+  const undo = page.getByRole('button', { name: /^撤销/ })
+  await expect(undo).toBeEnabled()
+  await undo.click()
+  await expect(undo).toBeDisabled()
+})
+
+for (const detached of [false, true]) {
+  test(`项目保存期间禁止打开录制避免草稿归属切换：${detached ? '独立窗口' : '主窗口'}`, async ({
+    page,
+  }) => {
+    await page.goto('/tests/browser/midi-editor-page.html')
+    let editor = page
+    if (detached) {
+      const opening = page.waitForEvent('popup')
+      await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+      editor = await opening
+      await expect(editor.locator('.detail-piano-roll')).toBeVisible()
+    }
+    await page.evaluate(() => window.midiEditorFixture.deferProjectSave(true))
+    await editor.getByRole('button', { name: '保存', exact: true }).click()
+    await expect
+      .poll(() => page.evaluate(() => window.midiEditorFixture.projectSavePending()))
+      .toBe(true)
+    const launch = editor.getByRole('button', { name: '键盘录制', exact: true })
+    await expect(launch).toBeDisabled()
+    await page.evaluate(() => window.midiEditorFixture.finishProjectSave())
+    await expect(launch).toBeEnabled()
+    await expect(editor.locator('.track-recorder-drawer')).toHaveCount(0)
+  })
+}

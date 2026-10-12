@@ -1,0 +1,22 @@
+{
+  "title": "Settings",
+  "general": "General",
+  "contents": "Settings contents",
+  "contact": "Contact us",
+  "about": "About",
+  "language": "Display language",
+  "closeBehavior": "When closing the window",
+  "tray": "Minimize to system tray",
+  "quit": "Quit application",
+  "askClose": "Ask when closing",
+  "closeTitle": "Close window",
+  "closeHint": "Minimizing keeps playback and editing sessions open. Use the tray icon to reopen the window.",
+  "closeHintLabel": "About minimizing to tray",
+  "remember": "Remember my choice",
+  "confirmClose": "Confirm",
+  "playbackSpeed": "Playback speed",
+  "normalSpeed": "Reset to normal",
+  "saveFailed": "Could not save settings",
+  "closeFailed": "Could not close window",
+  "recordingBeforeQuit": "Apply or discard your recording before quitting the application."
+}

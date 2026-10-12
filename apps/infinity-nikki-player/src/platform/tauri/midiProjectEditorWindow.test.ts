@@ -1,11 +1,18 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { createMidiProjectEditorWindowPort } from './midiProjectEditorWindow'
 
-const native = vi.hoisted(() => ({ options: {} as Record<string, unknown> }))
+const native = vi.hoisted(() => ({
+  options: {} as Record<string, unknown>,
+  parentEvents: [] as string[],
+}))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/webviewWindow', () => ({
   getCurrentWebviewWindow: () => ({
     onCloseRequested: async () => () => {},
+    once: async (event: string) => {
+      native.parentEvents.push(event)
+      return () => {}
+    },
     listen: async () => () => {},
     emitTo: async () => {},
   }),
@@ -31,6 +38,7 @@ it.each(['Macintosh', 'Windows NT 10.0'])(
   async (platform) => {
     vi.stubGlobal('navigator', { userAgent: platform })
     await createMidiProjectEditorWindowPort().open('session')
+    expect(native.parentEvents).toContain('tauri://destroyed')
     expect(native.options).toMatchObject({
       url: 'midi-project-editor.html?session=session',
       hiddenTitle: true,

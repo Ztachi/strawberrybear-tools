@@ -9,6 +9,9 @@ import type { PlaybackMode } from '@strawberrybear/player'
  * @description: 应用设置数据结构
  */
 export interface AppSettings {
+  /** 关闭窗口行为；旧配置默认托盘，首次仍询问。 */
+  close_action?: 'tray' | 'quit'
+  close_action_confirmed?: boolean
   /** 当前语言 */
   locale: string
   /** 当前模板 ID */

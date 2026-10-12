@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { App as AntApp, ConfigProvider, Input, Spin, Tooltip } from 'antdv-next'
 import type { EditorAction } from '@strawberrybear/midi-editor'
 import type { PianoRollTrack } from '@strawberrybear/piano-roll/core'
+import TrackRecorderLauncher from '@/components/TrackRecorderLauncher.vue'
+import type { TrackRecorderResult } from '@/features/midi-recording/types'
 import WindowTitleBar from '@/components/WindowTitleBar/WindowTitleBar.vue'
 import { MidiEditorShortcutController } from '@/features/midi-editor/shortcutController'
 import type { PianoWorkspaceState } from '@/features/piano-editor'
@@ -22,9 +24,8 @@ import { getAntdvLocale, isSupportedLocale } from '@/i18n'
 import { midiEditorConfigProviderProps } from '@/theme/infinityNikkiTheme'
 import MidiEditorWorkspace from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/MidiEditorWorkspace.vue'
 import { useMidiEditorPlayback } from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/useMidiEditorPlayback'
-import EditorChoiceModal, {
-  type EditorChoiceOption,
-} from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorChoiceModal.vue'
+import EditorChoiceModal from '@/components/EditorChoiceModal.vue'
+import { useEditorChoice } from '@/composables/useEditorChoice'
 import EditorProjectActions from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorProjectActions.vue'
 import EditorToolbar from '@/views/MainWindow/MidiEditorTab/MidiEditorPage/components/EditorToolbar.vue'
 
@@ -39,6 +40,10 @@ const presentation = shallowRef<MidiProjectEditorPresentation | null>(null)
 const updateLocked = computed(() => presentation.value?.updateLocked === true)
 const restore = shallowRef<PianoWorkspaceState>()
 const workspace = ref<InstanceType<typeof MidiEditorWorkspace> | null>(null)
+const recorderLauncher = ref<InstanceType<typeof TrackRecorderLauncher> | null>(null)
+const recordingOpen = ref(false)
+// eslint-disable-next-line no-unused-vars -- reject 的参数仅用于函数类型签名。
+const recorderRequests = new Map<string, { resolve: () => void; reject(cause: Error): void; timer: ReturnType<typeof setTimeout> }>()
 const error = ref('')
 const shown = ref(false)
 let active = true
@@ -65,16 +70,10 @@ const playback = useMidiEditorPlayback(
   activeDocument, loop, (transport) => workspace.value?.setTransport(transport), playablePitches
 )
 watch(updateLocked, (locked) => {
-  if (locked) playback.pause()
+  if (locked) { playback.pause(); recorderLauncher.value?.pause() }
 })
 const configLocale = computed(() => getAntdvLocale(locale.value))
-const choice = ref<{
-  open: boolean
-  title: string
-  description: string
-  options: EditorChoiceOption[]
-  resolve: CallableFunction | null
-}>({ open: false, title: '', description: '', options: [], resolve: null })
+const { choice, ask, resolveChoice } = useEditorChoice()
 
 function send(command: MidiProjectEditorCommand): Promise<void> {
   if (!session || !active) return Promise.resolve()
@@ -104,6 +103,7 @@ watch(playback.stateChanges, () => void publishPlayback())
 
 /** 原生关闭和还原按钮都先提交最终视口，再销毁子窗口。 */
 async function dockEditor(): Promise<void> {
+  if (recordingOpen.value) { await recorderLauncher.value?.close(); return }
   if (docking) return
   docking = true
   window.clearTimeout(viewportTimer)
@@ -114,20 +114,6 @@ async function dockEditor(): Promise<void> {
   await send({ kind: 'playback-state', snapshot })
   if (viewport) await send({ kind: 'viewport', viewport })
   await send({ kind: 'dock' })
-}
-
-function ask(title: string, description: string, options: EditorChoiceOption[]): Promise<string> {
-  choice.value.resolve?.('cancel')
-  return new Promise((resolve) => {
-    choice.value = { open: true, title, description, options, resolve }
-  })
-}
-
-function resolveChoice(key: string): void {
-  const resolve = choice.value.resolve
-  choice.value.open = false
-  choice.value.resolve = null
-  resolve?.(key)
 }
 
 async function confirm(
@@ -144,12 +130,13 @@ async function confirm(
 }
 
 function dispatch(action: EditorAction): void {
-  if (updateLocked.value) return
+  if (updateLocked.value || recordingOpen.value || presentation.value?.recordingLocked) return
   void send({ kind: 'dispatch', action })
 }
 
 /** 独立窗口自己排程音符；开始前只请主窗口停掉可能仍在播放的全局试听。 */
 async function playEditor(): Promise<void> {
+  if (recordingOpen.value) return
   if (updateLocked.value) return
   // 音频准备必须直接发生在点击手势内；主窗口暂停请求不阻塞本窗口的 AudioContext。
   void send({ kind: 'prepare-playback' })
@@ -177,7 +164,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function handleWindowKeydown(event: KeyboardEvent): void {
-  if (updateLocked.value || !state.value || event.defaultPrevented || isTypingTarget(event.target)) {
+  if (updateLocked.value || recordingOpen.value || !state.value || event.defaultPrevented || isTypingTarget(event.target)) {
     shortcuts.end()
     return
   }
@@ -270,6 +257,7 @@ function selectKeyTemplate(templateId: string): void {
 }
 
 async function exitEditor(): Promise<void> {
+  if (recordingOpen.value) { await recorderLauncher.value?.close(); return }
   if (!presentation.value?.hasChanges) {
     playback.stop()
     await send({ kind: 'exit', mode: 'discard' })
@@ -291,10 +279,27 @@ async function exitEditor(): Promise<void> {
 }
 
 async function saveAndClose(): Promise<void> {
+  if (recordingOpen.value) return
   playback.stop()
   await send({ kind: 'exit', mode: 'save' })
 }
 
+function recorderRequest(kind: 'recording-prepare' | 'recording-apply', result?: TrackRecorderResult): Promise<void> {
+  const requestId = crypto.randomUUID()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { recorderRequests.delete(requestId); reject(new Error('Recording acknowledgement timed out')) }, 20000)
+    recorderRequests.set(requestId, { resolve, reject, timer })
+    void send(kind === 'recording-apply' ? { kind, requestId, result: result! } : { kind, requestId })
+  })
+}
+async function prepareRecording(): Promise<void> {
+  playback.pause()
+  await recorderRequest('recording-prepare')
+}
+function recordingLock(locked: boolean): void {
+  recordingOpen.value = locked
+  void send({ kind: 'recording-lock', locked })
+}
 onMounted(async () => {
   // 刷新会销毁 WebView 的音频引擎；卸载前提交实时状态和视口，重新 ready 后按同一快照接管。
   const rememberBeforeReload = () => {
@@ -323,6 +328,11 @@ onMounted(async () => {
       if (!active || update.session !== session || update.clientId !== clientId || update.sequence <= received) return
       received = update.sequence
       lastContact = Date.now()
+      if (update.kind === 'recording-reply') {
+        const request = recorderRequests.get(update.requestId)
+        if (request) { clearTimeout(request.timer); recorderRequests.delete(update.requestId); if (update.error) request.reject(new Error(update.error)); else request.resolve() }
+        return
+      }
       if (update.kind === 'notice') {
         toast[update.level](update.title, {
           ...(update.description ? { description: update.description } : {}),
@@ -385,8 +395,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   active = false
+  for (const request of recorderRequests.values()) { clearTimeout(request.timer); request.reject(new Error('Editor window closed')) }
+  recorderRequests.clear()
   window.clearTimeout(viewportTimer)
-  choice.value.resolve?.('cancel')
+  resolveChoice('cancel')
   for (const cleanup of cleanups) cleanup()
 })
 </script>
@@ -394,7 +406,7 @@ onBeforeUnmount(() => {
 <template>
   <ConfigProvider v-bind="midiEditorConfigProviderProps" :locale="configLocale">
     <AntApp>
-      <main class="detached-midi-editor" :inert="updateLocked">
+      <main class="detached-midi-editor" :inert="updateLocked || recordingOpen">
         <template v-if="presentation && state">
           <WindowTitleBar :snap-layouts="false">
             <template #title>
@@ -433,6 +445,22 @@ onBeforeUnmount(() => {
                 @stop="playback.stop()"
                 @set-bpm="setBpm"
                 @set-meter="setMeter"
+              />
+              <TrackRecorderLauncher
+                ref="recorderLauncher"
+                native-chrome
+                :state="state"
+                :templates="presentation.templateMappings ?? []"
+                :template-id="presentation.currentTemplateId"
+                :track-id="workspace?.getState()?.selectedTrackId"
+                :position-seconds="playback.positionSeconds.value"
+                :fps="presentation.fps"
+                :speed="presentation.speed"
+                :draft-scope="presentation.recordingDraftScope"
+                :disabled="updateLocked || presentation.saving"
+                :prepare-external="prepareRecording"
+                :apply-result="result => recorderRequest('recording-apply', result)"
+                @lock="recordingLock"
               />
             </template>
             <template #actions>

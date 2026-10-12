@@ -7,7 +7,7 @@ import { createEditorSession, createProject } from '@strawberrybear/midi-editor'
 import { useMidiEditorSession } from './useMidiEditorSession'
 import NoteInspector from './components/NoteInspector.vue'
 import EditorToolbar from './components/EditorToolbar.vue'
-import NoteContextMenu from './components/NoteContextMenu.vue'
+import NoteContextMenu from '@/components/NoteContextMenu.vue'
 
 // 只替换框架控件表面，直接驱动真实页面处理函数、会话与历史栈。
 vi.mock('antdv-next', async () => {

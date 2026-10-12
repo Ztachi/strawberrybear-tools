@@ -16,6 +16,7 @@ import type { PianoRollProps } from '@strawberrybear/piano-roll/vue'
 import PianoRollFollowButton from '@/components/PianoRollFollowButton.vue'
 import PianoRollControls from '@/components/PianoRollControls.vue'
 import PianoTrackLabel from '@/components/PianoTrackLabel.vue'
+import { restorePianoRollNavigation } from '@/features/piano-editor/navigation'
 
 const props = defineProps<{
   document: PianoRollDocument
@@ -31,6 +32,9 @@ const props = defineProps<{
   editing?: PianoRollProps['editing']
   /** 浏览与编辑共用的参考轨显示偏好。 */
   showOtherTracks: boolean
+  hideClose?: boolean
+  hideReferenceToggle?: boolean
+  title?: string
 }>()
 const emit = defineEmits<{
   'select-track': [trackId: string]
@@ -45,7 +49,7 @@ const { t } = useI18n()
 const roll = ref<{ getView: () => PianoRollView | null } | null>(null)
 /** 首次挂载和显式迁移时恢复视口，普通播放帧或轨道切换不会触发恢复。 */
 function restoreSavedViewport(): void {
-  if (props.restore) roll.value?.getView()?.restoreViewport(props.restore)
+  restorePianoRollNavigation(roll.value?.getView(), props.restore, { timeZoom: props.timeZoom, pitchZoom: props.pitchZoom })
 }
 onMounted(restoreSavedViewport)
 watch(() => props.restore, restoreSavedViewport, { flush: 'post' })
@@ -74,11 +78,14 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
     @select-track="emit('select-track', $event)"
   >
     <template #title="{ label }">
-      <strong class="piano-roll-slot-title"><PianoTrackLabel :name="label" /></strong>
+      <strong class="piano-roll-slot-title"><PianoTrackLabel :name="title ?? label" /></strong>
     </template>
     <template #corner="{ view, viewport }">
       <PianoRollFollowButton :view="view" :viewport="viewport" :labels="labels" />
-      <Tooltip :title="t('midiEditor.otherTracksTip')">
+      <Tooltip
+        v-if="!hideReferenceToggle"
+        :title="t(showOtherTracks ? 'midiEditor.hideOtherTracksTip' : 'midiEditor.otherTracksTip')"
+      >
         <Button
           class="piano-reference-button"
           size="small"
@@ -97,8 +104,9 @@ defineExpose({ getView: () => roll.value?.getView() ?? null })
     </template>
     <template #toolbar="{ view, viewport }">
       <div class="piano-roll-app-toolbar">
+        <slot name="tools" />
         <PianoRollControls :view="view" :viewport="viewport" :labels="labels" editor />
-        <Tooltip :title="labels.close">
+        <Tooltip v-if="!hideClose" :title="labels.close">
           <Button
             class="piano-roll-trailing-action"
             type="text"

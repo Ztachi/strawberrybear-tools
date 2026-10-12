@@ -78,11 +78,11 @@ export function computeProjectMeta(document: PianoRollDocument): MidiProjectMeta
 
 /**
  * @description: 创建新项目（空文档或给定文档）。
- * @param {Partial<Pick<MidiProject, 'name' | 'document' | 'source'>>} input 可选初值
+ * @param {Partial<Pick<MidiProject, 'name' | 'document' | 'source' | 'extensions'>>} input 可选初值
  * @return {MidiProject} 项目
  */
 export function createProject(
-  input: Partial<Pick<MidiProject, 'name' | 'document' | 'source'>> = {}
+  input: Partial<Pick<MidiProject, 'name' | 'document' | 'source' | 'extensions'>> = {}
 ): MidiProject {
   const document = ensureDurationCovers(input.document ?? createEmptyDocument())
   const stamp = Date.now()
@@ -93,6 +93,7 @@ export function createProject(
     createdAt: stamp,
     updatedAt: stamp,
     ...(input.source ? { source: input.source } : {}),
+    ...(input.extensions ? { extensions: input.extensions } : {}),
     meta: computeProjectMeta(document),
     loop: null,
     document,
@@ -125,12 +126,18 @@ export function createEditorSession(
   let savedLoop = loop
   const listeners = new Set<(state: EditorSessionState) => void>()
 
+  // 扩展信息与文档历史共用身份，保证单次撤销同时恢复宿主元数据。
+  let extensionHistory = new WeakMap<PianoRollDocument, MidiProject['extensions']>()
+  extensionHistory.set(initial, project.extensions)
+  let savedExtensions = project.extensions
+  const extensions = () => extensionHistory.get(history.present)
   const document = (): PianoRollDocument => history.present
 
   function isDirty(): boolean {
     return (
       document() !== savedDocument ||
       name !== savedName ||
+      extensions() !== savedExtensions ||
       (loop?.startTick ?? -1) !== (savedLoop?.startTick ?? -1) ||
       (loop?.endTick ?? -1) !== (savedLoop?.endTick ?? -1)
     )
@@ -139,7 +146,7 @@ export function createEditorSession(
   function snapshot(): EditorSessionState {
     const current = document()
     return {
-      project: { ...base, name, loop, document: current },
+      project: { ...base, name, loop, document: current, extensions: extensions() },
       document: current,
       selection,
       tool,
@@ -157,9 +164,10 @@ export function createEditorSession(
   }
 
   /** 提交文档变更；无变化时不产生历史。 */
-  function commit(next: PianoRollDocument, label: string, coalesceKey?: string): boolean {
+  function commit(next: PianoRollDocument, label: string, coalesceKey?: string, expandRegions = true): boolean {
     if (next === document()) return false
-    const covered = ensureDurationCovers(expandEditedTrackRegions(document(), next))
+    const covered = ensureDurationCovers(expandRegions ? expandEditedTrackRegions(document(), next) : next)
+    extensionHistory.set(covered, extensions())
     history.commit(covered, label, coalesceKey)
     selection = pruneSelection(selection, covered)
     return true
@@ -192,6 +200,28 @@ export function createEditorSession(
   function apply(action: EditorAction): void {
     lastCreated = []
     switch (action.type) {
+      case 'apply-track-edit': {
+        const current = document()
+        const track = current.tracks.find(item => item.id === action.trackId)
+        if (!track || !Number.isFinite(action.endTick)) return
+        const ids = new Set(current.notes.filter(note => note.trackId !== action.trackId).map(note => note.id))
+        for (const note of action.notes) {
+          if (note.trackId !== action.trackId || ids.has(note.id) || !note.id ||
+            ![note.startTick, note.endTick, note.pitch, note.velocity].every(Number.isInteger) ||
+            note.startTick < 0 || note.endTick <= note.startTick || note.pitch < 0 || note.pitch > 127 || note.velocity < 1 || note.velocity > 127) return
+          ids.add(note.id)
+        }
+        const next = {
+          ...current,
+          tracks: current.tracks.map(item => item.id === action.trackId
+            ? { ...item, endTick: Math.max((item.startTick ?? 0) + 1, Math.round(action.endTick)) } : item),
+          notes: [...current.notes.filter(note => note.trackId !== action.trackId), ...action.notes.map(note => ({ ...note }))],
+        }
+        commit(next, 'apply-track-edit', undefined, false)
+        if (action.extensions !== undefined) extensionHistory.set(document(), structuredClone(action.extensions))
+        selection = pruneSelection(selection, document())
+        return
+      }
       case 'select': {
         if (action.mode === 'replace') selection = new Set(action.noteIds)
         else {
@@ -380,6 +410,7 @@ export function createEditorSession(
         name,
         loop,
         document: current,
+        extensions: extensions(),
         meta: computeProjectMeta(current),
         updatedAt: Date.now(),
       }
@@ -391,12 +422,16 @@ export function createEditorSession(
       savedDocument = document()
       savedName = name
       savedLoop = loop
+      savedExtensions = extensions()
       emit()
     },
     replaceProject(next) {
       const normalized = ensureDurationCovers(next.document)
       base = { ...next, document: normalized, meta: computeProjectMeta(normalized) }
       history = createHistory(normalized, options.historyLimit ?? 200)
+      extensionHistory = new WeakMap()
+      extensionHistory.set(normalized, next.extensions)
+      savedExtensions = next.extensions
       name = next.name
       loop = next.loop ?? null
       selection = new Set()

@@ -1,6 +1,26 @@
 /** 关于页使用稳定版本入口，更新反馈交由全局通知。 */
 import { expect, test } from '@playwright/test'
 
+test('内嵌关于的更新按钮名称与下载、安装动作同步', async ({ page }) => {
+  await page.goto('/tests/browser/app-updater.html?about&embedded')
+  const about = page.locator('.embedded-about')
+  const button = about.locator('.version-update-trigger button')
+  await expect(button).toHaveText('更新')
+  await expect(button).toHaveAccessibleName('更新')
+  await button.click()
+  await expect(button).toHaveText('下载中')
+  await expect(button).toHaveAccessibleName('下载中')
+  await expect(button).toBeDisabled()
+  await page.evaluate(() => window.updaterFixture.complete())
+  await expect(button).toHaveText('安装并重启')
+  await expect(button).toHaveAccessibleName('安装并重启')
+  await expect(button).toBeEnabled()
+  await button.click()
+  const calls = await page.evaluate(() => window.updaterFixture.calls)
+  expect(calls.filter((call) => call === 'download')).toHaveLength(1)
+  expect(calls).not.toContain('install')
+})
+
 test('未发布版本的检查结果仅在全局通知显示', async ({ page }) => {
   await page.goto('/tests/browser/app-updater.html?about&scenario=unpublished')
   const dialog = page.getByRole('dialog')
@@ -34,7 +54,7 @@ test('双语次要操作并列，移除手动下载与提示行', async ({ page 
     await page.goto(`/tests/browser/app-updater.html?about&scenario=error&locale=${locale}`)
     const dialog = page.getByRole('dialog')
     const actions = dialog.locator('.about-actions')
-    await expect(actions.getByRole('button')).toHaveCount(2)
+    await expect(actions.getByRole('button')).toHaveCount(3)
     const exportButton = actions.getByRole('button', {
       name: locale === 'zh-CN' ? '导出诊断' : 'Export diagnostics',
       exact: true,
@@ -62,10 +82,10 @@ test('检查失败使用全局通知，版本文字与按钮保持不变', async
   await expect(dialog.locator('.ant-alert, .ant-progress')).toHaveCount(0)
 })
 
-test('下载中图标旋转置灰，动态操作文案只在 Tooltip 显示', async ({ page }) => {
+test('下载中图标旋转置灰，按钮与 Tooltip 同步当前操作', async ({ page }) => {
   await page.goto('/tests/browser/app-updater.html?about')
   const dialog = page.getByRole('dialog')
-  const button = dialog.getByRole('button', { name: '检测更新', exact: true })
+  const button = dialog.locator('.version-update-trigger button')
   await dialog.locator('.version-update-trigger').hover()
   await expect(page.getByRole('tooltip')).toHaveText('更新')
   await button.click()
@@ -89,7 +109,7 @@ test('下载中图标旋转置灰，动态操作文案只在 Tooltip 显示', as
     return Math.hypot(after.x - before.x, after.y - before.y)
   })
   expect(drift).toBeLessThan(0.1)
-  await expect(button).toHaveText('v1.2.0')
+  await expect(button).toHaveText('下载中')
   await dialog.locator('.version-update-trigger').hover()
   await expect(page.getByRole('tooltip')).toHaveText('下载中')
   await page.evaluate(() => window.updaterFixture.complete())
@@ -107,7 +127,7 @@ test('检测中提示只显示当前状态，标题栏刷新围绕同一画布�
   const dialog = page.getByRole('dialog')
   await dialog.locator('.version-update-trigger').hover()
   await expect(page.getByRole('tooltip')).toHaveText('检测中')
-  await expect(dialog.getByRole('button', { name: '检测更新', exact: true })).toBeDisabled()
+  await expect(dialog.getByRole('button', { name: '检测中', exact: true })).toBeDisabled()
   await dialog.locator('.ant-modal-close').click()
   const refresh = page.locator('.header-nav-refresh')
   await refresh.hover()

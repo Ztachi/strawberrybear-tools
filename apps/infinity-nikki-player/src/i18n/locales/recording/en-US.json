@@ -1,0 +1,220 @@
+{
+  "launch": "Keyboard recording",
+  "title": "Keyboard recording · {track}",
+  "template": "Key mapping",
+  "method": "Recording mode",
+  "position": "Position: {position}",
+  "more": "More settings",
+  "countIn": "One-bar count-in",
+  "metronome": "Metronome",
+  "accompaniment": "Play accompaniment",
+  "auxiliary": "Playing aids",
+  "auxiliaryHelp": "Playing aids explained",
+  "modeHelp": "Recording modes explained",
+  "auxiliaryHint": {
+    "countIn": "Count in for one bar before recording starts. Keys pressed during the count-in only audition; press them again afterward to record.",
+    "metronome": "Play beat cues while recording to help keep time. These clicks are not included in the MIDI file.",
+    "accompaniment": "Off by default, so recording and preview play only this track. Enable to hear other enabled tracks. Overdubbing also plays this track's existing notes; re-recording mutes the replacement range."
+  },
+  "keyboard": "Performance keyboard",
+  "start": "Start recording",
+  "resume": "Resume recording",
+  "pause": "Pause recording",
+  "stop": "Stop recording",
+  "rewind": "Return to start",
+  "preview": "Preview",
+  "previewing": "Previewing",
+  "templateHint": "Choose a key template for this recording. The keyboard shows its mapped pitches.",
+  "previewTitle": "Note editor",
+  "pausePreview": "Pause preview",
+  "keyboardHint": "Click the keyboard, then play the mapped keys. Hold a key to set note duration.",
+  "noteCount": "{count} notes",
+  "settings": "Recording settings",
+  "rangeStart": "Start bar",
+  "rangeEnd": "End bar",
+  "rangeHelp": "The start bar is included; the end bar is excluded. For example, 1 to 3 records bars 1–2.",
+  "checks": "Playback checks",
+  "checkSummary": "{count} suggestions",
+  "help": "Recording help",
+  "helpIntro": "Record melodies and chords with your keyboard, preview them, then apply them to this track.",
+  "helpRecord": "Choose a key template, start recording, then play the mapped keys. Hold keys to set duration and press keys together for chords. Pause and resume, or stop to preview and undo the take.",
+  "helpModes": "Choose a mode from the recording-settings popup. Continue at end adds notes after the last note. Overdub at cursor layers notes at the selected position. Re-record range replaces the bars chosen in the popup.",
+  "helpShortcuts": "Ctrl/⌘+Enter records, pauses or resumes. Ctrl/⌘+Z undoes; Ctrl/⌘+Shift+Z redoes. Escape stops recording. Click the performance keyboard first to play mapped keys such as Space and Tab.",
+  "helpDocument": {
+    "contents": "Contents",
+    "done": "Got it",
+    "shortcutTitle": "Keyboard shortcuts",
+    "shortcutTip": "Use Ctrl on Windows and ⌘ on macOS. Click the performance keyboard to play ordinary mapped keys. Inputs, dropdowns and menus keep their usual keyboard behavior.",
+    "sections": {
+      "start": {
+        "title": "Quick start",
+        "items": {
+          "template": {
+            "label": "Choose a key template",
+            "description": "Open the template selector from the key-mapping icon in the header. The performance keyboard shows the mapped keys and pitches. Arrange one track at a time."
+          },
+          "record": {
+            "label": "Start recording, then play the mapped keys",
+            "description": "Click Start recording in the header or press Ctrl/⌘+Enter. Once the instrument is ready, the performance keyboard receives focus. Play the mapped keys to record."
+          },
+          "perform": {
+            "label": "Hold for duration; press together for chords",
+            "description": "Press a mapped key to start a note and release it to finish. Hold several keys together to record a chord. You can also hold mapped keys with the mouse."
+          },
+          "timing": {
+            "label": "Start on the first key, or count in",
+            "description": "Free recording starts with the first mapped key and keeps rests within your performance. Open the recording-settings popup in the header for a one-bar count-in, metronome and accompaniment. After the count-in, record to the beat; empty beats are kept too."
+          },
+          "pause": {
+            "label": "Pause, resume and finish",
+            "description": "Pause releases sounds and keeps the take open: preview it, then resume. Stop finishes one undoable take. In Re-record range, Resume continues at the current position; starting after Stop begins at the range start."
+          }
+        }
+      },
+      "modes": {
+        "title": "Recording modes",
+        "items": {
+          "append": {
+            "label": "Continue at end",
+            "description": "Choose Continue at end in the recording-settings popup to continue after the last visible note in this track. An empty track starts at its beginning. Useful for recording a melody in several takes."
+          },
+          "overdub": {
+            "label": "Overdub at cursor",
+            "description": "Choose Overdub at cursor in the recording-settings popup, click the piano roll to position the cursor, then start recording. New notes layer over the existing music, adding chords or another melody."
+          },
+          "replace": {
+            "label": "Re-record range",
+            "description": "Choose Re-record range in the recording-settings popup to show the start and end bars below it. The start is included and the end is excluded: 1 to 3 records bars 1–2. Once new notes are recorded, the take replaces that range, including silence if stopped early. Music outside it is kept, and recording stops automatically at its end."
+          },
+          "undo": {
+            "label": "Undo or redo a take",
+            "description": "After stopping, undo the take or redo to restore it. Undo while paused first finishes the current recording and restores the previous state. After applying, one undo in the MIDI editor restores the track before this arrangement."
+          }
+        }
+      },
+      "preview": {
+        "title": "Preview and layout",
+        "items": {
+          "locate": {
+            "label": "View and position the piano roll",
+            "description": "The piano roll shows the current track's recorded notes. Click the timeline or a note's position to move the cursor, then use Overdub at cursor to keep arranging. Follow keeps the view near the recording or preview position."
+          },
+          "listen": {
+            "label": "Preview and return to start",
+            "description": "Preview while paused or stopped; it ends at this track’s last audible note. Click again to pause preview. Rewind returns to the track start. Previewing or seeking while recording is paused preserves its resume position."
+          },
+          "layout": {
+            "label": "Adjust keyboard and piano-roll height",
+            "description": "The track name, recording controls and settings share a single header row. Drag the divider between the keyboard and piano roll to divide their height. The keyboard keeps whole rows containing mapped keys. In smaller windows, scroll within each area while the header and apply buttons stay fixed."
+          },
+          "refine": {
+            "label": "Edit notes in the piano roll",
+            "description": "Move, resize, or delete notes; right-click for selection, copy, quantize, and more. Snap affects editing without quantizing recordings. Click piano keys to audition with row highlighting, and use Pitch zoom to adjust key height."
+          }
+        }
+      },
+      "drafts": {
+        "title": "Drafts and applying",
+        "items": {
+          "apply": {
+            "label": "Apply to this track",
+            "description": "Apply to track writes the take and template back to this track and returns to the host, keeping other tracks intact. Accompaniment is off by default, so recording and preview play only this track. Enable Play accompaniment in Recording settings to hear other enabled tracks. Overdubbing also plays this track; re-recording mutes the replacement range."
+          },
+          "recover": {
+            "label": "Recover a recording draft",
+            "description": "Recording drafts are saved separately. When reopened, choose Load draft, Discard draft, or Cancel. Only Apply updates the host editor. If the original has changed, save as a new project to keep the recording."
+          },
+          "close": {
+            "label": "Choose how to keep your changes",
+            "description": "Closing with changes offers staying in the workspace, applying and closing, or discarding. If applying fails, the recording stays available and can be saved as a new project."
+          }
+        }
+      }
+    },
+    "shortcutItems": {
+      "record": {
+        "keys": "Ctrl/⌘+Enter",
+        "description": "Start, pause or resume recording. Starting and resuming focus the performance keyboard."
+      },
+      "undo": {
+        "keys": "Ctrl/⌘+Z",
+        "description": "Undo the take, including while the performance keyboard has focus."
+      },
+      "redo": {
+        "keys": "Ctrl/⌘+Shift+Z",
+        "description": "Redo the take."
+      },
+      "stop": {
+        "keys": "Escape",
+        "description": "Close an open settings popup or help dialog first. Otherwise, stop recording; after stopping, close the workspace and confirm how to keep changes."
+      },
+      "mapped": {
+        "keys": "Space / Tab / Enter",
+        "description": "When the template maps these keys, click the performance keyboard to play them."
+      }
+    }
+  },
+  "finishHint": "Apply, then continue refining in the MIDI editor.",
+  "recordShortcut": "Ctrl/⌘+Enter: record, pause or resume",
+  "replaceRequired": "Choose a valid bar range in the recording-settings popup before re-recording.",
+  "apply": "Apply to track",
+  "operationFailed": "The operation could not finish. Please retry.",
+  "selectTool": "Select notes",
+  "drawTool": "Draw notes",
+  "grid": "Editing grid",
+  "noSnap": "Move freely",
+  "replaceSelection": "Re-record selection",
+  "range": "Re-record bars: {start} — {end}",
+  "replaceHint": "Re-recording replaces the entire range, including silence when stopped early. Notes outside the range are kept. Undo restores the original.",
+  "mappingIssue": "Some notes are not mapped",
+  "mappingOk": "All pitches are mapped",
+  "timingProfile": "Checked at {fps} FPS · {speed}×",
+  "playbackHint": "Click a suggestion to locate its notes. Checks use game FPS, playback speed, repeated-key gaps and overlapping keys to help improve performance.",
+  "closeTitle": "Keep this arrangement?",
+  "closeDescription": "Your changes have not been applied to the track.",
+  "continueEditing": "Continue editing",
+  "discard": "Discard changes",
+  "applyClose": "Apply and close",
+  "draftFound": "An unapplied recording draft was found",
+  "draftConflict": "This project has changed, so this recording draft cannot be loaded. Save it as a new project to keep the recording.",
+  "recover": "Continue draft",
+  "recoverCopy": "Save as new project",
+  "discardDraft": "Discard draft",
+  "copyName": "{name} Recording",
+  "mode": {
+    "append": "Continue at end",
+    "overdub": "Overdub at cursor",
+    "replace": "Re-record range"
+  },
+  "modeHint": {
+    "append": "Continue after the last visible note in this track. An empty track starts at its beginning. Useful for recording in several takes.",
+    "overdub": "Click the piano roll to position the cursor, then layer new notes there. Existing notes are kept, so you can add a melody or chords.",
+    "replace": "Replace the chosen bars, including the start and excluding the end. Recording stops at the end. Silence from stopping early also replaces the range; an empty take leaves it unchanged. Music outside the range is kept."
+  },
+  "status": {
+    "idle": "Ready to record",
+    "preparing": "Preparing instrument",
+    "armed": "Press the first mapped key to start",
+    "counting": "Counting in; recording starts afterward",
+    "recording": "Recording",
+    "paused": "Paused; press again after resuming",
+    "stopped": "Stopped: preview or record more",
+    "disposed": "Closed"
+  },
+  "selection": {
+    "title": "Select",
+    "track": "Current track",
+    "project": "Entire project",
+    "after": "Select notes after this end ({count})",
+    "before": "Select notes before this start ({count})",
+    "all": "Select all notes ({count})"
+  },
+  "issues": {
+    "unmapped": "Unmapped ({count})",
+    "merged": "Same key at same time ({count})",
+    "overlap": "Overlapping key ({count})",
+    "timing": "Key timing too short ({count})"
+  },
+  "loadDraftPrompt": "An unfinished keyboard recording was found. Load the draft to continue editing?",
+  "savedAsProject": "Open this recording from the MIDI editor project list."
+}

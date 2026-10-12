@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 悬浮模式视图组件 - 可悬浮于游戏界面上方的迷你播放器，支持展开/收起面板、播放控制、模板切换
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
@@ -14,13 +14,15 @@ import {
   type KeyboardTimingProfile,
 } from '@/lib/keyboardTiming'
 import type { MidiInfo } from '@/types'
+import type { MidiPreviewQueueContext } from '@/features/player/midiPreview'
 import { getKeyboardNoteSchedule, setVolume as setMidiPreviewVolume } from '@/lib/midiPlayer'
-import { ChevronDown, ChevronUp, Crosshair, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, X } from 'lucide-vue-next'
 import { Tooltip } from 'antdv-next'
 import KeyTemplateSelect from '@/components/KeyTemplateSelect.vue'
 import MarqueeText from '@/components/MarqueeText.vue'
 import MusicPlayerCore from '@/components/MusicPlayerCore/index.vue'
 import OverlayFpsControl from './components/OverlayFpsControl.vue'
+import OverlayPlaylistPanel from './components/OverlayPlaylistPanel.vue'
 import { getMidiDisplayName } from '@/lib/midiDisplay'
 
 const { t } = useI18n()
@@ -167,23 +169,13 @@ function togglePlay() {
   }
 }
 
-async function playFromStartWithCountdown(midi?: MidiInfo) {
+async function playFromStartWithCountdown(midi: MidiInfo, queueItems: MidiInfo[], queueContext: MidiPreviewQueueContext) {
   cancelCountdown()
   await playerStore.stopPreviewPlayback()
   resetOverlayKeyboardState()
 
-  if (midi) {
-    const queueItems =
-      playerStore.activePreviewQueueItems.length > 0
-        ? playerStore.activePreviewQueueItems
-        : playerStore.midiLibrary
-    const queueContext = playerStore.previewQueueContext ?? {
-      id: 'all',
-      title: t('songList.allSongs'),
-    }
-    await playerStore.selectMidiInQueue(midi, queueItems, queueContext)
-    resetOverlayKeyboardState()
-  }
+  await playerStore.selectMidiInQueue(midi, queueItems, queueContext)
+  resetOverlayKeyboardState()
 
   startWithCountdown()
 }
@@ -266,7 +258,7 @@ function startKeystrokePlayback() {
   keystrokeSequencer.play(playerStore.previewCurrentTime)
 }
 
-// 监听播放状态与当前歌曲变化 - 合并在一个侦听器里，避免"切歌销毁"与"进入播放态启动"
+// 监听播放状态、歌曲与倍速变化 - 合并在一个侦听器里，避免"切歌销毁"与"进入播放态启动"
 // 在同一批响应式刷新中因执行顺序不同而互相覆盖：
 // 处于播放态（含切歌后继续播放）→ 按最新时间表重建执行器；暂停 → 释放按键；其余 → 销毁
 watch(
@@ -275,9 +267,11 @@ watch(
       playerStore.isPreviewPlaying,
       playerStore.isPreviewPaused,
       playerStore.currentMidi?.filename,
+      playerStore.speed,
     ] as const,
   ([playing, paused]) => {
     if (playing && !paused) {
+      // 执行器速度在创建时锁定；变速先释放旧按键，再从音频的当前音乐位置重建。
       startKeystrokePlayback()
     } else if (paused) {
       keystrokeSequencer?.pause()
@@ -342,26 +336,10 @@ async function startDrag(e: MouseEvent) {
 // 是否展开面板
 const isExpanded = ref(false)
 
-// 展开面板播放列表滚动容器，用于“定位当前歌曲”。
-const playlistRef = ref<HTMLElement | null>(null)
-
 // 切换展开/收起面板
 async function toggleExpand() {
   isExpanded.value = !isExpanded.value
   await resizeOverlayWindow()
-}
-
-/**
- * @description: 平滑滚动到当前选中歌曲
- * @return {Promise<void>} 无返回值
- */
-async function locateCurrentMidi() {
-  await nextTick()
-  const activeItem = playlistRef.value?.querySelector<HTMLElement>('.playlist-item.active')
-  if (!activeItem) return
-
-  // 使用 scrollIntoView 让浏览器处理容器内偏移，避免手写高度测量。
-  activeItem.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 // 退出悬浮模式 - 恢复窗口状态、保存配置、重置模式
@@ -379,14 +357,16 @@ async function exitOverlayMode() {
     )
     settingsStore.isOverlayMode = false
     await invoke('exit_overlay_mode')
+    return true
   } catch (e) {
     console.error('退出悬浮模式失败:', e)
+    return false
   }
 }
 
 // 播放指定 MIDI
-async function playMidi(midi: MidiInfo) {
-  await playFromStartWithCountdown(midi)
+async function playMidi(midi: MidiInfo, items: MidiInfo[], context: MidiPreviewQueueContext) {
+  await playFromStartWithCountdown(midi, items, context)
 }
 
 async function playRelativeMidi(direction: 'prev' | 'next') {
@@ -404,20 +384,13 @@ async function playRelativeMidi(direction: 'prev' | 'next') {
   startWithCountdown()
 }
 
-// 格式化时长
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-}
-
 // 当前 MIDI 展示名
 const currentMidiName = computed(() =>
   playerStore.currentMidi ? getMidiDisplayName(playerStore.currentMidi) : t('overlay.noFile')
 )
 // 当前曲目身份变化时重建跑马灯，悬浮条里长标题会从开头重新播放。
 const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'no-file')
+defineExpose({ exitOverlayMode })
 </script>
 
 <template>
@@ -488,6 +461,7 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
           <button
             class="ctrl-btn nikki-inverse-controls nikki-icon-button justify-self-end"
             :class="{ active: isExpanded }"
+            :aria-label="isExpanded ? t('overlay.collapse') : t('overlay.expand')"
             @click.stop="toggleExpand"
           >
             <ChevronUp v-if="isExpanded" :size="16" />
@@ -497,40 +471,7 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
       </div>
     </div>
 
-    <!-- 展开面板 - 显示播放列表 -->
-    <div v-if="isExpanded" class="expand-panel">
-      <div ref="playlistRef" class="playlist">
-        <div
-          v-for="midi in playerStore.activePreviewQueueItems"
-          :key="midi.filename"
-          class="playlist-item"
-          :class="{ active: playerStore.currentMidi?.filename === midi.filename }"
-          @click="playMidi(midi)"
-        >
-          <Tooltip :title="getMidiDisplayName(midi)">
-            <span class="playlist-name">{{ getMidiDisplayName(midi) }}</span>
-          </Tooltip>
-          <span class="playlist-duration">
-            {{ formatDuration(midi.duration_ms) }}
-          </span>
-        </div>
-        <!-- 空状态 -->
-        <div v-if="playerStore.activePreviewQueueItems.length === 0" class="playlist-empty">
-          {{ t('midi.libraryEmpty') }}
-        </div>
-      </div>
-
-      <Tooltip :title="t('overlay.locateCurrent')" placement="left">
-        <button
-          type="button"
-          class="locate-current-btn nikki-icon-button"
-          :aria-label="t('overlay.locateCurrent')"
-          @click.stop="locateCurrentMidi"
-        >
-          <Crosshair :size="16" :stroke-width="2.25" />
-        </button>
-      </Tooltip>
-    </div>
+    <OverlayPlaylistPanel :expanded="isExpanded" @play="playMidi" />
   </div>
 </template>
 
@@ -612,46 +553,5 @@ const currentMarqueeKey = computed(() => playerStore.currentMidi?.filename ?? 'n
 
 :global(.overlay-template-select-popup .rc-virtual-list-holder) {
   max-height: 96px;
-}
-
-.expand-panel {
-  @apply absolute bottom-0 left-0 right-0 overflow-hidden;
-  top: 156px;
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.playlist {
-  @apply h-full overflow-y-auto rounded-sm p-2;
-}
-
-.playlist-item {
-  @apply flex items-center justify-between px-4 py-2 cursor-pointer rounded-sm;
-}
-
-.playlist-item:hover {
-  background: rgba(247, 192, 193, 0.1);
-}
-
-.playlist-item.active {
-  background: rgba(247, 192, 193, 0.2);
-}
-
-.playlist-name {
-  @apply text-sm truncate flex-1 mr-3;
-  color: var(--color-foreground);
-}
-
-.playlist-duration {
-  @apply text-xs font-mono;
-  color: var(--color-muted-dark);
-}
-
-.playlist-empty {
-  @apply px-4 py-8 text-center text-sm;
-  color: var(--color-muted-dark);
-}
-
-.locate-current-btn {
-  @apply absolute bottom-3 right-3 flex h-4 w-4 items-center justify-center transition-colors cursor-pointer;
 }
 </style>

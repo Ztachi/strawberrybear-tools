@@ -4,6 +4,7 @@ import { nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button, Tooltip } from 'antdv-next'
 import { Music2 } from 'lucide-vue-next'
+import PlaylistSongTitle from '@/components/PlaylistSongTitle/index.vue'
 import type { PreviewQueueState } from '@/features/player/previewQueue'
 import { formatDuration } from '@/views/MainWindow/FilesTab/utils'
 const props = defineProps<{ state: PreviewQueueState; currentId: string | null }>()
@@ -27,27 +28,15 @@ defineExpose({ scrollToTop, locateCurrent, getScrollTop: () => queueListRef.valu
 </script>
 
 <template>
-  <p
-    v-if="state.error"
-    role="alert"
-    class="queue-error"
-  >
+  <p v-if="state.error" role="alert" class="queue-error">
     {{ state.error }}
   </p>
-  <div
-    v-if="state.items.length === 0"
-    class="queue-empty"
-  >
+  <div v-if="state.items.length === 0" class="queue-empty">
     <Music2 class="queue-empty-icon" />
     <span>{{ t('player.noQueue') }}</span>
   </div>
 
-  <div
-    v-else
-    ref="queueListRef"
-    class="queue-list"
-    @scroll="handleQueueScroll"
-  >
+  <div v-else ref="queueListRef" class="queue-list" @scroll="handleQueueScroll">
     <Button
       v-for="(midi, index) in state.items"
       :key="`${midi.id}-${index}`"
@@ -62,7 +51,11 @@ defineExpose({ scrollToTop, locateCurrent, getScrollTop: () => queueListRef.valu
       </div>
       <div class="queue-main">
         <Tooltip :title="midi.title">
-          <span class="queue-song-title">{{ midi.title }}</span>
+          <PlaylistSongTitle
+            class="queue-song-title"
+            :text="midi.title"
+            :selected="currentId === midi.id"
+          />
         </Tooltip>
         <span class="queue-song-meta">
           {{ midi.trackCount }} {{ t('midi.tracks') }} · {{ midi.noteCount || 0 }}
@@ -137,5 +130,4 @@ defineExpose({ scrollToTop, locateCurrent, getScrollTop: () => queueListRef.valu
   height: 38px;
   color: var(--color-primary-active);
 }
-
 </style>
