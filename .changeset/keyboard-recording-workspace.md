@@ -1,5 +1,5 @@
 ---
-"@strawberrybear/infinity-nikki-player": minor
+"@strawberrybear/infinity-nikki-player": patch
 "@strawberrybear/midi-editor": minor
 ---
 

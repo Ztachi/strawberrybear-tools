@@ -1,4 +1,15 @@
 {
+  "v1_3_3": {
+    "title": "Record melodies with your keyboard",
+    "highlights": [
+      "Record arrangements from the MIDI editor or virtual keyboard using your key template. Hold keys to set note duration and play chords; pause and resume, overdub at the cursor, or re-record a range of bars.",
+      "Use a one-bar count-in, metronome and optional accompaniment in the recording workspace. Preview and edit notes, restore drafts, then apply the result to the track. A single-row toolbar and adjustable keyboard and piano-roll areas leave more room for your music.",
+      "New categorized settings bring language, close behavior, contacts and About together. Choose whether closing minimizes to the tray or quits, remember your choice, and confirm unsaved edits before exiting.",
+      "Adjust playback from 0.5× to 3.0× with a slider, quick marks and a reset button in both the main and overlay players. Audio preview and in-game performance change speed together.",
+      "Search songs and browse playlists in the overlay while previous and next keep using the full playback queue. Locate returns to the actual playback source; fixes incorrect highlighting and pause actions for the same song in another playlist.",
+      "Snap, piano-roll zoom, panel layout and recording aids are remembered across songs, tracks and reopened windows. Long current-song titles scroll consistently, and draft loading, closing and recovery follow the same interactions."
+    ]
+  },
   "v1_3_2": {
     "title": "Clearer editing, smoother playback",
     "highlights": [
