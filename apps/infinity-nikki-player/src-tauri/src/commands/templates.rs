@@ -35,10 +35,7 @@ struct TemplateFileEntry {
 ///
 /// 模板目录的 PathBuf
 fn get_templates_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+    let data_dir = crate::data_management::data_dir(app)?;
     let templates_dir = data_dir.join("templates");
 
     // 如果目录不存在，创建它
@@ -284,7 +281,7 @@ fn is_supported_mapping_key(key: &str) -> bool {
 /// # Notes
 ///
 /// 模板中同一音高和同一物理按键都不允许重复。
-fn validate_template(template: &KeyTemplate) -> Result<(), String> {
+pub(crate) fn validate_template(template: &KeyTemplate) -> Result<(), String> {
     // 模板 ID 会参与文件路径拼接，必须先做安全字符校验。
     if !is_safe_template_id(&template.id) {
         return Err("模板 ID 只能包含英文字母、数字、横线和下划线".to_string());
@@ -995,14 +992,22 @@ fn create_default_template(template_id: &str) -> Result<KeyTemplate, String> {
 /// 默认模板仅首次启动时种子初始化，之后用户可编辑或删除
 #[tauri::command]
 pub fn get_templates(app: tauri::AppHandle) -> Result<Vec<KeyTemplate>, String> {
-    // 默认模板只在首次初始化时写入，后续不会补回用户删除的模板。
-    seed_default_templates_once(&app)?;
-    let mut entries = read_template_file_entries_from_dir(&app)?;
+    crate::data_management::with_data_write(&app, false, || {
+        // 默认模板只在首次初始化时写入，后续不会补回用户删除的模板。
+        let seeded = get_templates_dir(&app)?
+            .join(DEFAULT_TEMPLATES_SEEDED_MARKER)
+            .exists();
+        seed_default_templates_once(&app)?;
+        if !seeded {
+            crate::data_management::mark_content_changed(&app);
+        }
+        let mut entries = read_template_file_entries_from_dir(&app)?;
 
-    // 自定义模板按新到旧展示，默认模板固定保持 BUILTIN_TEMPLATE_IDS 的声明顺序。
-    sort_template_file_entries(&mut entries);
+        // 自定义模板按新到旧展示，默认模板固定保持 BUILTIN_TEMPLATE_IDS 的声明顺序。
+        sort_template_file_entries(&mut entries);
 
-    Ok(entries.into_iter().map(|entry| entry.template).collect())
+        Ok(entries.into_iter().map(|entry| entry.template).collect())
+    })
 }
 
 /// 保存模板到文件
@@ -1021,18 +1026,20 @@ pub fn get_templates(app: tauri::AppHandle) -> Result<Vec<KeyTemplate>, String> 
 /// 文件命名为 `{template.id}.json`
 #[tauri::command]
 pub fn save_template(app: tauri::AppHandle, template: KeyTemplate) -> Result<(), String> {
-    // 保存前先按原始名称校验，避免尾随空格/点被 normalize 静默吞掉。
-    validate_template_name(&template.name)?;
-    let template = normalize_custom_template(template);
-    validate_template(&template)?;
-    validate_unique_template_name(&app, &template)?;
-    let file_path = template_file_path(&app, &template.id)?;
+    crate::data_management::with_data_write(&app, true, || {
+        // 保存前先按原始名称校验，避免尾随空格/点被 normalize 静默吞掉。
+        validate_template_name(&template.name)?;
+        let template = normalize_custom_template(template);
+        validate_template(&template)?;
+        validate_unique_template_name(&app, &template)?;
+        let file_path = template_file_path(&app, &template.id)?;
 
-    let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
-    fs::write(&file_path, content).map_err(|e| e.to_string())?;
+        let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
+        fs::write(&file_path, content).map_err(|e| e.to_string())?;
 
-    log::info!("Saved template to: {:?}", file_path);
-    Ok(())
+        log::info!("Saved template to: {:?}", file_path);
+        Ok(())
+    })
 }
 
 /// 删除模板文件
@@ -1051,14 +1058,16 @@ pub fn save_template(app: tauri::AppHandle, template: KeyTemplate) -> Result<(),
 /// 文件不存在时视为删除成功
 #[tauri::command]
 pub fn delete_template(app: tauri::AppHandle, template_id: String) -> Result<(), String> {
-    let file_path = template_file_path(&app, &template_id)?;
+    crate::data_management::with_data_write(&app, true, || {
+        let file_path = template_file_path(&app, &template_id)?;
 
-    if file_path.exists() {
-        fs::remove_file(&file_path).map_err(|e| e.to_string())?;
-        log::info!("Deleted template: {:?}", file_path);
-    }
+        if file_path.exists() {
+            fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+            log::info!("Deleted template: {:?}", file_path);
+        }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 /// 导入模板文件
@@ -1082,24 +1091,26 @@ pub fn import_template(
     app: tauri::AppHandle,
     source_path: String,
 ) -> Result<Vec<KeyTemplate>, String> {
-    let source_path = PathBuf::from(source_path);
-    let templates = if has_extension(&source_path, "json") {
-        // JSON 导入保持单模板语义，但返回 Vec 以便前端和 ZIP 共用反馈逻辑。
-        import_templates_from_json_file(&app, &source_path)?
-    } else if has_extension(&source_path, "zip") {
-        // ZIP 导入逐个读取安全 JSON entry，每个模板都会重写为新的自定义 ID。
-        import_templates_from_zip_file(&app, &source_path)?
-    } else {
-        // 只允许明确支持的扩展名，避免误把其他文件按 JSON 解析。
-        return Err("只支持导入 .json 或 .zip 模板文件".to_string());
-    };
+    crate::data_management::with_data_write(&app, true, || {
+        let source_path = PathBuf::from(source_path);
+        let templates = if has_extension(&source_path, "json") {
+            // JSON 导入保持单模板语义，但返回 Vec 以便前端和 ZIP 共用反馈逻辑。
+            import_templates_from_json_file(&app, &source_path)?
+        } else if has_extension(&source_path, "zip") {
+            // ZIP 导入逐个读取安全 JSON entry，每个模板都会重写为新的自定义 ID。
+            import_templates_from_zip_file(&app, &source_path)?
+        } else {
+            // 只允许明确支持的扩展名，避免误把其他文件按 JSON 解析。
+            return Err("只支持导入 .json 或 .zip 模板文件".to_string());
+        };
 
-    log::info!(
-        "Imported {} template(s) from {:?}",
-        templates.len(),
-        source_path
-    );
-    Ok(templates)
+        log::info!(
+            "Imported {} template(s) from {:?}",
+            templates.len(),
+            source_path
+        );
+        Ok(templates)
+    })
 }
 
 /// 导出模板文件
@@ -1125,18 +1136,20 @@ pub fn export_template(
     template_id: String,
     target_path: String,
 ) -> Result<(), String> {
-    // template_file_path 会校验 template_id，避免读取模板目录外的文件。
-    let source_path = template_file_path(&app, &template_id)?;
-    let content =
-        fs::read_to_string(&source_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
-    let template: KeyTemplate =
-        serde_json::from_str(&content).map_err(|e| format!("解析模板失败: {}", e))?;
-    // 导出时重新格式化 JSON，保持导出文件可读。
-    let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
-    // target_path 来自系统保存对话框，直接写入用户选择的位置。
-    fs::write(&target_path, content).map_err(|e| format!("导出模板失败: {}", e))?;
-    log::info!("Exported template {} to {:?}", template_id, target_path);
-    Ok(())
+    crate::data_management::with_data_write(&app, false, || {
+        // template_file_path 会校验 template_id，避免读取模板目录外的文件。
+        let source_path = template_file_path(&app, &template_id)?;
+        let content =
+            fs::read_to_string(&source_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
+        let template: KeyTemplate =
+            serde_json::from_str(&content).map_err(|e| format!("解析模板失败: {}", e))?;
+        // 导出时重新格式化 JSON，保持导出文件可读。
+        let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
+        // target_path 来自系统保存对话框，直接写入用户选择的位置。
+        fs::write(&target_path, content).map_err(|e| format!("导出模板失败: {}", e))?;
+        log::info!("Exported template {} to {:?}", template_id, target_path);
+        Ok(())
+    })
 }
 
 /// 批量导出模板 ZIP 文件
@@ -1162,37 +1175,40 @@ pub fn export_templates_archive(
     template_ids: Vec<String>,
     target_path: String,
 ) -> Result<(), String> {
-    // 空列表说明前端状态异常，直接拒绝，避免写出空 ZIP 误导用户。
-    if template_ids.is_empty() {
-        return Err("请选择要导出的模板".to_string());
-    }
+    crate::data_management::with_data_write(&app, false, || {
+        // 空列表说明前端状态异常，直接拒绝，避免写出空 ZIP 误导用户。
+        if template_ids.is_empty() {
+            return Err("请选择要导出的模板".to_string());
+        }
 
-    let target_file = File::create(&target_path).map_err(|e| format!("创建 ZIP 失败: {}", e))?;
-    let mut zip = ZipWriter::new(target_file);
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        let target_file =
+            File::create(&target_path).map_err(|e| format!("创建 ZIP 失败: {}", e))?;
+        let mut zip = ZipWriter::new(target_file);
+        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
-    for template_id in template_ids {
-        // template_file_path 会校验 template_id，避免读取模板目录外的文件。
-        let source_path = template_file_path(&app, &template_id)?;
-        let content =
-            fs::read_to_string(&source_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
-        let template: KeyTemplate =
-            serde_json::from_str(&content).map_err(|e| format!("解析模板失败: {}", e))?;
-        // ZIP entry 使用模板名称命名；名称保存时已按跨平台文件名规范校验。
-        let entry_name = template_export_entry_name(&template)?;
-        // 导出前重新格式化 JSON，保证 ZIP 内文件可读且稳定。
-        let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
-        zip.start_file(entry_name, options)
-            .map_err(|e| format!("写入 ZIP 条目失败: {}", e))?;
-        zip.write_all(content.as_bytes())
-            .map_err(|e| format!("写入 ZIP 内容失败: {}", e))?;
-    }
+        for template_id in template_ids {
+            // template_file_path 会校验 template_id，避免读取模板目录外的文件。
+            let source_path = template_file_path(&app, &template_id)?;
+            let content =
+                fs::read_to_string(&source_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
+            let template: KeyTemplate =
+                serde_json::from_str(&content).map_err(|e| format!("解析模板失败: {}", e))?;
+            // ZIP entry 使用模板名称命名；名称保存时已按跨平台文件名规范校验。
+            let entry_name = template_export_entry_name(&template)?;
+            // 导出前重新格式化 JSON，保证 ZIP 内文件可读且稳定。
+            let content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
+            zip.start_file(entry_name, options)
+                .map_err(|e| format!("写入 ZIP 条目失败: {}", e))?;
+            zip.write_all(content.as_bytes())
+                .map_err(|e| format!("写入 ZIP 内容失败: {}", e))?;
+        }
 
-    // finish 会刷新 ZIP central directory，必须成功后文件才完整可读。
-    zip.finish()
-        .map_err(|e| format!("完成 ZIP 导出失败: {}", e))?;
-    log::info!("Exported templates archive to {:?}", target_path);
-    Ok(())
+        // finish 会刷新 ZIP central directory，必须成功后文件才完整可读。
+        zip.finish()
+            .map_err(|e| format!("完成 ZIP 导出失败: {}", e))?;
+        log::info!("Exported templates archive to {:?}", target_path);
+        Ok(())
+    })
 }
 
 /// 重命名模板
@@ -1220,31 +1236,34 @@ pub fn rename_template(
     template_id: String,
     new_name: String,
 ) -> Result<KeyTemplate, String> {
-    validate_template_name(&new_name)?;
+    crate::data_management::with_data_write(&app, true, || {
+        validate_template_name(&new_name)?;
 
-    // template_file_path 会校验 ID，避免读取模板目录外文件。
-    let file_path = template_file_path(&app, &template_id)?;
+        // template_file_path 会校验 ID，避免读取模板目录外文件。
+        let file_path = template_file_path(&app, &template_id)?;
 
-    // 读取现有模板
-    let content = fs::read_to_string(&file_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
-    let mut template: KeyTemplate =
-        serde_json::from_str(&content).map_err(|e| format!("解析模板失败: {}", e))?;
+        // 读取现有模板
+        let content =
+            fs::read_to_string(&file_path).map_err(|e| format!("读取模板文件失败: {}", e))?;
+        let mut template: KeyTemplate =
+            serde_json::from_str(&content).map_err(|e| format!("解析模板失败: {}", e))?;
 
-    // 更新名称
-    template.name = new_name.trim().to_string();
-    // 重命名后也重新归一化，保证旧文件中的按键大小写被修正。
-    template = normalize_custom_template(template);
-    // 写回前重新校验，避免重命名顺便保留非法旧数据。
-    validate_template(&template)?;
-    // 重命名也必须保持模板名称唯一，避免列表中出现同名模板。
-    validate_unique_template_name(&app, &template)?;
+        // 更新名称
+        template.name = new_name.trim().to_string();
+        // 重命名后也重新归一化，保证旧文件中的按键大小写被修正。
+        template = normalize_custom_template(template);
+        // 写回前重新校验，避免重命名顺便保留非法旧数据。
+        validate_template(&template)?;
+        // 重命名也必须保持模板名称唯一，避免列表中出现同名模板。
+        validate_unique_template_name(&app, &template)?;
 
-    // 保存
-    let new_content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
-    fs::write(&file_path, new_content).map_err(|e| e.to_string())?;
+        // 保存
+        let new_content = serde_json::to_string_pretty(&template).map_err(|e| e.to_string())?;
+        fs::write(&file_path, new_content).map_err(|e| e.to_string())?;
 
-    log::info!("Renamed template {} to {}", template_id, template.name);
-    Ok(template)
+        log::info!("Renamed template {} to {}", template_id, template.name);
+        Ok(template)
+    })
 }
 
 #[cfg(test)]

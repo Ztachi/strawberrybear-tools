@@ -249,6 +249,22 @@ export async function readOnlineMidiLibraryCache() {
   }
 }
 
+/** 仅清除可重建目录，不删除同一数据库中的设备身份和签名私钥。 */
+export async function clearOnlineMidiLibraryCache(): Promise<void> {
+  const db = await openIdentityDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(LIBRARY_STORE_NAME, 'readwrite')
+      transaction.objectStore(LIBRARY_STORE_NAME).clear()
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+      transaction.onabort = () => reject(transaction.error ?? new Error('清理曲库缓存已取消'))
+    })
+  } finally {
+    db.close()
+  }
+}
+
 export async function saveOnlineMidiLibraryCache(songs: OnlineMidiSong[]) {
   const cache: OnlineMidiLibraryCache = {
     id: LIBRARY_CACHE_KEY,

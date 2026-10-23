@@ -43,6 +43,7 @@ import SongListSidebar from './FilesTab/components/SongListSidebar.vue'
 import { useAppUpdater } from '@/composables/useAppUpdater'
 import { createRoutePageHost, type RoutePageLeaveGuard } from './routePageHost'
 import { registerAppCloseGuard } from '@/features/app-close/controller'
+import { dataOperationLocked, dataOperationPreparing, registerDataOperationGuard } from '@/features/data-management/operation'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -86,12 +87,20 @@ const updater = useAppUpdater()
 /** 当前路由页面复用自身编辑保护，避免依赖进程退出时的 beforeunload。 */
 const activePage = ref<RoutePageLeaveGuard | null>(null)
 const removePageCloseGuard = registerAppCloseGuard(async () => {
+  if (dataOperationLocked.value || dataOperationPreparing.value) return false
   // MIDI 会话（包括缓存中的独立窗口）自行参与退出；其他页面复用现有离开保护。
   if (route.meta.detachableEditor) return true
   return await activePage.value?.confirmLeaveIfNeeded?.() ?? true
 })
 onUnmounted(removePageCloseGuard)
+const removeDataGuard = registerDataOperationGuard(async () => {
+  await prepareQuitDisplay()
+  if (route.meta.detachableEditor) return true
+  return await activePage.value?.confirmLeaveIfNeeded?.() ?? true
+})
+onUnmounted(removeDataGuard)
 const removeInstallPreparation = updater.setPrepareInstall(async () => {
+  if (dataOperationLocked.value || dataOperationPreparing.value) return false
   if (activePage.value?.confirmLeaveIfNeeded && !(await activePage.value.confirmLeaveIfNeeded())) {
     return false
   }

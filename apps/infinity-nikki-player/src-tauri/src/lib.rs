@@ -3,9 +3,12 @@
 //! 负责初始化 Tauri 应用、窗口配置、菜单设置和插件管理
 
 mod app_lifecycle;
+mod cloud_sync;
 mod commands;
+mod data_management;
 mod keyboard;
 mod midi;
+mod preferences;
 mod types;
 mod updater;
 mod window_state;
@@ -14,6 +17,7 @@ use commands::frame_rate::FrameRateCaptureState;
 use commands::player::PlayerControl;
 use std::env;
 use tauri::{Emitter, Manager};
+use tauri_plugin_dialog::DialogExt;
 use types::AppState;
 
 /// 检测是否以管理员权限运行（仅 Windows）
@@ -88,7 +92,7 @@ fn seed_bundled_midi(app: &tauri::App) {
     }
 
     // 获取应用数据目录
-    let data_dir = match app.path().app_data_dir() {
+    let data_dir = match data_management::data_dir(app.handle()) {
         Ok(d) => d,
         Err(e) => {
             log::warn!("seed_bundled_midi: 获取数据目录失败: {}", e);
@@ -96,6 +100,10 @@ fn seed_bundled_midi(app: &tauri::App) {
         }
     };
     let library_dir = data_dir.join("midi_library");
+    // 已有资料目录（包括恢复出的空库）不再次补种，避免重启后把已删除歌曲加回。
+    if library_dir.exists() {
+        return;
+    }
 
     // 创建 midi_library 目录
     if let Err(e) = fs::create_dir_all(&library_dir) {
@@ -158,9 +166,28 @@ fn seed_bundled_midi(app: &tauri::App) {
 pub fn run() {
     // 构建并运行 Tauri 应用
     tauri::Builder::default()
+        // 单实例必须先注册；手动再次打开沿用既有托盘恢复行为。
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if args.iter().any(|argument| argument == "--autostart") {
+                return;
+            }
+            if app.try_state::<app_lifecycle::HiddenWindows>().is_some() {
+                if let Err(error) = app_lifecycle::restore_windows(app) {
+                    log::error!("再次打开窗口失败：{error}");
+                }
+            } else if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(log::LevelFilter::Info)
+                .level(log::LevelFilter::Trace)
+                .filter(|metadata| preferences::log_enabled(metadata.level()))
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
@@ -188,6 +215,23 @@ pub fn run() {
         .manage(FrameRateCaptureState::default())
         // 应用初始化设置
         .setup(move |app| {
+            if let Err(error) = preferences::initialize(app.handle()) {
+                app.dialog()
+                    .message(&error)
+                    .title("无法读取应用偏好")
+                    .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+                    .blocking_show();
+                return Err(std::io::Error::other(error).into());
+            }
+            if let Err(error) = data_management::initialize(app.handle()) {
+                app.dialog()
+                    .message(&error)
+                    .title("资料位置不可用")
+                    .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+                    .blocking_show();
+                return Err(std::io::Error::other(error).into());
+            }
+            cloud_sync::initialize(app.handle()).map_err(std::io::Error::other)?;
             // 插件日志已初始化后再记录系统信息，确保诊断能看到启动身份。
             #[cfg(target_os = "windows")]
             log::info!("管理员身份：{}", is_running_as_admin());
@@ -316,11 +360,13 @@ pub fn run() {
 
                 #[cfg(target_os = "macos")]
                 {
-                    if let Err(e) = window.show() {
-                        log::warn!("显示 macOS 主窗口失败: {}", e);
-                    }
-                    if let Err(e) = window.set_focus() {
-                        log::warn!("聚焦 macOS 主窗口失败: {}", e);
+                    if preferences::should_show_main_window(app.handle().clone()) {
+                        if let Err(e) = window.show() {
+                            log::warn!("显示 macOS 主窗口失败: {}", e);
+                        }
+                        if let Err(e) = window.set_focus() {
+                            log::warn!("聚焦 macOS 主窗口失败: {}", e);
+                        }
                     }
                 }
 
@@ -368,6 +414,32 @@ pub fn run() {
         .on_window_event(app_lifecycle::handle_window_event)
         // 注册所有 Tauri 命令
         .invoke_handler(tauri::generate_handler![
+            preferences::get_data_preferences,
+            preferences::save_data_preferences,
+            preferences::should_show_main_window,
+            preferences::restart_after_data_change,
+            commands::data_management::get_data_locations,
+            commands::data_management::open_data_location,
+            commands::data_management::list_data_backups,
+            commands::data_management::create_data_backup,
+            commands::data_management::rename_data_backup,
+            commands::data_management::delete_data_backup,
+            commands::data_management::export_data_backup,
+            commands::data_management::prepare_data_restore,
+            commands::data_management::commit_data_restore,
+            commands::data_management::migrate_data_directory,
+            commands::data_management::clear_data_cache,
+            commands::data_management::data_operation_requires_restart,
+            commands::data_management::get_pending_template_drafts,
+            commands::data_management::acknowledge_template_drafts,
+            commands::cloud_sync::get_cloud_sync_config,
+            commands::cloud_sync::save_cloud_sync_config,
+            commands::cloud_sync::test_cloud_sync_connection,
+            commands::cloud_sync::get_cloud_sync_status,
+            commands::cloud_sync::preview_cloud_snapshot,
+            commands::cloud_sync::upload_cloud_snapshot,
+            commands::cloud_sync::prepare_cloud_restore,
+            commands::cloud_sync::cancel_cloud_sync,
             app_lifecycle::hide_to_tray,
             app_lifecycle::quit_application,
             commands::updater::get_update_state,

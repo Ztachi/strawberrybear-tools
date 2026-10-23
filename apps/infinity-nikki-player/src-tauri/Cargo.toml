@@ -17,6 +17,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-store = "2"
 tauri-plugin-log = "2"
+# 采用兼容当前 Tauri 2.10 的插件版本，避免设置功能连带升级窗口运行时。
+tauri-plugin-autostart = "=2.5.1"
+tauri-plugin-single-instance = "=2.4.0"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -31,6 +34,14 @@ uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 tauri-plugin-mcp-bridge = "0.10.0"
 zip = "2"
+bytes = "1"
+futures-util = "0.3"
+sha2 = "0.10"
+fs4 = { version = "1.1", default-features = false, features = ["sync"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+object_store = { version = "0.14", default-features = false, features = ["aws-base", "reqwest", "ring"] }
+keyring = { version = "4.2", default-features = false, features = ["v1"] }
 frame-rate-capture = { path = "../../../crates/frame-rate-capture" }
 
 [dev-dependencies]

@@ -12,7 +12,6 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::Manager;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
@@ -21,11 +20,7 @@ const DRAFTS_DIR: &str = "drafts";
 
 /// @description: 获取项目目录，不存在时创建
 fn projects_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("获取应用数据目录失败: {}", e))?
-        .join("midi_projects");
+    let dir = crate::data_management::data_dir(app)?.join("midi_projects");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败: {}", e))?;
     }
@@ -75,7 +70,7 @@ fn validate_project_name(name: &str) -> Result<(), String> {
 }
 
 /// @description: 校验项目结构；文档必须是对象
-fn validate_project(project: &MidiProject) -> Result<(), String> {
+pub(crate) fn validate_project(project: &MidiProject) -> Result<(), String> {
     if !is_safe_template_id(&project.id) {
         return Err("项目 ID 只能包含英文字母、数字、横线和下划线".to_string());
     }
@@ -211,19 +206,27 @@ fn parse_project_json(content: &str, label: &str) -> Result<MidiProject, String>
 /// 获取全部项目摘要，按更新时间倒序
 #[tauri::command]
 pub fn get_midi_projects(app: tauri::AppHandle) -> Result<Vec<MidiProjectSummary>, String> {
-    let mut projects = read_all_projects(&app)?;
-    projects.sort_by(|a, b| b.updated_at.cmp(&a.updated_at).then_with(|| b.id.cmp(&a.id)));
-    Ok(projects.iter().map(summarize).collect())
+    crate::data_management::with_data_write(&app, false, || {
+        let mut projects = read_all_projects(&app)?;
+        projects.sort_by(|a, b| {
+            b.updated_at
+                .cmp(&a.updated_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        Ok(projects.iter().map(summarize).collect())
+    })
 }
 
 /// 载入完整项目
 #[tauri::command]
 pub fn load_midi_project(app: tauri::AppHandle, id: String) -> Result<MidiProject, String> {
-    let path = project_file_path(&app, &id)?;
-    if !path.exists() {
-        return Err("项目不存在".to_string());
-    }
-    read_project_file(&path)
+    crate::data_management::with_data_write(&app, false, || {
+        let path = project_file_path(&app, &id)?;
+        if !path.exists() {
+            return Err("项目不存在".to_string());
+        }
+        read_project_file(&path)
+    })
 }
 
 /// 保存项目（新建或覆盖），返回写盘后的项目摘要（含 updated_at）
@@ -232,28 +235,32 @@ pub fn save_midi_project(
     app: tauri::AppHandle,
     project: MidiProject,
 ) -> Result<MidiProjectSummary, String> {
-    validate_project_name(&project.name)?;
-    let project = normalize_project(project);
-    validate_project(&project)?;
-    validate_unique_name(&app, &project)?;
-    write_project_file(&project_file_path(&app, &project.id)?, &project)?;
-    log::info!("Saved MIDI project {}", project.id);
-    Ok(summarize(&project))
+    crate::data_management::with_data_write(&app, true, || {
+        validate_project_name(&project.name)?;
+        let project = normalize_project(project);
+        validate_project(&project)?;
+        validate_unique_name(&app, &project)?;
+        write_project_file(&project_file_path(&app, &project.id)?, &project)?;
+        log::info!("Saved MIDI project {}", project.id);
+        Ok(summarize(&project))
+    })
 }
 
 /// 删除项目；文件不存在视为成功
 #[tauri::command]
 pub fn delete_midi_project(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    let path = project_file_path(&app, &id)?;
-    if path.exists() {
-        fs::remove_file(&path).map_err(|e| e.to_string())?;
-    }
-    // 同步清理对应编辑草稿。
-    let draft = draft_file_path(&app, &format!("edit-{}", id))?;
-    if draft.exists() {
-        let _ = fs::remove_file(&draft);
-    }
-    Ok(())
+    crate::data_management::with_data_write(&app, true, || {
+        let path = project_file_path(&app, &id)?;
+        if path.exists() {
+            fs::remove_file(&path).map_err(|e| e.to_string())?;
+        }
+        // 同步清理对应编辑草稿。
+        let draft = draft_file_path(&app, &format!("edit-{}", id))?;
+        if draft.exists() {
+            let _ = fs::remove_file(&draft);
+        }
+        Ok(())
+    })
 }
 
 /// 重命名项目
@@ -263,15 +270,17 @@ pub fn rename_midi_project(
     id: String,
     new_name: String,
 ) -> Result<MidiProjectSummary, String> {
-    validate_project_name(&new_name)?;
-    let path = project_file_path(&app, &id)?;
-    let mut project = read_project_file(&path)?;
-    project.name = new_name.trim().to_string();
-    project.updated_at = now_millis();
-    validate_project(&project)?;
-    validate_unique_name(&app, &project)?;
-    write_project_file(&path, &project)?;
-    Ok(summarize(&project))
+    crate::data_management::with_data_write(&app, true, || {
+        validate_project_name(&new_name)?;
+        let path = project_file_path(&app, &id)?;
+        let mut project = read_project_file(&path)?;
+        project.name = new_name.trim().to_string();
+        project.updated_at = now_millis();
+        validate_project(&project)?;
+        validate_unique_name(&app, &project)?;
+        write_project_file(&path, &project)?;
+        Ok(summarize(&project))
+    })
 }
 
 /// 导入 .json（单项目）或 .zip（多项目）
@@ -280,48 +289,53 @@ pub fn import_midi_projects(
     app: tauri::AppHandle,
     source_path: String,
 ) -> Result<Vec<MidiProjectSummary>, String> {
-    let source = PathBuf::from(&source_path);
-    if has_extension(&source, "json") {
-        let content = fs::read_to_string(&source).map_err(|e| format!("读取文件失败: {}", e))?;
-        let label = source
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("project.json");
-        let project = parse_project_json(&content, label)?;
-        return Ok(vec![save_imported_project(&app, project)?]);
-    }
-    if has_extension(&source, "zip") {
-        let file = File::open(&source).map_err(|e| format!("读取 ZIP 失败: {}", e))?;
-        let mut archive = ZipArchive::new(file).map_err(|e| format!("解析 ZIP 失败: {}", e))?;
-        let mut parsed = Vec::new();
-        for index in 0..archive.len() {
-            let mut entry = archive
-                .by_index(index)
-                .map_err(|e| format!("读取 ZIP 条目失败: {}", e))?;
-            let name = entry.name().to_string();
-            if !is_safe_zip_template_entry(&name) {
-                continue;
-            }
-            let mut content = String::new();
-            if entry.read_to_string(&mut content).is_err() {
-                log::warn!("Skipped unreadable ZIP project entry: {}", name);
-                continue;
-            }
-            match parse_project_json(&content, &name) {
-                Ok(project) => parsed.push(project),
-                Err(error) => log::warn!("Skipped invalid ZIP project entry {}: {}", name, error),
-            }
+    crate::data_management::with_data_write(&app, true, || {
+        let source = PathBuf::from(&source_path);
+        if has_extension(&source, "json") {
+            let content =
+                fs::read_to_string(&source).map_err(|e| format!("读取文件失败: {}", e))?;
+            let label = source
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("project.json");
+            let project = parse_project_json(&content, label)?;
+            return Ok(vec![save_imported_project(&app, project)?]);
         }
-        let mut saved = Vec::new();
-        for project in parsed {
-            match save_imported_project(&app, project) {
-                Ok(summary) => saved.push(summary),
-                Err(error) => log::warn!("Skipped invalid ZIP project: {}", error),
+        if has_extension(&source, "zip") {
+            let file = File::open(&source).map_err(|e| format!("读取 ZIP 失败: {}", e))?;
+            let mut archive = ZipArchive::new(file).map_err(|e| format!("解析 ZIP 失败: {}", e))?;
+            let mut parsed = Vec::new();
+            for index in 0..archive.len() {
+                let mut entry = archive
+                    .by_index(index)
+                    .map_err(|e| format!("读取 ZIP 条目失败: {}", e))?;
+                let name = entry.name().to_string();
+                if !is_safe_zip_template_entry(&name) {
+                    continue;
+                }
+                let mut content = String::new();
+                if entry.read_to_string(&mut content).is_err() {
+                    log::warn!("Skipped unreadable ZIP project entry: {}", name);
+                    continue;
+                }
+                match parse_project_json(&content, &name) {
+                    Ok(project) => parsed.push(project),
+                    Err(error) => {
+                        log::warn!("Skipped invalid ZIP project entry {}: {}", name, error)
+                    }
+                }
             }
+            let mut saved = Vec::new();
+            for project in parsed {
+                match save_imported_project(&app, project) {
+                    Ok(summary) => saved.push(summary),
+                    Err(error) => log::warn!("Skipped invalid ZIP project: {}", error),
+                }
+            }
+            return Ok(saved);
         }
-        return Ok(saved);
-    }
-    Err("只支持导入 .json 或 .zip 项目文件".to_string())
+        Err("只支持导入 .json 或 .zip 项目文件".to_string())
+    })
 }
 
 /// 导出单个项目为 JSON
@@ -331,9 +345,11 @@ pub fn export_midi_project(
     id: String,
     target_path: String,
 ) -> Result<(), String> {
-    let project = read_project_file(&project_file_path(&app, &id)?)?;
-    let content = serde_json::to_string_pretty(&project).map_err(|e| e.to_string())?;
-    fs::write(&target_path, content).map_err(|e| format!("导出项目失败: {}", e))
+    crate::data_management::with_data_write(&app, false, || {
+        let project = read_project_file(&project_file_path(&app, &id)?)?;
+        let content = serde_json::to_string_pretty(&project).map_err(|e| e.to_string())?;
+        fs::write(&target_path, content).map_err(|e| format!("导出项目失败: {}", e))
+    })
 }
 
 /// 批量导出项目 ZIP，条目以项目名命名
@@ -343,25 +359,28 @@ pub fn export_midi_projects_archive(
     ids: Vec<String>,
     target_path: String,
 ) -> Result<(), String> {
-    if ids.is_empty() {
-        return Err("请选择要导出的项目".to_string());
-    }
-    let target = File::create(&target_path).map_err(|e| format!("创建 ZIP 失败: {}", e))?;
-    let mut zip = ZipWriter::new(target);
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-    for id in ids {
-        let project = read_project_file(&project_file_path(&app, &id)?)?;
-        if !is_valid_template_file_name(&project.name) {
-            return Err(template_name_validation_message());
+    crate::data_management::with_data_write(&app, false, || {
+        if ids.is_empty() {
+            return Err("请选择要导出的项目".to_string());
         }
-        let content = serde_json::to_string_pretty(&project).map_err(|e| e.to_string())?;
-        zip.start_file(format!("{}.json", project.name.trim()), options)
-            .map_err(|e| format!("写入 ZIP 条目失败: {}", e))?;
-        zip.write_all(content.as_bytes())
-            .map_err(|e| format!("写入 ZIP 内容失败: {}", e))?;
-    }
-    zip.finish().map_err(|e| format!("完成 ZIP 导出失败: {}", e))?;
-    Ok(())
+        let target = File::create(&target_path).map_err(|e| format!("创建 ZIP 失败: {}", e))?;
+        let mut zip = ZipWriter::new(target);
+        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        for id in ids {
+            let project = read_project_file(&project_file_path(&app, &id)?)?;
+            if !is_valid_template_file_name(&project.name) {
+                return Err(template_name_validation_message());
+            }
+            let content = serde_json::to_string_pretty(&project).map_err(|e| e.to_string())?;
+            zip.start_file(format!("{}.json", project.name.trim()), options)
+                .map_err(|e| format!("写入 ZIP 条目失败: {}", e))?;
+            zip.write_all(content.as_bytes())
+                .map_err(|e| format!("写入 ZIP 内容失败: {}", e))?;
+        }
+        zip.finish()
+            .map_err(|e| format!("完成 ZIP 导出失败: {}", e))?;
+        Ok(())
+    })
 }
 
 /// 保存草稿；不校验名称唯一，只要求结构合法
@@ -371,12 +390,14 @@ pub fn save_midi_project_draft(
     key: String,
     project: MidiProject,
 ) -> Result<(), String> {
-    if !project.document.is_object() {
-        return Err("项目文档格式无效".to_string());
-    }
-    let mut project = project;
-    project.updated_at = now_millis();
-    write_project_file(&draft_file_path(&app, &key)?, &project)
+    crate::data_management::with_data_write(&app, false, || {
+        if !project.document.is_object() {
+            return Err("项目文档格式无效".to_string());
+        }
+        let mut project = project;
+        project.updated_at = now_millis();
+        write_project_file(&draft_file_path(&app, &key)?, &project)
+    })
 }
 
 /// 读取草稿；不存在返回 None
@@ -385,38 +406,49 @@ pub fn load_midi_project_draft(
     app: tauri::AppHandle,
     key: String,
 ) -> Result<Option<MidiProject>, String> {
-    let path = draft_file_path(&app, &key)?;
-    if !path.exists() {
-        return Ok(None);
-    }
-    match read_project_file(&path) {
-        Ok(project) => Ok(Some(project)),
-        Err(error) => {
-            // 损坏草稿直接清理，避免每次打开都弹恢复框。
-            log::warn!("Discarded corrupt MIDI project draft {:?}: {}", path, error);
-            let _ = fs::remove_file(&path);
-            Ok(None)
+    crate::data_management::with_data_write(&app, false, || {
+        let path = draft_file_path(&app, &key)?;
+        if !path.exists() {
+            return Ok(None);
         }
-    }
+        match read_project_file(&path) {
+            Ok(project) => Ok(Some(project)),
+            Err(error) => {
+                // 损坏草稿直接清理，避免每次打开都弹恢复框。
+                log::warn!("Discarded corrupt MIDI project draft {:?}: {}", path, error);
+                let _ = fs::remove_file(&path);
+                Ok(None)
+            }
+        }
+    })
 }
 
 /// 删除草稿
 #[tauri::command]
 pub fn delete_midi_project_draft(app: tauri::AppHandle, key: String) -> Result<(), String> {
-    let path = draft_file_path(&app, &key)?;
-    if path.exists() {
-        fs::remove_file(&path).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    crate::data_management::with_data_write(&app, false, || {
+        let path = draft_file_path(&app, &key)?;
+        if path.exists() {
+            fs::remove_file(&path).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })
 }
 
 /// 将前端生成的二进制内容写入用户选定的路径（导出 .mid）
 #[tauri::command]
-pub fn save_binary_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    if path.trim().is_empty() {
-        return Err("目标路径不能为空".to_string());
-    }
-    fs::write(&path, data).map_err(|e| format!("写入文件失败: {}", e))
+pub fn save_binary_file<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    // 用户可把导出目标选在曲库内，必须与恢复共用保护；外部导出由同步内容指纹去重。
+    crate::data_management::with_data_write(&app, true, || {
+        if path.trim().is_empty() {
+            return Err("目标路径不能为空".to_string());
+        }
+        fs::write(&path, data).map_err(|e| format!("写入文件失败: {}", e))
+    })
 }
 
 #[cfg(test)]

@@ -29,6 +29,7 @@ export interface UpdateSnapshot {
   phase: UpdatePhase
   currentVersion: string
   targetVersion: string | null
+  releaseSummary?: string | null
   source: UpdateSource | null
   downloadedBytes: number
   contentLength: number | null

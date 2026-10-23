@@ -17,6 +17,7 @@
 - [钢琴卷帘设计与验收](design/piano-roll-design.md)
 - [键盘录制工作区](design/keyboard-recording.md)
 - [应用设置与关闭行为](design/app-settings.md)
+- [备份、资料迁移与云同步](design/data-management.md)
 - [错误追踪](error/README.md)
 - [Tauri 后端文档](../src-tauri/docs/README.md)
 

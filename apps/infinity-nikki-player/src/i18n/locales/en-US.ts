@@ -5,8 +5,10 @@ import releaseNoteReleases from './release-notes/en-US.json'
 
 import recording from './recording/en-US.json'
 import appSettings from './appSettings/en-US.json'
+import dataManagement from './data-management/en-US.json'
 
 export default {
+  dataManagement,
   appSettings,
   recording,
   app: {

@@ -17,8 +17,10 @@ test('升级首次进入只显示本次区间，刷新后不重复，关于入�
   await expect(about.getByRole('button', { name: '更新日志', exact: true })).toHaveClass(
     /ant-btn-default/
   )
-  const actions = about.locator('.about-actions button')
-  await expect(actions).toHaveCount(3)
+  const actions = about.locator('.version-update-trigger button, .about-release-notes')
+  await expect(actions).toHaveCount(2)
+  await expect(about.getByRole('button', { name: '源代码', exact: true })).toHaveCount(1)
+  await expect(about.getByRole('button', { name: '导出诊断', exact: true })).toHaveCount(0)
   const sizes = await actions.evaluateAll((buttons) =>
     buttons.map((button) => ({
       height: button.getBoundingClientRect().height,

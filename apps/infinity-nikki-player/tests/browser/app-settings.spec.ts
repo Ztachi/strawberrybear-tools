@@ -1,4 +1,348 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Locator } from '@playwright/test'
+
+/** 截图等目录动画真正到达目标位置，避免记录到平滑滚动的中间帧。 */
+async function expectDataPosition(settings: Locator, title = '数据'): Promise<void> {
+  const heading = settings.getByRole('heading', { name: title, exact: true })
+  const content = settings.locator('.section-document-content')
+  await expect
+    .poll(async () => {
+      const [headingBox, contentBox] = await Promise.all([
+        heading.boundingBox(),
+        content.boundingBox(),
+      ])
+      return headingBox && contentBox ? Math.abs(headingBox.y - contentBox.y - 8) : Infinity
+    })
+    .toBeLessThanOrEqual(2)
+}
+
+test('启动设置即时保存，静默选项随开机启动显示，保存失败恢复原值', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  const launch = settings.getByRole('switch', { name: '开机启动', exact: true })
+  const silent = settings.getByRole('switch', { name: '随开机启动时静默启动', exact: true })
+  await expect(silent).toHaveCount(0)
+  await launch.click()
+  await expect(silent).toBeVisible()
+  await silent.click()
+  await expect
+    .poll(() => page.evaluate(() => window.dataManagementFixture.state().preferences.silentStartup))
+    .toBe(true)
+  const automatic = settings.getByRole('switch', { name: '自动检查更新', exact: true })
+  await page.evaluate(() => window.dataManagementFixture.failNext('save_data_preferences'))
+  await automatic.click()
+  await expect(page.getByText('保存设置失败', { exact: true })).toBeVisible()
+  await expect(automatic).toBeChecked()
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.dataManagementFixture.state().preferences.autoCheckUpdates)
+    )
+    .toBe(true)
+})
+
+test('数据页备份可创建重命名删除，恢复前展示摘要且取消不改数据', async ({ page }, testInfo) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  await settings.getByRole('link', { name: '数据', exact: true }).click()
+  await expect(settings.getByText('/fixture/data', { exact: true })).toBeVisible()
+  await expectDataPosition(settings)
+  await page.screenshot({ path: testInfo.outputPath('settings-data.png'), animations: 'disabled' })
+  const interval = settings.getByRole('combobox', { name: '自动备份间隔', exact: true })
+  await page.evaluate(() => window.dataManagementFixture.failNext('save_data_preferences'))
+  await interval.click()
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: /^12 小时$/ })
+    .click()
+  await expect(page.getByText('保存设置失败', { exact: true })).toBeVisible()
+  await expect(
+    settings
+      .locator('.ant-select')
+      .filter({ has: page.getByRole('combobox', { name: '自动备份间隔', exact: true }) })
+  ).toContainText('24 小时')
+  await settings.getByRole('button', { name: '立即备份', exact: true }).click()
+  await expect(settings.getByText('本地备份', { exact: true }).last()).toBeVisible()
+  await settings.getByRole('button', { name: '重命名 本地备份', exact: true }).click()
+  const rename = page.getByRole('dialog', { name: '重命名备份', exact: true })
+  await rename.getByRole('textbox', { name: '名称', exact: true }).fill('演出前的备份')
+  await rename.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(settings.getByText('演出前的备份', { exact: true })).toBeVisible()
+  await settings.getByRole('button', { name: '恢复', exact: true }).click()
+  const restore = page.getByRole('dialog', { name: '恢复备份', exact: true })
+  await expect(restore).toContainText('验收设备')
+  await expect(restore).toContainText('歌曲 4')
+  await restore.getByRole('button', { name: '取消', exact: true }).click()
+  expect(
+    await page.evaluate(() =>
+      window.dataManagementFixture.state().calls.includes('commit_data_restore')
+    )
+  ).toBe(false)
+  await settings.getByRole('button', { name: '删除 演出前的备份', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '删除备份', exact: true })
+    .getByRole('button', { name: '确定', exact: true })
+    .click()
+  await expect(settings.getByText('还没有本地备份', { exact: true })).toBeVisible()
+})
+
+test('云配置保存后清空明文输入，未保存配置阻止同步，服务切换先确认停用', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  await settings.getByRole('link', { name: '数据', exact: true }).click()
+  await settings
+    .getByRole('textbox', { name: '服务器地址', exact: true })
+    .fill('https://dav.example.com/files/')
+  await settings.getByRole('textbox', { name: '用户名', exact: true }).fill('nikki')
+  await settings.getByLabel('密码 / 应用密码', { exact: true }).fill('fixture-app-password')
+  await settings.getByRole('switch', { name: '启用云同步', exact: true }).click()
+  await expect(settings.getByRole('button', { name: '上传到云端', exact: true })).toBeDisabled()
+  const automaticUpload = settings.getByRole('switch', { name: '自动上传', exact: true })
+  await automaticUpload.click()
+  const automaticConfirm = page.getByRole('dialog', { name: '开启自动上传', exact: true })
+  await expect(automaticConfirm).toContainText('不会自动下载或合并')
+  await automaticConfirm.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(automaticUpload).not.toBeChecked()
+  await automaticUpload.click()
+  await automaticConfirm.getByRole('button', { name: '确定', exact: true }).click()
+  await expect(automaticUpload).toBeChecked()
+  await page.evaluate(() => window.dataManagementFixture.failNext('test_cloud_sync_connection'))
+  await settings.getByRole('button', { name: '保存配置', exact: true }).click()
+  await expect(page.getByText('配置已保存，但连接失败', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => window.dataManagementFixture.state().cloud.autoUpload)).toBe(
+    true
+  )
+  await expect(settings.getByLabel('密码 / 应用密码', { exact: true })).toHaveValue('')
+  await expect(settings.getByLabel('密码 / 应用密码', { exact: true })).toHaveAttribute(
+    'placeholder',
+    '已保存，留空保持不变'
+  )
+  await expect(settings.getByRole('button', { name: '上传到云端', exact: true })).toBeEnabled()
+  await settings.getByRole('heading', { name: '云同步', exact: true }).scrollIntoViewIfNeeded()
+  await settings.locator('.section-document-content').evaluate((node) => {
+    const heading = Array.from(node.querySelectorAll('h4')).find(
+      (item) => item.textContent === '云同步'
+    )
+    if (heading)
+      node.scrollTop += heading.getBoundingClientRect().top - node.getBoundingClientRect().top - 8
+  })
+  await page.screenshot({ path: testInfo.outputPath('settings-cloud.png'), animations: 'disabled' })
+  await settings.getByRole('button', { name: '测试连接', exact: true }).click()
+  await expect(page.getByText('连接成功', { exact: true })).toBeVisible()
+  const provider = settings.getByRole('combobox', { name: '同步服务', exact: true })
+  await provider.click()
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: /^S3$/ })
+    .click()
+  const switchService = page.getByRole('dialog', { name: '切换同步服务', exact: true })
+  await expect(switchService).toBeVisible()
+  await switchService.getByRole('button', { name: '取消', exact: true }).click()
+  expect(await page.evaluate(() => window.dataManagementFixture.state().cloud.enabled)).toBe(true)
+  await expect(
+    settings
+      .locator('.ant-select')
+      .filter({ has: page.getByRole('combobox', { name: '同步服务', exact: true }) })
+  ).toContainText('WebDAV')
+  await provider.click()
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: /^S3$/ })
+    .click()
+  await switchService.getByRole('button', { name: '确定', exact: true }).click()
+  await expect(settings.getByRole('textbox', { name: '存储桶', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => window.dataManagementFixture.state().cloud.enabled)).toBe(false)
+  await expect(settings.getByRole('button', { name: '上传到云端', exact: true })).toBeDisabled()
+  await settings.getByRole('button', { name: 'Close', exact: true }).click()
+  const discard = page.getByRole('dialog', { name: '放弃未保存的配置', exact: true })
+  await expect(discard).toBeVisible()
+  await discard.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(settings).toBeVisible()
+})
+
+test('云上传确认现有快照，云恢复先准备再确认，失败不重启', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await page.evaluate(() => window.dataManagementFixture.setRemote())
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  await settings.getByRole('link', { name: '数据', exact: true }).click()
+  await settings
+    .getByRole('textbox', { name: '服务器地址', exact: true })
+    .fill('https://dav.example.com/files/')
+  await settings.getByRole('textbox', { name: '用户名', exact: true }).fill('nikki')
+  await settings.getByLabel('密码 / 应用密码', { exact: true }).fill('fixture-password')
+  await settings.getByRole('switch', { name: '启用云同步', exact: true }).click()
+  await settings.getByRole('button', { name: '保存配置', exact: true }).click()
+  await settings.getByRole('button', { name: '上传到云端', exact: true }).click()
+  const upload = page.getByRole('dialog', { name: '上传数据到云端', exact: true })
+  await expect(upload).toContainText('现有云端快照')
+  await expect(upload).toContainText('验收设备')
+  await upload.getByRole('button', { name: '取消', exact: true }).click()
+  expect(
+    await page.evaluate(() =>
+      window.dataManagementFixture.state().calls.includes('upload_cloud_snapshot')
+    )
+  ).toBe(false)
+  await page.evaluate(() => window.dataManagementFixture.failNext('commit_data_restore'))
+  await settings.getByRole('button', { name: '从云端恢复', exact: true }).click()
+  const restore = page.getByRole('dialog', { name: '恢复备份', exact: true })
+  await expect(restore).toBeVisible()
+  expect(
+    await page.evaluate(() =>
+      window.dataManagementFixture.state().calls.includes('prepare_cloud_restore')
+    )
+  ).toBe(true)
+  await restore.getByRole('button', { name: '确定', exact: true }).click()
+  await expect(page.getByText('操作未完成', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => window.dataManagementFixture.state().restarts)).toBe(0)
+  await expect(settings.getByRole('button', { name: '从云端恢复', exact: true })).toBeEnabled()
+})
+
+test('界面偏好重置保留模板草稿，导入成功提交后重启', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await page.evaluate(() => {
+    localStorage.setItem('infinity-nikki-player.template-draft.create', 'fixture-template-draft')
+    localStorage.setItem(
+      'infinity-nikki-player:midi-editor-preferences:v1',
+      JSON.stringify({ showVelocity: true })
+    )
+  })
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  await settings.getByRole('link', { name: '数据', exact: true }).click()
+  await settings.getByRole('button', { name: '重置界面偏好', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '重置界面偏好', exact: true })
+    .getByRole('button', { name: '确定', exact: true })
+    .click()
+  expect(
+    await page.evaluate(() => localStorage.getItem('infinity-nikki-player.template-draft.create'))
+  ).toBe('fixture-template-draft')
+  await expect(
+    settings.getByRole('switch', { name: '显示音符力度', exact: true })
+  ).not.toBeChecked()
+  await page.evaluate(() =>
+    window.dataManagementFixture.setDialogPath('/fixture/backup.nikki-backup.zip')
+  )
+  await settings.getByRole('button', { name: '导入数据', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '恢复备份', exact: true })
+    .getByRole('button', { name: '确定', exact: true })
+    .click()
+  await expect
+    .poll(() => page.evaluate(() => window.dataManagementFixture.state().restarts))
+    .toBe(1)
+  expect(
+    await page.evaluate(() =>
+      window.dataManagementFixture.state().calls.includes('commit_data_restore')
+    )
+  ).toBe(true)
+})
+
+test('恢复提交失败且修复状态不可读取时保持锁定，可重试重启', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
+  await page.evaluate(() => {
+    window.dataManagementFixture.setDialogPath('/fixture/backup.nikki-backup.zip')
+    window.dataManagementFixture.failNext('commit_data_restore')
+    window.dataManagementFixture.failNext('data_operation_requires_restart')
+  })
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  await settings.getByRole('link', { name: '数据', exact: true }).click()
+  await settings.getByRole('button', { name: '导入数据', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '恢复备份', exact: true })
+    .getByRole('button', { name: '确定', exact: true })
+    .click()
+  await expect(
+    settings.getByText('操作未完成，请重新启动以修复资料。', { exact: true })
+  ).toBeVisible()
+  await expect(settings.getByRole('button', { name: '导出数据', exact: true })).toBeDisabled()
+  expect(await page.evaluate(() => window.dataManagementFixture.state().restarts)).toBe(0)
+  await settings.getByRole('button', { name: '重新启动', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.dataManagementFixture.state().restarts))
+    .toBe(1)
+})
+
+test('恢复先保护独立窗口的未保存编辑，取消不提交，准备期仍能保存后恢复', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html')
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const child = await opening
+  const name = child.locator('.midi-editor-name input, input.midi-editor-name')
+  await name.fill('恢复前保留的工程')
+  await name.blur()
+  await expect(page.locator('.midi-editor-name input, input.midi-editor-name')).toHaveValue(
+    '恢复前保留的工程'
+  )
+  await page.evaluate(() =>
+    window.dataManagementFixture.setDialogPath('/fixture/backup.nikki-backup.zip')
+  )
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  await settings.getByRole('link', { name: '数据', exact: true }).click()
+  await settings.getByRole('button', { name: '导入数据', exact: true }).click()
+  const summary = page.getByRole('dialog', { name: '恢复备份', exact: true })
+  await summary.getByRole('button', { name: '确定', exact: true }).click()
+  const guard = page.getByRole('dialog').filter({ hasText: '保存并关闭' })
+  await expect(guard).toBeVisible()
+  await guard.getByRole('button', { name: '取消', exact: true }).click()
+  expect(
+    await page.evaluate(() =>
+      window.dataManagementFixture.state().calls.includes('commit_data_restore')
+    )
+  ).toBe(false)
+  await expect(name).toHaveValue('恢复前保留的工程')
+  await page.evaluate(() => window.midiEditorFixture.deferProjectSave(true))
+  await settings.getByRole('button', { name: '导入数据', exact: true }).click()
+  await summary.getByRole('button', { name: '确定', exact: true }).click()
+  await guard.getByRole('button', { name: '保存并关闭', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.midiEditorFixture.projectSavePending()))
+    .toBe(true)
+  await expect(page.locator('.midi-editor-page')).toHaveAttribute('inert', '')
+  expect(
+    await page.evaluate(() =>
+      window.dataManagementFixture.state().calls.includes('commit_data_restore')
+    )
+  ).toBe(false)
+  await page.evaluate(() => window.midiEditorFixture.finishProjectSave())
+  await expect
+    .poll(() => page.evaluate(() => window.dataManagementFixture.state().restarts))
+    .toBe(1)
+})
+
+test('独立窗口有活动录制时恢复不提交数据', async ({ page }) => {
+  await page.goto('/tests/browser/midi-editor-page.html')
+  const opening = page.waitForEvent('popup')
+  await page.getByRole('button', { name: '在独立窗口中打开', exact: true }).click()
+  const child = await opening
+  await child.getByRole('button', { name: '键盘录制', exact: true }).click()
+  await child.getByRole('button', { name: '开始录制', exact: true }).click()
+  await child.keyboard.press('a')
+  await page.evaluate(() =>
+    window.dataManagementFixture.setDialogPath('/fixture/backup.nikki-backup.zip')
+  )
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: '设置', exact: true })
+  await settings.getByRole('link', { name: '数据', exact: true }).click()
+  await settings.getByRole('button', { name: '导入数据', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '恢复备份', exact: true })
+    .getByRole('button', { name: '确定', exact: true })
+    .click()
+  await expect(page.getByText(/请先.*应用或放弃.*录制/)).toBeVisible()
+  expect(
+    await page.evaluate(() =>
+      window.dataManagementFixture.state().calls.includes('commit_data_restore')
+    )
+  ).toBe(false)
+  expect(await page.evaluate(() => window.dataManagementFixture.state().restarts)).toBe(0)
+})
 
 test('独立窗口录制按钮排在编辑工具后面，录制标题避开 macOS 系统按钮', async ({ page }) => {
   await page.goto('/tests/browser/midi-editor-page.html')
@@ -21,16 +365,16 @@ test('独立窗口录制按钮排在编辑工具后面，录制标题避开 macO
   expect((await child.locator('.recorder-track-name').boundingBox())!.x).toBeGreaterThanOrEqual(90)
 })
 
-test('设置复用帮助目录，常规与关于连续滚动，倍速使用数字刻度', async ({ page }, testInfo) => {
+test('设置按常规、数据和关于连续滚动，倍速使用数字刻度', async ({ page }, testInfo) => {
   await page.goto('/tests/browser/midi-editor-page.html?navigation=1')
   await page.getByRole('button', { name: '设置', exact: true }).click()
   const settings = page.getByRole('dialog', { name: '设置', exact: true })
   await expect(settings.getByRole('radio', { name: '最小化到系统托盘', exact: true })).toBeChecked()
   await expect(settings.getByRole('combobox', { name: '显示语言', exact: true })).toBeVisible()
   const contents = settings.getByRole('navigation', { name: '设置目录', exact: true })
-  await expect(contents.getByRole('link')).toHaveText(['常规', '联系我们', '关于'])
+  await expect(contents.getByRole('link')).toHaveText(['常规', '数据', '关于'])
   await expect(settings.getByRole('heading', { name: '设置目录', exact: true })).toHaveCount(0)
-  for (const title of ['常规', '联系我们', '关于']) {
+  for (const title of ['常规', '数据', '关于']) {
     await expect(
       contents.getByRole('link', { name: title, exact: true }).locator('svg')
     ).toHaveCount(1)
@@ -63,8 +407,9 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
   await expect(about).toContainText('当前版本')
   await expect(about.getByRole('button', { name: '检测更新', exact: true })).toHaveText('检测更新')
   await expect(about.locator('.about-description')).toHaveCount(0)
-  const buttons = about.getByRole('button')
-  await expect(buttons).toHaveText(['检测更新', '更新日志', '导出诊断'])
+  const buttons = about.locator('.version-update-trigger button, .about-release-notes')
+  await expect(buttons).toHaveText(['检测更新', '更新日志'])
+  await expect(about.getByRole('button', { name: '导出诊断', exact: true })).toHaveCount(0)
   for (const button of await buttons.all()) {
     await expect(button.locator('.ant-btn-icon')).toHaveCount(1)
     expect(
@@ -76,11 +421,10 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
       })
     ).toBe(true)
   }
-  expect((await settings.locator('#app-settings-about').boundingBox())!.height).toBeLessThan(300)
-  await contents.getByRole('link', { name: '联系我们', exact: true }).click()
-  const contact = settings.locator('#app-settings-contact')
+  expect((await settings.locator('#app-settings-about').boundingBox())!.height).toBeLessThan(600)
+  const contact = about.locator('.app-contact')
   await expect(contact).toContainText('967529814')
-  await contact.getByRole('button', { name: '官方网站', exact: true }).click()
+  await about.getByRole('button', { name: '官方网站', exact: true }).click()
   expect(await page.evaluate(() => window.midiEditorFixture.openedUrls())).toEqual([
     'https://ztachi.com/tools/infinity-nikki-player',
   ])
@@ -88,7 +432,11 @@ test('设置复用帮助目录，常规与关于连续滚动，倍速使用数�
     path: testInfo.outputPath('settings-contact.png'),
     animations: 'disabled',
   })
-  await contents.getByRole('link', { name: '关于', exact: true }).click()
+  await about.getByRole('button', { name: '源代码', exact: true }).click()
+  expect(await page.evaluate(() => window.midiEditorFixture.openedUrls())).toEqual([
+    'https://ztachi.com/tools/infinity-nikki-player',
+    'https://github.com/Ztachi/strawberrybear-tools/tree/main/apps/infinity-nikki-player',
+  ])
   await page.screenshot({ path: testInfo.outputPath('settings-about.png'), animations: 'disabled' })
   await contents.getByRole('link', { name: '常规', exact: true }).click()
   await expect
@@ -146,6 +494,7 @@ test('窄窗口设置保持左侧目录，语言可保存，关于仍在同一�
   expect(body.x).toBeGreaterThan(lastCategory.x + lastCategory.width)
   await expect(settings.getByRole('link', { name: 'Playback', exact: true })).toHaveCount(0)
   await expect(settings.getByRole('link', { name: 'Updates', exact: true })).toHaveCount(0)
+  await expect(settings.getByRole('link', { name: 'Data', exact: true })).toBeVisible()
   await page.screenshot({
     path: testInfo.outputPath('settings-narrow-en.png'),
     animations: 'disabled',
@@ -155,6 +504,12 @@ test('窄窗口设置保持左侧目录，语言可保存，关于仍在同一�
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(540)
   await settings.getByRole('link', { name: 'About', exact: true }).click()
   await expect(settings).toContainText('Release Notes')
+  await settings.getByRole('link', { name: 'Data', exact: true }).click()
+  await expectDataPosition(settings, 'Data')
+  await page.screenshot({
+    path: testInfo.outputPath('settings-data-narrow-en.png'),
+    animations: 'disabled',
+  })
 })
 
 test('360×156 悬浮窗口内倍速浮层完整显示，刻度与恢复原速可点击', async ({ page }, testInfo) => {

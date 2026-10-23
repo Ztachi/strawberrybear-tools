@@ -440,6 +440,13 @@ test('区域延长只产生一次撤销，历史按钮禁用状态清晰', async
   await page.mouse.up()
   await expect(undo).toBeEnabled()
   await expect(undo).toHaveCSS('opacity', '1')
+  // 区域预览和提交文档分别在渲染帧中接管，读取最终边界后再验证撤销往返。
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  )
   const extended = Number(await handle.getAttribute('data-end-tick'))
   expect(extended).toBeGreaterThan(original)
   await undo.click()

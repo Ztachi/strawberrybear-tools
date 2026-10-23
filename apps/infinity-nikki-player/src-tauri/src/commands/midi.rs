@@ -106,7 +106,7 @@ fn library_file_added_time(path: &Path) -> Option<u64> {
 ///
 /// # Errors
 /// 配置写入失败时返回错误；旧配置的曲名、禁用轨道等字段保持不变。
-fn attach_library_added_time(info: &mut MidiInfo, newly_added: bool) -> Result<(), String> {
+fn attach_library_added_time(info: &mut MidiInfo, newly_added: bool) -> Result<bool, String> {
     let path = Path::new(&info.file_path);
     let config_path = path.with_file_name(format!("{}.midi-config", info.filename));
     let mut config = fs::read_to_string(&config_path)
@@ -135,7 +135,7 @@ fn attach_library_added_time(info: &mut MidiInfo, newly_added: bool) -> Result<(
         fs::write(&config_path, content)
             .map_err(|error| format!("保存曲库添加时间失败: {}", error))?;
     }
-    Ok(())
+    Ok(newly_added || previous.is_none())
 }
 
 /// 获取 MIDI 库目录路径
@@ -148,10 +148,7 @@ fn attach_library_added_time(info: &mut MidiInfo, newly_added: bool) -> Result<(
 ///
 /// 库目录的 PathBuf，不存在则创建
 fn get_midi_library_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+    let data_dir = crate::data_management::data_dir(app)?;
     let midi_dir = data_dir.join("midi_library");
 
     // 如果目录不存在，创建它
@@ -248,16 +245,18 @@ pub fn parse_midi_file(path: String) -> Result<(MidiInfo, Vec<NoteEvent>), Strin
 /// 文件不存在或读取失败时返回错误
 #[tauri::command]
 pub fn read_midi_data(app: tauri::AppHandle, filename: String) -> Result<Vec<u8>, String> {
-    let library_dir = get_midi_library_dir(&app)?;
-    let stored_path = library_dir.join(&filename);
+    crate::data_management::with_data_write(&app, false, || {
+        let library_dir = get_midi_library_dir(&app)?;
+        let stored_path = library_dir.join(&filename);
 
-    if stored_path.exists() {
-        // 优先从库目录读取
-        fs::read(&stored_path).map_err(|e| format!("读取文件失败: {}", e))
-    } else {
-        // 兼容：直接用 filename 作为路径
-        fs::read(&filename).map_err(|e| format!("读取文件失败: {}", e))
-    }
+        if stored_path.exists() {
+            // 优先从库目录读取
+            fs::read(&stored_path).map_err(|e| format!("读取文件失败: {}", e))
+        } else {
+            // 兼容：直接用 filename 作为路径
+            fs::read(&filename).map_err(|e| format!("读取文件失败: {}", e))
+        }
+    })
 }
 
 /// 提取旋律事件
@@ -372,33 +371,35 @@ pub fn scan_folder(folder_path: String) -> Result<Vec<MidiInfo>, String> {
 /// 如果文件已存在于库中，直接返回现有文件的信息，不重复复制
 #[tauri::command]
 pub fn import_midi(app: tauri::AppHandle, source_path: String) -> Result<MidiInfo, String> {
-    let library_dir = get_midi_library_dir(&app)?;
+    crate::data_management::with_data_write(&app, true, || {
+        let library_dir = get_midi_library_dir(&app)?;
 
-    // 保留原始文件名
-    let source_filename = Path::new(&source_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown.mid")
-        .to_string();
+        // 保留原始文件名
+        let source_filename = Path::new(&source_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown.mid")
+            .to_string();
 
-    // 目标路径
-    let dest_path = library_dir.join(&source_filename);
+        // 目标路径
+        let dest_path = library_dir.join(&source_filename);
 
-    // 如果文件已存在，直接返回信息
-    if dest_path.exists() {
+        // 如果文件已存在，直接返回信息
+        if dest_path.exists() {
+            let (mut info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
+            attach_library_added_time(&mut info, false)?;
+            return Ok(info);
+        }
+
+        // 复制文件到库目录
+        fs::copy(&source_path, &dest_path).map_err(|e| format!("复制文件失败: {}", e))?;
+
+        // 解析文件获取信息
         let (mut info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
-        attach_library_added_time(&mut info, false)?;
-        return Ok(info);
-    }
+        attach_library_added_time(&mut info, true)?;
 
-    // 复制文件到库目录
-    fs::copy(&source_path, &dest_path).map_err(|e| format!("复制文件失败: {}", e))?;
-
-    // 解析文件获取信息
-    let (mut info, _) = parse_midi_internal(&dest_path.to_str().unwrap_or(""))?;
-    attach_library_added_time(&mut info, true)?;
-
-    Ok(info)
+        Ok(info)
+    })
 }
 
 /// 从 Buffer 导入 MIDI 文件
@@ -428,31 +429,33 @@ pub fn import_midi_buffer(
     filename: String,
     data: Vec<u8>,
 ) -> Result<MidiInfo, String> {
-    let library_dir = get_midi_library_dir(&app)?;
+    crate::data_management::with_data_write(&app, true, || {
+        let library_dir = get_midi_library_dir(&app)?;
 
-    // 获取安全的文件名
-    let safe_filename = Path::new(&filename)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown.mid")
-        .to_string();
+        // 获取安全的文件名
+        let safe_filename = Path::new(&filename)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown.mid")
+            .to_string();
 
-    let dest_path = library_dir.join(&safe_filename);
+        let dest_path = library_dir.join(&safe_filename);
 
-    // 如果已存在，直接返回
-    if dest_path.exists() {
+        // 如果已存在，直接返回
+        if dest_path.exists() {
+            let (mut info, _) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
+            attach_library_added_time(&mut info, false)?;
+            return Ok(info);
+        }
+
+        // 写入文件
+        fs::write(&dest_path, data).map_err(|e| format!("写入文件失败: {}", e))?;
+
+        // 解析获取信息
         let (mut info, _) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
-        attach_library_added_time(&mut info, false)?;
-        return Ok(info);
-    }
-
-    // 写入文件
-    fs::write(&dest_path, data).map_err(|e| format!("写入文件失败: {}", e))?;
-
-    // 解析获取信息
-    let (mut info, _) = parse_midi_internal(dest_path.to_str().unwrap_or(""))?;
-    attach_library_added_time(&mut info, true)?;
-    Ok(info)
+        attach_library_added_time(&mut info, true)?;
+        Ok(info)
+    })
 }
 
 #[tauri::command]
@@ -515,37 +518,45 @@ pub fn cleanup_online_midi_preview(app: tauri::AppHandle, file_path: String) -> 
 /// 只处理 .mid 和 .midi 扩展名的文件，忽略配置文件
 #[tauri::command]
 pub fn get_midi_library(app: tauri::AppHandle) -> Result<Vec<MidiInfo>, String> {
-    let library_dir = get_midi_library_dir(&app)?;
+    crate::data_management::with_data_write(&app, false, || {
+        let library_dir = get_midi_library_dir(&app)?;
 
-    let mut midi_files = Vec::new();
+        let mut midi_files = Vec::new();
 
-    // 遍历库目录
-    for entry in fs::read_dir(&library_dir).map_err(|e| format!("读取目录失败: {}", e))? {
-        let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
-        let file_path = entry.path();
+        // 遍历库目录
+        for entry in fs::read_dir(&library_dir).map_err(|e| format!("读取目录失败: {}", e))? {
+            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+            let file_path = entry.path();
 
-        // 只处理 MIDI 文件
-        if file_path.is_file() {
-            if let Some(ext) = file_path.extension() {
-                if ext.eq_ignore_ascii_case("mid") || ext.eq_ignore_ascii_case("midi") {
-                    match parse_midi_internal(file_path.to_str().unwrap_or("")) {
-                        Ok((mut info, _)) => {
-                            if let Err(error) = attach_library_added_time(&mut info, false) {
-                                log::warn!("保存添加时间失败 {}: {}", file_path.display(), error);
+            // 只处理 MIDI 文件
+            if file_path.is_file() {
+                if let Some(ext) = file_path.extension() {
+                    if ext.eq_ignore_ascii_case("mid") || ext.eq_ignore_ascii_case("midi") {
+                        match parse_midi_internal(file_path.to_str().unwrap_or("")) {
+                            Ok((mut info, _)) => {
+                                match attach_library_added_time(&mut info, false) {
+                                    Ok(true) => crate::data_management::mark_content_changed(&app),
+                                    Ok(false) => {}
+                                    Err(error) => log::warn!(
+                                        "保存添加时间失败 {}: {}",
+                                        file_path.display(),
+                                        error
+                                    ),
+                                }
+                                midi_files.push(info);
                             }
-                            midi_files.push(info);
+                            Err(e) => log::warn!("解析失败 {}: {}", file_path.display(), e),
                         }
-                        Err(e) => log::warn!("解析失败 {}: {}", file_path.display(), e),
                     }
                 }
             }
         }
-    }
 
-    // 按文件名排序
-    midi_files.sort_by(|a, b| a.filename.cmp(&b.filename));
+        // 按文件名排序
+        midi_files.sort_by(|a, b| a.filename.cmp(&b.filename));
 
-    Ok(midi_files)
+        Ok(midi_files)
+    })
 }
 
 /// 从库中删除 MIDI 文件
@@ -570,23 +581,25 @@ pub fn get_midi_library(app: tauri::AppHandle) -> Result<Vec<MidiInfo>, String> 
 /// 配置文件命名为 `{filename}.midi-config`
 #[tauri::command]
 pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Result<(), String> {
-    let library_dir = get_midi_library_dir(&app)?;
-    let file_path = library_dir.join(&filename);
+    crate::data_management::with_data_write(&app, true, || {
+        let library_dir = get_midi_library_dir(&app)?;
+        let file_path = library_dir.join(&filename);
 
-    // 删除 MIDI 文件
-    if file_path.exists() {
-        fs::remove_file(&file_path).map_err(|e| format!("删除文件失败: {}", e))?;
-    }
+        // 删除 MIDI 文件
+        if file_path.exists() {
+            fs::remove_file(&file_path).map_err(|e| format!("删除文件失败: {}", e))?;
+        }
 
-    // 删除对应的配置文件
-    let config_path = library_dir.join(format!("{}.midi-config", filename));
-    if config_path.exists() {
-        fs::remove_file(&config_path).map_err(|e| format!("删除配置文件失败: {}", e))?;
-    }
+        // 删除对应的配置文件
+        let config_path = library_dir.join(format!("{}.midi-config", filename));
+        if config_path.exists() {
+            fs::remove_file(&config_path).map_err(|e| format!("删除配置文件失败: {}", e))?;
+        }
 
-    crate::commands::song_lists::remove_filename_from_all_song_lists(&app, &filename)?;
+        crate::commands::song_lists::remove_filename_from_all_song_lists(&app, &filename)?;
 
-    Ok(())
+        Ok(())
+    })
 }
 
 /// 加载 MIDI 配置
@@ -607,20 +620,23 @@ pub fn delete_midi_from_library(app: tauri::AppHandle, filename: String) -> Resu
 /// 配置文件命名为 `{filename}.midi-config`
 #[tauri::command]
 pub fn load_midi_config(app: tauri::AppHandle, filename: String) -> Result<MidiConfig, String> {
-    let library_dir = get_midi_library_dir(&app)?;
-    let config_path = library_dir.join(format!("{}.midi-config", filename));
+    crate::data_management::with_data_write(&app, false, || {
+        let library_dir = get_midi_library_dir(&app)?;
+        let config_path = library_dir.join(format!("{}.midi-config", filename));
 
-    if !config_path.exists() {
-        // 配置文件不存在时返回错误，让前端走「重新计算并写缓存」的分支，
-        // 避免误用 MidiConfig::default() 覆盖 Rust 端解析的 duration_ms / track_count。
-        return Err(format!("配置文件不存在: {}", config_path.display()));
-    }
+        if !config_path.exists() {
+            // 配置文件不存在时返回错误，让前端走「重新计算并写缓存」的分支，
+            // 避免误用 MidiConfig::default() 覆盖 Rust 端解析的 duration_ms / track_count。
+            return Err(format!("配置文件不存在: {}", config_path.display()));
+        }
 
-    // 读取并解析配置文件
-    let content = fs::read_to_string(&config_path).map_err(|e| format!("读取配置失败: {}", e))?;
-    let config: MidiConfig =
-        serde_json::from_str(&content).map_err(|e| format!("解析配置失败: {}", e))?;
-    Ok(config)
+        // 读取并解析配置文件
+        let content =
+            fs::read_to_string(&config_path).map_err(|e| format!("读取配置失败: {}", e))?;
+        let config: MidiConfig =
+            serde_json::from_str(&content).map_err(|e| format!("解析配置失败: {}", e))?;
+        Ok(config)
+    })
 }
 
 /// 保存 MIDI 配置
@@ -665,44 +681,47 @@ pub fn save_midi_config(
     online_song_id: Option<String>,
     online_sha256: Option<String>,
 ) -> Result<(), String> {
-    let library_dir = get_midi_library_dir(&app)?;
-    let config_path = library_dir.join(format!("{}.midi-config", filename));
-    let existing_config = if config_path.exists() {
-        fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|content| serde_json::from_str::<MidiConfig>(&content).ok())
-            .unwrap_or_default()
-    } else {
-        MidiConfig::default()
-    };
+    crate::data_management::with_data_write(&app, true, || {
+        let library_dir = get_midi_library_dir(&app)?;
+        let config_path = library_dir.join(format!("{}.midi-config", filename));
+        let existing_config = if config_path.exists() {
+            fs::read_to_string(&config_path)
+                .ok()
+                .and_then(|content| serde_json::from_str::<MidiConfig>(&content).ok())
+                .unwrap_or_default()
+        } else {
+            MidiConfig::default()
+        };
 
-    // 构建配置对象
-    let config = MidiConfig {
-        filename: filename.clone(),
-        added_at: existing_config
-            .added_at
-            .or_else(|| library_file_added_time(&library_dir.join(&filename))),
-        title: normalize_optional_text(title).or(existing_config.title),
-        author_name: normalize_optional_text(author_name).or(existing_config.author_name),
-        description: normalize_optional_text(description).or(existing_config.description),
-        online_song_id: normalize_optional_text(online_song_id).or(existing_config.online_song_id),
-        online_sha256: normalize_optional_text(online_sha256).or(existing_config.online_sha256),
-        duration_ms,
-        track_count,
-        melody_note_count,
-        ticks_per_beat,
-        tempo,
-        disabled_tracks,
-    };
+        // 构建配置对象
+        let config = MidiConfig {
+            filename: filename.clone(),
+            added_at: existing_config
+                .added_at
+                .or_else(|| library_file_added_time(&library_dir.join(&filename))),
+            title: normalize_optional_text(title).or(existing_config.title),
+            author_name: normalize_optional_text(author_name).or(existing_config.author_name),
+            description: normalize_optional_text(description).or(existing_config.description),
+            online_song_id: normalize_optional_text(online_song_id)
+                .or(existing_config.online_song_id),
+            online_sha256: normalize_optional_text(online_sha256).or(existing_config.online_sha256),
+            duration_ms,
+            track_count,
+            melody_note_count,
+            ticks_per_beat,
+            tempo,
+            disabled_tracks,
+        };
 
-    // 序列化为 JSON
-    let content =
-        serde_json::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {}", e))?;
+        // 序列化为 JSON
+        let content =
+            serde_json::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {}", e))?;
 
-    // 写入文件
-    fs::write(&config_path, content).map_err(|e| format!("保存配置失败: {}", e))?;
+        // 写入文件
+        fs::write(&config_path, content).map_err(|e| format!("保存配置失败: {}", e))?;
 
-    Ok(())
+        Ok(())
+    })
 }
 
 #[cfg(test)]
