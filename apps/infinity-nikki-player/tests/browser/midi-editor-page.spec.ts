@@ -204,7 +204,10 @@ test('点击参考音符后，总览将远处选中的音轨平滑滚动到视�
     .poll(async () => {
       const row = await track.boundingBox()
       const viewport = await scroll.boundingBox()
-      return Math.abs(row!.y + row!.height / 2 - viewport!.y - viewport!.height / 2)
+      // 虚拟列表滚动时会短暂替换行节点，等待重新挂载后再比较中心位置。
+      return row && viewport
+        ? Math.abs(row.y + row.height / 2 - viewport.y - viewport.height / 2)
+        : Infinity
     })
     .toBeLessThan(2)
 })
