@@ -6,8 +6,11 @@ import { computed, onMounted, onUnmounted, getCurrentInstance, ref, nextTick } f
 import { useI18n } from 'vue-i18n'
 import { App as AntApp, ConfigProvider } from 'antdv-next'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { invoke } from '@tauri-apps/api/core'
+import { dataOperationLocked, dataOperationPreparing } from '@/features/data-management/operation'
 import MainWindow from './views/MainWindow/index.vue'
 import ReleaseNotesHost from '@/components/ReleaseNotesHost.vue'
+import DataManagementHost from '@/components/DataManagementHost.vue'
 import { feedback as toast } from '@/lib/feedback'
 import { usePlayerStore } from './stores/player'
 import { useAppUpdater } from '@/composables/useAppUpdater'
@@ -35,7 +38,7 @@ const currentAntdvLocale = computed(() => getAntdvLocale(locale.value))
 async function showWindowWhenLoadingReady() {
   await nextTick()
   // 背景交由浏览器加载；隐藏窗口中的图片解码和动画帧都不能作为显示窗口的前置条件。
-  await getCurrentWindow().show()
+  if (await invoke<boolean>('should_show_main_window')) await getCurrentWindow().show()
   loadingProgress.value = 58
 }
 
@@ -119,10 +122,13 @@ onUnmounted(() => appUpdater.dispose())
       </Transition>
 
       <!-- 主窗口 -->
-      <MainWindow :inert="appUpdater.isPreparing.value || appUpdater.isInstalling.value" />
+      <MainWindow
+        :inert="appUpdater.isPreparing.value || appUpdater.isInstalling.value || dataOperationLocked || dataOperationPreparing"
+      />
 
       <!-- 关于对话框 -->
       <ReleaseNotesHost :ready="!isLoading" />
+      <DataManagementHost />
       <div v-if="appUpdater.isInstalling.value" class="installing-screen" role="status">
         {{ $t('updater.phases.installing') }}
       </div>

@@ -23,7 +23,7 @@ env:
 
 jobs:
   build:
-    name: Build and Type Check
+    name: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,7 +51,7 @@ jobs:
           pnpm --filter @strawberrybear/infinity-nikki-player test
 
   updater-native:
-    name: 原生更新故障测试
+    name: 原生更新与数据故障测试
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -62,4 +62,4 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: 'apps/infinity-nikki-player/src-tauri -> target'
-      - run: 'cargo test --locked --manifest-path apps/infinity-nikki-player/src-tauri/Cargo.toml updater::'
+      - run: 'cargo test --locked --manifest-path apps/infinity-nikki-player/src-tauri/Cargo.toml --lib'

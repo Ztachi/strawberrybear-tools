@@ -12,16 +12,22 @@ interface Contact {
   label: string
   account: string
 }
+withDefaults(defineProps<{ showHeader?: boolean }>(), { showHeader: true })
 const { t, tm } = useI18n()
 const icons: Record<string, Component> = { qq: QqOutlined, discord: DiscordFilled }
 const contacts = computed<Contact[]>(() => {
   const value = tm('about.contacts')
   if (!Array.isArray(value)) return []
-  return value.filter((contact): contact is Contact =>
-    typeof contact === 'object' && contact !== null &&
-    'type' in contact && typeof contact.type === 'string' &&
-    'label' in contact && typeof contact.label === 'string' &&
-    'account' in contact && typeof contact.account === 'string'
+  return value.filter(
+    (contact): contact is Contact =>
+      typeof contact === 'object' &&
+      contact !== null &&
+      'type' in contact &&
+      typeof contact.type === 'string' &&
+      'label' in contact &&
+      typeof contact.label === 'string' &&
+      'account' in contact &&
+      typeof contact.account === 'string'
   )
 })
 async function openWebsite(): Promise<void> {
@@ -31,7 +37,7 @@ async function openWebsite(): Promise<void> {
 
 <template>
   <div class="app-contact">
-    <div class="contact-header">
+    <div v-if="showHeader" class="contact-header">
       <h3 id="app-settings-contact-title" class="contact-title">
         <MessagesSquare class="size-4 shrink-0 text-primary" :stroke-width="2" aria-hidden="true" />
         {{ t('appSettings.contact') }}

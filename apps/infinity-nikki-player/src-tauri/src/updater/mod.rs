@@ -47,6 +47,7 @@ pub struct Snapshot {
     pub phase: Phase,
     pub current_version: String,
     pub target_version: Option<String>,
+    pub release_summary: Option<String>,
     pub source: Option<Source>,
     pub downloaded_bytes: u64,
     pub content_length: Option<u64>,
@@ -87,6 +88,7 @@ impl UpdaterService {
                 phase: Phase::Idle,
                 current_version,
                 target_version: None,
+                release_summary: None,
                 source: None,
                 downloaded_bytes: 0,
                 content_length: None,
@@ -245,6 +247,10 @@ async fn check_source(
 
 /// 比较两个来源的有效最高版本；失败时保留之前发现的候选版本。
 pub async fn check<R: Runtime>(app: AppHandle<R>, reason: CheckReason) -> Snapshot {
+    // 仅为既有自动调度增加偏好门控，手动检查及更新状态机保持原语义。
+    if !matches!(reason, CheckReason::Manual) && !crate::preferences::auto_check_enabled() {
+        return snapshot(&app);
+    }
     let generation = {
         let state = app.state::<UpdaterService>();
         let mut core = state.0.lock();
@@ -284,6 +290,15 @@ pub async fn check<R: Runtime>(app: AppHandle<R>, reason: CheckReason) -> Snapsh
             let candidates = vec![Ok(core.candidate.take()), Ok(candidate)];
             core.candidate = select_update(candidates).ok().flatten();
             core.snapshot.target_version = core.candidate.as_ref().map(|u| u.version.clone());
+            // 关于页只读展示官方清单摘要，不参与更新选择或安装策略。
+            core.snapshot.release_summary = core.candidate.as_ref().and_then(|update| {
+                update
+                    .body
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|body| !body.is_empty())
+                    .map(|body| body.chars().take(300).collect())
+            });
             core.snapshot.source = core.candidate.as_ref().map(|u| {
                 if u.download_url.as_str().starts_with(PROXY_PREFIX) {
                     Source::Mirror

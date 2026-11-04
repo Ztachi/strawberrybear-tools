@@ -204,7 +204,10 @@ test('点击参考音符后，总览将远处选中的音轨平滑滚动到视�
     .poll(async () => {
       const row = await track.boundingBox()
       const viewport = await scroll.boundingBox()
-      return Math.abs(row!.y + row!.height / 2 - viewport!.y - viewport!.height / 2)
+      // 虚拟列表滚动时会短暂替换行节点，等待重新挂载后再比较中心位置。
+      return row && viewport
+        ? Math.abs(row.y + row.height / 2 - viewport.y - viewport.height / 2)
+        : Infinity
     })
     .toBeLessThan(2)
 })
@@ -440,6 +443,13 @@ test('区域延长只产生一次撤销，历史按钮禁用状态清晰', async
   await page.mouse.up()
   await expect(undo).toBeEnabled()
   await expect(undo).toHaveCSS('opacity', '1')
+  // 区域预览和提交文档分别在渲染帧中接管，读取最终边界后再验证撤销往返。
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  )
   const extended = Number(await handle.getAttribute('data-end-tick'))
   expect(extended).toBeGreaterThan(original)
   await undo.click()

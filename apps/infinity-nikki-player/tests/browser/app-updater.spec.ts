@@ -21,6 +21,18 @@ test('内嵌关于的更新按钮名称与下载、安装动作同步', async ({
   expect(calls).not.toContain('install')
 })
 
+test('新版摘要以纯文本显示至多三行，空内容不占位', async ({ page }) => {
+  await page.goto('/tests/browser/app-updater.html?about&embedded')
+  const about = page.locator('.embedded-about')
+  await expect(about.getByText('可更新至 v1.2.1', { exact: true })).toBeVisible()
+  const summary = about.locator('.about-release-summary')
+  await expect(summary).toContainText('<strong>优化设置排版。</strong>')
+  await expect(summary.locator('strong')).toHaveCount(0)
+  await expect(summary).toHaveCSS('-webkit-line-clamp', '3')
+  await page.goto('/tests/browser/app-updater.html?about&embedded&noSummary')
+  await expect(page.locator('.embedded-about .about-release-summary')).toHaveCount(0)
+})
+
 test('未发布版本的检查结果仅在全局通知显示', async ({ page }) => {
   await page.goto('/tests/browser/app-updater.html?about&scenario=unpublished')
   const dialog = page.getByRole('dialog')
@@ -45,29 +57,49 @@ test('小窗口更新入口固定，滚动后可访问底部次要操作', async
     element.scrollTop = element.scrollHeight
   })
   await expect(dialog.getByRole('button', { name: '检测更新', exact: true })).toBeInViewport()
-  await expect(dialog.getByRole('button', { name: '导出诊断', exact: true })).toBeInViewport()
+  await expect(dialog.getByText('ztachi.', { exact: true })).toBeInViewport()
+  await expect(dialog.getByRole('button', { name: '复制', exact: true }).last()).toBeInViewport()
+  await expect(dialog.getByRole('button', { name: '导出诊断', exact: true })).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('about-update-compact.png') })
 })
 
-test('双语次要操作并列，移除手动下载与提示行', async ({ page }) => {
+test('双语关于保留更新日志和项目链接，诊断操作归入数据设置', async ({ page }) => {
   for (const locale of ['zh-CN', 'en-US']) {
     await page.goto(`/tests/browser/app-updater.html?about&scenario=error&locale=${locale}`)
     const dialog = page.getByRole('dialog')
     const actions = dialog.locator('.about-actions')
-    await expect(actions.getByRole('button')).toHaveCount(3)
-    const exportButton = actions.getByRole('button', {
-      name: locale === 'zh-CN' ? '导出诊断' : 'Export diagnostics',
-      exact: true,
-    })
-    await expect(exportButton).toBeVisible()
+    await expect(actions.getByRole('button')).toHaveCount(1)
+    await expect(
+      actions.getByRole('button', {
+        name: locale === 'zh-CN' ? '更新日志' : 'Release Notes',
+        exact: true,
+      })
+    ).toBeVisible()
+    await expect(
+      dialog.getByRole('button', {
+        name: locale === 'zh-CN' ? '官方网站' : 'Official website',
+        exact: true,
+      })
+    ).toHaveCount(1)
+    await expect(
+      dialog.getByRole('button', {
+        name: locale === 'zh-CN' ? '源代码' : 'Source code',
+        exact: true,
+      })
+    ).toHaveCount(1)
+    await expect(
+      dialog.getByRole('button', {
+        name: locale === 'zh-CN' ? '导出诊断' : 'Export diagnostics',
+        exact: true,
+      })
+    ).toHaveCount(0)
     await expect(
       dialog.getByRole('button', {
         name: locale === 'zh-CN' ? '手动下载' : 'Manual download',
         exact: true,
       })
     ).toHaveCount(0)
-    await exportButton.click()
-    expect(await page.evaluate(() => window.updaterFixture.calls)).toEqual(['version', 'export'])
+    expect(await page.evaluate(() => window.updaterFixture.calls)).toEqual(['version'])
   }
 })
 

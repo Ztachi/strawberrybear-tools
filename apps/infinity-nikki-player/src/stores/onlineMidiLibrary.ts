@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
   fetchAllOnlineMidiSongs,
+  clearOnlineMidiLibraryCache,
   fetchOnlineMidiSong,
   readOnlineMidiLibraryCache,
   saveOnlineMidiLibraryCache,
@@ -135,6 +136,15 @@ export const useOnlineMidiLibraryStore = defineStore('onlineMidiLibrary', () => 
     filters.difficultyType = undefined
   }
 
+  /** 清除可重建目录；身份、筛选条件和已导入作品保持不变。 */
+  async function clearCache(): Promise<void> {
+    if (isSyncing.value) throw new Error('曲库正在刷新，请完成后再清理缓存')
+    await clearOnlineMidiLibraryCache()
+    songsById.value = {}
+    syncedAt.value = null
+    isHydrated.value = false
+  }
+
   return {
     songsById,
     songs,
@@ -152,5 +162,6 @@ export const useOnlineMidiLibraryStore = defineStore('onlineMidiLibrary', () => 
     fetchSongById,
     getSong,
     clearFilters,
+    clearCache,
   }
 })

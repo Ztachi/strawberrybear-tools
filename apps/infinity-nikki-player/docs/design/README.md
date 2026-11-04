@@ -13,6 +13,7 @@
 | [theme.md](theme.md)                           | 无限暖暖主题 token、CSS 变量和视觉原则               |
 | [keyboard-recording.md](keyboard-recording.md) | 独立单轨录制、修正、草稿和宿主应用                   |
 | [app-settings.md](app-settings.md)             | 分类设置、首次关闭、托盘恢复和播放倍速               |
+| [data-management.md](data-management.md)       | 资料迁移、本地备份、恢复事务与云同步                 |
 | [piano-roll-design.md](piano-roll-design.md)   | 多轨总览、单轨浮层、MIDI 适配与验收                  |
 
 ## 技术栈

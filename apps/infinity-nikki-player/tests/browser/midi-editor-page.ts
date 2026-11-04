@@ -39,6 +39,7 @@ import type { OnlineMidiSong } from '@/lib/onlineMidiLibraryApi'
 import type { MidiInfo } from '@/types'
 import { browserMidiProjectEditorWindowPort } from './midi-project-editor-window-port'
 import '@/style.css'
+import { mockDataManagementCommand } from './data-management-mock'
 
 const midi: MidiInfo = {
   filename: 'layout-fixture.mid',
@@ -285,6 +286,8 @@ let quits = 0
 let savedSettings: Record<string, unknown> = {}
 mockWindows('main')
 const fixtureIPC: Parameters<typeof mockIPC>[0] = (command, payload) => {
+  const dataResult = mockDataManagementCommand(command, payload as Record<string, unknown>)
+  if (dataResult) return dataResult.value
   if (command === 'plugin:event|listen') return 0
   if (command === 'plugin:event|unlisten' || command === 'set_speed') return
   if (command === 'plugin:window|set_size') return

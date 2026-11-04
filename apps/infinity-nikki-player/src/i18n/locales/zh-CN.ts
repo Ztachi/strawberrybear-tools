@@ -5,8 +5,10 @@ import releaseNoteReleases from './release-notes/zh-CN.json'
 
 import recording from './recording/zh-CN.json'
 import appSettings from './appSettings/zh-CN.json'
+import dataManagement from './data-management/zh-CN.json'
 
 export default {
+  dataManagement,
   appSettings,
   recording,
   app: {

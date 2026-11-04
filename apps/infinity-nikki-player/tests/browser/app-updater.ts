@@ -27,6 +27,9 @@ let state: UpdateSnapshot = {
   phase: 'available',
   currentVersion: '1.2.0',
   targetVersion: '1.2.1',
+  releaseSummary: params.has('noSummary')
+    ? ' \n '
+    : '改善云同步连接体验。\n支持资料备份与恢复。\n<strong>优化设置排版。</strong>\n保留完整更新日志入口。',
   lastCheckedAt: Date.now(),
 }
 if (scenario === 'error')

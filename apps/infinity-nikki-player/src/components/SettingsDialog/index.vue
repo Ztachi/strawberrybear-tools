@@ -1,69 +1,94 @@
 <script setup lang="ts">
-/** 设置与帮助共用目录文档，常规选项修改即保存，联系与关于独立展示。 */
+/** 设置只编排三个连续章节，目录与滚动继续交给共用 SectionDocument。 */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Alert, Button, Modal } from 'antdv-next'
+import { BadgeInfo, Database, SlidersHorizontal } from 'lucide-vue-next'
 import {
-  Modal,
-  Form,
-  FormItem,
-  Select,
-  RadioGroup,
-  Radio,
-  Checkbox,
-  Tooltip,
-} from 'antdv-next'
-import { SlidersHorizontal, MessagesSquare, BadgeInfo, CircleAlert } from 'lucide-vue-next'
-import { useSettingsStore } from '@/stores/settings'
-import { SUPPORTED_LOCALES, isSupportedLocale } from '@/i18n'
+  dataManagement,
+  DEFAULT_DATA_PREFERENCES,
+  type DataPreferences,
+} from '@/lib/dataManagement'
 import { feedback } from '@/lib/feedback'
 import AboutDialog from '@/components/AboutDialog/index.vue'
-import AppContact from '@/components/AppContact.vue'
 import SectionDocument from '@/components/SectionDocument.vue'
+import GeneralSettings from './GeneralSettings.vue'
+import DataSettings from './DataSettings.vue'
+
 const open = defineModel<boolean>('open', { default: false })
 const props = withDefaults(defineProps<{ initialCategory?: string; navigationKey?: number }>(), {
   initialCategory: 'general',
 })
 const { t } = useI18n()
-const settings = useSettingsStore()
-const busy = ref(false)
 const documentReady = ref(false)
-// 首次定位等框架入场结束，避免缩放动画让 Anchor 计算到错误的章节位置。
-watch(open, (value) => {
-  if (!value) documentReady.value = false
-})
+const preferences = ref<DataPreferences>({ ...DEFAULT_DATA_PREFERENCES })
+const loaded = ref(false)
+const saving = ref(false)
+const loadError = ref('')
+const dataSettings = ref<InstanceType<typeof DataSettings> | null>(null)
+const closing = ref(false)
+const categoryIcons = { general: SlidersHorizontal, data: Database, about: BadgeInfo }
+const categories = computed(() =>
+  ['general', 'data', 'about'].map((key) => ({
+    key,
+    href: `#app-settings-${key}`,
+    title: key === 'data' ? t('dataManagement.title') : t(`appSettings.${key}`),
+  }))
+)
+
+async function loadPreferences(): Promise<void> {
+  loaded.value = false
+  loadError.value = ''
+  try {
+    preferences.value = await dataManagement.getPreferences()
+    loaded.value = true
+  } catch (error) {
+    loadError.value = String(error)
+  }
+}
+watch(
+  open,
+  (value) => {
+    if (!value) documentReady.value = false
+    else void loadPreferences()
+  },
+  { immediate: true }
+)
 function afterOpenChange(value: boolean): void {
   documentReady.value = value && open.value
 }
-const categoryIcons = { general: SlidersHorizontal, contact: MessagesSquare, about: BadgeInfo }
-const categories = computed(() =>
-  ['general', 'contact', 'about'].map((key) => ({
-    key,
-    href: `#app-settings-${key}`,
-    title: t(`appSettings.${key}`),
-  }))
-)
-async function save(change: () => Promise<void>): Promise<void> {
-  if (busy.value) return
-  busy.value = true
+async function savePreferences(patch: Partial<DataPreferences>): Promise<boolean> {
+  if (saving.value || !loaded.value) return false
+  saving.value = true
+  const next = { ...preferences.value, ...patch }
   try {
-    await change()
+    await dataManagement.savePreferences(next)
+    preferences.value = next
+    return true
   } catch (error) {
     feedback.error(t('appSettings.saveFailed'), { description: String(error) })
+    return false
   } finally {
-    busy.value = false
+    saving.value = false
   }
 }
-function language(value: unknown): void {
-  if (typeof value === 'string' && isSupportedLocale(value))
-    void save(() => settings.setLocale(value))
-}
-function closeAction(value: unknown): void {
-  if (value === 'tray' || value === 'quit') void save(() => settings.setCloseAction(value))
+async function changeOpen(value: boolean): Promise<void> {
+  if (value) {
+    open.value = true
+    return
+  }
+  if (closing.value || saving.value) return
+  closing.value = true
+  try {
+    if ((await dataSettings.value?.canClose()) ?? true) open.value = false
+  } finally {
+    closing.value = false
+  }
 }
 </script>
 <template>
   <Modal
-    v-model:open="open"
+    :open="open"
     :title="t('appSettings.title')"
     :footer="null"
     centered
@@ -72,6 +97,7 @@ function closeAction(value: unknown): void {
     :styles="{ body: { height: 'min(72vh, 640px)', overflow: 'hidden' } }"
     :after-open-change="afterOpenChange"
     root-class="app-settings-modal"
+    @update:open="changeOpen"
   >
     <SectionDocument
       :items="categories"
@@ -81,99 +107,68 @@ function closeAction(value: unknown): void {
       :navigation-key="props.navigationKey"
     >
       <template #item="{ item }">
-        <span class="flex items-center gap-2">
-          <component
+        <span class="flex items-center gap-2"
+          ><component
             :is="categoryIcons[item.key as keyof typeof categoryIcons]"
             class="size-4 shrink-0"
             :stroke-width="2"
             aria-hidden="true"
-          />
-          {{ item.title }}
-        </span>
+          />{{ item.title }}</span
+        >
       </template>
+      <Alert
+        v-if="loadError"
+        type="error"
+        show-icon
+        class="mb-3"
+        :title="t('dataManagement.loadFailed')"
+        :description="loadError"
+      >
+        <template #action>
+          <Button size="small" @click="loadPreferences">
+            {{ t('dataManagement.retry') }}
+          </Button>
+        </template>
+      </Alert>
       <section
-        id="app-settings-general"
-        class="scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
-        aria-labelledby="app-settings-general-title"
+        v-for="category in categories"
+        :id="`app-settings-${category.key}`"
+        :key="category.key"
+        class="mb-6 scroll-mt-2 last:mb-0"
+        :aria-labelledby="`app-settings-${category.key}-title`"
       >
         <h3
-          id="app-settings-general-title"
-          class="m-0 mb-4 flex items-center gap-2 text-sm font-semibold"
+          :id="`app-settings-${category.key}-title`"
+          class="m-0 mb-3 flex items-center gap-2 text-sm font-semibold"
         >
-          <SlidersHorizontal
+          <component
+            :is="categoryIcons[category.key as keyof typeof categoryIcons]"
             class="size-4 shrink-0 text-primary"
             :stroke-width="2"
             aria-hidden="true"
-          />
-          {{ t('appSettings.general') }}
+          />{{ category.title }}
         </h3>
-        <Form layout="vertical">
-          <FormItem :label="t('appSettings.language')" html-for="settings-language">
-            <Select
-              id="settings-language"
-              :value="settings.locale"
-              :options="SUPPORTED_LOCALES"
-              :aria-label="t('appSettings.language')"
-              :disabled="busy"
-              class="w-full max-w-64"
-              @update:value="language"
-            />
-          </FormItem>
-          <FormItem :label="t('appSettings.closeBehavior')" class="mb-0">
-            <RadioGroup
-              :value="settings.closeAction"
-              :disabled="busy"
-              class="flex flex-col gap-3"
-              @update:value="closeAction"
-            >
-              <Radio value="tray">
-                {{ t('appSettings.tray') }}
-              </Radio>
-              <Radio value="quit">
-                {{ t('appSettings.quit') }}
-              </Radio>
-            </RadioGroup>
-            <div class="mt-3 flex items-center gap-1.5">
-              <Checkbox
-                :checked="!settings.closeActionConfirmed"
-                :disabled="busy"
-                @update:checked="save(() => settings.setCloseAction(settings.closeAction, !$event))"
-              >
-                {{ t('appSettings.askClose') }}
-              </Checkbox>
-              <Tooltip :title="t('appSettings.closeHint')" :trigger="['hover', 'focus']">
-                <button
-                  type="button"
-                  class="nikki-icon-button flex size-4 shrink-0 items-center justify-center rounded p-0"
-                  :aria-label="t('appSettings.closeHintLabel')"
-                >
-                  <CircleAlert :size="14" :stroke-width="2" aria-hidden="true" />
-                </button>
-              </Tooltip>
-            </div>
-          </FormItem>
-        </Form>
-      </section>
-      <section
-        id="app-settings-contact"
-        class="mt-3 scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
-        aria-labelledby="app-settings-contact-title"
-      >
-        <AppContact />
-      </section>
-      <section
-        id="app-settings-about"
-        class="mt-3 scroll-mt-2 rounded-xl border border-primary/15 bg-primary/[0.035] p-4"
-        aria-labelledby="app-settings-about-title"
-      >
-        <h3
-          id="app-settings-about-title"
-          class="m-0 mb-4 flex items-center gap-2 text-sm font-semibold"
-        >
-          <BadgeInfo class="size-4 shrink-0 text-primary" :stroke-width="2" aria-hidden="true" />
-          {{ t('appSettings.about') }}
-        </h3>
-        <AboutDialog embedded />
+        <GeneralSettings
+          v-if="category.key === 'general'"
+          :preferences="preferences"
+          :saving="saving"
+          :loaded="loaded"
+          @preferences="savePreferences"
+        />
+        <DataSettings
+          v-else-if="category.key === 'data'"
+          :ref="
+            (instance) => {
+              dataSettings = instance as InstanceType<typeof DataSettings> | null
+            }
+          "
+          :preferences="preferences"
+          :saving="saving"
+          :loaded="loaded"
+          :save-preferences="savePreferences"
+          @preferences="savePreferences"
+        />
+        <AboutDialog v-else embedded />
       </section>
     </SectionDocument>
   </Modal>

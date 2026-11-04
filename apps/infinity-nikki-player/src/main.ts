@@ -10,6 +10,9 @@ import { router } from './router'
 import { getAppContext } from './bootstrap/createAppContext'
 import { bindAppContextStores } from './bootstrap/bindAppContextStores'
 import { configureAntdvStaticContext } from './theme/infinityNikkiTheme'
+import { applyPendingTemplateDrafts } from './lib/dataManagementBrowser'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { message } from '@tauri-apps/plugin-dialog'
 import 'antdv-next/dist/reset.css'
 import './style.css'
 
@@ -48,7 +51,18 @@ configureAntdvStaticContext()
  * @description 从 Rust 后端获取系统语言设置，然后初始化国际化配置
  * @return Promise
  */
-initI18n()
-
-/** 将应用挂载到 DOM */
-app.mount('#app')
+/** 模板草稿恢复先于任何编辑器挂载，确认成功后才清理原生待恢复记录。 */
+async function start(): Promise<void> {
+  try {
+    await applyPendingTemplateDrafts()
+    void initI18n()
+    app.mount('#app')
+  } catch (error) {
+    await getCurrentWindow().show()
+    await message(`无法恢复模板草稿，请检查磁盘空间或权限后重新启动。\n${String(error)}`, {
+      title: '资料恢复未完成',
+      kind: 'error',
+    })
+  }
+}
+void start()
