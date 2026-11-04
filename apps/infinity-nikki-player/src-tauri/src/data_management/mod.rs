@@ -875,6 +875,13 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
         if kind.is_dir() {
             copy_directory(&entry.path(), &target)?;
         } else if kind.is_file() {
+            // 合并迁回默认位置前的备份时，同名副本必须一致，不能覆盖另一份历史。
+            if target.exists() && !files_equal(&entry.path(), &target)? {
+                return Err(format!(
+                    "迁移备份存在同名冲突：{}，原资料已保留",
+                    target.display()
+                ));
+            }
             fs::copy(entry.path(), &target)
                 .map_err(|error| format!("复制迁移资料失败：{error}"))?;
             if !files_equal(&entry.path(), &target)? {
@@ -963,6 +970,32 @@ fn require_space(available: u64, needed: u64, location: &Path) -> Result<(), Str
     Ok(())
 }
 
+/// 覆盖默认位置前，把该位置的资料快照与全部历史备份收入迁入后的备份目录。
+fn preserve_default_destination(
+    target: &Path,
+    staged_root: &Path,
+    version: &str,
+) -> Result<BackupInfo, String> {
+    let (bytes, summary) = archive::build(
+        target,
+        version,
+        &device_name(),
+        SnapshotKind::Local,
+        HashMap::new(),
+    )?;
+    copy_directory(&target.join(BACKUP_DIR), &staged_root.join(BACKUP_DIR))?;
+    // 本次合并不清理任一侧的历史；后续新建备份再按用户保留数量清理。
+    let mut info = persist_backup(staged_root, &bytes, summary, usize::MAX)?;
+    info.name = "迁回默认位置前的资料".into();
+    write_json(
+        &staged_root
+            .join(BACKUP_DIR)
+            .join(format!("{}.json", info.id)),
+        &info,
+    )?;
+    Ok(info)
+}
+
 pub fn migrate_data_directory<R: Runtime>(
     app: &AppHandle<R>,
     path: &Path,
@@ -998,9 +1031,8 @@ pub fn migrate_data_directory<R: Runtime>(
             .chain([BACKUP_DIR])
             .map(String::from)
             .collect();
-        if directories.iter().any(|name| target.join(name).exists())
-            && !(overwrite_default && target == default)
-        {
+        let replacing_default = directories.iter().any(|name| target.join(name).exists());
+        if replacing_default && !(overwrite_default && target == default) {
             return Err("目标目录已有资料，请选择空目录；恢复默认目录需要确认覆盖".into());
         }
         let content_size = CONTENT_DIRS.iter().try_fold(0u64, |size, name| {
@@ -1031,6 +1063,17 @@ pub fn migrate_data_directory<R: Runtime>(
         // 创建迁移前备份后重新读取目标卷空间；同卷迁移也会计入新备份已占用的空间。
         let required = content_size
             .saturating_add(directory_size(&source.join(BACKUP_DIR))?)
+            .saturating_add(if replacing_default {
+                // 原目标资料保留为一份完整快照，并合并原目标的备份历史。
+                CONTENT_DIRS
+                    .iter()
+                    .try_fold(directory_size(&target.join(BACKUP_DIR))?, |size, name| {
+                        directory_size(&target.join(name)).map(|length| size.saturating_add(length))
+                    })?
+                    .saturating_add(1024 * 1024)
+            } else {
+                0
+            })
             .saturating_add(HEADROOM);
         require_space(
             fs4::available_space(&target)
@@ -1044,6 +1087,13 @@ pub fn migrate_data_directory<R: Runtime>(
         let result = (|| {
             for name in &directories {
                 copy_directory(&source.join(name), &stage.join("content").join(name))?;
+            }
+            if replacing_default {
+                preserve_default_destination(
+                    &target,
+                    &stage.join("content"),
+                    &app.package_info().version.to_string(),
+                )?;
             }
             apply_transaction(
                 &config_dir(app)?,

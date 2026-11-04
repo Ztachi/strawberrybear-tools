@@ -501,6 +501,91 @@ fn linked_content_directory_is_rejected_instead_of_copying_external_files() {
 }
 
 #[test]
+fn returning_to_default_preserves_its_old_library_and_backup_history() {
+    let source = tempdir().unwrap();
+    let target = tempdir().unwrap();
+    let config = tempdir().unwrap();
+    populate(source.path());
+    populate(target.path());
+    let mut old_template = template();
+    old_template["name"] = "默认目录独有的旧模板".into();
+    let old_bytes = serde_json::to_vec(&old_template).unwrap();
+    put(target.path(), "templates/custom-one.json", &old_bytes);
+    let historical = create_backup_at(target.path(), "1.3.3", drafts(), 10).unwrap();
+    let historical_bytes = fs::read(
+        target
+            .path()
+            .join(BACKUP_DIR)
+            .join(format!("{}.zip", historical.id)),
+    )
+    .unwrap();
+    let stage = target.path().join(".data-staging/return-default");
+    let directories: Vec<String> = CONTENT_DIRS
+        .iter()
+        .copied()
+        .chain([BACKUP_DIR])
+        .map(String::from)
+        .collect();
+    for name in &directories {
+        copy_directory(&source.path().join(name), &stage.join("content").join(name)).unwrap();
+    }
+    let safety =
+        preserve_default_destination(target.path(), &stage.join("content"), "1.3.3").unwrap();
+    apply_transaction(
+        config.path(),
+        target.path(),
+        &stage,
+        directories,
+        &drafts(),
+        Some(target.path()),
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(target.path().join("templates/custom-one.json")).unwrap(),
+        serde_json::to_vec(&template()).unwrap()
+    );
+    let safety_bytes = fs::read(
+        target
+            .path()
+            .join(BACKUP_DIR)
+            .join(format!("{}.zip", safety.id)),
+    )
+    .unwrap();
+    let restored = archive::read(&safety_bytes, false).unwrap();
+    assert_eq!(restored.files["templates/custom-one.json"], old_bytes);
+    assert_eq!(
+        fs::read(
+            target
+                .path()
+                .join(BACKUP_DIR)
+                .join(format!("{}.zip", historical.id))
+        )
+        .unwrap(),
+        historical_bytes
+    );
+    assert_eq!(list_backups_at(target.path()).unwrap().len(), 2);
+}
+
+#[test]
+fn backup_merge_conflict_never_overwrites_either_copy() {
+    let source = tempdir().unwrap();
+    let staged = tempdir().unwrap();
+    put(source.path(), "same.zip", b"old-backup");
+    put(staged.path(), "same.zip", b"new-backup");
+    assert!(copy_directory(source.path(), staged.path())
+        .unwrap_err()
+        .contains("同名冲突"));
+    assert_eq!(
+        fs::read(source.path().join("same.zip")).unwrap(),
+        b"old-backup"
+    );
+    assert_eq!(
+        fs::read(staged.path().join("same.zip")).unwrap(),
+        b"new-backup"
+    );
+}
+
+#[test]
 fn archive_rejects_case_collisions_and_windows_device_names() {
     for names in [
         vec!["content/midi_library/A.mid", "content/midi_library/a.mid"],

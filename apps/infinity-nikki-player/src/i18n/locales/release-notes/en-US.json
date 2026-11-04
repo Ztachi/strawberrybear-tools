@@ -1,4 +1,13 @@
 {
+  "v1_3_4": {
+    "title": "Back up your music and continue on another device",
+    "highlights": [
+      "Settings now groups General, Data and About, with startup, silent launch, automatic update checks and display preferences. Version, update and contact options are easier to find.",
+      "Export and restore your complete library or schedule local backups, including songs, playlists, templates, projects and saved drafts. A safety backup and unsaved-edit checks protect your current work before restoring.",
+      "Use WebDAV or S3 to upload and restore saved work, with optional automatic uploads after local changes. Passwords and secret keys stay in your system credential store.",
+      "Move your music data to another folder, preserving the old library and backup history when returning to the default location. Manage logs, diagnostics, caches and interface preferences from Data settings."
+    ]
+  },
   "v1_3_3": {
     "title": "Record melodies with your keyboard",
     "highlights": [
